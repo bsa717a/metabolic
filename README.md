@@ -30,6 +30,19 @@ Optional: `GEMINI_MODEL` defaults to `gemini-2.5-flash`. Without a key, the app 
 Features:
 - **Nutrition page** — AI food lookup estimates macros from natural language
 - **Assistant page** — chat with your live program, meal, and exercise context
+- **Shopping list** — send a meal-plan grocery list to Instacart for pickup (Walmart and other retailers)
+
+## Instacart grocery pickup
+
+Apply for an API key at the [Instacart Developer Platform](https://docs.instacart.com/developer_platform_api), then in `server/.env`:
+
+```
+INSTACART_API_KEY=your-key-here
+```
+
+Local development uses the Instacart dev host (`connect.dev.instacart.tools`) automatically. Production uses `connect.instacart.com`. Override with `INSTACART_API_BASE` if needed.
+
+On the nutrition shopping list, **Order pickup on Instacart** opens a pre-filled Instacart page where the user picks a store, reviews matched products, and completes checkout.
 
 Local Docker Postgres is exposed on host port `5433` to avoid conflicts with an existing local PostgreSQL service. Inside Docker it still uses port `5432`.
 
@@ -60,6 +73,7 @@ echo -n YOUR_TWILIO_PHONE_NUMBER | gcloud secrets create TWILIO_PHONE_NUMBER --d
 echo -n YOUR_SENDGRID_API_KEY | gcloud secrets create SENDGRID_API_KEY --data-file=-
 echo -n DoNotReply@MasterMetabolic.com | gcloud secrets create SENDGRID_FROM_EMAIL --data-file=-
 echo -n 'Master Metabolic' | gcloud secrets create SENDGRID_FROM_NAME --data-file=-
+echo -n YOUR_INSTACART_API_KEY | gcloud secrets create INSTACART_API_KEY --data-file=-
 ```
 
 Grant the Cloud Run service account access after first deploy:
@@ -67,7 +81,7 @@ Grant the Cloud Run service account access after first deploy:
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe metabolic-v1 --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME; do
+for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME INSTACART_API_KEY; do
   gcloud secrets add-iam-policy-binding "$s" \
     --member="serviceAccount:${SA}" \
     --role="roles/secretmanager.secretAccessor"

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Printer, Share2 } from 'lucide-react';
+import { ChevronDown, ExternalLink, Printer, Share2, ShoppingBag } from 'lucide-react';
 import { clsx } from 'clsx';
 import { addDays, api, formatWeekRange, startOfWeek, todayKey } from '../../services/api';
-import type { ShoppingListResult } from '../../types';
+import type { InstacartShoppingListLink, InstacartStatus, ShoppingListResult } from '../../types';
 import { printShoppingList } from '../../utils/printShoppingList';
 import { formatPlannedMealContext, shareShoppingList } from '../../utils/shoppingListFormat';
 import { readSavedSupermarket, saveSupermarket } from '../../utils/shoppingListPreferences';
@@ -50,6 +50,9 @@ export function ShoppingListDrawer({
   const [sharing, setSharing] = useState(false);
   const [storeSectionOpen, setStoreSectionOpen] = useState(false);
   const [result, setResult] = useState<ShoppingListResult | null>(null);
+  const [instacartConfigured, setInstacartConfigured] = useState(false);
+  const [instacartLoading, setInstacartLoading] = useState(false);
+  const [instacartError, setInstacartError] = useState<string | null>(null);
 
   const range = useMemo(() => getPresetRange(preset, anchorDate), [preset, anchorDate]);
 
@@ -80,6 +83,21 @@ export function ShoppingListDrawer({
 
     return () => controller.abort();
   }, [open, range.startDate, range.endDate, appliedStoreName]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const controller = new AbortController();
+    api<InstacartStatus>('/api/nutrition/instacart/status', { signal: controller.signal })
+      .then((data) => {
+        if (!controller.signal.aborted) setInstacartConfigured(data.configured);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setInstacartConfigured(false);
+      });
+
+    return () => controller.abort();
+  }, [open]);
 
   function applyStoreName() {
     const trimmed = storeName.trim();
@@ -120,6 +138,33 @@ export function ShoppingListDrawer({
       setShareError(err instanceof Error ? err.message : 'Could not share shopping list.');
     } finally {
       setSharing(false);
+    }
+  }
+
+  async function handleInstacartOrder() {
+    if (!result?.itemCount || instacartLoading || !instacartConfigured) return;
+
+    setInstacartError(null);
+    setInstacartLoading(true);
+    try {
+      const payload: Record<string, string | number> = {
+        startDate: range.startDate,
+        endDate: range.endDate
+      };
+      if (appliedStoreName.trim()) {
+        payload.storeName = appliedStoreName.trim();
+      }
+
+      const link = await api<InstacartShoppingListLink>('/api/nutrition/shopping-list/instacart-link', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      window.open(link.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setInstacartError(err instanceof Error ? err.message : 'Could not open Instacart.');
+    } finally {
+      setInstacartLoading(false);
     }
   }
 
@@ -235,6 +280,31 @@ export function ShoppingListDrawer({
               {result.plannedDayCount === 1 ? '' : 's'}.
               {!result.enriched && result.itemCount > 0 ? ' Using estimated amounts.' : ''}
             </p>
+
+            {result.itemCount > 0 && (
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="w-full justify-center gap-2"
+                  onClick={handleInstacartOrder}
+                  disabled={loading || instacartLoading || !instacartConfigured}
+                >
+                  <ShoppingBag className="h-4 w-4" />
+                  {instacartLoading ? 'Opening Instacart…' : 'Order pickup on Instacart'}
+                  {!instacartLoading && <ExternalLink className="h-3.5 w-3.5 opacity-70" />}
+                </Button>
+                {instacartConfigured ? (
+                  <p className="text-xs text-slate-500">
+                    Opens Instacart in a new tab. Choose your store (including Walmart), review matched products, select a pickup
+                    time, and check out there.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">Instacart ordering will appear here once the server API key is configured.</p>
+                )}
+                {instacartError && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{instacartError}</p>}
+              </div>
+            )}
 
             {result.itemCount === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">

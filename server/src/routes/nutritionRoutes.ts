@@ -5,6 +5,7 @@ import { addMealItem, copyMealFromPreviousDay, createMeal, deleteMealItem, getMe
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
+import { createInstacartShoppingListLink, isInstacartConfigured } from '../services/instacartService.js';
 import { prisma } from '../db/prisma.js';
 
 const mealUpdateSchema = z
@@ -68,6 +69,41 @@ export async function nutritionRoutes(app: FastifyInstance) {
       return await getGroceryShoppingList(request.appUser!.id, query.startDate, query.endDate, query.storeName ?? null);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to build shopping list' });
+    }
+  });
+
+  app.get('/api/nutrition/instacart/status', { preHandler: requireAuth }, async () => ({
+    configured: isInstacartConfigured()
+  }));
+
+  app.post('/api/nutrition/shopping-list/instacart-link', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        storeName: z.string().trim().min(1).max(120).optional(),
+        title: z.string().trim().min(1).max(160).optional(),
+        expiresInDays: z.number().int().min(1).max(365).optional()
+      })
+      .parse(request.body);
+
+    if (!isInstacartConfigured()) {
+      return reply.code(503).send({ error: 'Instacart ordering is not configured.' });
+    }
+
+    try {
+      return await createInstacartShoppingListLink({
+        userId: request.appUser!.id,
+        startDate: body.startDate,
+        endDate: body.endDate,
+        storeName: body.storeName ?? null,
+        title: body.title ?? null,
+        expiresInDays: body.expiresInDays
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create Instacart link';
+      const statusCode = message.includes('not configured') ? 503 : 400;
+      return reply.code(statusCode).send({ error: message });
     }
   });
 

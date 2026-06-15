@@ -61,6 +61,8 @@ export type ShoppingListResult = {
   sections: GroceryListSection[];
   note: string;
 };
+export type InstacartStatus = { configured: boolean };
+export type InstacartShoppingListLink = { url: string; itemCount: number; expiresInDays: number };
 export type ExerciseCatalogItem = {
   id: string;
   name: string;

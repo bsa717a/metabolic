@@ -27,7 +27,9 @@ const envSchema = z.object({
   SENDGRID_API_KEY: z.string().optional().default(""),
   SENDGRID_FROM_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   SENDGRID_FROM_NAME: z.string().optional().default("Master Metabolic"),
-  CLIENT_URL: z.string().url().default("http://localhost:5173")
+  CLIENT_URL: z.string().url().default("http://localhost:5173"),
+  INSTACART_API_KEY: z.string().optional().default(""),
+  INSTACART_API_BASE: z.string().optional().default("")
 });
 
 export const env = envSchema.parse(process.env);
