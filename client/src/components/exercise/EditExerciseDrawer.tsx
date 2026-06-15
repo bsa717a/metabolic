@@ -4,6 +4,7 @@ import { EXERCISE_BODY_PARTS, EXERCISE_CATEGORIES } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { ExerciseHowToVideoButton } from './ExerciseHowToVideoButton';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -88,6 +89,16 @@ function EditExerciseDrawerContent({
 
   return (
         <div className="space-y-4">
+          {item.exercise.howToVideoUrl && (
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <ExerciseHowToVideoButton
+                name={item.exercise.name}
+                videoUrl={item.exercise.howToVideoUrl}
+                variant="primary"
+              />
+              <p className="text-sm text-slate-600">Watch the how-to video for this exercise.</p>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-sm">
               <span className="font-medium text-slate-700">Sets</span>

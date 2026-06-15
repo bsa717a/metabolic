@@ -510,6 +510,7 @@ model Exercise {
   category String?
   bodyPart String?
   description String?
+  howToVideoUrl String?
   defaultSets Int?
   defaultReps Int?
   defaultDurationMinutes Int?

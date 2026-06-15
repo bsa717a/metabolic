@@ -17,6 +17,7 @@ const envSchema = z.object({
   FIREBASE_PROJECT_ID: z.string().default("metabolic"),
   FIREBASE_CLIENT_EMAIL: z.string().optional().default(""),
   FIREBASE_PRIVATE_KEY: z.string().optional().default(""),
+  FIREBASE_STORAGE_BUCKET: z.string().optional().default(""),
   AI_PROVIDER: z.enum(["mock", "openai", "gemini"]).default("mock"),
   OPENAI_API_KEY: z.string().optional().default(""),
   GEMINI_API_KEY: z.string().optional().default(""),
