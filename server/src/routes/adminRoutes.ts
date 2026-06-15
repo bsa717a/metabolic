@@ -6,16 +6,19 @@ import { requireRole } from '../auth/requireRole.js';
 import { prisma } from '../db/prisma.js';
 import {
   assignPrimaryCoach,
+  listAdminExercises,
   listAdminFoods,
   listAdminFoodReviewQueue,
   listAdminUsers,
   listCoaches,
+  serializeAdminExercise,
   serializeAdminFood,
   serializeAdminUser,
   serializeReviewFood,
   approveAdminFood,
   rejectAdminFood,
   unassignPrimaryCoach,
+  updateAdminExercise,
   updateAdminFood,
   updateAdminUser
 } from '../services/adminService.js';
@@ -47,6 +50,7 @@ import {
   updateTemplate as updateExerciseTemplate,
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
+import { uploadExerciseHowToVideo } from '../services/exerciseVideoStorageService.js';
 
 const adminOnly = [requireAuth, requireRole(['SUPER_ADMIN', 'ADMIN'])];
 const superAdminOnly = [requireAuth, requireRole(['SUPER_ADMIN'])];
@@ -93,6 +97,20 @@ const foodApproveBody = z.object({
   fat: z.number().finite().min(0).optional(),
   visibility: z.nativeEnum(Visibility).optional()
 });
+
+const exerciseUpdateBody = z
+  .object({
+    name: z.string().trim().min(1).optional(),
+    category: z.string().trim().nullable().optional(),
+    bodyPart: z.string().trim().nullable().optional(),
+    description: z.string().trim().nullable().optional(),
+    howToVideoUrl: z.string().trim().url().nullable().optional(),
+    defaultSets: z.number().int().min(0).nullable().optional(),
+    defaultReps: z.number().int().min(0).nullable().optional(),
+    defaultDurationMinutes: z.number().int().min(0).nullable().optional(),
+    defaultDistance: z.number().finite().min(0).nullable().optional()
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
 
 const templateCreateBody = z.object({
   name: z.string().trim().min(1),
@@ -270,6 +288,52 @@ export async function adminRoutes(app: FastifyInstance) {
     } catch (error) {
       request.log.error({ err: error }, 'Failed to update food');
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update food' });
+    }
+  });
+
+  app.get('/api/admin/exercises', { preHandler: adminOnly }, async () => {
+    const exercises = await listAdminExercises();
+    return exercises.map(serializeAdminExercise);
+  });
+
+  app.patch('/api/admin/exercises/:id', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = exerciseUpdateBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise update' });
+    }
+
+    try {
+      const exercise = await updateAdminExercise(id, parsed.data);
+      return serializeAdminExercise(exercise);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to update exercise');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update exercise' });
+    }
+  });
+
+  app.post('/api/admin/exercises/:id/how-to-video', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    try {
+      await prisma.exercise.findUniqueOrThrow({ where: { id } });
+      const upload = await request.file();
+      if (!upload) {
+        return reply.code(400).send({ error: 'Video file is required.' });
+      }
+
+      const buffer = await upload.toBuffer();
+      const howToVideoUrl = await uploadExerciseHowToVideo(
+        id,
+        buffer,
+        upload.mimetype,
+        upload.filename
+      );
+      const exercise = await updateAdminExercise(id, { howToVideoUrl });
+      return serializeAdminExercise(exercise);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to upload exercise video');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to upload exercise video' });
     }
   });
 

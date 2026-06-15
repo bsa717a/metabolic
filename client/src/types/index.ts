@@ -67,10 +67,14 @@ export type ExerciseCatalogItem = {
   category?: string | null;
   bodyPart?: string | null;
   description?: string | null;
+  howToVideoUrl?: string | null;
   defaultSets?: number | null;
   defaultReps?: number | null;
   defaultDurationMinutes?: number | null;
   defaultDistance?: number | null;
+};
+export type AdminExercise = ExerciseCatalogItem & {
+  createdAt: string;
 };
 export const EXERCISE_CATEGORIES = ['Strength', 'Cardio', 'Recovery'] as const;
 export const EXERCISE_BODY_PARTS = [
@@ -94,7 +98,13 @@ export type ScheduledExercise = {
   durationMinutes?: number | null;
   distance?: number | null;
   weight?: number | null;
-  exercise: { name: string; category?: string | null; bodyPart?: string | null; description?: string | null };
+  exercise: {
+    name: string;
+    category?: string | null;
+    bodyPart?: string | null;
+    description?: string | null;
+    howToVideoUrl?: string | null;
+  };
 };
 /** @deprecated Use ScheduledExercise — kept for dashboard compatibility */
 export type Exercise = ScheduledExercise;

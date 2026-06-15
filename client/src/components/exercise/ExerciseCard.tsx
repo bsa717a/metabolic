@@ -3,6 +3,7 @@ import { Check, Pencil, SkipForward } from 'lucide-react';
 import type { ScheduledExercise } from '../../types';
 import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
+import { ExerciseHowToVideoButton } from './ExerciseHowToVideoButton';
 
 function formatPlan(item: ScheduledExercise) {
   if (item.sets != null) {
@@ -65,17 +66,22 @@ function ExerciseActionButton({
 
 function ExerciseActions({
   canComplete,
+  exerciseName,
+  howToVideoUrl,
   onEdit,
   onDone,
   onSkip
 }: {
   canComplete: boolean;
+  exerciseName: string;
+  howToVideoUrl?: string | null;
   onEdit: () => void;
   onDone?: () => void;
   onSkip?: () => void;
 }) {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
+      <ExerciseHowToVideoButton name={exerciseName} videoUrl={howToVideoUrl} />
       <ExerciseActionButton label="Edit exercise" onClick={onEdit}>
         <Pencil size={18} />
       </ExerciseActionButton>
@@ -139,7 +145,12 @@ export function ExerciseCard({
               <p className="text-sm text-slate-400 sm:min-w-0">{formatPlan(item)}</p>
             </div>
           </div>
-          <ExerciseActions canComplete={false} onEdit={onEdit} />
+          <ExerciseActions
+            canComplete={false}
+            exerciseName={item.exercise.name}
+            howToVideoUrl={item.exercise.howToVideoUrl}
+            onEdit={onEdit}
+          />
         </div>
       </div>
     );
@@ -155,6 +166,8 @@ export function ExerciseCard({
       </div>
       <ExerciseActions
         canComplete={canComplete}
+        exerciseName={item.exercise.name}
+        howToVideoUrl={item.exercise.howToVideoUrl}
         onEdit={onEdit}
         onDone={() => void markDone()}
         onSkip={() => void skip()}

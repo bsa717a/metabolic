@@ -1,5 +1,6 @@
 import { FoodSource, Role, UserStatus, Visibility } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { deleteExerciseHowToVideos } from './exerciseVideoStorageService.js';
 
 export type AdminUserUpdate = {
   firstName?: string;
@@ -22,6 +23,18 @@ export type AdminFoodUpdate = {
   source?: FoodSource;
   visibility?: Visibility;
   verified?: boolean;
+};
+
+export type AdminExerciseUpdate = {
+  name?: string;
+  category?: string | null;
+  bodyPart?: string | null;
+  description?: string | null;
+  howToVideoUrl?: string | null;
+  defaultSets?: number | null;
+  defaultReps?: number | null;
+  defaultDurationMinutes?: number | null;
+  defaultDistance?: number | null;
 };
 
 const userInclude = {
@@ -112,6 +125,26 @@ export async function listAdminFoods() {
   return prisma.food.findMany({ orderBy: [{ name: 'asc' }] });
 }
 
+export function serializeAdminExercise(exercise: Awaited<ReturnType<typeof listAdminExercises>>[number]) {
+  return {
+    id: exercise.id,
+    name: exercise.name,
+    category: exercise.category,
+    bodyPart: exercise.bodyPart,
+    description: exercise.description,
+    howToVideoUrl: exercise.howToVideoUrl,
+    defaultSets: exercise.defaultSets,
+    defaultReps: exercise.defaultReps,
+    defaultDurationMinutes: exercise.defaultDurationMinutes,
+    defaultDistance: exercise.defaultDistance != null ? Number(exercise.defaultDistance) : null,
+    createdAt: exercise.createdAt.toISOString()
+  };
+}
+
+export async function listAdminExercises() {
+  return prisma.exercise.findMany({ orderBy: [{ name: 'asc' }] });
+}
+
 export async function listAdminFoodReviewQueue() {
   return prisma.food.findMany({
     where: { aiGenerated: true, verified: false },
@@ -168,6 +201,13 @@ export async function unassignPrimaryCoach(userId: string) {
 
 export async function updateAdminFood(id: string, data: AdminFoodUpdate) {
   return prisma.food.update({ where: { id }, data });
+}
+
+export async function updateAdminExercise(id: string, data: AdminExerciseUpdate) {
+  if (data.howToVideoUrl === null) {
+    await deleteExerciseHowToVideos(id);
+  }
+  return prisma.exercise.update({ where: { id }, data });
 }
 
 export async function approveAdminFood(id: string, data?: AdminFoodUpdate) {

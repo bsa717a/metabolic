@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import formbody from '@fastify/formbody';
+import multipart from '@fastify/multipart';
 import { env } from './config/env.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { dashboardRoutes } from './routes/dashboardRoutes.js';
@@ -27,6 +28,11 @@ async function main() {
   });
   await app.register(helmet);
   await app.register(formbody);
+  await app.register(multipart, {
+    limits: {
+      fileSize: 100 * 1024 * 1024
+    }
+  });
 
   app.get('/health', async () => ({ ok: true, service: 'metabolic-api' }));
   await app.register(authRoutes);
