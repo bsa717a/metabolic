@@ -9,7 +9,7 @@ function BrandMark({ className, size = 40 }: { className?: string; size?: number
       aria-hidden
       width={size}
       height={size}
-      className={clsx('shrink-0 object-contain', className)}
+      className={clsx('shrink-0 object-contain [image-rendering:pixelated]', className)}
     />
   );
 }

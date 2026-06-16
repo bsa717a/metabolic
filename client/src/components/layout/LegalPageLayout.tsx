@@ -15,7 +15,7 @@ export function LegalPageLayout({
       <header className="border-b border-app-border bg-app-surface">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link to="/login" className="flex items-center gap-3">
-            <img src="/logo.png" alt="Master Metabolic" className="h-9 w-auto object-contain" />
+            <img src="/logo.png" alt="Master Metabolic" className="h-9 w-auto object-contain [image-rendering:pixelated]" />
             <span className="text-sm font-semibold">Master Metabolic</span>
           </Link>
           <ThemeToggle />
