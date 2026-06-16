@@ -91,9 +91,9 @@ export function ProgressPage() {
         </Card>
         <Card>
           <h2 className="font-bold">Start vs current vs goal</h2>
-          <p className="mt-4 text-slate-500">See the Program page for compact rings and metric table.</p>
+          <p className="mt-4 text-slate-500">See Metabolic Blueprint for compact rings and metric table.</p>
           <p className="mt-3 text-sm text-slate-500">
-            The export report also includes metric snapshots, body composition logs, progress photos, and blood panel
+            The export report also includes session snapshots, body composition logs, progress photos, and blood panel
             results with reference-range status.
           </p>
         </Card>

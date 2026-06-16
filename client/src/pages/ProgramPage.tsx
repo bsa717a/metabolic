@@ -72,7 +72,7 @@ export function ProgramPage() {
     } catch (err) {
       setSnapshots([]);
       setSelectedSnapshotId(null);
-      setSnapshotError(err instanceof Error ? err.message : 'Unable to load saved snapshots');
+      setSnapshotError(err instanceof Error ? err.message : 'Unable to load session snapshots');
     }
   }, []);
 
@@ -152,7 +152,7 @@ export function ProgramPage() {
         unit: metric.unit
       }));
       if (payload.some((metric) => !Number.isFinite(metric.currentValue))) {
-        throw new Error('Please enter valid current values before saving a snapshot.');
+        throw new Error('Please enter valid current values before saving a session snapshot.');
       }
       const snapshot = await api<ProgramMetricSnapshot>(`/api/programs/${program.id}/metric-snapshots`, {
         method: 'POST',
@@ -161,7 +161,7 @@ export function ProgramPage() {
       await loadSnapshots(program.id);
       setSelectedSnapshotId(snapshot.id);
     } catch (err) {
-      setSnapshotError(err instanceof Error ? err.message : 'Unable to save snapshot');
+      setSnapshotError(err instanceof Error ? err.message : 'Unable to save session snapshot');
     } finally {
       setSavingSnapshot(false);
     }
@@ -189,8 +189,8 @@ export function ProgramPage() {
     <>
       <div className="space-y-6 pb-24">
         <div>
-          <h1 className="text-3xl font-bold">{program.name}</h1>
-          <p className="text-slate-500">Start, current, and goal metrics in one compact view.</p>
+          <h1 className="text-3xl font-bold">Metabolic Blueprint</h1>
+          <p className="text-slate-500">Where intention meets results.</p>
         </div>
         <ProgramDonutSummary metrics={chartMetrics} currentLabel={currentChartLabel} />
         <ProgramMetricTable

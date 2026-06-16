@@ -84,8 +84,8 @@ export function ProgramMetricSnapshotHistory({ programId, snapshots, selectedId,
   if (snapshots.length === 0) {
     return (
       <Card>
-        <h2 className="mb-1 text-lg font-bold">Saved Snapshots</h2>
-        <p className="text-sm text-slate-500 dark:text-app-text-muted">Save today&apos;s current values to start tracking sessions over time.</p>
+        <h2 className="mb-1 text-lg font-bold">Session Snapshots</h2>
+        <p className="text-sm text-slate-500 dark:text-app-text-muted">Save a session snapshot to start tracking progress over time.</p>
       </Card>
     );
   }
@@ -93,7 +93,7 @@ export function ProgramMetricSnapshotHistory({ programId, snapshots, selectedId,
   return (
     <>
       <Card>
-        <h2 className="mb-1 text-lg font-bold">Saved Snapshots</h2>
+        <h2 className="mb-1 text-lg font-bold">Session Snapshots</h2>
         <p className="mb-4 text-sm text-slate-500 dark:text-app-text-muted">Select a session to preview it in the chart, or edit with the pencil.</p>
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-app-border">
           <table className="min-w-full text-left">

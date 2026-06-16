@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AdminCard } from '../components/admin/AdminCard';
 import { FoodReviewQueue } from '../components/admin/FoodReviewQueue';
 import { ExerciseTable } from '../components/admin/ExerciseTable';
+import { ExerciseTemplatesTable } from '../components/admin/ExerciseTemplatesTable';
 import { FoodTable } from '../components/admin/FoodTable';
+import { NutritionTemplatesTable } from '../components/admin/NutritionTemplatesTable';
 import { UserTable } from '../components/admin/UserTable';
 import { AdminGamificationPanel } from '../components/admin/AdminGamificationPanel';
 
@@ -33,18 +34,9 @@ const interactiveSections = new Set<AdminSection>([
 ]);
 
 export function AdminPage() {
-  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<AdminSection | null>('Users');
 
   function toggleSection(section: AdminSection) {
-    if (section === 'Nutrition Templates') {
-      navigate('/admin/nutrition-templates');
-      return;
-    }
-    if (section === 'Exercise Templates') {
-      navigate('/admin/exercise-templates');
-      return;
-    }
     if (!interactiveSections.has(section)) return;
     setActiveSection((current) => (current === section ? null : section));
   }
@@ -67,6 +59,8 @@ export function AdminPage() {
       {activeSection === 'Food Database' && <FoodTable />}
       {activeSection === 'Exercise Database' && <ExerciseTable />}
       {activeSection === 'AI Review Queue' && <FoodReviewQueue />}
+      {activeSection === 'Nutrition Templates' && <NutritionTemplatesTable />}
+      {activeSection === 'Exercise Templates' && <ExerciseTemplatesTable />}
       {activeSection === 'Gamification' && <AdminGamificationPanel />}
     </div>
   );

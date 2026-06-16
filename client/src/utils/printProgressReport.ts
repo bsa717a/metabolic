@@ -274,7 +274,7 @@ export function buildProgressReportHtml(summary: ProgressSummary) {
     snapshotRows
       ? `
         <section class="section">
-          <h2>Metric snapshots</h2>
+          <h2>Session snapshots</h2>
           <table class="data-table">
             <thead><tr><th>Date</th><th>Values</th></tr></thead>
             <tbody>${snapshotRows}</tbody>
