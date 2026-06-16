@@ -3,55 +3,14 @@ import { Link } from 'react-router-dom';
 
 function BrandMark({ className, size = 40 }: { className?: string; size?: number }) {
   return (
-    <svg
-      className={className}
+    <img
+      src="/logo.png"
+      alt=""
+      aria-hidden
       width={size}
       height={size}
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="brand-ring" x1="8" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#A6C98A" />
-          <stop offset="1" stopColor="#7DA35D" />
-        </linearGradient>
-        <linearGradient id="brand-m-right" x1="24" y1="14" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#A6C98A" />
-          <stop offset="1" stopColor="#7DA35D" />
-        </linearGradient>
-        <clipPath id="brand-m-right-clip">
-          <rect x="24" y="12" width="14" height="24" />
-        </clipPath>
-      </defs>
-      <circle
-        cx="24"
-        cy="24"
-        r="20"
-        stroke="url(#brand-ring)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeDasharray="112 18"
-        transform="rotate(-35 24 24)"
-      />
-      <path
-        d="M14.5 32.5V15.5L19.5 23.5L24 15.5L28.5 23.5V32.5"
-        stroke="#1F2933"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="dark:stroke-brand-off-white"
-      />
-      <path
-        d="M14.5 32.5V15.5L19.5 23.5L24 15.5L28.5 23.5V32.5"
-        stroke="url(#brand-m-right)"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        clipPath="url(#brand-m-right-clip)"
-      />
-    </svg>
+      className={clsx('shrink-0 object-contain [image-rendering:pixelated]', className)}
+    />
   );
 }
 
@@ -69,7 +28,7 @@ export function BrandLogo({
 }) {
   const content = (
     <>
-      <BrandMark size={markSize} className="shrink-0 -translate-y-0.5" />
+      <BrandMark size={markSize} />
       <div className="min-w-0">
         <p className="leading-none">
           <span className="text-lg font-semibold tracking-tight text-brand-navy dark:text-brand-off-white sm:text-xl">
