@@ -10,6 +10,11 @@ import { lookupFoodFromImage, type FoodLookupResult } from './foodLookupService.
 import { env } from '../config/env.js';
 import { sendOutboundMessage } from './twilioOutboundService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
+import {
+  smsHelpResponseMessage,
+  smsOptInConfirmationMessage,
+  smsOptOutConfirmationMessage
+} from '../utils/smsCompliance.js';
 
 export type SmsIntent =
   | 'MARK_ALL_EXERCISES_DONE'
@@ -56,15 +61,15 @@ function isSmsStopKeyword(message: string) {
 }
 
 function smsOptInResponse() {
-  return 'Master Metabolic: You are opted in for conversational SMS replies about meals, workouts, program status, progress, and support. Msg frequency varies. Msg & data rates may apply. Reply HELP for help or STOP to opt out.';
+  return smsOptInConfirmationMessage();
 }
 
 function smsHelpResponse() {
-  return 'Master Metabolic SMS support: Text questions about your meals, workouts, program status, or progress. Msg frequency varies. Msg & data rates may apply. Reply STOP to opt out. Email support@master-metabolic.com for help.';
+  return smsHelpResponseMessage();
 }
 
 function smsOptOutResponse() {
-  return 'Master Metabolic: You have opted out and will no longer receive SMS messages from this number. Reply START to resubscribe.';
+  return smsOptOutConfirmationMessage();
 }
 
 function wantsMarkMealComplete(text: string) {

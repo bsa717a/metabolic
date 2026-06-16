@@ -1,23 +1,35 @@
 import { Link } from 'react-router-dom';
 import { LegalPageLayout } from '../components/layout/LegalPageLayout';
+import { SMS_OPT_IN_DISCLOSURE, SMS_PHONE_DISPLAY } from '../config/sms';
 
 const SUPPORT_EMAIL = 'support@master-metabolic.com';
 
 export function SmsOptInPage() {
   return (
-    <LegalPageLayout title="Master Metabolic SMS Opt-In" lastUpdated="June 10, 2026">
+    <LegalPageLayout title="Master Metabolic SMS Opt-In" lastUpdated="June 16, 2026">
       <section>
         <h2 className="text-lg font-semibold">How to opt in</h2>
         <p className="mt-2 text-app-text-muted">
-          Existing Metabolic users can opt in to the Master Metabolic SMS program by texting{' '}
-          <strong>START</strong> to the Master Metabolic SMS number provided in their Metabolic account or by
-          an authorized Master Metabolic coach or administrator.
+          Existing Metabolic users opt in to the Master Metabolic SMS program by texting{' '}
+          <strong>START</strong> to:
+        </p>
+        <p className="mt-3 text-center text-2xl font-semibold tracking-wide">{SMS_PHONE_DISPLAY}</p>
+        <p className="mt-3 text-app-text-muted">
+          You must have an active Metabolic account with your mobile number linked to your profile before
+          texting <strong>START</strong>. View this page before opting in so you understand how the program
+          works.
         </p>
         <p className="mt-2 rounded-2xl border border-app-border bg-app-surface p-4 text-app-text-muted">
-          By texting <strong>START</strong>, you agree to receive conversational SMS replies from Master
-          Metabolic about your Metabolic account, including meals, workouts, program status, progress, and
-          support. Message frequency varies based on your messages. Message and data rates may apply. Reply{' '}
-          <strong>HELP</strong> for help or <strong>STOP</strong> to opt out.
+          {SMS_OPT_IN_DISCLOSURE}
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold">Coach-assisted enrollment</h2>
+        <p className="mt-2 text-app-text-muted">
+          A Master Metabolic coach or administrator may share the SMS number above with an enrolled client
+          during onboarding. The client must still text <strong>START</strong> from their own mobile phone to
+          opt in. Coaches do not opt clients in on their behalf.
         </p>
       </section>
 
@@ -26,7 +38,7 @@ export function SmsOptInPage() {
         <p className="mt-2 text-app-text-muted">
           SMS consent is optional and is not required to purchase goods or services. The SMS feature is available
           only to users who have a Metabolic account and choose to start an SMS conversation with Master
-          Metabolic.
+          Metabolic by texting <strong>START</strong>.
         </p>
       </section>
 
@@ -34,8 +46,11 @@ export function SmsOptInPage() {
         <h2 className="text-lg font-semibold">Message types and frequency</h2>
         <p className="mt-2 text-app-text-muted">
           Master Metabolic sends conversational coaching and support replies related to your account, meals,
-          workouts, program status, and progress. We do not send marketing messages, promotional blasts, or
-          unsolicited reminders under this SMS program. Message frequency varies based on how often you text us.
+          workouts, program status, and progress. Coaches may also send account-related messages that include
+          links back to your Metabolic progress, nutrition, or exercise pages when your results are ready. We do
+          not send marketing messages, promotional blasts, or unsolicited reminders under this SMS program.
+          Message frequency varies based on how often you text us or when a coach sends a results notification
+          you requested through your program.
         </p>
       </section>
 
