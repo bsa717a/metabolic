@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
 import { LegalPageLayout } from '../components/layout/LegalPageLayout';
+import { SMS_PHONE_DISPLAY } from '../config/sms';
 
 const SUPPORT_EMAIL = 'support@master-metabolic.com';
 
 export function CampaignTermsPage() {
   return (
-    <LegalPageLayout title="SMS Campaign Terms and Conditions" lastUpdated="May 28, 2026">
+    <LegalPageLayout title="SMS Campaign Terms and Conditions" lastUpdated="June 16, 2026">
       <section>
         <h2 className="text-lg font-semibold">Agreement</h2>
         <p className="mt-2 text-app-text-muted">
@@ -42,13 +43,18 @@ export function CampaignTermsPage() {
       <section>
         <h2 className="text-lg font-semibold">Opt-in</h2>
         <p className="mt-2 text-app-text-muted">
-          You opt in by texting <strong>START</strong> to the Master Metabolic SMS number after viewing the
-          public{' '}
+          You opt in by texting <strong>START</strong> to {SMS_PHONE_DISPLAY} after viewing the public{' '}
           <Link to="/sms-opt-in" className="font-medium text-app-text underline-offset-2 hover:underline">
             SMS opt-in disclosure
           </Link>
           . By opting in, you authorize Master Metabolic to send conversational SMS replies related to your
-          Metabolic account, including meals, workouts, program status, progress, and support.
+          Metabolic account, including meals, workouts, program status, progress, and support. Coaches may send
+          account-related messages with links to your Metabolic progress, nutrition, or exercise pages when your
+          results are ready.
+        </p>
+        <p className="mt-2 text-app-text-muted">
+          Message frequency varies based on how often you text us or when a coach sends a results notification
+          through your program. Message and data rates may apply as determined by your wireless carrier.
         </p>
         <p className="mt-2 text-app-text-muted">
           Consent to receive SMS messages is not a condition of purchasing any goods or services. The SMS
@@ -59,10 +65,10 @@ export function CampaignTermsPage() {
       <section>
         <h2 className="text-lg font-semibold">Message types and frequency</h2>
         <p className="mt-2 text-app-text-muted">
-          Messages are conversational and sent in response to texts you initiate. Message frequency varies based
-          on how often you text us. Master Metabolic does not send marketing messages, promotional blasts, or
-          unsolicited reminders under this SMS program. Message and data rates may apply as determined by your
-          wireless carrier.
+          Messages are conversational and sent in response to texts you initiate, or when a coach sends a
+          results notification through your program. Message frequency varies based on how often you text us.
+          Master Metabolic does not send marketing messages, promotional blasts, or unsolicited reminders under
+          this SMS program.
         </p>
       </section>
 
@@ -78,7 +84,8 @@ export function CampaignTermsPage() {
         <h2 className="text-lg font-semibold">Opt-out and help keywords</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-app-text-muted">
           <li>
-            Text <strong>START</strong> to opt in or resubscribe to the Master Metabolic SMS program.
+            Text <strong>START</strong> to {SMS_PHONE_DISPLAY} to opt in or resubscribe to the Master Metabolic
+            SMS program.
           </li>
           <li>
             Reply <strong>STOP</strong> to cancel SMS messages from Master Metabolic at any time. You will

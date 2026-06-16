@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
 import { LegalPageLayout } from '../components/layout/LegalPageLayout';
+import { SMS_PHONE_DISPLAY } from '../config/sms';
 
 const SUPPORT_EMAIL = 'support@master-metabolic.com';
 
 export function CampaignPolicyPage() {
   return (
-    <LegalPageLayout title="SMS Campaign Privacy Policy" lastUpdated="May 28, 2026">
+    <LegalPageLayout title="SMS Campaign Privacy Policy" lastUpdated="June 16, 2026">
       <section>
         <h2 className="text-lg font-semibold">Overview</h2>
         <p className="mt-2 text-app-text-muted">
@@ -32,6 +33,10 @@ export function CampaignPolicyPage() {
         <p className="mt-2 text-app-text-muted">We use SMS-related information to:</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-app-text-muted">
           <li>Deliver AI-powered coaching responses about your nutrition, exercise, and program data</li>
+          <li>
+            Send account-related results notifications with links to your progress, nutrition, or exercise pages
+            when requested by your coach through your program
+          </li>
           <li>Authenticate you by matching your phone number to your Metabolic account</li>
           <li>Maintain a message history so conversations can continue across multiple texts</li>
           <li>Improve reliability, security, and support for the messaging program</li>
@@ -46,14 +51,18 @@ export function CampaignPolicyPage() {
       <section>
         <h2 className="text-lg font-semibold">Opt-in and consent</h2>
         <p className="mt-2 text-app-text-muted">
-          You opt in to receive SMS messages from Master Metabolic by texting <strong>START</strong> to the
-          Master Metabolic SMS number after viewing the public{' '}
+          You opt in to receive SMS messages from Master Metabolic by texting <strong>START</strong> to{' '}
+          {SMS_PHONE_DISPLAY} after viewing the public{' '}
           <Link to="/sms-opt-in" className="font-medium text-app-text underline-offset-2 hover:underline">
             SMS opt-in disclosure
           </Link>
           . By opting in, you confirm that you are the account holder or have permission to use the phone number
           provided and that you agree to receive conversational SMS replies related to your Metabolic account,
           including meals, workouts, program status, progress, and support.
+        </p>
+        <p className="mt-2 text-app-text-muted">
+          Message frequency varies based on your interactions with the service. Message and data rates may apply
+          depending on your mobile carrier and plan.
         </p>
         <p className="mt-2 text-app-text-muted">
           SMS consent is optional and is not required to purchase goods or services. We do not send marketing

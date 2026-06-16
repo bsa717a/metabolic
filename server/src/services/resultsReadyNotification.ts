@@ -25,6 +25,7 @@ export function buildResultsReadySmsMessage(options: {
     `Master Metabolic: Hi ${greeting}, ${coachLabel} says your latest results are ready.`,
     `Progress: ${options.links.progress}`,
     `Nutrition: ${options.links.nutrition}`,
-    `Exercise: ${options.links.exercise}`
+    `Exercise: ${options.links.exercise}`,
+    'Reply STOP to opt out.'
   ].join('\n');
 }
