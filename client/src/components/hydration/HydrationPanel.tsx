@@ -143,7 +143,12 @@ export function HydrationPanel({ variant = 'page', onClose }: HydrationPanelProp
       <div className={compact ? '' : 'rounded-2xl border border-app-border bg-app-surface p-4 sm:p-6'}>
         <div className={`flex ${compact ? 'flex-col items-center gap-4' : 'flex-col items-center gap-6 sm:flex-row sm:items-start'}`}>
           <div className="flex flex-col items-center shrink-0">
-            <WaterBottle fillFraction={summary.fillFraction} size={compact ? 'md' : 'lg'} />
+            <WaterBottle
+              fillFraction={summary.fillFraction}
+              goalMet={summary.goalMet}
+              targetOz={summary.targetOz}
+              size={compact ? 'md' : 'lg'}
+            />
             <p className="mt-2 text-sm font-medium text-app-text">
               {summary.goalMet ? 'Goal reached for today' : `${remainingOz} oz to go`}
             </p>

@@ -63,7 +63,12 @@ export function TopbarGamification() {
           aria-label="Open hydration"
           aria-expanded={hydrationOpen}
         >
-          <WaterBottle fillFraction={hydration.fillFraction} size="sm" />
+          <WaterBottle
+            fillFraction={hydration.fillFraction}
+            goalMet={hydration.goalMet}
+            targetOz={hydration.targetOz}
+            size="sm"
+          />
         </button>
         <HydrationTopbarDrawer
           open={hydrationOpen}
