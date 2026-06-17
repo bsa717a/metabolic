@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { api } from '../services/api';
 import type { UserBadgeView } from '../types/gamification';
+import { BadgeDetailModal } from '../components/gamification/BadgeDetailModal';
 import { BadgeTile } from '../components/gamification/BadgeTile';
 
 type BadgesResponse = {
@@ -20,6 +21,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function BadgesPage() {
   const [data, setData] = useState<BadgesResponse | null>(null);
+  const [selectedBadge, setSelectedBadge] = useState<UserBadgeView | null>(null);
 
   useEffect(() => {
     api<BadgesResponse>('/api/gamification/badges').then(setData);
@@ -35,7 +37,8 @@ export function BadgesPage() {
       </Link>
       <h1 className="text-3xl font-bold">Badges</h1>
       <p className="text-sm text-app-text-muted max-w-xl">
-        Meaningful milestones — earned through showing up, tracking honestly, and building consistency.
+        Meaningful milestones — earned through showing up, tracking honestly, and building consistency. Tap a badge
+        to zoom in.
       </p>
 
       {data?.recent.length ? (
@@ -45,7 +48,7 @@ export function BadgesPage() {
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {data.recent.map((badge) => (
-              <BadgeTile key={badge.id} badge={badge} />
+              <BadgeTile key={badge.id} badge={badge} onSelect={setSelectedBadge} />
             ))}
           </div>
         </section>
@@ -58,11 +61,13 @@ export function BadgesPage() {
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {badges.map((badge) => (
-              <BadgeTile key={badge.id} badge={badge} />
+              <BadgeTile key={badge.id} badge={badge} onSelect={setSelectedBadge} />
             ))}
           </div>
         </section>
       ))}
+
+      <BadgeDetailModal badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
     </div>
   );
 }

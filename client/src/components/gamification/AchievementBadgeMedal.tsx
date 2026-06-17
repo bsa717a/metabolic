@@ -6,7 +6,8 @@ import { resolveBadgeDisplay } from './badgeDisplay';
 const SIZES = {
   sm: { disc: 48, icon: 20, label: false, art: 48 },
   md: { disc: 80, icon: 32, label: true, art: 96 },
-  lg: { disc: 112, icon: 44, label: true, art: 160 }
+  lg: { disc: 112, icon: 44, label: true, art: 160 },
+  xl: { disc: 160, icon: 56, label: true, art: 280 }
 } as const;
 
 function shortLabel(name: string) {
