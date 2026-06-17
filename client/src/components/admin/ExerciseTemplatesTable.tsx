@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Copy, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 import type { ExercisePlanTemplateSummary } from '../../types';
@@ -73,6 +73,8 @@ function SortableHeader({
 
 export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateId?: string }) {
   const navigate = useNavigate();
+  const { id: routeTemplateId } = useParams<{ id?: string }>();
+  const isTemplateEditorRoute = Boolean(routeTemplateId ?? initialTemplateId);
   const [templates, setTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -84,12 +86,13 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialTemplateId ?? null);
 
   useEffect(() => {
-    if (initialTemplateId) setSelectedTemplateId(initialTemplateId);
-  }, [initialTemplateId]);
+    const activeId = routeTemplateId ?? initialTemplateId;
+    if (activeId) setSelectedTemplateId(activeId);
+  }, [initialTemplateId, routeTemplateId]);
 
   function closeDrawer() {
     setSelectedTemplateId(null);
-    if (initialTemplateId) navigate('/admin/exercise-templates');
+    if (isTemplateEditorRoute) navigate('/admin/exercise-templates');
   }
 
   function handleTemplateSaved(updated: ExercisePlanTemplateSummary) {
@@ -104,6 +107,9 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
 
   function openTemplate(id: string) {
     setSelectedTemplateId(id);
+    if (isTemplateEditorRoute) {
+      navigate(`/admin/exercise-templates/${id}`, { replace: true });
+    }
   }
 
   const visibleTemplates = useMemo(() => {
@@ -181,6 +187,10 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
     if (!window.confirm(`Delete template "${name}"?`)) return;
     try {
       await api(`/api/admin/exercise-templates/${id}`, { method: 'DELETE' });
+      if (selectedTemplateId === id) {
+        setSelectedTemplateId(null);
+        if (isTemplateEditorRoute) navigate('/admin/exercise-templates');
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete template');

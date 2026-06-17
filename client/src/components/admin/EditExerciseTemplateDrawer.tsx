@@ -223,6 +223,7 @@ function EditExerciseTemplateDrawerContent({
         })
       });
       setTemplate(updated);
+      onTitleChange(updated.name);
       notifySaved(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save template');
