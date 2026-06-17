@@ -105,7 +105,7 @@ function CoachRoute({ appUser }: { appUser: AppUser | null }) {
       </div>
     );
   }
-  return <CoachPage />;
+  return <CoachPage coachUserId={appUser!.id} />;
 }
 
 export default function App() {

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { clsx } from 'clsx';
 import { api, toDateKey } from '../../services/api';
 import type { CoachCheckIn, CoachCalendarEvent, CoachClient } from '../../types';
 import { Button } from '../ui/Button';
@@ -6,6 +8,26 @@ import { Drawer } from '../ui/Drawer';
 
 function clientName(client: CoachClient) {
   return `${client.firstName} ${client.lastName}`;
+}
+
+function matchesSelectedClientSearch(client: CoachClient, query: string) {
+  return clientName(client) === query.trim();
+}
+
+function resolveUserIdFromSearch(query: string, clients: CoachClient[], currentUserId: string) {
+  const currentClient = clients.find((client) => client.id === currentUserId);
+  if (currentClient && matchesSelectedClientSearch(currentClient, query)) {
+    return currentUserId;
+  }
+  return '';
+}
+
+function matchesClientSearch(client: CoachClient, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  const first = client.firstName.toLowerCase();
+  const last = client.lastName.toLowerCase();
+  return first.includes(normalized) || last.includes(normalized) || `${first} ${last}`.includes(normalized);
 }
 
 function toLocalDateFromIso(iso: string) {
@@ -51,12 +73,25 @@ export function ScheduleCheckInDrawer({
   const [time, setTime] = useState('09:00');
   const [durationMinutes, setDurationMinutes] = useState<30 | 60>(30);
   const [notes, setNotes] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const clientPickerRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const sortedClients = useMemo(
     () => [...clients].sort((a, b) => clientName(a).localeCompare(clientName(b))),
     [clients]
+  );
+
+  const filteredClients = useMemo(
+    () => sortedClients.filter((client) => matchesClientSearch(client, clientSearch)),
+    [clientSearch, sortedClients]
+  );
+
+  const selectedClient = useMemo(
+    () => sortedClients.find((client) => client.id === userId) ?? null,
+    [sortedClients, userId]
   );
 
   useEffect(() => {
@@ -68,18 +103,41 @@ export function ScheduleCheckInDrawer({
       setTime(toLocalTimeInput(editingEvent.startsAt));
       setDurationMinutes(editingEvent.durationMinutes === 60 ? 60 : 30);
       setNotes(editingEvent.detail ?? '');
+      const client = clients.find((row) => row.id === editingEvent.userId);
+      setClientSearch(client ? clientName(client) : '');
+      setClientPickerOpen(false);
       return;
     }
-    setUserId(initialUserId || sortedClients[0]?.id || '');
+    const prefilledClient = initialUserId
+      ? sortedClients.find((row) => row.id === initialUserId)
+      : null;
+    setUserId(prefilledClient?.id ?? '');
+    setClientSearch(prefilledClient ? clientName(prefilledClient) : '');
     setDate(initialDate);
     setTime('09:00');
     setDurationMinutes(30);
     setNotes('');
-  }, [editingEvent, initialDate, initialUserId, open, sortedClients]);
+    setClientPickerOpen(false);
+  }, [clients, editingEvent, initialDate, initialUserId, open, sortedClients]);
+
+  useEffect(() => {
+    if (!clientPickerOpen) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (clientPickerRef.current?.contains(event.target as Node)) return;
+      setClientPickerOpen(false);
+      if (selectedClient) {
+        setClientSearch(clientName(selectedClient));
+      } else {
+        setClientSearch('');
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [clientPickerOpen, selectedClient]);
 
   async function save() {
-    if (!userId) {
-      setError('Choose a client first.');
+    if (!userId || !selectedClient || !matchesSelectedClientSearch(selectedClient, clientSearch)) {
+      setError('Choose a client from the list.');
       return;
     }
     setBusy(true);
@@ -138,17 +196,74 @@ export function ScheduleCheckInDrawer({
 
         <label className="block text-sm">
           <span className="mb-1 block font-medium">Client</span>
-          <select
-            className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
-          >
-            {sortedClients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {clientName(client)}
-              </option>
-            ))}
-          </select>
+          <div ref={clientPickerRef} className="relative">
+            <div className="flex overflow-hidden rounded-xl border border-app-border bg-app-surface">
+              <input
+                type="text"
+                role="combobox"
+                aria-expanded={clientPickerOpen}
+                aria-autocomplete="list"
+                aria-controls="schedule-check-in-client-list"
+                className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 outline-none"
+                value={clientSearch}
+                placeholder="Search or choose a client"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setClientSearch(value);
+                  setClientPickerOpen(true);
+                  setUserId((currentUserId) => resolveUserIdFromSearch(value, sortedClients, currentUserId));
+                }}
+                onFocus={() => setClientPickerOpen(true)}
+              />
+              <button
+                type="button"
+                aria-label={clientPickerOpen ? 'Close client list' : 'Open client list'}
+                className="inline-flex shrink-0 items-center justify-center border-l border-app-border px-3 text-app-text-muted transition hover:bg-app-muted hover:text-app-text"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setClientPickerOpen((open) => !open)}
+              >
+                <ChevronDown
+                  className={clsx('h-4 w-4 transition', clientPickerOpen && 'rotate-180')}
+                  aria-hidden
+                />
+              </button>
+            </div>
+            {clientPickerOpen && (
+              <ul
+                id="schedule-check-in-client-list"
+                role="listbox"
+                className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-app-border bg-app-surface py-1 shadow-lg"
+              >
+                {filteredClients.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-app-text-muted">No clients match your search.</li>
+                ) : (
+                  filteredClients.map((client) => {
+                    const selected = client.id === userId;
+                    return (
+                      <li key={client.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          className={`flex w-full px-3 py-2 text-left text-sm transition hover:bg-app-muted ${
+                            selected ? 'bg-app-muted font-medium text-app-text' : 'text-app-text'
+                          }`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setUserId(client.id);
+                            setClientSearch(clientName(client));
+                            setClientPickerOpen(false);
+                          }}
+                        >
+                          {clientName(client)}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            )}
+          </div>
         </label>
 
         <div className="grid gap-3 sm:grid-cols-2">
