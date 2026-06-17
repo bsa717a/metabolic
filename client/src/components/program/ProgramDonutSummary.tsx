@@ -58,7 +58,7 @@ export function ProgramDonutSummary({
 
   return (
     <Card>
-      <h2 className="mb-5 text-lg font-bold">Program Snapshot</h2>
+      <h2 className="mb-5 text-lg font-bold">Session Snapshot</h2>
       <div className="grid gap-5 sm:grid-cols-3">
         <Ring label="Start of Program" value={startWeight} centerPercent={startBodyFat} ringFillPercent={startBodyFat} color="#eab308" />
         <Ring label={currentLabel} value={currentWeight} centerPercent={currentBodyFat} ringFillPercent={currentBodyFat} color="#3b82f6" />

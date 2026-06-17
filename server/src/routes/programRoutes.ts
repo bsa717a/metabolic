@@ -84,7 +84,7 @@ export async function programRoutes(app: FastifyInstance) {
       return snapshots.map(serializeSnapshot);
     } catch (error) {
       request.log.error({ err: error }, 'Failed to list metric snapshots');
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to list metric snapshots' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to list session snapshots' });
     }
   });
 
@@ -92,14 +92,14 @@ export async function programRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const parsed = snapshotBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: 'Invalid snapshot values. Use valid numbers for each metric.' });
+      return reply.code(400).send({ error: 'Invalid session snapshot values. Use valid numbers for each metric.' });
     }
     try {
       const snapshot = await saveProgramMetricSnapshot(request.appUser!, id, parsed.data);
       return serializeSnapshot(snapshot);
     } catch (error) {
       request.log.error({ err: error }, 'Failed to save metric snapshot');
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save metric snapshot' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save session snapshot' });
     }
   });
 
@@ -107,14 +107,14 @@ export async function programRoutes(app: FastifyInstance) {
     const { id, snapshotId } = request.params as { id: string; snapshotId: string };
     const parsed = snapshotBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: 'Invalid snapshot values. Use valid numbers for each metric.' });
+      return reply.code(400).send({ error: 'Invalid session snapshot values. Use valid numbers for each metric.' });
     }
     try {
       const snapshot = await updateProgramMetricSnapshot(request.appUser!, id, snapshotId, parsed.data);
       return serializeSnapshot(snapshot);
     } catch (error) {
       request.log.error({ err: error }, 'Failed to update metric snapshot');
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update metric snapshot' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update session snapshot' });
     }
   });
 

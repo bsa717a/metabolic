@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react';
+import { Camera, Loader2, Pencil } from 'lucide-react';
 import type { ProgramMetric } from '../../types';
 import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
 
 type Props = {
   metrics: ProgramMetric[];
@@ -18,7 +19,38 @@ function formatValue(value: number) {
   return Number(value).toFixed(2);
 }
 
+function IconActionButton({
+  label,
+  onClick,
+  disabled,
+  children
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function ProgramMetricTable({ metrics, onEdit, onSaveSnapshot, savingSnapshot, todaySnapshotSaved }: Props) {
+  const saveSnapshotLabel = savingSnapshot
+    ? 'Saving session snapshot…'
+    : todaySnapshotSaved
+      ? "Update today's session snapshot"
+      : "Save today's session snapshot";
+
   return (
     <Card>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -26,13 +58,13 @@ export function ProgramMetricTable({ metrics, onEdit, onSaveSnapshot, savingSnap
           <h2 className="mb-1 text-lg font-bold">Metric Comparison</h2>
           <p className="text-sm text-slate-500">Use edit to update start, current, and goal values.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={onEdit}>
-            Edit metrics
-          </Button>
-          <Button variant="secondary" disabled={savingSnapshot} onClick={onSaveSnapshot}>
-            {savingSnapshot ? 'Saving snapshot...' : todaySnapshotSaved ? "Update today's snapshot" : "Save today's snapshot"}
-          </Button>
+        <div className="flex flex-wrap gap-1">
+          <IconActionButton label="Edit metrics" onClick={onEdit}>
+            <Pencil className="h-4 w-4" />
+          </IconActionButton>
+          <IconActionButton label={saveSnapshotLabel} disabled={savingSnapshot} onClick={onSaveSnapshot}>
+            {savingSnapshot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+          </IconActionButton>
         </div>
       </div>
       <div className="w-full text-lg">

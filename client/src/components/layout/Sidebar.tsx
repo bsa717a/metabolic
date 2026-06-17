@@ -6,7 +6,7 @@ import { BrandLogo } from '../brand/BrandLogo';
 
 const links = [
   ['/', 'Dashboard', Gauge],
-  ['/program', 'Program', Target],
+  ['/program', 'Metabolic Blueprint', Target],
   ['/nutrition', 'Nutrition', Apple],
   ['/exercise', 'Exercise', Dumbbell],
   ['/progress', 'Progress', LineChart],
