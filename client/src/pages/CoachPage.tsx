@@ -32,7 +32,7 @@ function latestWeight(client: CoachClient) {
   return client.activeProgram?.currentWeight ?? client.latestProgressSnapshot?.weight ?? null;
 }
 
-export function CoachPage() {
+export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [clients, setClients] = useState<CoachClient[]>([]);
   const [clientGroups, setClientGroups] = useState<ClientGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
@@ -391,6 +391,7 @@ export function CoachPage() {
 
             {workspaceView === 'calendar' ? (
               <CoachCalendar
+                coachUserId={coachUserId}
                 clients={visibleClients}
                 scheduleClients={clients}
                 clientGroups={clientGroups}
