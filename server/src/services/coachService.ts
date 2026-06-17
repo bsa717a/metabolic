@@ -4,6 +4,7 @@ import { canAccessUser } from '../auth/requireRole.js';
 import { parseDateParam, toDateKey, addUtcDays } from '../utils/dates.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { getGamificationDashboard } from './gamificationService.js';
+import { getCoachHydrationStats, setWaterGoal } from './hydrationService.js';
 import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { sendResultsReadyEmail } from './emailService.js';
@@ -175,7 +176,25 @@ export async function getCoachClientDashboard(actor: { id: string; role: Role },
 
 export async function getCoachClientEngagement(actor: { id: string; role: Role }, userId: string) {
   await requireCoachClient(actor, userId);
-  return getGamificationDashboard(userId);
+  const [engagement, hydration] = await Promise.all([
+    getGamificationDashboard(userId),
+    getCoachHydrationStats(userId)
+  ]);
+  return { ...engagement, hydration };
+}
+
+export async function getCoachClientHydration(actor: { id: string; role: Role }, userId: string) {
+  await requireCoachClient(actor, userId);
+  return getCoachHydrationStats(userId);
+}
+
+export async function setCoachClientWaterGoal(
+  actor: { id: string; role: Role },
+  userId: string,
+  goalOz: number
+) {
+  await requireCoachClient(actor, userId);
+  return setWaterGoal(userId, goalOz);
 }
 
 export async function sendCoachResultsReadyEmail(

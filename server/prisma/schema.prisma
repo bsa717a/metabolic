@@ -153,6 +153,11 @@ enum ProgressSnapshotStatus {
   DRAFT
   COMPLETE
 }
+enum HydrationSource {
+  MANUAL
+  AI
+  SMS
+}
 
 model User {
   id String @id @default(cuid())
@@ -169,6 +174,7 @@ model User {
   coachRequestedAt DateTime?
   defaultNutritionTemplateId String?
   defaultExerciseTemplateId String?
+  waterGoalOz Int @default(64)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organizations UserOrganization[]
@@ -201,6 +207,7 @@ model User {
   weeklyReflections WeeklyReflection[]
   bloodPanels BloodPanel[] @relation("BloodPanelUser")
   bloodPanelsEntered BloodPanel[] @relation("BloodPanelEnteredBy")
+  hydrationEntries HydrationEntry[]
   defaultNutritionTemplate NutritionPlanTemplate? @relation("CoachDefaultNutritionTemplate", fields: [defaultNutritionTemplateId], references: [id], onDelete: SetNull)
   defaultExerciseTemplate ExerciseTemplate? @relation("CoachDefaultExerciseTemplate", fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
 }
@@ -410,6 +417,9 @@ model DailyLog {
   exercisesPlanned Int @default(0)
   exercisesCompleted Int @default(0)
   complianceScore Decimal? @db.Decimal(5, 2)
+  waterTargetOz Int @default(64)
+  waterActualOz Int @default(0)
+  waterGoalMet Boolean @default(false)
   notes String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -417,7 +427,21 @@ model DailyLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   meals Meal[]
   dailyFoodLog DailyFoodLog?
+  hydrationEntries HydrationEntry[]
   @@unique([userId, date])
+}
+
+model HydrationEntry {
+  id String @id @default(cuid())
+  dailyLogId String
+  userId String
+  amountOz Int
+  source HydrationSource @default(MANUAL)
+  createdAt DateTime @default(now())
+  dailyLog DailyLog @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([dailyLogId])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model Meal {
