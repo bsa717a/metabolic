@@ -3,14 +3,30 @@ import { AchievementBadgeMedal } from './AchievementBadgeMedal';
 import { resolveBadgeDisplay } from './badgeDisplay';
 import type { UserBadgeView } from '../../types/gamification';
 
-export function BadgeTile({ badge }: { badge: UserBadgeView }) {
+export function BadgeTile({
+  badge,
+  onSelect
+}: {
+  badge: UserBadgeView;
+  onSelect?: (badge: UserBadgeView) => void;
+}) {
   const { earned, inProgress } = resolveBadgeDisplay(badge.status);
 
   return (
     <Card
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={() => onSelect?.(badge)}
+      onKeyDown={(event) => {
+        if (!onSelect) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect(badge);
+        }
+      }}
       className={`flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:items-start sm:text-left ${
         earned ? 'border-brand-gold/50 bg-gradient-to-br from-brand-gold/5 to-transparent' : ''
-      }`}
+      } ${onSelect ? 'cursor-pointer transition hover:border-brand-gold/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/50' : ''}`}
     >
       <AchievementBadgeMedal
         badgeId={badge.id}
@@ -37,7 +53,7 @@ export function BadgeTile({ badge }: { badge: UserBadgeView }) {
         )}
         {earned && badge.earnedAt && (
           <p className="mt-3 text-xs text-app-text-muted">
-            Earned {new Date(badge.earnedAt).toLocaleDateString()}
+            Earned {new Date(badge.earnedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
           </p>
         )}
       </div>
