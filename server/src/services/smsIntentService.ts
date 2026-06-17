@@ -1,4 +1,4 @@
-import { MealStatus, SmsDirection } from '@prisma/client';
+import { MealStatus, HydrationSource, SmsDirection } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { markAllPlannedExercisesDone, markDone } from './exerciseService.js';
@@ -10,6 +10,8 @@ import { lookupFoodFromImage, type FoodLookupResult } from './foodLookupService.
 import { env } from '../config/env.js';
 import { sendOutboundMessage } from './twilioOutboundService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
+import { logWater } from './hydrationService.js';
+import { parseWaterAmountOz } from '../utils/waterParse.js';
 import {
   smsHelpResponseMessage,
   smsOptInConfirmationMessage,
@@ -21,6 +23,7 @@ export type SmsIntent =
   | 'MARK_EXERCISE_DONE'
   | 'MARK_MEAL_COMPLETE'
   | 'LOG_FOOD'
+  | 'LOG_WATER'
   | 'FOOD_PHOTO'
   | 'AI_CHAT';
 
@@ -29,6 +32,7 @@ type SmsAction =
   | { intent: 'MARK_EXERCISE_DONE'; exerciseName?: string }
   | { intent: 'MARK_MEAL_COMPLETE'; mealName?: string }
   | { intent: 'LOG_FOOD'; foodText: string; mealName: string }
+  | { intent: 'LOG_WATER'; text: string; amountOz: number }
   | { intent: null };
 
 const MEAL_NAME_PATTERN = /\b(breakfast|lunch|dinner|snack|brunch)\b/i;
@@ -149,8 +153,14 @@ function wantsMarkExerciseDone(text: string) {
 export function parseSmsAction(message: string): SmsAction {
   const text = message.toLowerCase().trim();
 
+  // Explicit "log <food> for <meal>" is always a food command, even if it mentions water.
   const logMatch = message.match(/log\s+(.+?)\s+for\s+(.+)/i);
   if (logMatch) return { intent: 'LOG_FOOD', foodText: logMatch[1], mealName: logMatch[2] };
+
+  const waterAmount = parseWaterAmountOz(message);
+  if (waterAmount != null) {
+    return { intent: 'LOG_WATER', text: message.trim(), amountOz: waterAmount };
+  }
 
   if (wantsMarkAllExercises(text)) return { intent: 'MARK_ALL_EXERCISES_DONE' };
 
@@ -266,6 +276,19 @@ async function handleWriteAction(userId: string, action: Exclude<SmsAction, { in
       ? ` Next up: ${nextMeal.name}${nextMeal.plannedTime ? ` at ${nextMeal.plannedTime}` : ''}.`
       : ' All meals are complete for today.';
     return `Got it — ${meal.name} marked as eaten as planned. You have ${updated.summary?.caloriesRemaining ?? 0} calories and ${updated.summary?.proteinRemaining ?? 0}g protein remaining.${nextPart} ${pickEncouragement()}`;
+  }
+
+  if (action.intent === 'LOG_WATER') {
+    const result = await logWater(userId, {
+      amountOz: action.amountOz,
+      text: action.text,
+      source: HydrationSource.SMS
+    });
+    const remaining = Math.max(result.targetOz - result.actualOz, 0);
+    if (result.goalMet) {
+      return `Logged ${result.amountOz} oz water. Daily goal reached — ${result.actualOz}/${result.targetOz} oz. ${pickEncouragement()}`;
+    }
+    return `Logged ${result.amountOz} oz water. ${result.actualOz}/${result.targetOz} oz today (${remaining} oz to go).`;
   }
 
   return `I parsed "${action.foodText}" for ${action.mealName}. Food logging by SMS is coming soon — use the app for now.`;

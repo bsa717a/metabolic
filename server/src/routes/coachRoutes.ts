@@ -12,6 +12,7 @@ import {
   deleteCoachCheckIn,
   getCoachClientDashboard,
   getCoachClientEngagement,
+  getCoachClientHydration,
   getCoachCalendar,
   getCoachSettings,
   listCoachClientGroups,
@@ -19,6 +20,7 @@ import {
   sendCoachResultsReadyEmail,
   sendCoachResultsReadySms,
   setCoachClientGroupMembers,
+  setCoachClientWaterGoal,
   updateCoachCheckIn,
   updateCoachClientGroup,
   updateCoachSettings
@@ -273,6 +275,28 @@ export async function coachRoutes(app: FastifyInstance) {
       return await getCoachClientEngagement(request.appUser!, (request.params as { userId: string }).userId);
     } catch (error) {
       return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load engagement' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/hydration', { preHandler: coachOnly }, async (request, reply) => {
+    try {
+      return await getCoachClientHydration(request.appUser!, (request.params as { userId: string }).userId);
+    } catch (error) {
+      return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load hydration' });
+    }
+  });
+
+  app.patch('/api/coach/users/:userId/hydration-goal', { preHandler: coachOnly }, async (request, reply) => {
+    const body = z.object({ goalOz: z.number().finite().min(1).max(512) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Invalid goal' });
+    try {
+      return await setCoachClientWaterGoal(
+        request.appUser!,
+        (request.params as { userId: string }).userId,
+        body.data.goalOz
+      );
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update hydration goal' });
     }
   });
 

@@ -6,7 +6,7 @@ export function smsOptInConfirmationMessage() {
 }
 
 export function smsHelpResponseMessage() {
-  return `${SMS_BRAND_NAME} SMS support: Text questions about your meals, workouts, program status, or progress. Msg frequency varies. Msg & data rates may apply. Reply STOP to opt out. Email support@master-metabolic.com for help.`;
+  return `${SMS_BRAND_NAME} SMS support: Text questions about your meals, workouts, program status, or progress. To log water, text "16 oz water" or "drank a glass of water". Msg frequency varies. Msg & data rates may apply. Reply STOP to opt out. Email support@master-metabolic.com for help.`;
 }
 
 export function smsOptOutConfirmationMessage() {

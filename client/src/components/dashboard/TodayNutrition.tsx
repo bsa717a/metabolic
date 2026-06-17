@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Camera, ChevronDown, Leaf, Plus, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
 import { api } from '../../services/api';
+import { isWaterLogRequest } from '../../utils/waterLog';
 import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
@@ -369,6 +370,24 @@ export function TodayNutrition({
       await loadMealSuggestions(input);
       return;
     }
+    if (!photo && isWaterLogRequest(input)) {
+      setSaving(true);
+      setError(null);
+      try {
+        await api('/api/hydration/log', {
+          method: 'POST',
+          body: JSON.stringify({ text: input, source: 'AI' })
+        });
+        setEntry('');
+        window.dispatchEvent(new Event('hydration-updated'));
+        onChange();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not log water');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
     const { targetMeal, foodText } = parseFoodEntry(meals, input, expandedMealId);
     if (!targetMeal) {
@@ -493,7 +512,7 @@ export function TodayNutrition({
         <div className="flex gap-2">
           <textarea
             className="min-h-24 flex-1 rounded-xl border border-app-border bg-app-bg p-3 text-sm"
-            placeholder="Type what you ate, or mention a meal like lunch. If no meal is named, snacks are used automatically."
+            placeholder="Type what you ate, log water (e.g. 16 oz water), or mention a meal like lunch."
             value={entry}
             onChange={(event) => setEntry(event.target.value)}
           />

@@ -154,6 +154,11 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
       include: { meals: { include: { items: true }, orderBy: { mealNumber: 'asc' } } }
     }));
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { waterGoalOz: true }
+  });
+
   let dailyLog;
   let created = false;
 
@@ -170,6 +175,7 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
         proteinTarget: fallbackLog?.proteinTarget ?? metricValue(program.metrics, 'PROTEIN') ?? 190,
         carbTarget: fallbackLog?.carbTarget ?? 190,
         fatTarget: fallbackLog?.fatTarget ?? 70,
+        waterTargetOz: fallbackLog?.waterTargetOz ?? user?.waterGoalOz ?? 64,
         mealsPlanned: fallbackLog?.meals.length ?? DEFAULT_MEALS.length,
         exercisesPlanned: fallbackLog?.exercisesPlanned ?? 4
       }

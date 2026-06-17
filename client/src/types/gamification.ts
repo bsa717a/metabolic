@@ -18,10 +18,18 @@ export type GamificationDashboard = {
     foodLoggingStreak: number;
     foodLoggingBest: number;
     snapshotStreak: number;
+    waterGoalStreak: number;
     dailyWinsThisWeek: number;
     graceDaysAvailable: number;
     graceDaysUsed: number;
     nextMilestone: string | null;
+  };
+  hydration: {
+    targetOz: number;
+    actualOz: number;
+    fillFraction: number;
+    goalMet: boolean;
+    currentStreak: number;
   };
   recentBadges: Array<{
     id: string;

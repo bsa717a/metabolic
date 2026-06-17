@@ -1,4 +1,4 @@
-import { Apple, Bot, Dumbbell, Gauge, LineChart, Settings, Target, Users } from 'lucide-react';
+import { Apple, Bot, Droplets, Dumbbell, Gauge, LineChart, Settings, Target, Users } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import type { AppUser } from '../../types';
 import { isAdminRole, isCoachRole } from '../../utils/roles';
@@ -10,6 +10,7 @@ const links = [
   ['/nutrition', 'Nutrition', Apple],
   ['/exercise', 'Exercise', Dumbbell],
   ['/progress', 'Progress', LineChart],
+  ['/hydration', 'Hydration', Droplets],
   ['/assistant', 'AI Assistant', Bot],
   ['/coach', 'Coach', Users],
   ['/admin', 'Admin', Settings]

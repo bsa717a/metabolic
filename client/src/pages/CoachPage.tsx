@@ -4,6 +4,7 @@ import { UsersRound } from 'lucide-react';
 import { api, todayKey } from '../services/api';
 import type { ClientGroup, CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary } from '../types';
 import type { GamificationDashboard } from '../types/gamification';
+import type { CoachHydrationStats } from '../types/hydration';
 import { CoachCalendar } from '../components/coach/CoachCalendar';
 import { ClientGroupsDrawer } from '../components/coach/ClientGroupsDrawer';
 import { SendResultsMenu } from '../components/coach/SendResultsMenu';
@@ -15,6 +16,8 @@ type CoachSettings = {
   defaultNutritionTemplateId: string | null;
   defaultExerciseTemplateId: string | null;
 };
+
+type CoachEngagement = GamificationDashboard & { hydration: CoachHydrationStats };
 
 function clientName(client: CoachClient) {
   return `${client.firstName} ${client.lastName}`;
@@ -36,7 +39,8 @@ export function CoachPage() {
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [engagement, setEngagement] = useState<GamificationDashboard | null>(null);
+  const [engagement, setEngagement] = useState<CoachEngagement | null>(null);
+  const [clientWaterGoalDraft, setClientWaterGoalDraft] = useState('64');
   const [nutritionTemplates, setNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
   const [exerciseTemplates, setExerciseTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
   const [nutritionTemplateId, setNutritionTemplateId] = useState('');
@@ -116,10 +120,11 @@ export function CoachPage() {
     try {
       const [dashboardData, engagementData] = await Promise.all([
         api<Dashboard>(`/api/coach/users/${clientId}/dashboard`),
-        api<GamificationDashboard>(`/api/coach/users/${clientId}/engagement`)
+        api<CoachEngagement>(`/api/coach/users/${clientId}/engagement`)
       ]);
       setDashboard(dashboardData);
       setEngagement(engagementData);
+      setClientWaterGoalDraft(String(engagementData.hydration.waterGoalOz));
     } catch {
       setDashboard(null);
       setEngagement(null);
@@ -139,6 +144,29 @@ export function CoachPage() {
     if (visibleClients.some((client) => client.id === selectedClientId)) return;
     setSelectedClientId(visibleClients[0]?.id ?? '');
   }, [selectedClientId, visibleClients]);
+
+  async function saveClientWaterGoal() {
+    if (!selectedClient) return;
+    const goalOz = Number(clientWaterGoalDraft);
+    if (!Number.isFinite(goalOz) || goalOz < 1) {
+      setError('Enter a valid hydration goal in ounces');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await api(`/api/coach/users/${selectedClient.id}/hydration-goal`, {
+        method: 'PATCH',
+        body: JSON.stringify({ goalOz })
+      });
+      await loadDashboard(selectedClient.id);
+      setSuccessMessage(`Updated hydration goal for ${clientName(selectedClient)}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update hydration goal');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function applyTemplate(kind: 'nutrition' | 'exercise') {
     if (!selectedClient) return;
@@ -503,6 +531,44 @@ export function CoachPage() {
                         <p className="mt-2 text-sm text-app-text-muted">
                           {engagement?.momentum.dailyWinsThisWeek ?? 0} daily wins this week
                         </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-app-muted p-4">
+                      <p className="text-xs uppercase text-app-text-muted">Hydration</p>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <p className="text-app-text-muted">Today</p>
+                          <p className="text-lg font-bold tabular-nums">
+                            {engagement?.hydration.todayActualOz ?? 0}/{engagement?.hydration.todayTargetOz ?? 0} oz
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-app-text-muted">30-day hit rate</p>
+                          <p className="text-lg font-bold tabular-nums">
+                            {engagement?.hydration.last30DayHitPercent ?? 0}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-app-text-muted">Streak</p>
+                          <p className="text-lg font-bold tabular-nums">{engagement?.hydration.currentStreak ?? 0} days</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-end gap-2">
+                        <label className="text-sm text-app-text-muted">
+                          Daily goal (oz)
+                          <input
+                            type="number"
+                            min={1}
+                            max={512}
+                            value={clientWaterGoalDraft}
+                            onChange={(event) => setClientWaterGoalDraft(event.target.value)}
+                            className="mt-1 block w-28 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text"
+                          />
+                        </label>
+                        <Button disabled={saving} onClick={() => void saveClientWaterGoal()}>
+                          Save hydration goal
+                        </Button>
                       </div>
                     </div>
 
