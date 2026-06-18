@@ -44,26 +44,52 @@ async function main(): Promise<void> {
   const legacyUsers = countValidUsers();
   const legacySessions = parseTable(DUMP_PATH, 'training_sessions').length;
 
-  const [foods, exercises, nutritionTemplates, exerciseTemplates, users, coaches, assignments, programs, metricSnapshots, progressSnapshots] =
-    await Promise.all([
-      prisma.food.count({ where: { source: 'IMPORTED' } }),
-      prisma.exercise.count(),
-      prisma.nutritionPlanTemplate.count({ where: { visibility: 'GLOBAL' } }),
-      prisma.exerciseTemplate.count({ where: { visibility: 'GLOBAL' } }),
-      prisma.user.count({ where: { firebaseUid: { startsWith: 'legacy-' } } }),
-      prisma.user.count({ where: { firebaseUid: { startsWith: 'legacy-' }, role: { in: ['COACH', 'ADMIN'] } } }),
-      prisma.coachAssignment.count(),
-      prisma.program.count({ where: { name: 'Legacy Program' } }),
-      prisma.programMetricSnapshot.count(),
-      prisma.progressSnapshot.count({ where: { notes: { startsWith: 'legacy:' } } })
-    ]);
+  const [
+    foods,
+    exercises,
+    nutritionTemplates,
+    exerciseTemplates,
+    users,
+    coaches,
+    assignments,
+    programs,
+    metricSnapshots,
+    progressSnapshots,
+    profiles,
+    profilesWithHeight,
+    profilesWithConditions
+  ] = await Promise.all([
+    prisma.food.count({ where: { source: 'IMPORTED' } }),
+    prisma.exercise.count(),
+    prisma.nutritionPlanTemplate.count({ where: { visibility: 'GLOBAL' } }),
+    prisma.exerciseTemplate.count({ where: { visibility: 'GLOBAL' } }),
+    prisma.user.count({ where: { firebaseUid: { startsWith: 'legacy-' } } }),
+    prisma.user.count({ where: { firebaseUid: { startsWith: 'legacy-' }, role: { in: ['COACH', 'ADMIN'] } } }),
+    prisma.coachAssignment.count(),
+    prisma.program.count({ where: { name: 'Legacy Program' } }),
+    prisma.programMetricSnapshot.count(),
+    prisma.progressSnapshot.count({ where: { notes: { startsWith: 'legacy:' } } }),
+    prisma.clientProfile.count(),
+    prisma.clientProfile.count({ where: { heightInches: { not: null } } }),
+    prisma.clientProfile.count({
+      where: {
+        OR: [
+          { medicalConditions: { not: null } },
+          { exerciseConditions: { not: null } },
+          { foodConditions: { not: null } },
+          { dietNotes: { not: null } }
+        ]
+      }
+    })
+  ]);
 
   const spot = await prisma.user.findUnique({
     where: { email: SPOTCHECK_EMAIL },
     include: {
       programs: { include: { metrics: true, metricSnapshots: true } },
       progressSnapshots: true,
-      userAssignments: { include: { coach: true } }
+      userAssignments: { include: { coach: true } },
+      clientProfile: true
     }
   });
 
@@ -77,7 +103,9 @@ async function main(): Promise<void> {
         `- Programs: ${spot.programs.length}`,
         `- Program metrics: ${spot.programs[0]?.metrics.length ?? 0}`,
         `- Metric snapshots: ${spot.programs[0]?.metricSnapshots.length ?? 0}`,
-        `- Progress snapshots: ${spot.progressSnapshots.length}`
+        `- Progress snapshots: ${spot.progressSnapshots.length}`,
+        `- Profile height: ${spot.clientProfile?.heightInches != null ? `${spot.clientProfile.heightInches} in (raw: ${spot.clientProfile.heightRaw ?? 'n/a'})` : 'none'}`,
+        `- Profile address: ${spot.clientProfile?.city || spot.clientProfile?.state ? `${spot.clientProfile?.city ?? ''} ${spot.clientProfile?.state ?? ''}`.trim() : 'none'}`
       ]
     : [`- Spot-check user ${SPOTCHECK_EMAIL} not found.`];
 
@@ -101,6 +129,9 @@ ${row('Coach assignments', '-', assignments)}
 ${row('Programs', '-', programs)}
 ${row('Metric snapshots (<= sessions)', legacySessions, metricSnapshots)}
 ${row('Progress snapshots', '-', progressSnapshots)}
+${row('Client profiles', '-', profiles)}
+${row('Profiles with height', '-', profilesWithHeight)}
+${row('Profiles with conditions', '-', profilesWithConditions)}
 
 Skipped users: ${legacyUsers.invalid} invalid email, ${legacyUsers.duplicate} duplicate email.
 

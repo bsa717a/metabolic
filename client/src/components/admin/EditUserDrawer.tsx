@@ -31,6 +31,66 @@ function formatRole(role: string) {
   return role.replaceAll('_', ' ');
 }
 
+function formatHeight(profile: NonNullable<AdminUser['profile']>) {
+  if (profile.heightInches != null) {
+    const feet = Math.floor(profile.heightInches / 12);
+    const inches = profile.heightInches % 12;
+    return `${feet}'${inches}"`;
+  }
+  return profile.heightRaw ?? null;
+}
+
+function formatAddress(profile: NonNullable<AdminUser['profile']>) {
+  const street = [profile.addressLine1, profile.addressLine2].filter(Boolean).join(', ');
+  const cityState = [profile.city, profile.state].filter(Boolean).join(', ');
+  const full = [street, cityState, profile.zip].filter(Boolean).join(' • ');
+  return full || null;
+}
+
+function ProfileRow({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</span>
+      <span className="whitespace-pre-wrap text-sm text-slate-700">{value}</span>
+    </div>
+  );
+}
+
+function ClientProfileSection({ profile }: { profile?: AdminUser['profile'] }) {
+  if (!profile) return null;
+
+  const emergencyContact = [profile.emergencyContactName, profile.emergencyContactRelationship]
+    .filter(Boolean)
+    .join(' • ');
+  const emergencyContactLine = [emergencyContact, profile.emergencyContactPhone].filter(Boolean).join(' — ');
+
+  const rows = [
+    { label: 'Address', value: formatAddress(profile) },
+    { label: 'Emergency contact', value: emergencyContactLine || null },
+    { label: 'Height', value: formatHeight(profile) },
+    { label: 'Medical conditions', value: profile.medicalConditions },
+    { label: 'Exercise conditions', value: profile.exerciseConditions },
+    { label: 'Food conditions', value: profile.foodConditions },
+    { label: 'Diet notes', value: profile.dietNotes },
+    { label: 'Coach notes', value: profile.coachNotes }
+  ];
+
+  if (rows.every((row) => !row.value)) return null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <h3 className="text-sm font-semibold text-slate-700">Client profile</h3>
+      <p className="text-xs text-slate-500">Imported from the legacy system. Read-only.</p>
+      <div className="space-y-3">
+        {rows.map((row) => (
+          <ProfileRow key={row.label} label={row.label} value={row.value} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function labelClassName() {
   return 'mb-1 block text-sm font-medium text-slate-600';
 }
@@ -174,6 +234,8 @@ function EditUserDrawerContent({
         </select>
         <p className="mt-1 text-xs text-slate-500">Only super admins can save coach assignment changes.</p>
       </label>
+
+      <ClientProfileSection profile={user.profile} />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

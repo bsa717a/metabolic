@@ -12,12 +12,32 @@ export type AppUser = {
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
 export type UserSummary = Pick<AppUser, 'id' | 'firstName' | 'lastName' | 'email'>;
+export type ClientProfile = {
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  emergencyContactRelationship: string | null;
+  medicalConditions: string | null;
+  exerciseConditions: string | null;
+  foodConditions: string | null;
+  dietNotes: string | null;
+  coachNotes: string | null;
+  heightInches: number | null;
+  heightRaw: string | null;
+  targetBodyFat: number | null;
+  targetMeasurement: number | null;
+};
 export type AdminUser = AppUser & {
   status: UserStatus;
   createdAt: string;
   coachCode?: string | null;
   coachRequestedAt?: string | null;
   assignedCoach?: UserSummary | null;
+  profile?: ClientProfile | null;
 };
 export type Food = { id: string; name: string; servingSize: number; servingUnit: string; calories: number; protein: number; carbs: number; fat: number; brand?: string };
 export type FoodSource = 'MANUAL' | 'AI' | 'IMPORTED' | 'VERIFIED';

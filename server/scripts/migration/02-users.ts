@@ -1,11 +1,31 @@
 import { PrismaClient, Role, UserStatus } from '@prisma/client';
 import { DUMP_PATH, SKIP_FIREBASE, legacyUid } from './config.js';
 import { loadIdMap, saveIdMap } from './idmap.js';
-import { isValidEmail, parseTable, splitName, type LegacyRow } from './mysqlDumpParser.js';
+import { cleanText, isValidEmail, parseHeightInches, parseTable, splitName, num, type LegacyRow } from './mysqlDumpParser.js';
 
 const prisma = new PrismaClient();
 
 const BCRYPT_RE = /^\$2[aby]\$\d{2}\$.{53}$/;
+
+interface PreparedProfile {
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  emergencyContactRelationship: string | null;
+  medicalConditions: string | null;
+  exerciseConditions: string | null;
+  foodConditions: string | null;
+  dietNotes: string | null;
+  coachNotes: string | null;
+  heightInches: number | null;
+  heightRaw: string | null;
+  targetBodyFat: number | null;
+  targetMeasurement: number | null;
+}
 
 interface PreparedUser {
   legacyId: string;
@@ -16,26 +36,36 @@ interface PreparedUser {
   gender: string | null;
   role: Role;
   status: UserStatus;
-  notes: string | null;
+  profile: PreparedProfile;
   ownerId: string | null;
   passwordHash: string | null;
 }
 
-function foldNotes(row: LegacyRow): string | null {
-  const parts: string[] = [];
-  const add = (label: string, value: string | null | undefined) => {
-    const v = (value ?? '').trim();
-    if (v) parts.push(`${label}: ${v}`);
+function prepareProfile(row: LegacyRow): PreparedProfile {
+  return {
+    addressLine1: cleanText(row.addr_line_1),
+    addressLine2: cleanText(row.addr_line_2),
+    city: cleanText(row.city),
+    state: cleanText(row.state),
+    zip: cleanText(row.zip),
+    emergencyContactName: cleanText(row.ec_name),
+    emergencyContactPhone: cleanText(row.ec_phone),
+    emergencyContactRelationship: cleanText(row.ec_relationship),
+    medicalConditions: cleanText(row.med_cond),
+    exerciseConditions: cleanText(row.exer_cond),
+    foodConditions: cleanText(row.food_cond),
+    dietNotes: cleanText(row.diet_cond),
+    coachNotes: cleanText(row.notes),
+    heightInches: parseHeightInches(row.height),
+    heightRaw: cleanText(row.height),
+    targetBodyFat: num(cleanText(row.target_bf)),
+    targetMeasurement: num(cleanText(row.target_mg))
   };
-  add('Height', row.height);
-  add('Target body fat', row.target_bf);
-  add('Target measurement', row.target_mg);
-  add('Medical conditions', row.med_cond);
-  add('Exercise conditions', row.exer_cond);
-  add('Food conditions', row.food_cond);
-  add('Diet notes', row.diet_cond);
-  add('Coach notes', row.notes);
-  return parts.length ? parts.join('\n') : null;
+}
+
+/** True when the profile has at least one populated field worth persisting. */
+function hasProfileData(profile: PreparedProfile): boolean {
+  return Object.values(profile).some((v) => v !== null);
 }
 
 function mapRole(role: string | null): Role {
@@ -83,7 +113,7 @@ function prepareUsers(): { prepared: PreparedUser[]; skipped: { legacyId: string
       gender: (row.gender ?? '').trim().toLowerCase() || null,
       role: mapRole(row.role),
       status: mapStatus(row.status),
-      notes: foldNotes(row),
+      profile: prepareProfile(row),
       ownerId: row.owner_id && row.owner_id !== '0' ? String(row.owner_id) : null,
       passwordHash: BCRYPT_RE.test(hash) ? hash : null
     });
@@ -144,6 +174,7 @@ async function main(): Promise<void> {
   console.log(`  Firebase: imported=${firebase.imported} failed=${firebase.failed} withoutPassword=${firebase.noPassword}`);
 
   // Upsert users (coaches first so coach assignments resolve).
+  let profilesUpserted = 0;
   for (const u of [...coaches, ...clients]) {
     const data = {
       firebaseUid: legacyUid(u.legacyId),
@@ -161,9 +192,18 @@ async function main(): Promise<void> {
       update: data
     });
     idMap.users[u.legacyId] = user.id;
-    if (u.notes) idMap.notes[u.legacyId] = u.notes;
     if (u.role === Role.COACH || u.role === Role.ADMIN) idMap.coaches[u.legacyId] = user.id;
+
+    if (hasProfileData(u.profile)) {
+      await prisma.clientProfile.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, ...u.profile },
+        update: u.profile
+      });
+      profilesUpserted += 1;
+    }
   }
+  console.log(`  Client profiles: ${profilesUpserted}`);
 
   // Coach assignments from owner_id.
   let assignments = 0;

@@ -44,11 +44,13 @@ const userInclude = {
         select: { id: true, firstName: true, lastName: true, email: true, role: true, status: true }
       }
     }
-  }
+  },
+  clientProfile: true
 };
 
 export function serializeAdminUser(user: Awaited<ReturnType<typeof listAdminUsers>>[number]) {
   const assignment = user.userAssignments[0];
+  const profile = user.clientProfile;
   return {
     id: user.id,
     firebaseUid: user.firebaseUid,
@@ -68,6 +70,27 @@ export function serializeAdminUser(user: Awaited<ReturnType<typeof listAdminUser
           firstName: assignment.coach.firstName,
           lastName: assignment.coach.lastName,
           email: assignment.coach.email
+        }
+      : null,
+    profile: profile
+      ? {
+          addressLine1: profile.addressLine1,
+          addressLine2: profile.addressLine2,
+          city: profile.city,
+          state: profile.state,
+          zip: profile.zip,
+          emergencyContactName: profile.emergencyContactName,
+          emergencyContactPhone: profile.emergencyContactPhone,
+          emergencyContactRelationship: profile.emergencyContactRelationship,
+          medicalConditions: profile.medicalConditions,
+          exerciseConditions: profile.exerciseConditions,
+          foodConditions: profile.foodConditions,
+          dietNotes: profile.dietNotes,
+          coachNotes: profile.coachNotes,
+          heightInches: profile.heightInches,
+          heightRaw: profile.heightRaw,
+          targetBodyFat: profile.targetBodyFat != null ? Number(profile.targetBodyFat) : null,
+          targetMeasurement: profile.targetMeasurement != null ? Number(profile.targetMeasurement) : null
         }
       : null
   };

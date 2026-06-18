@@ -270,3 +270,45 @@ export function splitName(name: string | null): { firstName: string; lastName: s
   const lastName = parts.join(' ') || 'Unknown';
   return { firstName, lastName };
 }
+
+/** Trim free-text and treat empty / "NA" placeholders as null. */
+export function cleanText(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return null;
+  if (/^n\/?a\.?$/i.test(trimmed)) return null;
+  return trimmed;
+}
+
+/**
+ * Normalize legacy height strings to inches. Handles formats like
+ * `5' 7''`, `6'`, `6'0`, `5'5''`, `5'2`, and curly quotes/typographic marks.
+ * Returns null when no plausible height can be parsed.
+ */
+export function parseHeightInches(value: string | null | undefined): number | null {
+  const raw = cleanText(value);
+  if (!raw) return null;
+
+  // Normalize curly quotes/primes to straight quotes.
+  const normalized = raw
+    .replace(/[\u2032\u2018\u2019\u00b4`]/g, "'")
+    .replace(/[\u2033\u201c\u201d]/g, '"');
+
+  // Feet + optional inches: 5'7", 5' 7'', 6', 5'5, 6'0
+  const feetInches = normalized.match(/(\d+)\s*'\s*(\d+)?/);
+  if (feetInches) {
+    const feet = Number(feetInches[1]);
+    const inches = feetInches[2] ? Number(feetInches[2]) : 0;
+    if (Number.isFinite(feet) && Number.isFinite(inches) && feet > 0 && feet < 8 && inches < 12) {
+      return feet * 12 + inches;
+    }
+  }
+
+  // Bare number: treat 4-7 as feet, 48-84 as inches.
+  const bare = Number(normalized.replace(/["']/g, '').trim());
+  if (Number.isFinite(bare)) {
+    if (bare >= 4 && bare <= 7) return Math.round(bare * 12);
+    if (bare >= 48 && bare <= 84) return Math.round(bare);
+  }
+
+  return null;
+}
