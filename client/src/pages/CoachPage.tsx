@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { UsersRound } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { api, todayKey } from '../services/api';
 import type { ClientGroup, CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary } from '../types';
 import type { GamificationDashboard } from '../types/gamification';
 import type { CoachHydrationStats } from '../types/hydration';
 import { CoachCalendar } from '../components/coach/CoachCalendar';
+import { ClientDetailTabs } from '../components/coach/ClientDetailTabs';
 import { ClientGroupsDrawer } from '../components/coach/ClientGroupsDrawer';
+import { ClientRoster } from '../components/coach/ClientRoster';
+import { CoachSettingsDrawer } from '../components/coach/CoachSettingsDrawer';
+import { ScheduleCheckInDrawer } from '../components/coach/ScheduleCheckInDrawer';
+import { SessionNotesPanel } from '../components/coach/SessionNotesPanel';
 import { EditAccountDetailsDrawer } from '../components/user/EditAccountDetailsDrawer';
-import { SendResultsMenu } from '../components/coach/SendResultsMenu';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { clientName } from '../utils/coachClientUtils';
 
 type CoachSettings = {
   coachCode: string | null;
@@ -20,82 +26,8 @@ type CoachSettings = {
 
 type CoachEngagement = GamificationDashboard & { hydration: CoachHydrationStats };
 
-type AssignedUsersSortKey = 'name' | 'nextCheckIn';
-type SortDirection = 'asc' | 'desc';
-
-function compareStrings(a: string, b: string, direction: SortDirection) {
-  const result = a.localeCompare(b, undefined, { sensitivity: 'base' });
-  return direction === 'asc' ? result : -result;
-}
-
-function compareOptionalDates(a: string | null, b: string | null, direction: SortDirection) {
-  if (!a && !b) return 0;
-  if (!a) return 1;
-  if (!b) return -1;
-  const result = new Date(a).getTime() - new Date(b).getTime();
-  return direction === 'asc' ? result : -result;
-}
-
-function AssignedUsersSortHeader({
-  label,
-  sortKey,
-  activeSortKey,
-  sortDirection,
-  onSort,
-  className = 'py-3 pr-4 font-medium'
-}: {
-  label: string;
-  sortKey: AssignedUsersSortKey;
-  activeSortKey: AssignedUsersSortKey;
-  sortDirection: SortDirection;
-  onSort: (key: AssignedUsersSortKey) => void;
-  className?: string;
-}) {
-  const active = activeSortKey === sortKey;
-
-  return (
-    <th className={className}>
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={clsx(
-          'inline-flex items-center gap-1 transition',
-          active ? 'text-app-text' : 'text-app-text-muted hover:text-app-text'
-        )}
-      >
-        <span>{label}</span>
-        <span aria-hidden className="text-xs">{active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
-      </button>
-    </th>
-  );
-}
-
-function clientName(client: CoachClient) {
-  return `${client.firstName} ${client.lastName}`;
-}
-
-function completion(completed?: number, planned?: number) {
-  if (!planned) return 'No plan yet';
-  return `${completed ?? 0}/${planned}`;
-}
-
-function latestWeight(client: CoachClient) {
-  return client.activeProgram?.currentWeight ?? client.latestProgressSnapshot?.weight ?? null;
-}
-
-function formatNextCheckIn(iso: string | null | undefined) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'UTC'
-  });
-}
-
 export function CoachPage({ coachUserId }: { coachUserId: string }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [clients, setClients] = useState<CoachClient[]>([]);
   const [clientGroups, setClientGroups] = useState<ClientGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
@@ -106,13 +38,9 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [clientWaterGoalDraft, setClientWaterGoalDraft] = useState('64');
   const [nutritionTemplates, setNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
   const [exerciseTemplates, setExerciseTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
-  const [nutritionTemplateId, setNutritionTemplateId] = useState('');
-  const [exerciseTemplateId, setExerciseTemplateId] = useState('');
   const [coachCodeDraft, setCoachCodeDraft] = useState('');
   const [defaultNutritionTemplateId, setDefaultNutritionTemplateId] = useState('');
   const [defaultExerciseTemplateId, setDefaultExerciseTemplateId] = useState('');
-  const [applyDate, setApplyDate] = useState(() => todayKey());
-  const [setAsDefault, setSetAsDefault] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -120,9 +48,9 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState('');
   const [workspaceView, setWorkspaceView] = useState<'list' | 'calendar'>('list');
-  const [assignedUsersSortKey, setAssignedUsersSortKey] = useState<AssignedUsersSortKey>('name');
-  const [assignedUsersSortDirection, setAssignedUsersSortDirection] = useState<SortDirection>('asc');
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const selectedGroup = useMemo(
     () => clientGroups.find((group) => group.id === selectedGroupId) ?? null,
@@ -135,27 +63,28 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
     return clients.filter((client) => memberIds.has(client.id));
   }, [clients, selectedGroup]);
 
-  const sortedVisibleClients = useMemo(() => {
-    return [...visibleClients].sort((a, b) => {
-      if (assignedUsersSortKey === 'name') {
-        return compareStrings(clientName(a), clientName(b), assignedUsersSortDirection);
+  const selectedClient = useMemo(() => {
+    if (!selectedClientId) return visibleClients[0] ?? null;
+    return visibleClients.find((client) => client.id === selectedClientId) ?? null;
+  }, [visibleClients, selectedClientId]);
+
+  const handleSelectClient = useCallback(
+    (userId: string) => {
+      if (!userId) {
+        setSelectedClientId('');
+        return;
       }
-      return compareOptionalDates(a.nextCheckInAt, b.nextCheckInAt, assignedUsersSortDirection);
-    });
-  }, [assignedUsersSortDirection, assignedUsersSortKey, visibleClients]);
-
-  function handleAssignedUsersSort(nextKey: AssignedUsersSortKey) {
-    if (assignedUsersSortKey === nextKey) {
-      setAssignedUsersSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
-    setAssignedUsersSortKey(nextKey);
-    setAssignedUsersSortDirection('asc');
-  }
-
-  const selectedClient = useMemo(
-    () => visibleClients.find((client) => client.id === selectedClientId) ?? visibleClients[0],
-    [visibleClients, selectedClientId]
+      setSelectedClientId(userId);
+      setSearchParams(
+        (params) => {
+          const next = new URLSearchParams(params);
+          next.set('client', userId);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
   );
 
   const loadGroups = useCallback(async () => {
@@ -193,10 +122,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       setCoachCodeDraft(coachSettings.coachCode ?? '');
       setDefaultNutritionTemplateId(coachSettings.defaultNutritionTemplateId ?? '');
       setDefaultExerciseTemplateId(coachSettings.defaultExerciseTemplateId ?? '');
-      setSelectedClientId((current) => current || clientRows[0]?.id || '');
       setSelectedGroupId((current) => (current && groupRows.some((group) => group.id === current) ? current : ''));
-      setNutritionTemplateId((current) => current || nutritionRows[0]?.id || '');
-      setExerciseTemplateId((current) => current || exerciseRows[0]?.id || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load coach workspace');
     } finally {
@@ -229,14 +155,36 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   }, [load]);
 
   useEffect(() => {
-    void loadDashboard(selectedClient?.id ?? '');
-  }, [loadDashboard, selectedClient?.id]);
+    if (loading || !clients.length) return;
+
+    const fromUrl = searchParams.get('client');
+    if (fromUrl && visibleClients.some((client) => client.id === fromUrl)) {
+      setSelectedClientId(fromUrl);
+      return;
+    }
+
+    setSelectedClientId((current) => {
+      if (current && visibleClients.some((client) => client.id === current)) return current;
+      return visibleClients[0]?.id ?? '';
+    });
+  }, [loading, searchParams, visibleClients]);
+
+  useEffect(() => {
+    if (!selectedClient) {
+      setDashboard(null);
+      setEngagement(null);
+      return;
+    }
+    void loadDashboard(selectedClient.id);
+  }, [loadDashboard, selectedClient]);
 
   useEffect(() => {
     if (!selectedClientId) return;
     if (visibleClients.some((client) => client.id === selectedClientId)) return;
-    setSelectedClientId(visibleClients[0]?.id ?? '');
-  }, [selectedClientId, visibleClients]);
+    const fallbackId = visibleClients[0]?.id;
+    if (fallbackId) handleSelectClient(fallbackId);
+    else setSelectedClientId('');
+  }, [handleSelectClient, selectedClientId, visibleClients]);
 
   async function saveClientWaterGoal() {
     if (!selectedClient) return;
@@ -261,34 +209,13 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
     }
   }
 
-  async function applyTemplate(kind: 'nutrition' | 'exercise') {
+  async function refreshClientData() {
     if (!selectedClient) return;
-    const templateId = kind === 'nutrition' ? nutritionTemplateId : exerciseTemplateId;
-    if (!templateId) {
-      setError(`Choose a ${kind} template first.`);
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      const path =
-        kind === 'nutrition'
-          ? `/api/coach/users/${selectedClient.id}/daily-logs/${applyDate}/apply-template`
-          : `/api/coach/users/${selectedClient.id}/daily-logs/${applyDate}/apply-exercise-template`;
-      await api(path, {
-        method: 'POST',
-        body: JSON.stringify({ templateId, setAsDefault })
-      });
-      await Promise.all([load(), loadDashboard(selectedClient.id)]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `Unable to apply ${kind} template`);
-    } finally {
-      setSaving(false);
-    }
+    await Promise.all([load(), loadDashboard(selectedClient.id), loadClients()]);
   }
 
   function handleCalendarSelectClient(userId: string) {
-    setSelectedClientId(userId);
+    handleSelectClient(userId);
     setWorkspaceView('list');
   }
 
@@ -383,30 +310,41 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
           <h1 className="text-3xl font-bold">Coach Workspace</h1>
           <p className="text-app-text-muted">Manage assigned users, review progress, and apply plans.</p>
         </div>
-        {clients.length > 0 && (
-          <div className="inline-flex rounded-xl border border-app-border p-1">
-            <button
-              type="button"
-              className={clsx(
-                'rounded-lg px-3 py-1.5 text-sm font-semibold transition',
-                workspaceView === 'list' ? 'bg-app-muted text-app-text' : 'text-app-text-muted hover:text-app-text'
-              )}
-              onClick={() => setWorkspaceView('list')}
-            >
-              List
-            </button>
-            <button
-              type="button"
-              className={clsx(
-                'rounded-lg px-3 py-1.5 text-sm font-semibold transition',
-                workspaceView === 'calendar' ? 'bg-app-muted text-app-text' : 'text-app-text-muted hover:text-app-text'
-              )}
-              onClick={() => setWorkspaceView('calendar')}
-            >
-              Calendar
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-label="Coach settings"
+            title="Coach settings"
+            className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl border border-app-border px-3.5 py-2.5 text-app-text transition hover:bg-app-muted"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="h-[1.375rem] w-[1.375rem]" />
+          </button>
+          {clients.length > 0 && (
+            <div className="inline-flex rounded-xl border border-app-border p-1">
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+                  workspaceView === 'list' ? 'bg-app-muted text-app-text' : 'text-app-text-muted hover:text-app-text'
+                )}
+                onClick={() => setWorkspaceView('list')}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+                  workspaceView === 'calendar' ? 'bg-app-muted text-app-text' : 'text-app-text-muted hover:text-app-text'
+                )}
+                onClick={() => setWorkspaceView('calendar')}
+              >
+                Calendar
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -422,66 +360,27 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       )}
 
       {clients.length === 0 ? (
-        <>
-          <CoachSettingsCard
-            coachCodeDraft={coachCodeDraft}
-            defaultNutritionTemplateId={defaultNutritionTemplateId}
-            defaultExerciseTemplateId={defaultExerciseTemplateId}
-            nutritionTemplates={nutritionTemplates}
-            exerciseTemplates={exerciseTemplates}
-            saving={saving}
-            onCoachCodeChange={setCoachCodeDraft}
-            onDefaultNutritionTemplateChange={setDefaultNutritionTemplateId}
-            onDefaultExerciseTemplateChange={setDefaultExerciseTemplateId}
-            onSave={() => void saveSettings()}
-          />
-          <Card>
-            <h2 className="text-lg font-bold">No assigned users yet</h2>
-            <p className="mt-2 text-sm text-app-text-muted">Share your coach code or wait for a super admin to assign users.</p>
-          </Card>
-        </>
+        <Card>
+          <h2 className="text-lg font-bold">No assigned users yet</h2>
+          <p className="mt-2 text-sm text-app-text-muted">
+            Share your coach code or wait for a super admin to assign users. Open coach settings to configure your code and default plans.
+          </p>
+        </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-          <div className="space-y-4">
-            {workspaceView === 'list' && (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    className="rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm"
-                    value={selectedGroupId}
-                    onChange={(event) => setSelectedGroupId(event.target.value)}
-                  >
-                    <option value="">All groups</option>
-                    {clientGroups.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.name} ({group.memberCount})
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    aria-label="Manage client groups"
-                    title="Manage client groups"
-                    className="inline-flex min-h-[2.5rem] items-center justify-center rounded-xl px-3.5 py-2.5 text-app-text transition hover:bg-app-muted"
-                    onClick={() => setGroupsOpen(true)}
-                  >
-                    <UsersRound className="h-[1.375rem] w-[1.375rem]" />
-                  </button>
-                </div>
-                <select
-                  className="rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm"
-                  value={selectedClient?.id ?? ''}
-                  onChange={(event) => setSelectedClientId(event.target.value)}
-                >
-                  {visibleClients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {clientName(client)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+        <div className="grid gap-4 lg:grid-cols-[minmax(280px,320px)_minmax(0,1fr)_minmax(280px,340px)]">
+          <ClientRoster
+            clients={visibleClients}
+            totalCount={clients.length}
+            selectedClientId={selectedClient?.id ?? ''}
+            onSelect={handleSelectClient}
+            clientGroups={clientGroups}
+            selectedGroupId={selectedGroupId}
+            onGroupChange={setSelectedGroupId}
+            onManageGroups={() => setGroupsOpen(true)}
+            selectedGroupName={selectedGroup?.name}
+          />
 
+          <div className="min-w-0 space-y-4">
             {workspaceView === 'calendar' ? (
               <CoachCalendar
                 coachUserId={coachUserId}
@@ -494,219 +393,49 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 onSelectClient={handleCalendarSelectClient}
                 onCheckInsChanged={loadClients}
               />
+            ) : selectedClient ? (
+              <ClientDetailTabs
+                key={selectedClient.id}
+                client={selectedClient}
+                dashboard={dashboard}
+                engagement={engagement}
+                nutritionTemplates={nutritionTemplates}
+                exerciseTemplates={exerciseTemplates}
+                saving={saving}
+                sendingEmail={sendingEmail}
+                sendingSms={sendingSms}
+                clientWaterGoalDraft={clientWaterGoalDraft}
+                onClientWaterGoalDraftChange={setClientWaterGoalDraft}
+                onSaveHydrationGoal={() => void saveClientWaterGoal()}
+                onSendEmail={sendResultsEmail}
+                onSendText={sendResultsSms}
+                onSavingChange={setSaving}
+                onError={setError}
+                onRefresh={refreshClientData}
+              />
             ) : (
-              <>
-            <Card>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold">Assigned users</h2>
-                  <p className="text-sm text-app-text-muted">
-                    {visibleClients.length} of {clients.length} client{clients.length === 1 ? '' : 's'}
-                    {selectedGroup ? ` in ${selectedGroup.name}` : ''}
-                  </p>
-                </div>
-              </div>
-
-              {visibleClients.length === 0 ? (
-                <p className="text-sm text-app-text-muted">
-                  {selectedGroup
-                    ? `No clients in ${selectedGroup.name} yet. Use the groups icon to add members.`
-                    : 'No assigned users match this filter.'}
-                </p>
-              ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-app-border text-app-text-muted">
-                      <AssignedUsersSortHeader
-                        label="Name"
-                        sortKey="name"
-                        activeSortKey={assignedUsersSortKey}
-                        sortDirection={assignedUsersSortDirection}
-                        onSort={handleAssignedUsersSort}
-                      />
-                      <th className="py-3 pr-4 font-medium">Program</th>
-                      <th className="py-3 pr-4 font-medium">Meals</th>
-                      <th className="py-3 pr-4 font-medium">Exercise</th>
-                      <th className="py-3 pr-4 font-medium">Latest weight</th>
-                      <AssignedUsersSortHeader
-                        label="Next check-in"
-                        sortKey="nextCheckIn"
-                        activeSortKey={assignedUsersSortKey}
-                        sortDirection={assignedUsersSortDirection}
-                        onSort={handleAssignedUsersSort}
-                        className="py-3 font-medium"
-                      />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedVisibleClients.map((client) => (
-                      <tr
-                        key={client.id}
-                        className={`cursor-pointer border-b border-app-border/60 last:border-0 ${
-                          selectedClient?.id === client.id ? 'bg-app-muted' : 'hover:bg-app-muted/60'
-                        }`}
-                        onClick={() => setSelectedClientId(client.id)}
-                      >
-                        <td className="py-3 pr-4 font-semibold">{clientName(client)}</td>
-                        <td className="py-3 pr-4 text-app-text-muted">{client.activeProgram?.name ?? 'No active program'}</td>
-                        <td className="py-3 pr-4 text-app-text-muted">
-                          {completion(client.latestDailyLog?.mealsCompleted, client.latestDailyLog?.mealsPlanned)}
-                        </td>
-                        <td className="py-3 pr-4 text-app-text-muted">
-                          {completion(client.latestDailyLog?.exercisesCompleted, client.latestDailyLog?.exercisesPlanned)}
-                        </td>
-                        <td className="py-3 pr-4 text-app-text-muted">
-                          {latestWeight(client) != null ? `${latestWeight(client)} lbs` : '—'}
-                        </td>
-                        <td className="py-3 text-app-text-muted tabular-nums">{formatNextCheckIn(client.nextCheckInAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              )}
-            </Card>
-
-            {selectedClient && (
               <Card>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <h2 className="text-lg font-bold">{clientName(selectedClient)} progress</h2>
-                  <SendResultsMenu
-                    disabled={saving}
-                    sendingEmail={sendingEmail}
-                    sendingSms={sendingSms}
-                    onSendEmail={sendResultsEmail}
-                    onSendText={sendResultsSms}
-                  />
-                </div>
-                <p className="mt-2 text-sm text-app-text-muted">
-                  {selectedClient.textPhone
-                    ? `Text will go to ${selectedClient.textPhone}.`
-                    : 'No phone on file yet — add one in account details or when sending results.'}
-                </p>
-                {dashboard?.summary ? (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-4">
-                      <div className="rounded-xl bg-app-muted p-3">
-                        <p className="text-xs uppercase text-app-text-muted">Current weight</p>
-                        <p className="mt-1 text-xl font-bold">{Math.round(dashboard.summary.currentWeight)} lbs</p>
-                      </div>
-                      <div className="rounded-xl bg-app-muted p-3">
-                        <p className="text-xs uppercase text-app-text-muted">Goal progress</p>
-                        <p className="mt-1 text-xl font-bold">{Math.round(dashboard.summary.goalProgress)}%</p>
-                      </div>
-                      <div className="rounded-xl bg-app-muted p-3">
-                        <p className="text-xs uppercase text-app-text-muted">Calories left</p>
-                        <p className="mt-1 text-xl font-bold">{Math.round(dashboard.summary.caloriesRemaining)}</p>
-                      </div>
-                      <div className="rounded-xl bg-app-muted p-3">
-                        <p className="text-xs uppercase text-app-text-muted">Exercises left</p>
-                        <p className="mt-1 text-xl font-bold">{dashboard.summary.exercisesLeft}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
-                      <div className="rounded-xl bg-app-muted p-4">
-                        <p className="text-xs uppercase text-app-text-muted">Current level</p>
-                        {engagement?.currentLevel ? (
-                          <>
-                            <p className="mt-1 text-lg font-bold">
-                              Level {engagement.currentLevel.number}: {engagement.currentLevel.name}
-                            </p>
-                            <p className="mt-1 text-sm text-app-text-muted">{engagement.currentLevel.progressPercent}% complete</p>
-                            <p className="mt-2 text-sm">Next: {engagement.currentLevel.nextAction}</p>
-                          </>
-                        ) : (
-                          <p className="mt-1 text-sm text-app-text-muted">No level activity yet.</p>
-                        )}
-                      </div>
-
-                      <div className="rounded-xl bg-app-muted p-4">
-                        <p className="text-xs uppercase text-app-text-muted">Streaks</p>
-                        <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-                          <div>
-                            <p className="text-app-text-muted">Food</p>
-                            <p className="text-lg font-bold">{engagement?.momentum.foodLoggingStreak ?? 0}</p>
-                          </div>
-                          <div>
-                            <p className="text-app-text-muted">Best</p>
-                            <p className="text-lg font-bold">{engagement?.momentum.foodLoggingBest ?? 0}</p>
-                          </div>
-                          <div>
-                            <p className="text-app-text-muted">Snapshots</p>
-                            <p className="text-lg font-bold">{engagement?.momentum.snapshotStreak ?? 0}</p>
-                          </div>
-                        </div>
-                        <p className="mt-2 text-sm text-app-text-muted">
-                          {engagement?.momentum.dailyWinsThisWeek ?? 0} daily wins this week
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl bg-app-muted p-4">
-                      <p className="text-xs uppercase text-app-text-muted">Hydration</p>
-                      <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                        <div>
-                          <p className="text-app-text-muted">Today</p>
-                          <p className="text-lg font-bold tabular-nums">
-                            {engagement?.hydration.todayActualOz ?? 0}/{engagement?.hydration.todayTargetOz ?? 0} oz
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-app-text-muted">30-day hit rate</p>
-                          <p className="text-lg font-bold tabular-nums">
-                            {engagement?.hydration.last30DayHitPercent ?? 0}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-app-text-muted">Streak</p>
-                          <p className="text-lg font-bold tabular-nums">{engagement?.hydration.currentStreak ?? 0} days</p>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex flex-wrap items-end gap-2">
-                        <label className="text-sm text-app-text-muted">
-                          Daily goal (oz)
-                          <input
-                            type="number"
-                            min={1}
-                            max={512}
-                            value={clientWaterGoalDraft}
-                            onChange={(event) => setClientWaterGoalDraft(event.target.value)}
-                            className="mt-1 block w-28 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text"
-                          />
-                        </label>
-                        <Button disabled={saving} onClick={() => void saveClientWaterGoal()}>
-                          Save hydration goal
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl bg-app-muted p-4">
-                      <p className="text-xs uppercase text-app-text-muted">Recent badges</p>
-                      {engagement?.recentBadges.length ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {engagement.recentBadges.map((badge) => (
-                            <span key={badge.id} className="rounded-full bg-app-surface px-3 py-1 text-sm font-semibold">
-                              {badge.icon} {badge.name}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-sm text-app-text-muted">No badges earned yet.</p>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-app-text-muted">No dashboard data available for this user yet.</p>
-                )}
+                <p className="text-sm text-app-text-muted">Select a client from the roster to view their progress.</p>
               </Card>
-            )}
-              </>
             )}
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4">
+            {selectedClient ? (
+              <SessionNotesPanel
+                key={selectedClient.id}
+                clientId={selectedClient.id}
+                clientName={clientName(selectedClient)}
+                onScheduleSession={() => setScheduleOpen(true)}
+                onSendResults={sendResultsEmail}
+              />
+            ) : (
+              <Card>
+                <h2 className="text-lg font-bold">Session notes</h2>
+                <p className="mt-1 text-sm text-app-text-muted">Select a client to start a session.</p>
+              </Card>
+            )}
+
             {selectedClient ? (
               <Card>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -722,81 +451,24 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 </div>
               </Card>
             ) : null}
-
-            <CoachSettingsCard
-              coachCodeDraft={coachCodeDraft}
-              defaultNutritionTemplateId={defaultNutritionTemplateId}
-              defaultExerciseTemplateId={defaultExerciseTemplateId}
-              nutritionTemplates={nutritionTemplates}
-              exerciseTemplates={exerciseTemplates}
-              saving={saving}
-              onCoachCodeChange={setCoachCodeDraft}
-              onDefaultNutritionTemplateChange={setDefaultNutritionTemplateId}
-              onDefaultExerciseTemplateChange={setDefaultExerciseTemplateId}
-              onSave={() => void saveSettings()}
-            />
-
-            <Card>
-              <h2 className="text-lg font-bold">Apply plans</h2>
-              <p className="mt-1 text-sm text-app-text-muted">Apply templates to the selected user's day and optionally make them defaults.</p>
-
-            <label className="mt-4 block text-sm">
-              <span className="mb-1 block font-medium">Plan date</span>
-              <input
-                type="date"
-                className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-                value={applyDate}
-                onChange={(event) => setApplyDate(event.target.value)}
-              />
-            </label>
-            <label className="mt-3 flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={setAsDefault} onChange={(event) => setSetAsDefault(event.target.checked)} />
-              Set as the user&apos;s default going forward
-            </label>
-
-            <div className="mt-5 space-y-3">
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium">Nutrition template</span>
-                <select
-                  className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-                  value={nutritionTemplateId}
-                  onChange={(event) => setNutritionTemplateId(event.target.value)}
-                >
-                  {nutritionTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button type="button" className="w-full" disabled={saving || !nutritionTemplates.length} onClick={() => void applyTemplate('nutrition')}>
-                Apply nutrition template
-              </Button>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium">Exercise template</span>
-                <select
-                  className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-                  value={exerciseTemplateId}
-                  onChange={(event) => setExerciseTemplateId(event.target.value)}
-                >
-                  {exerciseTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button type="button" className="w-full" disabled={saving || !exerciseTemplates.length} onClick={() => void applyTemplate('exercise')}>
-                Apply exercise template
-              </Button>
-            </div>
-            </Card>
           </div>
         </div>
       )}
+
+      <CoachSettingsDrawer
+        open={settingsOpen}
+        coachCodeDraft={coachCodeDraft}
+        defaultNutritionTemplateId={defaultNutritionTemplateId}
+        defaultExerciseTemplateId={defaultExerciseTemplateId}
+        nutritionTemplates={nutritionTemplates}
+        exerciseTemplates={exerciseTemplates}
+        saving={saving}
+        onCoachCodeChange={setCoachCodeDraft}
+        onDefaultNutritionTemplateChange={setDefaultNutritionTemplateId}
+        onDefaultExerciseTemplateChange={setDefaultExerciseTemplateId}
+        onSave={() => void saveSettings()}
+        onClose={() => setSettingsOpen(false)}
+      />
 
       <ClientGroupsDrawer
         open={groupsOpen}
@@ -804,6 +476,15 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
         groups={clientGroups}
         onClose={() => setGroupsOpen(false)}
         onGroupsChange={loadGroups}
+      />
+
+      <ScheduleCheckInDrawer
+        open={scheduleOpen}
+        clients={clients}
+        initialDate={todayKey()}
+        initialUserId={selectedClient?.id ?? ''}
+        onClose={() => setScheduleOpen(false)}
+        onSaved={loadClients}
       />
 
       {selectedClient ? (
@@ -817,83 +498,5 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
         />
       ) : null}
     </div>
-  );
-}
-
-function CoachSettingsCard({
-  coachCodeDraft,
-  defaultNutritionTemplateId,
-  defaultExerciseTemplateId,
-  nutritionTemplates,
-  exerciseTemplates,
-  saving,
-  onCoachCodeChange,
-  onDefaultNutritionTemplateChange,
-  onDefaultExerciseTemplateChange,
-  onSave
-}: {
-  coachCodeDraft: string;
-  defaultNutritionTemplateId: string;
-  defaultExerciseTemplateId: string;
-  nutritionTemplates: NutritionPlanTemplateSummary[];
-  exerciseTemplates: ExercisePlanTemplateSummary[];
-  saving: boolean;
-  onCoachCodeChange: (value: string) => void;
-  onDefaultNutritionTemplateChange: (value: string) => void;
-  onDefaultExerciseTemplateChange: (value: string) => void;
-  onSave: () => void;
-}) {
-  return (
-    <Card>
-      <h2 className="text-lg font-bold">New user defaults</h2>
-      <p className="mt-1 text-sm text-app-text-muted">Users can enter your code during setup to get assigned and start on these plans.</p>
-
-      <label className="mt-4 block text-sm">
-        <span className="mb-1 block font-medium">Coach code</span>
-        <input
-          className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 uppercase"
-          value={coachCodeDraft}
-          onChange={(event) => onCoachCodeChange(event.target.value.toUpperCase())}
-          placeholder="DF"
-          maxLength={20}
-        />
-      </label>
-
-      <label className="mt-4 block text-sm">
-        <span className="mb-1 block font-medium">Default nutrition plan</span>
-        <select
-          className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-          value={defaultNutritionTemplateId}
-          onChange={(event) => onDefaultNutritionTemplateChange(event.target.value)}
-        >
-          <option value="">Use global starter plan</option>
-          {nutritionTemplates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="mt-4 block text-sm">
-        <span className="mb-1 block font-medium">Default exercise plan</span>
-        <select
-          className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-          value={defaultExerciseTemplateId}
-          onChange={(event) => onDefaultExerciseTemplateChange(event.target.value)}
-        >
-          <option value="">Use global starter plan</option>
-          {exerciseTemplates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <Button type="button" className="mt-4 w-full" disabled={saving} onClick={onSave}>
-        {saving ? 'Saving...' : 'Save defaults'}
-      </Button>
-    </Card>
   );
 }

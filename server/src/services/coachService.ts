@@ -3,8 +3,11 @@ import { prisma } from '../db/prisma.js';
 import { canAccessUser } from '../auth/requireRole.js';
 import { parseDateParam, toDateKey, addUtcDays } from '../utils/dates.js';
 import { getTodayDashboard } from './dashboardService.js';
+import { ensureDailyLogByUserId } from './dailyLogService.js';
+import { getScheduledExercises } from './exerciseService.js';
 import { getGamificationDashboard } from './gamificationService.js';
 import { getCoachHydrationStats, setWaterGoal } from './hydrationService.js';
+import { getMealsForDate } from './nutritionService.js';
 import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { sendResultsReadyEmail } from './emailService.js';
@@ -107,6 +110,15 @@ export async function listCoachClients(coachId: string) {
     const latestDailyLog = user.dailyLogs[0] ?? null;
     const latestProgressSnapshot = user.progressSnapshots[0] ?? null;
     const textPhone = resolveClientMessagingPhone(user.phone, inboundPhones.get(user.id));
+
+    const compliancePct = computeCompliancePct(latestDailyLog);
+    const lastActivityAt =
+      latestDailyLog?.date.toISOString().slice(0, 10) ??
+      latestProgressSnapshot?.snapshotDate.toISOString().slice(0, 10) ??
+      null;
+    const nextSessionAt = nextCheckInByUserId.get(user.id) ?? null;
+    const needsAttention = computeNeedsAttention(compliancePct, lastActivityAt, nowMs);
+
     return {
       id: user.id,
       firstName: user.firstName,
@@ -141,9 +153,32 @@ export async function listCoachClients(coachId: string) {
             completionStatus: latestProgressSnapshot.completionStatus
           }
         : null,
-      nextCheckInAt: nextCheckInByUserId.get(user.id) ?? null
+      nextCheckInAt: nextSessionAt,
+      nextSessionAt,
+      compliancePct,
+      lastActivityAt,
+      needsAttention
     };
   });
+}
+
+function computeCompliancePct(
+  log: { mealsCompleted: number; mealsPlanned: number; exercisesCompleted: number; exercisesPlanned: number } | null
+): number | null {
+  if (!log) return null;
+  const parts: number[] = [];
+  if (log.mealsPlanned > 0) parts.push((log.mealsCompleted / log.mealsPlanned) * 100);
+  if (log.exercisesPlanned > 0) parts.push((log.exercisesCompleted / log.exercisesPlanned) * 100);
+  if (!parts.length) return null;
+  return Math.round(parts.reduce((sum, value) => sum + value, 0) / parts.length);
+}
+
+function computeNeedsAttention(compliancePct: number | null, lastActivityAt: string | null, nowMs: number): boolean {
+  if (compliancePct != null && compliancePct < 50) return true;
+  if (!lastActivityAt) return true;
+  const lastMs = new Date(`${lastActivityAt}T12:00:00Z`).getTime();
+  const daysSince = Math.floor((nowMs - lastMs) / (24 * 60 * 60 * 1000));
+  return daysSince > 3;
 }
 
 function normalizeCoachCode(value?: string | null) {
@@ -196,6 +231,105 @@ export async function updateCoachSettings(
 export async function getCoachClientDashboard(actor: { id: string; role: Role }, userId: string) {
   await requireCoachClient(actor, userId);
   return getTodayDashboard(userId);
+}
+
+export async function getCoachClientMeals(actor: { id: string; role: Role }, userId: string, date: string) {
+  await requireCoachClient(actor, userId);
+  const log = await ensureDailyLogByUserId(userId, date);
+  if (!log) throw new Error('No active program found');
+  return getMealsForDate(userId, date);
+}
+
+export async function getCoachClientExercises(actor: { id: string; role: Role }, userId: string, date: string) {
+  await requireCoachClient(actor, userId);
+  const log = await ensureDailyLogByUserId(userId, date);
+  if (!log) throw new Error('No active program found');
+  return getScheduledExercises(userId, date);
+}
+
+function serializeCoachSession(session: {
+  id: string;
+  coachId: string;
+  userId: string;
+  occurredAt: Date;
+  notes: string;
+  linkedCheckInId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: session.id,
+    coachId: session.coachId,
+    userId: session.userId,
+    occurredAt: session.occurredAt.toISOString(),
+    notes: session.notes,
+    linkedCheckInId: session.linkedCheckInId,
+    createdAt: session.createdAt.toISOString(),
+    updatedAt: session.updatedAt.toISOString()
+  };
+}
+
+async function requireLinkedCheckInForSession(
+  coachId: string,
+  userId: string,
+  linkedCheckInId: string | null | undefined
+) {
+  if (linkedCheckInId == null) return;
+  const checkIn = await prisma.coachCheckIn.findUnique({
+    where: { id: linkedCheckInId },
+    select: { coachId: true, userId: true }
+  });
+  if (!checkIn || checkIn.coachId !== coachId || checkIn.userId !== userId) {
+    throw new Error('Check-in does not belong to this coach and client');
+  }
+}
+
+export async function listCoachSessions(actor: { id: string; role: Role }, userId: string) {
+  await requireCoachClient(actor, userId);
+  const sessions = await prisma.coachSession.findMany({
+    where: { coachId: actor.id, userId },
+    orderBy: { occurredAt: 'desc' }
+  });
+  return sessions.map(serializeCoachSession);
+}
+
+export async function createCoachSession(
+  actor: { id: string; role: Role },
+  data: { userId: string; notes: string; occurredAt?: string; linkedCheckInId?: string | null }
+) {
+  await requireCoachClient(actor, data.userId);
+  await requireLinkedCheckInForSession(actor.id, data.userId, data.linkedCheckInId);
+  const session = await prisma.coachSession.create({
+    data: {
+      coachId: actor.id,
+      userId: data.userId,
+      notes: data.notes,
+      occurredAt: data.occurredAt ? new Date(data.occurredAt) : undefined,
+      linkedCheckInId: data.linkedCheckInId ?? null
+    }
+  });
+  return serializeCoachSession(session);
+}
+
+export async function updateCoachSession(
+  actor: { id: string; role: Role },
+  sessionId: string,
+  data: { notes?: string; occurredAt?: string; linkedCheckInId?: string | null }
+) {
+  const existing = await prisma.coachSession.findUnique({ where: { id: sessionId } });
+  if (!existing || existing.coachId !== actor.id) throw new Error('Session not found');
+
+  await requireLinkedCheckInForSession(actor.id, existing.userId, data.linkedCheckInId);
+
+  const session = await prisma.coachSession.update({
+    where: { id: sessionId },
+    data: {
+      notes: data.notes,
+      occurredAt: data.occurredAt ? new Date(data.occurredAt) : undefined,
+      linkedCheckInId: data.linkedCheckInId === undefined ? undefined : data.linkedCheckInId
+    }
+  });
+  return serializeCoachSession(session);
 }
 
 export async function getCoachClientEngagement(actor: { id: string; role: Role }, userId: string) {

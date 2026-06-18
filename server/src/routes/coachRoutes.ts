@@ -8,11 +8,16 @@ import {
   applyCoachNutritionTemplate,
   createCoachClientGroup,
   createCoachCheckIn,
+  createCoachSession,
+  listCoachSessions,
+  updateCoachSession,
   deleteCoachClientGroup,
   deleteCoachCheckIn,
   getCoachClientDashboard,
   getCoachClientEngagement,
+  getCoachClientExercises,
   getCoachClientHydration,
+  getCoachClientMeals,
   getCoachCalendar,
   getCoachSettings,
   listCoachClientGroups,
@@ -150,6 +155,20 @@ const checkInBody = z.object({
 const checkInUpdateBody = checkInBody.partial().refine((body) => Object.keys(body).length > 0, {
   message: 'At least one field is required'
 });
+const sessionCreateBody = z.object({
+  userId: z.string().trim().min(1),
+  notes: z.string().trim().min(1),
+  occurredAt: z.string().trim().min(1).optional(),
+  linkedCheckInId: z.string().trim().min(1).nullable().optional()
+});
+const sessionUpdateBody = z
+  .object({
+    notes: z.string().trim().min(1).optional(),
+    occurredAt: z.string().trim().min(1).optional(),
+    linkedCheckInId: z.string().trim().min(1).nullable().optional()
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
+const sessionListQuery = z.object({ userId: z.string().trim().min(1) });
 const sendResultsSmsBody = z
   .object({
     phone: z.string().trim().min(1).optional(),
@@ -215,6 +234,36 @@ export async function coachRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get('/api/coach/sessions', { preHandler: coachOnly }, async (request, reply) => {
+    const parsed = sessionListQuery.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    try {
+      return await listCoachSessions(request.appUser!, parsed.data.userId);
+    } catch (error) {
+      return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load sessions' });
+    }
+  });
+
+  app.post('/api/coach/sessions', { preHandler: coachOnly }, async (request, reply) => {
+    const parsed = sessionCreateBody.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid session' });
+    try {
+      return await createCoachSession(request.appUser!, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save session' });
+    }
+  });
+
+  app.patch('/api/coach/sessions/:id', { preHandler: coachOnly }, async (request, reply) => {
+    const parsed = sessionUpdateBody.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid session' });
+    try {
+      return await updateCoachSession(request.appUser!, (request.params as { id: string }).id, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update session' });
+    }
+  });
+
   app.get('/api/coach/client-groups', { preHandler: coachOnly }, async (request) =>
     listCoachClientGroups(request.appUser!.id)
   );
@@ -267,6 +316,30 @@ export async function coachRoutes(app: FastifyInstance) {
       return await getCoachClientDashboard(request.appUser!, (request.params as { userId: string }).userId);
     } catch (error) {
       return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load client' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/daily-logs/:date/meals', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    try {
+      return await getCoachClientMeals(request.appUser!, userId, date);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to load meals' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/daily-logs/:date/exercises', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    try {
+      return await getCoachClientExercises(request.appUser!, userId, date);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to load exercises' });
     }
   });
 
