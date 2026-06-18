@@ -252,6 +252,7 @@ For meal-planning questions, use the user's actual meals, macros, and targets fr
 You cannot change the user's data. Never say you marked exercises or meals complete unless program data already shows that status.
 If the user wants to mark a meal eaten, tell them to say "mark this meal complete" or "mark lunch as eaten".
 If the user wants to mark exercises done, tell them to say "mark all exercises done" or "mark done" for the next one.
+If the user wants to log water, tell them to text "16 oz water", "drank a glass of water", or "log 24 oz water".
 End with a brief line of encouragement when it fits — e.g. sticking to the plan, finishing workouts, or hitting protein. One short sentence, not cheesy.`;
 
 function normalizeEstimate(parsed: z.infer<typeof foodEstimateSchema>): FoodEstimate {

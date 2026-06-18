@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { Meal, NutritionPlanTemplateSummary } from '../../types';
-import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 
 function formatMacros(template: NutritionPlanTemplateSummary) {
@@ -26,9 +25,10 @@ export function ApplyTemplateModal({
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [setAsDefault, setSetAsDefault] = useState(true);
-  const [applying, setApplying] = useState(false);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
 
   const hasActuals = meals.some((meal) => meal.items.some((item) => item.type === 'ACTUAL'));
+  const applying = applyingId !== null;
 
   useEffect(() => {
     if (!open) return;
@@ -46,21 +46,22 @@ export function ApplyTemplateModal({
       .finally(() => setLoading(false));
   }, [open]);
 
-  async function apply() {
-    if (!selectedId) return;
-    setApplying(true);
+  async function apply(templateId: string) {
+    if (applying) return;
+    setApplyingId(templateId);
+    setSelectedId(templateId);
     setError('');
     try {
       await api(`/api/daily-logs/${selectedDate}/apply-template`, {
         method: 'POST',
-        body: JSON.stringify({ templateId: selectedId, setAsDefault })
+        body: JSON.stringify({ templateId, setAsDefault })
       });
       onApplied();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to apply template');
     } finally {
-      setApplying(false);
+      setApplyingId(null);
     }
   }
 
@@ -70,6 +71,17 @@ export function ApplyTemplateModal({
         <p className="text-sm text-slate-500">
           Apply a template to <strong>{selectedDate}</strong>. This replaces planned meals and macro targets for that day.
         </p>
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={setAsDefault}
+            disabled={applying}
+            onChange={(event) => setSetAsDefault(event.target.checked)}
+          />
+          <span>Use as my default plan for future days</span>
+        </label>
 
         {hasActuals && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -85,44 +97,38 @@ export function ApplyTemplateModal({
         )}
 
         {!loading && templates.length > 0 && (
-          <ul className="space-y-2">
-            {templates.map((template) => {
-              const selected = selectedId === template.id;
-              return (
-                <li key={template.id}>
-                  <button
-                    type="button"
-                    className={`w-full rounded-2xl border p-4 text-left transition ${
-                      selected ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                    onClick={() => setSelectedId(template.id)}
-                  >
-                    <p className="font-semibold">{template.name}</p>
-                    {template.description && <p className="mt-1 text-sm text-slate-500">{template.description}</p>}
-                    <p className="mt-2 text-xs text-slate-500">{formatMacros(template)}</p>
-                    <p className="text-xs text-slate-400">
-                      {template.mealCount} meals · {template.itemCount} food items
-                    </p>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <p className="text-sm text-slate-500">Click a template to apply it to this day.</p>
+            <ul className="space-y-2">
+              {templates.map((template) => {
+                const selected = selectedId === template.id;
+                const isApplying = applyingId === template.id;
+                return (
+                  <li key={template.id}>
+                    <button
+                      type="button"
+                      className={`w-full rounded-2xl border p-4 text-left transition ${
+                        selected ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : 'border-slate-200 hover:bg-slate-50'
+                      } ${applying ? 'cursor-wait opacity-80' : ''}`}
+                      disabled={applying}
+                      onClick={() => void apply(template.id)}
+                    >
+                      <p className="font-semibold">
+                        {template.name}
+                        {isApplying && <span className="ml-2 text-sm font-normal text-slate-500">Applying…</span>}
+                      </p>
+                      {template.description && <p className="mt-1 text-sm text-slate-500">{template.description}</p>}
+                      <p className="mt-2 text-xs text-slate-500">{formatMacros(template)}</p>
+                      <p className="text-xs text-slate-400">
+                        {template.mealCount} meals · {template.itemCount} food items
+                      </p>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
-
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={setAsDefault}
-            onChange={(event) => setSetAsDefault(event.target.checked)}
-          />
-          <span>Use as my default plan for future days</span>
-        </label>
-
-        <Button type="button" className="w-full" disabled={!selectedId || applying} onClick={() => void apply()}>
-          {applying ? 'Applying…' : 'Apply template'}
-        </Button>
       </div>
     </Drawer>
   );

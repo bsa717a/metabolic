@@ -4,6 +4,7 @@ import { UsersRound } from 'lucide-react';
 import { api, todayKey } from '../services/api';
 import type { ClientGroup, CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary } from '../types';
 import type { GamificationDashboard } from '../types/gamification';
+import type { CoachHydrationStats } from '../types/hydration';
 import { CoachCalendar } from '../components/coach/CoachCalendar';
 import { ClientGroupsDrawer } from '../components/coach/ClientGroupsDrawer';
 import { SendResultsMenu } from '../components/coach/SendResultsMenu';
@@ -15,6 +16,58 @@ type CoachSettings = {
   defaultNutritionTemplateId: string | null;
   defaultExerciseTemplateId: string | null;
 };
+
+type CoachEngagement = GamificationDashboard & { hydration: CoachHydrationStats };
+
+type AssignedUsersSortKey = 'name' | 'nextCheckIn';
+type SortDirection = 'asc' | 'desc';
+
+function compareStrings(a: string, b: string, direction: SortDirection) {
+  const result = a.localeCompare(b, undefined, { sensitivity: 'base' });
+  return direction === 'asc' ? result : -result;
+}
+
+function compareOptionalDates(a: string | null, b: string | null, direction: SortDirection) {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  const result = new Date(a).getTime() - new Date(b).getTime();
+  return direction === 'asc' ? result : -result;
+}
+
+function AssignedUsersSortHeader({
+  label,
+  sortKey,
+  activeSortKey,
+  sortDirection,
+  onSort,
+  className = 'py-3 pr-4 font-medium'
+}: {
+  label: string;
+  sortKey: AssignedUsersSortKey;
+  activeSortKey: AssignedUsersSortKey;
+  sortDirection: SortDirection;
+  onSort: (key: AssignedUsersSortKey) => void;
+  className?: string;
+}) {
+  const active = activeSortKey === sortKey;
+
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={clsx(
+          'inline-flex items-center gap-1 transition',
+          active ? 'text-app-text' : 'text-app-text-muted hover:text-app-text'
+        )}
+      >
+        <span>{label}</span>
+        <span aria-hidden className="text-xs">{active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
+      </button>
+    </th>
+  );
+}
 
 function clientName(client: CoachClient) {
   return `${client.firstName} ${client.lastName}`;
@@ -29,14 +82,27 @@ function latestWeight(client: CoachClient) {
   return client.activeProgram?.currentWeight ?? client.latestProgressSnapshot?.weight ?? null;
 }
 
-export function CoachPage() {
+function formatNextCheckIn(iso: string | null | undefined) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC'
+  });
+}
+
+export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [clients, setClients] = useState<CoachClient[]>([]);
   const [clientGroups, setClientGroups] = useState<ClientGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [engagement, setEngagement] = useState<GamificationDashboard | null>(null);
+  const [engagement, setEngagement] = useState<CoachEngagement | null>(null);
+  const [clientWaterGoalDraft, setClientWaterGoalDraft] = useState('64');
   const [nutritionTemplates, setNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
   const [exerciseTemplates, setExerciseTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
   const [nutritionTemplateId, setNutritionTemplateId] = useState('');
@@ -53,6 +119,8 @@ export function CoachPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState('');
   const [workspaceView, setWorkspaceView] = useState<'list' | 'calendar'>('list');
+  const [assignedUsersSortKey, setAssignedUsersSortKey] = useState<AssignedUsersSortKey>('name');
+  const [assignedUsersSortDirection, setAssignedUsersSortDirection] = useState<SortDirection>('asc');
 
   const selectedGroup = useMemo(
     () => clientGroups.find((group) => group.id === selectedGroupId) ?? null,
@@ -65,6 +133,24 @@ export function CoachPage() {
     return clients.filter((client) => memberIds.has(client.id));
   }, [clients, selectedGroup]);
 
+  const sortedVisibleClients = useMemo(() => {
+    return [...visibleClients].sort((a, b) => {
+      if (assignedUsersSortKey === 'name') {
+        return compareStrings(clientName(a), clientName(b), assignedUsersSortDirection);
+      }
+      return compareOptionalDates(a.nextCheckInAt, b.nextCheckInAt, assignedUsersSortDirection);
+    });
+  }, [assignedUsersSortDirection, assignedUsersSortKey, visibleClients]);
+
+  function handleAssignedUsersSort(nextKey: AssignedUsersSortKey) {
+    if (assignedUsersSortKey === nextKey) {
+      setAssignedUsersSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setAssignedUsersSortKey(nextKey);
+    setAssignedUsersSortDirection('asc');
+  }
+
   const selectedClient = useMemo(
     () => visibleClients.find((client) => client.id === selectedClientId) ?? visibleClients[0],
     [visibleClients, selectedClientId]
@@ -74,6 +160,15 @@ export function CoachPage() {
     const groupRows = await api<ClientGroup[]>('/api/coach/client-groups');
     setClientGroups(groupRows);
     setSelectedGroupId((current) => (current && groupRows.some((group) => group.id === current) ? current : ''));
+  }, []);
+
+  const loadClients = useCallback(async () => {
+    try {
+      const clientRows = await api<CoachClient[]>('/api/coach/users');
+      setClients(clientRows);
+    } catch {
+      // Keep the existing list if a background refresh fails.
+    }
   }, []);
 
   const load = useCallback(async () => {
@@ -116,10 +211,11 @@ export function CoachPage() {
     try {
       const [dashboardData, engagementData] = await Promise.all([
         api<Dashboard>(`/api/coach/users/${clientId}/dashboard`),
-        api<GamificationDashboard>(`/api/coach/users/${clientId}/engagement`)
+        api<CoachEngagement>(`/api/coach/users/${clientId}/engagement`)
       ]);
       setDashboard(dashboardData);
       setEngagement(engagementData);
+      setClientWaterGoalDraft(String(engagementData.hydration.waterGoalOz));
     } catch {
       setDashboard(null);
       setEngagement(null);
@@ -139,6 +235,29 @@ export function CoachPage() {
     if (visibleClients.some((client) => client.id === selectedClientId)) return;
     setSelectedClientId(visibleClients[0]?.id ?? '');
   }, [selectedClientId, visibleClients]);
+
+  async function saveClientWaterGoal() {
+    if (!selectedClient) return;
+    const goalOz = Number(clientWaterGoalDraft);
+    if (!Number.isFinite(goalOz) || goalOz < 1) {
+      setError('Enter a valid hydration goal in ounces');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await api(`/api/coach/users/${selectedClient.id}/hydration-goal`, {
+        method: 'PATCH',
+        body: JSON.stringify({ goalOz })
+      });
+      await loadDashboard(selectedClient.id);
+      setSuccessMessage(`Updated hydration goal for ${clientName(selectedClient)}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update hydration goal');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function applyTemplate(kind: 'nutrition' | 'exercise') {
     if (!selectedClient) return;
@@ -363,6 +482,7 @@ export function CoachPage() {
 
             {workspaceView === 'calendar' ? (
               <CoachCalendar
+                coachUserId={coachUserId}
                 clients={visibleClients}
                 scheduleClients={clients}
                 clientGroups={clientGroups}
@@ -370,6 +490,7 @@ export function CoachPage() {
                 onGroupChange={setSelectedGroupId}
                 onManageGroups={() => setGroupsOpen(true)}
                 onSelectClient={handleCalendarSelectClient}
+                onCheckInsChanged={loadClients}
               />
             ) : (
               <>
@@ -395,15 +516,29 @@ export function CoachPage() {
                 <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-app-border text-app-text-muted">
-                      <th className="py-3 pr-4 font-medium">Name</th>
+                      <AssignedUsersSortHeader
+                        label="Name"
+                        sortKey="name"
+                        activeSortKey={assignedUsersSortKey}
+                        sortDirection={assignedUsersSortDirection}
+                        onSort={handleAssignedUsersSort}
+                      />
                       <th className="py-3 pr-4 font-medium">Program</th>
                       <th className="py-3 pr-4 font-medium">Meals</th>
                       <th className="py-3 pr-4 font-medium">Exercise</th>
-                      <th className="py-3 font-medium">Latest weight</th>
+                      <th className="py-3 pr-4 font-medium">Latest weight</th>
+                      <AssignedUsersSortHeader
+                        label="Next check-in"
+                        sortKey="nextCheckIn"
+                        activeSortKey={assignedUsersSortKey}
+                        sortDirection={assignedUsersSortDirection}
+                        onSort={handleAssignedUsersSort}
+                        className="py-3 font-medium"
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleClients.map((client) => (
+                    {sortedVisibleClients.map((client) => (
                       <tr
                         key={client.id}
                         className={`cursor-pointer border-b border-app-border/60 last:border-0 ${
@@ -419,9 +554,10 @@ export function CoachPage() {
                         <td className="py-3 pr-4 text-app-text-muted">
                           {completion(client.latestDailyLog?.exercisesCompleted, client.latestDailyLog?.exercisesPlanned)}
                         </td>
-                        <td className="py-3 text-app-text-muted">
+                        <td className="py-3 pr-4 text-app-text-muted">
                           {latestWeight(client) != null ? `${latestWeight(client)} lbs` : '—'}
                         </td>
+                        <td className="py-3 text-app-text-muted tabular-nums">{formatNextCheckIn(client.nextCheckInAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -503,6 +639,44 @@ export function CoachPage() {
                         <p className="mt-2 text-sm text-app-text-muted">
                           {engagement?.momentum.dailyWinsThisWeek ?? 0} daily wins this week
                         </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-app-muted p-4">
+                      <p className="text-xs uppercase text-app-text-muted">Hydration</p>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <p className="text-app-text-muted">Today</p>
+                          <p className="text-lg font-bold tabular-nums">
+                            {engagement?.hydration.todayActualOz ?? 0}/{engagement?.hydration.todayTargetOz ?? 0} oz
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-app-text-muted">30-day hit rate</p>
+                          <p className="text-lg font-bold tabular-nums">
+                            {engagement?.hydration.last30DayHitPercent ?? 0}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-app-text-muted">Streak</p>
+                          <p className="text-lg font-bold tabular-nums">{engagement?.hydration.currentStreak ?? 0} days</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-end gap-2">
+                        <label className="text-sm text-app-text-muted">
+                          Daily goal (oz)
+                          <input
+                            type="number"
+                            min={1}
+                            max={512}
+                            value={clientWaterGoalDraft}
+                            onChange={(event) => setClientWaterGoalDraft(event.target.value)}
+                            className="mt-1 block w-28 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text"
+                          />
+                        </label>
+                        <Button disabled={saving} onClick={() => void saveClientWaterGoal()}>
+                          Save hydration goal
+                        </Button>
                       </div>
                     </div>
 

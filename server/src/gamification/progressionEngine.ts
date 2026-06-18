@@ -44,6 +44,12 @@ async function getCompletedFoodLogDays(userId: string) {
   });
 }
 
+async function getWaterGoalMetDays(userId: string) {
+  return prisma.dailyLog.count({
+    where: { userId, waterGoalMet: true }
+  });
+}
+
 async function reconcileCompletedFoodLogDays(userId: string) {
   const logs = await prisma.dailyLog.findMany({
     where: { userId },
@@ -478,7 +484,7 @@ async function evaluateBadges(userId: string): Promise<ProgressionCelebration[]>
     level_completed: await prisma.userLevelProgress.count({
       where: { userId, status: LevelStatus.COMPLETED }
     }),
-    water_goal_days: 0,
+    water_goal_days: await getWaterGoalMetDays(userId),
     daily_check_in_streak: 0,
     recovery_daily_win: 0
   };
@@ -647,6 +653,71 @@ export async function recordFoodLogDay(userId: string, dailyLogId: string, date:
   }
 
   return runProgressionEvaluation(userId);
+}
+
+export async function recordWaterGoalDay(userId: string, dailyLogId: string) {
+  const log = await prisma.dailyLog.findUnique({
+    where: { id: dailyLogId },
+    select: { waterActualOz: true, waterTargetOz: true, waterGoalMet: true }
+  });
+  if (!log || !log.waterGoalMet || log.waterActualOz < log.waterTargetOz) return runProgressionEvaluation(userId);
+
+  await updateStreak(userId, StreakType.WATER_GOAL_DAILY, true);
+  return runProgressionEvaluation(userId);
+}
+
+/**
+ * Reverses a WATER_GOAL_DAILY credit for today (e.g. after the user undoes a hydration entry
+ * and the daily goal is no longer met). Only acts if the streak was credited today.
+ */
+export async function revertWaterGoalDay(userId: string) {
+  const today = startOfUtcDay();
+  const streak = await prisma.userStreak.findUnique({
+    where: { userId_streakType: { userId, streakType: StreakType.WATER_GOAL_DAILY } }
+  });
+  if (!streak?.lastCompletedDate) return;
+  if (startOfUtcDay(streak.lastCompletedDate).getTime() !== today.getTime()) return;
+
+  const todayEvent = await prisma.streakEvent.findFirst({
+    where: { userId, streakType: StreakType.WATER_GOAL_DAILY, eventDate: today },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const priorEvent = await prisma.streakEvent.findFirst({
+    where: {
+      userId,
+      streakType: StreakType.WATER_GOAL_DAILY,
+      eventDate: { lt: today },
+      eventType: { in: [StreakEventType.COMPLETED, StreakEventType.GRACE_DAY_USED, StreakEventType.RECOVERED] }
+    },
+    orderBy: { eventDate: 'desc' }
+  });
+  const priorCompletedDate = priorEvent?.eventDate ?? null;
+
+  if (todayEvent?.eventType === StreakEventType.GRACE_DAY_USED) {
+    await prisma.userStreak.update({
+      where: { id: streak.id },
+      data: {
+        graceDaysUsed: Math.max(0, streak.graceDaysUsed - 1),
+        lastCompletedDate: priorCompletedDate,
+        status: StreakStatus.ACTIVE
+      }
+    });
+  } else {
+    const newCount = Math.max(0, streak.currentCount - 1);
+    await prisma.userStreak.update({
+      where: { id: streak.id },
+      data: {
+        currentCount: newCount,
+        lastCompletedDate: priorCompletedDate,
+        status: newCount > 0 ? StreakStatus.ACTIVE : StreakStatus.RESET
+      }
+    });
+  }
+
+  if (todayEvent) {
+    await prisma.streakEvent.delete({ where: { id: todayEvent.id } });
+  }
 }
 
 export { requirementLabel, LEVEL_DEFINITIONS, BADGE_DEFINITIONS };

@@ -28,6 +28,10 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ScheduleCheckInDrawer } from './ScheduleCheckInDrawer';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
+import {
+  readCoachCalendarActivityFilter,
+  saveCoachCalendarActivityFilter
+} from '../../utils/coachCalendarPreferences';
 
 const EVENT_LABELS: Record<CoachCalendarEvent['type'], string> = {
   daily_log: 'Daily activity',
@@ -98,14 +102,17 @@ const iconButtonClassName =
   'inline-flex min-h-[2.5rem] min-w-[2.5rem] items-center justify-center rounded-xl px-3.5 py-2.5 transition disabled:cursor-not-allowed disabled:opacity-50';
 
 export function CoachCalendar({
+  coachUserId,
   clients,
   scheduleClients,
   clientGroups,
   groupId,
   onGroupChange,
   onManageGroups,
-  onSelectClient
+  onSelectClient,
+  onCheckInsChanged
 }: {
+  coachUserId: string;
   clients: CoachClient[];
   scheduleClients: CoachClient[];
   clientGroups: ClientGroup[];
@@ -113,12 +120,15 @@ export function CoachCalendar({
   onGroupChange: (groupId: string) => void;
   onManageGroups: () => void;
   onSelectClient: (userId: string) => void;
+  onCheckInsChanged?: () => void | Promise<void>;
 }) {
   const [rangeMode, setRangeMode] = useState<'week' | 'month'>('month');
   const [anchorDate, setAnchorDate] = useState(() => todayKey());
   const [selectedDate, setSelectedDate] = useState(() => todayKey());
   const [filterUserId, setFilterUserId] = useState('');
-  const [filterActivityTypes, setFilterActivityTypes] = useState<CoachCalendarEventType[]>([]);
+  const [filterActivityTypes, setFilterActivityTypes] = useState<CoachCalendarEventType[]>(() =>
+    readCoachCalendarActivityFilter(coachUserId)
+  );
   const [activityMenuOpen, setActivityMenuOpen] = useState(false);
   const activityMenuRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<CoachCalendarEvent[]>([]);
@@ -164,6 +174,11 @@ export function CoachCalendar({
   useEffect(() => {
     void loadCalendar();
   }, [loadCalendar]);
+
+  useEffect(() => {
+    if (!coachUserId) return;
+    setFilterActivityTypes(readCoachCalendarActivityFilter(coachUserId));
+  }, [coachUserId]);
 
   useEffect(() => {
     if (!filterUserId) return;
@@ -236,9 +251,24 @@ export function CoachCalendar({
   }
 
   function toggleActivityType(type: CoachCalendarEventType) {
-    setFilterActivityTypes((current) =>
-      current.includes(type) ? current.filter((value) => value !== type) : [...current, type]
-    );
+    setFilterActivityTypes((current) => {
+      const next = current.includes(type)
+        ? current.filter((value) => value !== type)
+        : [...current, type];
+      if (coachUserId) {
+        saveCoachCalendarActivityFilter(coachUserId, next);
+      }
+      return next;
+    });
+  }
+
+  function clearFilters() {
+    onGroupChange('');
+    setFilterUserId('');
+    setFilterActivityTypes([]);
+    if (coachUserId) {
+      saveCoachCalendarActivityFilter(coachUserId, []);
+    }
   }
 
   return (
@@ -418,11 +448,7 @@ export function CoachCalendar({
             <button
               type="button"
               className="text-sm font-medium text-app-text-muted transition hover:text-app-text"
-              onClick={() => {
-                onGroupChange('');
-                setFilterUserId('');
-                setFilterActivityTypes([]);
-              }}
+              onClick={clearFilters}
             >
               Clear filters
             </button>
@@ -491,10 +517,11 @@ export function CoachCalendar({
             {loading && <span className="text-sm text-app-text-muted">Loading…</span>}
             <button
               type="button"
-              className="text-sm font-medium text-brand-navy transition hover:opacity-80 dark:text-brand-green"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-navy transition hover:opacity-80 dark:text-brand-green"
               onClick={() => openScheduleCheckIn(null)}
             >
-              Schedule on this day
+              <CalendarPlus className="h-4 w-4 shrink-0" aria-hidden />
+              Schedule a check-in
             </button>
           </div>
         </div>
@@ -565,7 +592,10 @@ export function CoachCalendar({
           setCheckInOpen(false);
           setEditingCheckIn(null);
         }}
-        onSaved={loadCalendar}
+        onSaved={async () => {
+          await loadCalendar();
+          await onCheckInsChanged?.();
+        }}
       />
     </Card>
   );

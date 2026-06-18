@@ -8,6 +8,7 @@ import {
   type ProgressionCelebration
 } from '../gamification/progressionEngine.js';
 import { ensureTodayDailyLog } from './dailyLogService.js';
+import { startOfUtcDay } from '../utils/dates.js';
 
 export async function syncGamificationDefinitions() {
   for (const level of LEVEL_DEFINITIONS) {
@@ -153,9 +154,34 @@ export async function getGamificationDashboard(userId: string) {
 
   const foodStreak = streaks.find((s) => s.streakType === 'FOOD_LOGGING_DAILY');
   const snapshotStreak = streaks.find((s) => s.streakType === 'WEEKLY_SNAPSHOT');
+  const waterStreak = streaks.find((s) => s.streakType === 'WATER_GOAL_DAILY');
 
   const sevenDayBadge = BADGE_DEFINITIONS.find((b) => b.id === 'seven-day-momentum');
   const foodStreakCount = foodStreak?.currentCount ?? 0;
+
+  const program = await prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    include: { metrics: true }
+  });
+  let hydration = {
+    targetOz: 64,
+    actualOz: 0,
+    fillFraction: 1,
+    goalMet: false,
+    currentStreak: waterStreak?.currentCount ?? 0
+  };
+  if (program) {
+    const dailyLog = await ensureTodayDailyLog(userId, program);
+    const targetOz = dailyLog.waterTargetOz;
+    const actualOz = dailyLog.waterActualOz;
+    hydration = {
+      targetOz,
+      actualOz,
+      fillFraction: targetOz > 0 ? Math.max(0, Math.min(1, (targetOz - actualOz) / targetOz)) : 0,
+      goalMet: dailyLog.waterGoalMet,
+      currentStreak: waterStreak?.currentCount ?? 0
+    };
+  }
 
   return {
     currentLevel: activeProgress
@@ -185,6 +211,7 @@ export async function getGamificationDashboard(userId: string) {
       foodLoggingStreak: foodStreakCount,
       foodLoggingBest: foodStreak?.bestCount ?? 0,
       snapshotStreak: snapshotStreak?.currentCount ?? 0,
+      waterGoalStreak: waterStreak?.currentCount ?? 0,
       dailyWinsThisWeek,
       graceDaysAvailable: foodStreak?.graceDaysAvailable ?? 0,
       graceDaysUsed: foodStreak?.graceDaysUsed ?? 0,
@@ -193,6 +220,7 @@ export async function getGamificationDashboard(userId: string) {
           ? `Log tomorrow to earn the ${sevenDayBadge.name} badge.`
           : null
     },
+    hydration,
     recentBadges: recentBadges.map((ub) => ({
       id: ub.badgeId,
       name: ub.badge.name,

@@ -1,6 +1,18 @@
 import { clsx } from 'clsx';
 
-export function Drawer({ open, title, children, onClose }: { open: boolean; title: string; children: React.ReactNode; onClose: () => void }) {
+export function Drawer({
+  open,
+  title,
+  children,
+  onClose,
+  panelClassName
+}: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  panelClassName?: string;
+}) {
   return (
     <div className={clsx('fixed inset-0 z-50 transition', open ? 'pointer-events-auto' : 'pointer-events-none')}>
       <div
@@ -9,7 +21,8 @@ export function Drawer({ open, title, children, onClose }: { open: boolean; titl
       />
       <aside
         className={clsx(
-          'absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-app-surface p-6 text-app-text shadow-2xl transition-transform',
+          'absolute right-0 top-0 flex h-full w-full flex-col bg-app-surface p-6 text-app-text shadow-2xl transition-transform',
+          panelClassName ?? 'max-w-md',
           open ? 'translate-x-0' : 'translate-x-full'
         )}
       >

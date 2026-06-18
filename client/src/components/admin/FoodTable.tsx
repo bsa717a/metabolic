@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
 import type { AdminFood } from '../../types';
 import { Card } from '../ui/Card';
 import { EditFoodDrawer } from './EditFoodDrawer';
+
+type SortKey = 'name' | 'serving' | 'calories' | 'source';
+type SortDirection = 'asc' | 'desc';
 
 function formatServing(food: AdminFood) {
   return `${Number(food.servingSize)} ${food.servingUnit}`;
@@ -19,13 +22,99 @@ function badgeClass(kind: 'verified' | 'ai' | 'global' | 'user') {
   return 'bg-slate-100 text-slate-600';
 }
 
+function compareStrings(a: string, b: string, direction: SortDirection) {
+  const result = a.localeCompare(b, undefined, { sensitivity: 'base' });
+  return direction === 'asc' ? result : -result;
+}
+
+function compareNumbers(a: number, b: number, direction: SortDirection) {
+  const result = a - b;
+  return direction === 'asc' ? result : -result;
+}
+
+function matchesSearch(food: AdminFood, query: string) {
+  const haystack = [
+    food.name,
+    food.brand ?? '',
+    formatServing(food),
+    String(food.calories),
+    formatMacros(food),
+    food.source,
+    food.visibility,
+    food.verified ? 'verified' : '',
+    food.aiGenerated ? 'ai' : ''
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(query);
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  activeSortKey,
+  sortDirection,
+  onSort,
+  className = ''
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeSortKey: SortKey;
+  sortDirection: SortDirection;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}) {
+  const active = activeSortKey === sortKey;
+
+  return (
+    <th className={`py-3 pr-4 font-medium ${className}`.trim()}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 transition ${
+          active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
+        }`}
+      >
+        <span>{label}</span>
+        <span aria-hidden className="text-xs">{active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
+      </button>
+    </th>
+  );
+}
+
 export function FoodTable() {
   const [foods, setFoods] = useState<AdminFood[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const selectedFood = foods.find((food) => food.id === selectedFoodId);
+
+  const visibleFoods = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = query ? foods.filter((food) => matchesSearch(food, query)) : foods;
+
+    return [...filtered].sort((a, b) => {
+      if (sortKey === 'name') return compareStrings(a.name, b.name, sortDirection);
+      if (sortKey === 'serving') return compareStrings(formatServing(a), formatServing(b), sortDirection);
+      if (sortKey === 'calories') return compareNumbers(Number(a.calories), Number(b.calories), sortDirection);
+      return compareStrings(a.source, b.source, sortDirection);
+    });
+  }, [foods, searchQuery, sortDirection, sortKey]);
+
+  function handleSort(nextKey: SortKey) {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortKey(nextKey);
+    setSortDirection('asc');
+  }
 
   const loadFoods = useCallback(async () => {
     setLoading(true);
@@ -54,12 +143,24 @@ export function FoodTable() {
   return (
     <>
       <Card>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="min-w-0">
             <h2 className="text-lg font-bold">Food Database</h2>
             <p className="text-sm text-slate-500">Click a row to edit food details.</p>
           </div>
-          <span className="text-sm text-slate-500">{foods.length} total</span>
+          {!loading && !error && (
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search foods…"
+              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:flex-none sm:w-56"
+              aria-label="Search foods"
+            />
+          )}
+          <span className="ml-auto shrink-0 text-sm text-slate-500">
+            {searchQuery.trim() ? `${visibleFoods.length} of ${foods.length}` : `${foods.length} total`}
+          </span>
         </div>
 
         {loading && <p className="text-sm text-slate-500">Loading foods...</p>}
@@ -71,19 +172,54 @@ export function FoodTable() {
 
         {!loading && !error && (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table className="w-full table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[32%]" />
+                <col className="w-[14%]" />
+                <col className="w-[10%]" />
+                <col className="w-[16%]" />
+                <col className="w-[12%]" />
+                <col className="w-[16%]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="py-3 pr-4 font-medium">Food</th>
-                  <th className="py-3 pr-4 font-medium">Serving</th>
-                  <th className="py-3 pr-4 font-medium">Calories</th>
+                  <SortableHeader
+                    label="Food"
+                    sortKey="name"
+                    activeSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Serving"
+                    sortKey="serving"
+                    activeSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    className="whitespace-nowrap"
+                  />
+                  <SortableHeader
+                    label="Calories"
+                    sortKey="calories"
+                    activeSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    className="whitespace-nowrap"
+                  />
                   <th className="py-3 pr-4 font-medium">Macros</th>
-                  <th className="py-3 pr-4 font-medium">Source</th>
+                  <SortableHeader
+                    label="Source"
+                    sortKey="source"
+                    activeSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    className="whitespace-nowrap"
+                  />
                   <th className="py-3 font-medium">Flags</th>
                 </tr>
               </thead>
               <tbody>
-                {foods.map((food) => {
+                {visibleFoods.map((food) => {
                   const selected = selectedFoodId === food.id;
                   return (
                     <tr
@@ -100,14 +236,14 @@ export function FoodTable() {
                         selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-slate-50'
                       }`}
                     >
-                      <td className="py-3 pr-4">
-                        <div className="font-semibold">{food.name}</div>
-                        {food.brand && <div className="text-slate-500">{food.brand}</div>}
+                      <td className="max-w-0 py-3 pr-4">
+                        <div className="truncate font-semibold">{food.name}</div>
+                        {food.brand && <div className="truncate text-slate-500">{food.brand}</div>}
                       </td>
-                      <td className="py-3 pr-4 text-slate-600">{formatServing(food)}</td>
-                      <td className="py-3 pr-4 text-slate-600">{Math.round(Number(food.calories))}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{formatServing(food)}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{Math.round(Number(food.calories))}</td>
                       <td className="py-3 pr-4 text-slate-600">{formatMacros(food)}</td>
-                      <td className="py-3 pr-4 text-slate-600">{food.source}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{food.source}</td>
                       <td className="py-3">
                         <div className="flex flex-wrap gap-1.5">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass(food.visibility === 'GLOBAL' ? 'global' : 'user')}`}>
@@ -131,6 +267,9 @@ export function FoodTable() {
               </tbody>
             </table>
             {foods.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No foods found.</p>}
+            {foods.length > 0 && visibleFoods.length === 0 && (
+              <p className="py-6 text-center text-sm text-slate-500">No foods match your search.</p>
+            )}
           </div>
         )}
       </Card>

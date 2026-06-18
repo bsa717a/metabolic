@@ -101,7 +101,7 @@ export function ProgressExportPage() {
 
           {summary.metricSnapshots.length > 0 && (
             <section>
-              <h2 className="text-lg font-bold text-slate-900">Metric snapshots</h2>
+              <h2 className="text-lg font-bold text-slate-900">Session snapshots</h2>
               <div className="mt-4 space-y-3">
                 {summary.metricSnapshots.map((snapshot) => (
                   <div key={snapshot.id} className="rounded-xl border border-slate-200 px-4 py-3">

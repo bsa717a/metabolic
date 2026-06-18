@@ -26,6 +26,7 @@ import { GamificationPage } from './pages/GamificationPage';
 import { JourneyPage } from './pages/JourneyPage';
 import { BadgesPage } from './pages/BadgesPage';
 import { BaselineSnapshotPage } from './pages/BaselineSnapshotPage';
+import { HydrationPage } from './pages/HydrationPage';
 import { ExerciseExportPage } from './pages/export/ExerciseExportPage';
 import { NutritionExportPage } from './pages/export/NutritionExportPage';
 import { ShoppingListExportPage } from './pages/export/ShoppingListExportPage';
@@ -104,7 +105,7 @@ function CoachRoute({ appUser }: { appUser: AppUser | null }) {
       </div>
     );
   }
-  return <CoachPage />;
+  return <CoachPage coachUserId={appUser!.id} />;
 }
 
 export default function App() {
@@ -196,6 +197,7 @@ export default function App() {
             <Route path="nutrition" element={<NutritionPage />} />
             <Route path="exercise" element={<ExercisePage />} />
             <Route path="progress" element={<ProgressPage />} />
+            <Route path="hydration" element={<HydrationPage />} />
             <Route path="level-up" element={<GamificationPage />} />
             <Route path="level-up/journey" element={<JourneyPage />} />
             <Route path="level-up/badges" element={<BadgesPage />} />

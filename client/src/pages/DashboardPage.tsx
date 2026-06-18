@@ -158,7 +158,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-app-text-muted mb-3">Navigation</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          <QuickLink to="/program" icon={Target} label="Program" />
+          <QuickLink to="/program" icon={Target} label="Metabolic Blueprint" />
           <QuickLink to="/nutrition" icon={Apple} label="Nutrition" />
           <QuickLink to="/exercise" icon={Dumbbell} label="Exercise" />
           <QuickLink to="/level-up" icon={TrendingUp} label="Level Up" />

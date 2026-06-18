@@ -235,7 +235,7 @@ export function BaselineSnapshotForm({
         Create your starting point so you can see how your body changes over time. Photos use the same upload flow as
         the{' '}
         <Link to="/program" className="font-medium text-brand-green hover:underline">
-          Program
+          Metabolic Blueprint
         </Link>{' '}
         page.
       </p>
