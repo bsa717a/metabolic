@@ -7,6 +7,7 @@ import type { GamificationDashboard } from '../types/gamification';
 import type { CoachHydrationStats } from '../types/hydration';
 import { CoachCalendar } from '../components/coach/CoachCalendar';
 import { ClientGroupsDrawer } from '../components/coach/ClientGroupsDrawer';
+import { EditAccountDetailsDrawer } from '../components/user/EditAccountDetailsDrawer';
 import { SendResultsMenu } from '../components/coach/SendResultsMenu';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -121,6 +122,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [workspaceView, setWorkspaceView] = useState<'list' | 'calendar'>('list');
   const [assignedUsersSortKey, setAssignedUsersSortKey] = useState<AssignedUsersSortKey>('name');
   const [assignedUsersSortDirection, setAssignedUsersSortDirection] = useState<SortDirection>('asc');
+  const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
 
   const selectedGroup = useMemo(
     () => clientGroups.find((group) => group.id === selectedGroupId) ?? null,
@@ -581,7 +583,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 <p className="mt-2 text-sm text-app-text-muted">
                   {selectedClient.textPhone
                     ? `Text will go to ${selectedClient.textPhone}.`
-                    : 'No phone on file yet — you can enter one when sending, or add it in Admin → Users.'}
+                    : 'No phone on file yet — add one in account details or when sending results.'}
                 </p>
                 {dashboard?.summary ? (
                   <div className="mt-4 space-y-4">
@@ -705,6 +707,22 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
           </div>
 
           <div className="space-y-6">
+            {selectedClient ? (
+              <Card>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold">Account details</h2>
+                    <p className="mt-1 text-sm text-app-text-muted">
+                      Health profile, allergies, restrictions, and coach notes for {clientName(selectedClient)}.
+                    </p>
+                  </div>
+                  <Button variant="secondary" onClick={() => setAccountDetailsOpen(true)}>
+                    Edit account details
+                  </Button>
+                </div>
+              </Card>
+            ) : null}
+
             <CoachSettingsCard
               coachCodeDraft={coachCodeDraft}
               defaultNutritionTemplateId={defaultNutritionTemplateId}
@@ -787,6 +805,17 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
         onClose={() => setGroupsOpen(false)}
         onGroupsChange={loadGroups}
       />
+
+      {selectedClient ? (
+        <EditAccountDetailsDrawer
+          open={accountDetailsOpen}
+          userId={selectedClient.id}
+          title={`${clientName(selectedClient)} account details`}
+          mode="coach"
+          onClose={() => setAccountDetailsOpen(false)}
+          onSaved={() => void loadClients()}
+        />
+      ) : null}
     </div>
   );
 }
