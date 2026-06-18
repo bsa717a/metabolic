@@ -76,6 +76,29 @@ export async function listCoachClients(coachId: string) {
   });
 
   const inboundPhones = await loadLatestInboundPhones(assignments.map((assignment) => assignment.user.id));
+  const userIds = assignments.map((assignment) => assignment.user.id);
+  const now = new Date();
+  const nowMs = now.getTime();
+  const maxCheckInDurationMs = 60 * 60 * 1000;
+  const relevantCheckIns = userIds.length
+    ? await prisma.coachCheckIn.findMany({
+        where: {
+          coachId,
+          userId: { in: userIds },
+          startsAt: { gte: new Date(nowMs - maxCheckInDurationMs) }
+        },
+        orderBy: { startsAt: 'asc' },
+        select: { userId: true, startsAt: true, durationMinutes: true }
+      })
+    : [];
+  const nextCheckInByUserId = new Map<string, string>();
+  for (const checkIn of relevantCheckIns) {
+    const endsAtMs = checkIn.startsAt.getTime() + checkIn.durationMinutes * 60_000;
+    if (endsAtMs <= nowMs) continue;
+    if (!nextCheckInByUserId.has(checkIn.userId)) {
+      nextCheckInByUserId.set(checkIn.userId, checkIn.startsAt.toISOString());
+    }
+  }
 
   return assignments.map((assignment) => {
     const user = assignment.user;
@@ -117,7 +140,8 @@ export async function listCoachClients(coachId: string) {
             weight: latestProgressSnapshot.weight == null ? null : Number(latestProgressSnapshot.weight),
             completionStatus: latestProgressSnapshot.completionStatus
           }
-        : null
+        : null,
+      nextCheckInAt: nextCheckInByUserId.get(user.id) ?? null
     };
   });
 }
