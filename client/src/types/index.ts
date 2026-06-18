@@ -11,6 +11,22 @@ export type AppUser = {
   birthDate?: string | null;
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
+export type UserClientProfile = UserDemographics & {
+  heightFeet: number | null;
+  heightInches: number | null;
+  medicalConditions: string | null;
+  exerciseRestrictions: string | null;
+  foodAllergies: string | null;
+  dietaryPreferences: string | null;
+  clientNotes: string | null;
+  canEditClientNotes: boolean;
+};
+export type UserAccountDetails = UserClientProfile & {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+};
 export type UserSummary = Pick<AppUser, 'id' | 'firstName' | 'lastName' | 'email'>;
 export type AdminUser = AppUser & {
   status: UserStatus;

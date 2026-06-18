@@ -1,9 +1,11 @@
 import { clsx } from 'clsx';
-import { LayoutDashboard, LogOut } from 'lucide-react';
+import { LayoutDashboard, LogOut, UserRound } from 'lucide-react';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
 import type { AppUser } from '../../types';
 import { BrandLogo } from '../brand/BrandLogo';
+import { EditAccountDetailsDrawer } from '../user/EditAccountDetailsDrawer';
 import { ThemeToggle } from './ThemeToggle';
 import { TopbarGamification } from './TopbarGamification';
 
@@ -11,6 +13,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
   const location = useLocation();
   const navigate = useNavigate();
   const isDashboard = location.pathname === '/';
+  const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
 
   return (
     <header
@@ -51,9 +54,17 @@ export function Topbar({ user }: { user?: AppUser | null }) {
         onClick={(event) => event.stopPropagation()}
       >
         {user && (
-          <span className="text-sm font-medium hidden md:block text-app-text-muted">
-            Hi, {user.firstName}
-          </span>
+          <>
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-xl bg-app-muted px-3 py-2 text-sm font-medium text-app-text transition hover:bg-app-border/60"
+              onClick={() => setAccountDetailsOpen(true)}
+            >
+              <UserRound size={16} aria-hidden />
+              <span className="hidden md:inline">Hi, {user.firstName}</span>
+              <span className="md:hidden">Account</span>
+            </button>
+          </>
         )}
 
         <ThemeToggle />
@@ -66,6 +77,16 @@ export function Topbar({ user }: { user?: AppUser | null }) {
           <span className="hidden sm:inline">Logout</span>
         </button>
       </div>
+
+      {user ? (
+        <EditAccountDetailsDrawer
+          open={accountDetailsOpen}
+          userId={user.id}
+          title="Account details"
+          mode="self"
+          onClose={() => setAccountDetailsOpen(false)}
+        />
+      ) : null}
     </header>
   );
 }

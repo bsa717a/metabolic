@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import type { AdminUser, Role, UserStatus, UserSummary } from '../../types';
+import { useEffect, useState } from 'react';
+import type { AdminUser, Role, UserAccountDetails, UserStatus, UserSummary } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { UserProfileFields } from '../user/UserProfileFields';
+import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from '../user/userProfileForm';
 
 const roles: Role[] = ['SUPER_ADMIN', 'ADMIN', 'COACH', 'USER', 'VIEWER'];
 const statuses: UserStatus[] = ['ACTIVE', 'INVITED', 'DISABLED'];
@@ -71,12 +73,37 @@ function EditUserDrawerContent({
   onSaved: (user: AdminUser) => void;
 }) {
   const [draft, setDraft] = useState(() => toDraft(user));
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
+  const [canEditClientNotes, setCanEditClientNotes] = useState(true);
   const [coachId, setCoachId] = useState(user.assignedCoach?.id ?? '');
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [profileLoadError, setProfileLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    setLoadingProfile(true);
+    setProfileLoadError('');
+    setProfileLoaded(false);
+    api<UserAccountDetails>(`/api/users/${user.id}/profile`)
+      .then((details) => {
+        setProfileDraft(profileToDraft(details));
+        setCanEditClientNotes(details.canEditClientNotes);
+        setProfileLoaded(true);
+      })
+      .catch((err) => {
+        setProfileLoadError(err instanceof Error ? err.message : 'Unable to load health profile');
+      })
+      .finally(() => setLoadingProfile(false));
+  }, [user.id]);
+
   function updateDraft<K extends keyof UserDraft>(field: K, value: UserDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateProfile<K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) {
+    setProfileDraft((current) => ({ ...current, [field]: value }));
   }
 
   async function save() {
@@ -107,6 +134,12 @@ function EditUserDrawerContent({
             })
           : await api<AdminUser>(`/api/admin/users/${user.id}/coach-assignment`, { method: 'DELETE' });
       }
+      if (profileLoaded) {
+        await api<UserAccountDetails>(`/api/users/${user.id}/profile`, {
+          method: 'PATCH',
+          body: JSON.stringify(buildProfilePayload(profileDraft, canEditClientNotes))
+        });
+      }
       onSaved(nextUser);
       onClose();
     } catch (err) {
@@ -117,68 +150,80 @@ function EditUserDrawerContent({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <p className="text-sm text-slate-500">Update account details for {user.email}.</p>
 
-      <label className="block">
-        <span className={labelClassName()}>First name</span>
-        <input className={inputClassName()} value={draft.firstName} onChange={(event) => updateDraft('firstName', event.target.value)} />
-      </label>
+      <div className="space-y-4">
+        <label className="block">
+          <span className={labelClassName()}>First name</span>
+          <input className={inputClassName()} value={draft.firstName} onChange={(event) => updateDraft('firstName', event.target.value)} />
+        </label>
 
-      <label className="block">
-        <span className={labelClassName()}>Last name</span>
-        <input className={inputClassName()} value={draft.lastName} onChange={(event) => updateDraft('lastName', event.target.value)} />
-      </label>
+        <label className="block">
+          <span className={labelClassName()}>Last name</span>
+          <input className={inputClassName()} value={draft.lastName} onChange={(event) => updateDraft('lastName', event.target.value)} />
+        </label>
 
-      <label className="block">
-        <span className={labelClassName()}>Email</span>
-        <input className={inputClassName()} type="email" value={draft.email} onChange={(event) => updateDraft('email', event.target.value)} />
-      </label>
+        <label className="block">
+          <span className={labelClassName()}>Email</span>
+          <input className={inputClassName()} type="email" value={draft.email} onChange={(event) => updateDraft('email', event.target.value)} />
+        </label>
 
-      <label className="block">
-        <span className={labelClassName()}>Phone</span>
-        <input className={inputClassName()} value={draft.phone} onChange={(event) => updateDraft('phone', event.target.value)} placeholder="Optional" />
-      </label>
+        <label className="block">
+          <span className={labelClassName()}>Phone</span>
+          <input className={inputClassName()} value={draft.phone} onChange={(event) => updateDraft('phone', event.target.value)} placeholder="Optional" />
+        </label>
 
-      <label className="block">
-        <span className={labelClassName()}>Role</span>
-        <select className={inputClassName()} value={draft.role} onChange={(event) => updateDraft('role', event.target.value as Role)}>
-          {roles.map((role) => (
-            <option key={role} value={role}>
-              {formatRole(role)}
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="block">
+          <span className={labelClassName()}>Role</span>
+          <select className={inputClassName()} value={draft.role} onChange={(event) => updateDraft('role', event.target.value as Role)}>
+            {roles.map((role) => (
+              <option key={role} value={role}>
+                {formatRole(role)}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <label className="block">
-        <span className={labelClassName()}>Status</span>
-        <select className={inputClassName()} value={draft.status} onChange={(event) => updateDraft('status', event.target.value as UserStatus)}>
-          {statuses.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="block">
+          <span className={labelClassName()}>Status</span>
+          <select className={inputClassName()} value={draft.status} onChange={(event) => updateDraft('status', event.target.value as UserStatus)}>
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <label className="block">
-        <span className={labelClassName()}>Primary coach</span>
-        <select className={inputClassName()} value={coachId} onChange={(event) => setCoachId(event.target.value)}>
-          <option value="">No coach assigned</option>
-          {coaches.map((coach) => (
-            <option key={coach.id} value={coach.id}>
-              {coach.firstName} {coach.lastName} ({coach.email})
-            </option>
-          ))}
-        </select>
-        <p className="mt-1 text-xs text-slate-500">Only super admins can save coach assignment changes.</p>
-      </label>
+        <label className="block">
+          <span className={labelClassName()}>Primary coach</span>
+          <select className={inputClassName()} value={coachId} onChange={(event) => setCoachId(event.target.value)}>
+            <option value="">No coach assigned</option>
+            {coaches.map((coach) => (
+              <option key={coach.id} value={coach.id}>
+                {coach.firstName} {coach.lastName} ({coach.email})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">Only super admins can save coach assignment changes.</p>
+        </label>
+      </div>
+
+      {loadingProfile ? (
+        <p className="text-sm text-slate-500">Loading health profile…</p>
+      ) : profileLoadError ? (
+        <p className="text-sm text-amber-700">
+          {profileLoadError} Account fields can still be saved, but health profile changes are unavailable until it loads.
+        </p>
+      ) : (
+        <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-3 pt-2">
-        <Button disabled={saving} onClick={save}>
+        <Button disabled={saving || loadingProfile} onClick={save}>
           {saving ? 'Saving...' : 'Save changes'}
         </Button>
         <Button variant="secondary" disabled={saving} onClick={onClose}>
