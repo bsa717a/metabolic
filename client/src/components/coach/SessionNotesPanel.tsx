@@ -41,13 +41,17 @@ function QuickAction({
 export function SessionNotesPanel({
   clientId,
   clientName,
+  programId,
   onScheduleSession,
-  onSendResults
+  onSendResults,
+  onSessionSaved
 }: {
   clientId: string;
   clientName: string;
+  programId: string | null;
   onScheduleSession: () => void;
   onSendResults: () => void;
+  onSessionSaved?: () => void | Promise<void>;
 }) {
   const [sessions, setSessions] = useState<CoachSession[]>([]);
   const [notes, setNotes] = useState('');
@@ -81,28 +85,26 @@ export function SessionNotesPanel({
     void load();
   }, [load]);
 
-  async function saveNote() {
-    if (!notes.trim()) {
-      setError('Enter some notes first.');
+  async function saveSession() {
+    if (!programId) {
+      setError('This client has no active program yet.');
       return;
     }
     setSaving(true);
     setError('');
     try {
-      if (activeSessionId) {
-        await api(`/api/coach/sessions/${activeSessionId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ notes: notes.trim() })
-        });
-      } else {
-        await api('/api/coach/sessions', {
-          method: 'POST',
-          body: JSON.stringify({ userId: clientId, notes: notes.trim() })
-        });
-      }
+      await api<CoachSession>('/api/coach/sessions/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: clientId,
+          notes: notes.trim(),
+          sessionId: activeSessionId ?? undefined
+        })
+      });
       await load();
+      await onSessionSaved?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save note');
+      setError(err instanceof Error ? err.message : 'Unable to save session');
     } finally {
       setSaving(false);
     }
@@ -131,9 +133,12 @@ export function SessionNotesPanel({
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
-      <Button className="mt-3 w-full" disabled={saving || loading} onClick={() => void saveNote()}>
-        {saving ? 'Saving...' : activeSessionId ? 'Update note' : 'Save note'}
+      <Button className="mt-3 w-full" disabled={saving || loading || !programId} onClick={() => void saveSession()}>
+        {saving ? 'Saving...' : activeSessionId ? 'Update session' : 'Save session'}
       </Button>
+      {!programId && (
+        <p className="mt-2 text-xs text-app-text-muted">An active program is required before saving a session.</p>
+      )}
 
       <div className="mt-6 border-t border-app-border pt-4">
         <p className="mb-2 text-xs font-semibold uppercase text-app-text-muted">Quick actions</p>
@@ -167,7 +172,7 @@ export function SessionNotesPanel({
               pastSessions.map((session) => (
                 <div key={session.id} className="rounded-xl border border-app-border p-3">
                   <p className="text-xs font-semibold text-app-text-muted">{formatSessionDate(session.occurredAt)}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm">{session.notes}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{session.notes || 'No notes saved.'}</p>
                 </div>
               ))
             )}

@@ -6,6 +6,7 @@ import { parseDateParam } from '../utils/dates.js';
 import { metricUpdatesForLegacyGoals, missingProgramMetrics } from '../utils/programMetrics.js';
 
 const REQUIRED_METRICS = ['WEIGHT', 'BODY_FAT', 'LEAN_TISSUE_MASS', 'FAT_MASS', 'CALORIES', 'PROTEIN'] as const;
+const MEASUREMENT_METRICS = ['WAIST', 'HIPS', 'CHEST'] as const;
 
 function hasCompleteMetrics(metrics: Array<{ metricType: string }>) {
   const types = new Set(metrics.map((metric) => metric.metricType));
@@ -62,29 +63,54 @@ async function ensureCompleteProgramMetrics(programId: string) {
   });
 }
 
+async function ensureMeasurementProgramMetrics(programId: string, metrics: Array<{ metricType: string }>) {
+  const existing = new Set(metrics.map((metric) => metric.metricType));
+  const toCreate = MEASUREMENT_METRICS.filter((metricType) => !existing.has(metricType)).map((metricType) => ({
+    programId,
+    metricType,
+    startValue: 0,
+    currentValue: 0,
+    goalValue: 0,
+    unit: 'in'
+  }));
+
+  if (!toCreate.length) return;
+
+  await prisma.programMetric.createMany({ data: toCreate });
+}
+
 export async function listPrograms(user: { id: string; role: Role }) {
   const where = isAdmin(user) ? {} : isCoach(user) ? { coachId: user.id } : { userId: user.id };
   const programs = await prisma.program.findMany({ where, include: { metrics: true, user: true }, orderBy: { createdAt: 'desc' } });
 
   return Promise.all(
     programs.map(async (program) => {
+      let resolved = program;
       if (hasCompleteMetrics(program.metrics)) {
         const goalUpdates = metricUpdatesForLegacyGoals(program.metrics);
-        if (!goalUpdates.length) return program;
-        await prisma.$transaction(async (tx) => {
-          for (const update of goalUpdates) {
-            await tx.programMetric.update({
-              where: { id: update.id },
-              data: { goalValue: update.goalValue }
-            });
-          }
-        });
-        return prisma.program.findUniqueOrThrow({
-          where: { id: program.id },
-          include: { metrics: true, user: true }
-        });
+        if (goalUpdates.length) {
+          await prisma.$transaction(async (tx) => {
+            for (const update of goalUpdates) {
+              await tx.programMetric.update({
+                where: { id: update.id },
+                data: { goalValue: update.goalValue }
+              });
+            }
+          });
+          resolved = await prisma.program.findUniqueOrThrow({
+            where: { id: program.id },
+            include: { metrics: true, user: true }
+          });
+        }
+      } else {
+        const completed = await ensureCompleteProgramMetrics(program.id);
+        resolved = completed ?? program;
       }
-      return ensureCompleteProgramMetrics(program.id);
+      await ensureMeasurementProgramMetrics(resolved.id, resolved.metrics);
+      return prisma.program.findUniqueOrThrow({
+        where: { id: resolved.id },
+        include: { metrics: true, user: true }
+      });
     })
   );
 }
@@ -93,23 +119,32 @@ export async function getProgram(user: { id: string; role: Role }, id: string) {
   const program = await prisma.program.findUnique({ where: { id }, include: { metrics: true, user: true } });
   if (!program) return null;
   if (!(await canAccessUser(user, program.userId)) && program.coachId !== user.id) return null;
+  let resolved = program;
   if (hasCompleteMetrics(program.metrics)) {
     const goalUpdates = metricUpdatesForLegacyGoals(program.metrics);
-    if (!goalUpdates.length) return program;
-    await prisma.$transaction(async (tx) => {
-      for (const update of goalUpdates) {
-        await tx.programMetric.update({
-          where: { id: update.id },
-          data: { goalValue: update.goalValue }
-        });
-      }
-    });
-    return prisma.program.findUniqueOrThrow({
-      where: { id: program.id },
-      include: { metrics: true, user: true }
-    });
+    if (goalUpdates.length) {
+      await prisma.$transaction(async (tx) => {
+        for (const update of goalUpdates) {
+          await tx.programMetric.update({
+            where: { id: update.id },
+            data: { goalValue: update.goalValue }
+          });
+        }
+      });
+      resolved = await prisma.program.findUniqueOrThrow({
+        where: { id: program.id },
+        include: { metrics: true, user: true }
+      });
+    }
+  } else {
+    const completed = await ensureCompleteProgramMetrics(program.id);
+    resolved = completed ?? program;
   }
-  return ensureCompleteProgramMetrics(program.id);
+  await ensureMeasurementProgramMetrics(resolved.id, resolved.metrics);
+  return prisma.program.findUniqueOrThrow({
+    where: { id: resolved.id },
+    include: { metrics: true, user: true }
+  });
 }
 
 export async function activateProgram(userId: string, id: string) {
@@ -133,8 +168,41 @@ export async function listProgramMetricSnapshots(
 
   return prisma.programMetricSnapshot.findMany({
     where: { programId },
-    include: { values: true },
+    include: {
+      values: true,
+      coachSession: { select: { notes: true } }
+    },
     orderBy: { date: 'desc' }
+  }).then(async (snapshots) => {
+    const needsFallback = snapshots.some((snapshot) => !snapshot.coachSession?.notes);
+    if (!needsFallback || !program.coachId) return snapshots;
+
+    const fallbackSessions = await prisma.coachSession.findMany({
+      where: {
+        userId: program.userId,
+        coachId: program.coachId,
+        notes: { not: '' }
+      },
+      select: { notes: true, occurredAt: true },
+      orderBy: { occurredAt: 'desc' }
+    });
+
+    const notesByDate = new Map<string, string>();
+    for (const session of fallbackSessions) {
+      const dateKey = session.occurredAt.toISOString().slice(0, 10);
+      if (!notesByDate.has(dateKey)) notesByDate.set(dateKey, session.notes);
+    }
+
+    return snapshots.map((snapshot) => {
+      if (snapshot.coachSession?.notes) return snapshot;
+      const dateKey = snapshot.date.toISOString().slice(0, 10);
+      const fallbackNotes = notesByDate.get(dateKey);
+      if (!fallbackNotes) return snapshot;
+      return {
+        ...snapshot,
+        coachSession: { notes: fallbackNotes }
+      };
+    });
   });
 }
 
@@ -155,15 +223,26 @@ export async function saveProgramMetricSnapshot(
       update: { updatedAt: new Date() }
     });
 
-    await tx.programMetricSnapshotValue.deleteMany({ where: { snapshotId: snapshot.id } });
-    await tx.programMetricSnapshotValue.createMany({
-      data: values.map((value) => ({
-        snapshotId: snapshot.id,
-        metricType: value.metricType as never,
-        currentValue: value.currentValue,
-        unit: value.unit
-      }))
-    });
+    for (const value of values) {
+      await tx.programMetricSnapshotValue.upsert({
+        where: {
+          snapshotId_metricType: {
+            snapshotId: snapshot.id,
+            metricType: value.metricType as never
+          }
+        },
+        create: {
+          snapshotId: snapshot.id,
+          metricType: value.metricType as never,
+          currentValue: value.currentValue,
+          unit: value.unit
+        },
+        update: {
+          currentValue: value.currentValue,
+          unit: value.unit
+        }
+      });
+    }
 
     const result = await tx.programMetricSnapshot.findUniqueOrThrow({
       where: { id: snapshot.id },

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../services/api';
+import { api, toDateKey } from '../services/api';
 import type { Program, ProgramMetric } from '../types';
 import { EditMetricsDrawer } from '../components/program/EditMetricsDrawer';
 import { ProgramDonutSummary } from '../components/program/ProgramDonutSummary';
 import { ProgramMetricTable } from '../components/program/ProgramMetricTable';
 import { ProgramMetricSnapshotHistory } from '../components/program/ProgramMetricSnapshotHistory';
-import { SnapshotTrackingSection } from '../components/program/SnapshotTrackingSection';
-import { todayKey } from '../services/api';
+import { MeasurementsSection } from '../components/program/MeasurementsSection';
 import type { ProgramMetricSnapshot, ProgressPhotoSet, BloodPanelSummary } from '../types';
+import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../utils/measurementUtils';
+import { formatSnapshotCurrentLabel, metricsWithSnapshotCurrent } from '../utils/snapshotHistoryUtils';
 
 function normalizeMetric(metric: ProgramMetric): ProgramMetric {
   return {
@@ -16,20 +17,6 @@ function normalizeMetric(metric: ProgramMetric): ProgramMetric {
     currentValue: Number(metric.currentValue),
     goalValue: Number(metric.goalValue)
   };
-}
-
-function metricsWithSnapshotCurrent(metrics: ProgramMetric[], snapshot: ProgramMetricSnapshot | null) {
-  if (!snapshot) return metrics;
-  return metrics.map((metric) => {
-    const saved = snapshot.values.find((value) => value.metricType === metric.metricType);
-    if (!saved) return metric;
-    return { ...metric, currentValue: Number(saved.currentValue) };
-  });
-}
-
-function formatSnapshotLabel(date: string) {
-  const parsed = new Date(`${date}T00:00:00.000Z`);
-  return `Current (${parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })})`;
 }
 
 export function ProgramPage() {
@@ -104,32 +91,26 @@ export function ProgramPage() {
     void loadProgram();
   }, [loadProgram]);
 
+  const bodyCompMetrics = useMemo(() => bodyCompositionMetrics(metrics), [metrics]);
+
   const selectedSnapshot = useMemo(
     () => snapshots.find((snapshot) => snapshot.id === selectedSnapshotId) ?? null,
     [snapshots, selectedSnapshotId]
   );
 
-  const chartMetrics = useMemo(
-    () => metricsWithSnapshotCurrent(metrics, selectedSnapshot),
-    [metrics, selectedSnapshot]
+  const displayMetrics = useMemo(
+    () => metricsWithSnapshotCurrent(bodyCompMetrics, selectedSnapshot),
+    [bodyCompMetrics, selectedSnapshot]
   );
 
-  const currentChartLabel = selectedSnapshot ? formatSnapshotLabel(selectedSnapshot.date) : 'Current';
-  const todaySnapshot = snapshots.find((snapshot) => snapshot.date === todayKey());
+  const currentChartLabel = selectedSnapshot ? formatSnapshotCurrentLabel(selectedSnapshot.date) : 'Current';
+  const todaySnapshot = snapshots.find((snapshot) => snapshot.date === toDateKey(new Date()));
 
   function upsertSnapshot(updated: ProgramMetricSnapshot) {
     setSnapshots((current) => {
       const index = current.findIndex((snapshot) => snapshot.id === updated.id);
       if (index === -1) return [updated, ...current].sort((a, b) => b.date.localeCompare(a.date));
       return current.map((snapshot) => (snapshot.id === updated.id ? updated : snapshot));
-    });
-  }
-
-  function upsertProgressPhoto(updated: ProgressPhotoSet) {
-    setProgressPhotos((current) => {
-      const index = current.findIndex((photoSet) => photoSet.id === updated.id);
-      if (index === -1) return [updated, ...current].sort((a, b) => b.date.localeCompare(a.date));
-      return current.map((photoSet) => (photoSet.id === updated.id ? updated : photoSet));
     });
   }
 
@@ -146,11 +127,7 @@ export function ProgramPage() {
     setSavingSnapshot(true);
     setSnapshotError('');
     try {
-      const payload = metrics.map((metric) => ({
-        metricType: metric.metricType,
-        currentValue: Number(metric.currentValue),
-        unit: metric.unit
-      }));
+      const payload = buildSessionSnapshotPayload(bodyCompMetrics, todaySnapshot ?? null);
       if (payload.some((metric) => !Number.isFinite(metric.currentValue))) {
         throw new Error('Please enter valid current values before saving a session snapshot.');
       }
@@ -192,13 +169,29 @@ export function ProgramPage() {
           <h1 className="text-3xl font-bold">Metabolic Blueprint</h1>
           <p className="text-slate-500">Where intention meets results.</p>
         </div>
-        <ProgramDonutSummary metrics={chartMetrics} currentLabel={currentChartLabel} />
-        <ProgramMetricTable
-          metrics={metrics}
-          onEdit={() => setMetricsDrawerOpen(true)}
-          onSaveSnapshot={saveSnapshot}
+        <ProgramDonutSummary
+          metrics={displayMetrics}
+          currentLabel={currentChartLabel}
+          onSaveSnapshot={() => void saveSnapshot()}
           savingSnapshot={savingSnapshot}
           todaySnapshotSaved={Boolean(todaySnapshot)}
+        />
+        <ProgramMetricTable
+          metrics={displayMetrics}
+          currentLabel={currentChartLabel}
+          onEdit={() => setMetricsDrawerOpen(true)}
+        />
+        <MeasurementsSection
+          programId={program.id}
+          userId={program.userId}
+          program={program}
+          snapshots={snapshots}
+          progressPhotos={progressPhotos}
+          bloodPanels={bloodPanels}
+          selectedSnapshot={selectedSnapshot}
+          onSnapshotUpdated={upsertSnapshot}
+          onBloodPanelUpdated={upsertBloodPanel}
+          onRefresh={loadProgram}
         />
         <ProgramMetricSnapshotHistory
           programId={program.id}
@@ -207,16 +200,6 @@ export function ProgramPage() {
           onSelect={setSelectedSnapshotId}
           onUpdated={upsertSnapshot}
         />
-        <SnapshotTrackingSection
-          programId={program.id}
-          userId={program.userId}
-          snapshots={snapshots}
-          progressPhotos={progressPhotos}
-          bloodPanels={bloodPanels}
-          onSnapshotUpdated={upsertSnapshot}
-          onProgressPhotosUpdated={upsertProgressPhoto}
-          onBloodPanelUpdated={upsertBloodPanel}
-        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         {snapshotError && <p className="text-sm text-red-600">{snapshotError}</p>}
       </div>
@@ -224,7 +207,7 @@ export function ProgramPage() {
       <EditMetricsDrawer
         open={metricsDrawerOpen}
         programId={program.id}
-        metrics={metrics}
+        metrics={bodyCompMetrics}
         onClose={() => setMetricsDrawerOpen(false)}
         onSaved={loadProgram}
       />

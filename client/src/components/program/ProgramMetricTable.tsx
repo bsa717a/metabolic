@@ -1,14 +1,11 @@
 import type { ReactNode } from 'react';
-import { Camera, Loader2, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import type { ProgramMetric } from '../../types';
 import { Card } from '../ui/Card';
 
 type Props = {
   metrics: ProgramMetric[];
   onEdit: () => void;
-  onSaveSnapshot: () => void;
-  savingSnapshot: boolean;
-  todaySnapshotSaved: boolean;
   compact?: boolean;
   currentLabel?: string;
 };
@@ -49,37 +46,18 @@ function IconActionButton({
 export function ProgramMetricTable({
   metrics,
   onEdit,
-  onSaveSnapshot,
-  savingSnapshot,
-  todaySnapshotSaved,
   compact = false,
   currentLabel = 'Current'
 }: Props) {
-  const saveSnapshotLabel = savingSnapshot
-    ? 'Saving session snapshot…'
-    : todaySnapshotSaved
-      ? "Update today's session snapshot"
-      : "Save today's session snapshot";
-
   return (
     <Card className={compact ? 'p-4' : undefined}>
       <div className={`flex flex-wrap items-start justify-between gap-3 ${compact ? 'mb-3' : 'mb-4'}`}>
         <div>
-          <h2 className={`mb-1 font-bold ${compact ? 'text-base' : 'text-lg'}`}>Metric Comparison</h2>
-          <p className={compact ? 'text-xs text-slate-500' : 'text-sm text-slate-500'}>
-            Use edit to update start, current, and goal values.
-          </p>
+          <h2 className={`font-bold ${compact ? 'text-base' : 'text-lg'}`}>Metric Comparison</h2>
         </div>
         <div className="flex flex-wrap gap-1">
           <IconActionButton label="Edit metrics" onClick={onEdit}>
             <Pencil className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-          </IconActionButton>
-          <IconActionButton label={saveSnapshotLabel} disabled={savingSnapshot} onClick={onSaveSnapshot}>
-            {savingSnapshot ? (
-              <Loader2 className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} animate-spin`} />
-            ) : (
-              <Camera className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-            )}
           </IconActionButton>
         </div>
       </div>

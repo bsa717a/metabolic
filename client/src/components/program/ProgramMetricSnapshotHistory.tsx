@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, StickyNote } from 'lucide-react';
 import type { ProgramMetricSnapshot } from '../../types';
 import {
   buildSnapshotRows,
@@ -7,6 +7,7 @@ import {
   formatSnapshotMetric
 } from '../../utils/snapshotHistoryUtils';
 import { Card } from '../ui/Card';
+import { Drawer } from '../ui/Drawer';
 import { EditSnapshotDrawer } from './EditSnapshotDrawer';
 
 type Props = {
@@ -34,6 +35,7 @@ export function ProgramMetricSnapshotHistory({
   embedded = false
 }: Props) {
   const [editingSnapshot, setEditingSnapshot] = useState<ProgramMetricSnapshot | null>(null);
+  const [viewingNotes, setViewingNotes] = useState<{ session: number; date: string; notes: string } | null>(null);
   const rows = useMemo(() => buildSnapshotRows(snapshots).reverse(), [snapshots]);
   const editingRow = rows.find((row) => row.snapshot.id === editingSnapshot?.id);
   const headerClass = compact ? compactHeaderCellClass : headerCellClass;
@@ -70,6 +72,7 @@ export function ProgramMetricSnapshotHistory({
             <th className={headerClass}>Body Fat</th>
             <th className={headerClass}>Scale Change</th>
             <th className={headerClass}>% Change</th>
+            <th className={`${headerClass} w-12`} aria-label="Session notes" />
             <th className={`${headerClass} w-12`} aria-label="Edit" />
           </tr>
         </thead>
@@ -99,6 +102,26 @@ export function ProgramMetricSnapshotHistory({
                 <td className={cellClass}>{formatSnapshotMetric(row.fatMass, 1)}</td>
                 <td className={cellClass}>{row.scaleChange}</td>
                 <td className={cellClass}>{row.percentChange}</td>
+                <td className={`${cellClass} text-right`}>
+                  {row.snapshot.sessionNotes ? (
+                    <button
+                      type="button"
+                      aria-label={`View session notes for session ${row.session}`}
+                      title="View session notes"
+                      className="rounded-lg p-2 text-slate-500 transition hover:bg-white hover:text-slate-900 dark:text-app-text-muted dark:hover:bg-app-muted dark:hover:text-app-text"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setViewingNotes({
+                          session: row.session,
+                          date: formatSnapshotDate(row.snapshot.date),
+                          notes: row.snapshot.sessionNotes ?? ''
+                        });
+                      }}
+                    >
+                      <StickyNote size={pencilSize} />
+                    </button>
+                  ) : null}
+                </td>
                 <td className={`${cellClass} text-right`}>
                   <button
                     type="button"
@@ -145,6 +168,22 @@ export function ProgramMetricSnapshotHistory({
         onClose={() => setEditingSnapshot(null)}
         onSaved={onUpdated}
       />
+
+      <Drawer
+        open={Boolean(viewingNotes)}
+        title={viewingNotes ? `Session ${viewingNotes.session} notes` : 'Session notes'}
+        panelClassName="max-w-lg"
+        onClose={() => setViewingNotes(null)}
+      >
+        {viewingNotes ? (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-500 dark:text-app-text-muted">{viewingNotes.date}</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-app-text">
+              {viewingNotes.notes}
+            </p>
+          </div>
+        ) : null}
+      </Drawer>
     </>
   );
 }
