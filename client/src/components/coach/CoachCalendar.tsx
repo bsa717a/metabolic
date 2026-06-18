@@ -109,7 +109,8 @@ export function CoachCalendar({
   groupId,
   onGroupChange,
   onManageGroups,
-  onSelectClient
+  onSelectClient,
+  onCheckInsChanged
 }: {
   coachUserId: string;
   clients: CoachClient[];
@@ -119,6 +120,7 @@ export function CoachCalendar({
   onGroupChange: (groupId: string) => void;
   onManageGroups: () => void;
   onSelectClient: (userId: string) => void;
+  onCheckInsChanged?: () => void | Promise<void>;
 }) {
   const [rangeMode, setRangeMode] = useState<'week' | 'month'>('month');
   const [anchorDate, setAnchorDate] = useState(() => todayKey());
@@ -590,7 +592,10 @@ export function CoachCalendar({
           setCheckInOpen(false);
           setEditingCheckIn(null);
         }}
-        onSaved={loadCalendar}
+        onSaved={async () => {
+          await loadCalendar();
+          await onCheckInsChanged?.();
+        }}
       />
     </Card>
   );

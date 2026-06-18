@@ -207,6 +207,7 @@ export type CoachClient = {
     weight: number | null;
     completionStatus: string;
   } | null;
+  nextCheckInAt: string | null;
 };
 export type ClientGroup = {
   id: string;
