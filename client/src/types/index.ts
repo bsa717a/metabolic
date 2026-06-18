@@ -224,6 +224,20 @@ export type CoachClient = {
     completionStatus: string;
   } | null;
   nextCheckInAt: string | null;
+  nextSessionAt: string | null;
+  compliancePct: number | null;
+  lastActivityAt: string | null;
+  needsAttention: boolean;
+};
+export type CoachSession = {
+  id: string;
+  coachId: string;
+  userId: string;
+  occurredAt: string;
+  notes: string;
+  linkedCheckInId: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 export type ClientGroup = {
   id: string;

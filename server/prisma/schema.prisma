@@ -195,6 +195,8 @@ model User {
   clientGroupMemberships ClientGroupMember[]
   coachCheckIns CoachCheckIn[] @relation("CoachCheckIns")
   clientCheckIns CoachCheckIn[] @relation("ClientCheckIns")
+  coachSessions CoachSession[] @relation("CoachSessions")
+  clientSessions CoachSession[] @relation("ClientSessions")
   mealTemplates MealTemplate[]
   nutritionPlanTemplatesCreated NutritionPlanTemplate[] @relation("NutritionPlanTemplateCreator")
   exerciseTemplatesCreated ExerciseTemplate[] @relation("ExerciseTemplateCreator")
@@ -345,8 +347,25 @@ model CoachCheckIn {
   updatedAt DateTime @updatedAt
   coach User @relation("CoachCheckIns", fields: [coachId], references: [id], onDelete: Cascade)
   user User @relation("ClientCheckIns", fields: [userId], references: [id], onDelete: Cascade)
+  sessions CoachSession[]
   @@index([coachId, startsAt])
   @@index([userId, startsAt])
+}
+
+model CoachSession {
+  id String @id @default(cuid())
+  coachId String
+  userId String
+  occurredAt DateTime @default(now())
+  notes String @db.Text
+  linkedCheckInId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  coach User @relation("CoachSessions", fields: [coachId], references: [id], onDelete: Cascade)
+  user User @relation("ClientSessions", fields: [userId], references: [id], onDelete: Cascade)
+  linkedCheckIn CoachCheckIn? @relation(fields: [linkedCheckInId], references: [id], onDelete: SetNull)
+  @@index([coachId, userId, occurredAt(sort: Desc)])
+  @@index([userId, occurredAt(sort: Desc)])
 }
 
 model Program {
