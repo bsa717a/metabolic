@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import { Camera, Loader2 } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import type { ProgramMetric } from '../../types';
 import { Card } from '../ui/Card';
@@ -40,12 +42,43 @@ function Ring({
   );
 }
 
+function SnapshotButton({
+  label,
+  onClick,
+  disabled,
+  children
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function ProgramDonutSummary({
   metrics,
-  currentLabel = 'Current'
+  currentLabel = 'Current',
+  onSaveSnapshot,
+  savingSnapshot = false,
+  todaySnapshotSaved = false
 }: {
   metrics: ProgramMetric[];
   currentLabel?: string;
+  onSaveSnapshot?: () => void;
+  savingSnapshot?: boolean;
+  todaySnapshotSaved?: boolean;
 }) {
   const weight = metrics.find((metric) => metric.metricType === 'WEIGHT');
   const bodyFat = metrics.find((metric) => metric.metricType === 'BODY_FAT');
@@ -56,9 +89,21 @@ export function ProgramDonutSummary({
   const currentBodyFat = Number(bodyFat?.currentValue ?? 0);
   const goalBodyFat = Number(bodyFat?.goalValue ?? 0);
 
+  const saveSnapshotLabel = savingSnapshot
+    ? 'Saving session snapshot…'
+    : todaySnapshotSaved
+      ? "Update today's session snapshot"
+      : "Save today's session snapshot";
+
   return (
     <Card>
-      <h2 className="mb-5 text-lg font-bold">Session Snapshot</h2>
+      {onSaveSnapshot && (
+        <div className="mb-4 flex justify-end">
+          <SnapshotButton label={saveSnapshotLabel} disabled={savingSnapshot} onClick={onSaveSnapshot}>
+            {savingSnapshot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+          </SnapshotButton>
+        </div>
+      )}
       <div className="grid gap-5 sm:grid-cols-3">
         <Ring label="Start of Program" value={startWeight} centerPercent={startBodyFat} ringFillPercent={startBodyFat} color="#eab308" />
         <Ring label={currentLabel} value={currentWeight} centerPercent={currentBodyFat} ringFillPercent={currentBodyFat} color="#3b82f6" />

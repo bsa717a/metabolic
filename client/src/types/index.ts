@@ -126,7 +126,12 @@ export type ScheduledExercise = {
 export type Exercise = ScheduledExercise;
 export type ProgramMetric = { id: string; metricType: string; startValue: number; currentValue: number; goalValue: number; unit: string };
 export type ProgramMetricSnapshotValue = { metricType: string; currentValue: number; unit: string };
-export type ProgramMetricSnapshot = { id: string; date: string; values: ProgramMetricSnapshotValue[] };
+export type ProgramMetricSnapshot = {
+  id: string;
+  date: string;
+  values: ProgramMetricSnapshotValue[];
+  sessionNotes?: string | null;
+};
 export type ProgressPhotoSet = {
   id: string;
   date: string;
@@ -236,6 +241,7 @@ export type CoachSession = {
   occurredAt: string;
   notes: string;
   linkedCheckInId: string | null;
+  linkedSnapshotId: string | null;
   createdAt: string;
   updatedAt: string;
 };

@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api, toDateKey } from '../../services/api';
 import type { Program, ProgramMetric, ProgramMetricSnapshot } from '../../types';
+import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../../utils/measurementUtils';
 import {
   formatSnapshotCurrentLabel,
   metricsWithSnapshotCurrent
 } from '../../utils/snapshotHistoryUtils';
 import { EditMetricsDrawer } from '../program/EditMetricsDrawer';
+import { ProgramDonutSummary } from '../program/ProgramDonutSummary';
 import { ProgramMetricTable } from '../program/ProgramMetricTable';
-import { CoachSnapshotPreview } from './CoachSnapshotPreview';
 
 function normalizeMetric(metric: ProgramMetric): ProgramMetric {
   return {
@@ -20,42 +21,25 @@ function normalizeMetric(metric: ProgramMetric): ProgramMetric {
 
 export function ClientMetricsPanel({
   program,
+  snapshots,
+  selectedSnapshotId,
+  onSelectSnapshotId,
   onRefresh
 }: {
   program: Program | null;
+  snapshots: ProgramMetricSnapshot[];
+  selectedSnapshotId: string | null;
+  onSelectSnapshotId: (id: string | null) => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [metrics, setMetrics] = useState<ProgramMetric[]>([]);
-  const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
   const [metricsDrawerOpen, setMetricsDrawerOpen] = useState(false);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    setMetrics((program?.metrics ?? []).map(normalizeMetric));
-    setSelectedSnapshotId(null);
-  }, [program]);
-
-  const loadSnapshots = useCallback(async (programId: string) => {
-    try {
-      const rows = await api<ProgramMetricSnapshot[]>(`/api/programs/${programId}/metric-snapshots`);
-      setSnapshots(rows);
-      setSelectedSnapshotId((current) => (current && rows.some((row) => row.id === current) ? current : null));
-      setError('');
-    } catch (err) {
-      setSnapshots([]);
-      setError(err instanceof Error ? err.message : 'Unable to load session snapshots');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!program?.id) {
-      setSnapshots([]);
-      return;
-    }
-    void loadSnapshots(program.id);
-  }, [loadSnapshots, program?.id]);
+  const metrics = useMemo(
+    () => (program?.metrics ?? []).map(normalizeMetric),
+    [program?.metrics]
+  );
 
   const todaySnapshot = useMemo(
     () => snapshots.find((snapshot) => snapshot.date === toDateKey(new Date())),
@@ -67,9 +51,11 @@ export function ClientMetricsPanel({
     [snapshots, selectedSnapshotId]
   );
 
+  const bodyCompMetrics = useMemo(() => bodyCompositionMetrics(metrics), [metrics]);
+
   const displayMetrics = useMemo(
-    () => metricsWithSnapshotCurrent(metrics, selectedSnapshot),
-    [metrics, selectedSnapshot]
+    () => metricsWithSnapshotCurrent(bodyCompMetrics, selectedSnapshot),
+    [bodyCompMetrics, selectedSnapshot]
   );
 
   const currentLabel = selectedSnapshot ? formatSnapshotCurrentLabel(selectedSnapshot.date) : 'Current';
@@ -79,11 +65,7 @@ export function ClientMetricsPanel({
     setSavingSnapshot(true);
     setError('');
     try {
-      const payload = metrics.map((metric) => ({
-        metricType: metric.metricType,
-        currentValue: Number(metric.currentValue),
-        unit: metric.unit
-      }));
+      const payload = buildSessionSnapshotPayload(bodyCompMetrics, todaySnapshot ?? null);
       if (payload.some((metric) => !Number.isFinite(metric.currentValue))) {
         throw new Error('Please enter valid current values before saving a session snapshot.');
       }
@@ -91,8 +73,7 @@ export function ClientMetricsPanel({
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      await loadSnapshots(program.id);
-      setSelectedSnapshotId(snapshot.id);
+      onSelectSnapshotId(snapshot.id);
       await onRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save session snapshot');
@@ -103,11 +84,6 @@ export function ClientMetricsPanel({
 
   async function handleMetricsSaved() {
     await onRefresh();
-    if (program?.id) await loadSnapshots(program.id);
-  }
-
-  function handleSnapshotUpdated(updated: ProgramMetricSnapshot) {
-    setSnapshots((current) => current.map((snapshot) => (snapshot.id === updated.id ? updated : snapshot)));
   }
 
   if (!program) {
@@ -118,7 +94,7 @@ export function ClientMetricsPanel({
     );
   }
 
-  if (!metrics.length) {
+  if (!bodyCompMetrics.length) {
     return (
       <p className="rounded-xl bg-app-muted p-4 text-sm text-app-text-muted">
         No metrics configured for this program yet.
@@ -128,29 +104,27 @@ export function ClientMetricsPanel({
 
   return (
     <>
-      <ProgramMetricTable
-        compact
+      <ProgramDonutSummary
         metrics={displayMetrics}
         currentLabel={currentLabel}
-        onEdit={() => setMetricsDrawerOpen(true)}
         onSaveSnapshot={() => void saveSnapshot()}
         savingSnapshot={savingSnapshot}
         todaySnapshotSaved={Boolean(todaySnapshot)}
       />
+      <div className="mt-4">
+        <ProgramMetricTable
+          compact
+          metrics={displayMetrics}
+          currentLabel={currentLabel}
+          onEdit={() => setMetricsDrawerOpen(true)}
+        />
+      </div>
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-      <CoachSnapshotPreview
-        programId={program.id}
-        snapshots={snapshots}
-        selectedId={selectedSnapshotId}
-        onSelect={setSelectedSnapshotId}
-        onSnapshotUpdated={handleSnapshotUpdated}
-      />
 
       <EditMetricsDrawer
         open={metricsDrawerOpen}
         programId={program.id}
-        metrics={metrics}
+        metrics={bodyCompMetrics}
         onClose={() => setMetricsDrawerOpen(false)}
         onSaved={handleMetricsSaved}
       />

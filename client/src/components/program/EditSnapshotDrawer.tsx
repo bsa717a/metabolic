@@ -11,13 +11,7 @@ const BODY_COMP_METRICS = [
   { metricType: 'FAT_MASS', label: 'Body Fat', unit: 'lbs' }
 ] as const;
 
-const MEASUREMENT_METRICS = [
-  { metricType: 'WAIST', label: 'Waist', unit: 'in' },
-  { metricType: 'HIPS', label: 'Hips', unit: 'in' },
-  { metricType: 'CHEST', label: 'Chest', unit: 'in' }
-] as const;
-
-const TRACKED_METRICS = [...BODY_COMP_METRICS, ...MEASUREMENT_METRICS] as const;
+const TRACKED_METRICS = [...BODY_COMP_METRICS] as const;
 
 type SnapshotDraft = Record<(typeof TRACKED_METRICS)[number]['metricType'], string>;
 
@@ -35,10 +29,7 @@ function toDraft(snapshot: ProgramMetricSnapshot): SnapshotDraft {
     WEIGHT: metricValue(snapshot, 'WEIGHT'),
     BODY_FAT: metricValue(snapshot, 'BODY_FAT'),
     LEAN_TISSUE_MASS: metricValue(snapshot, 'LEAN_TISSUE_MASS'),
-    FAT_MASS: metricValue(snapshot, 'FAT_MASS'),
-    WAIST: metricValue(snapshot, 'WAIST'),
-    HIPS: metricValue(snapshot, 'HIPS'),
-    CHEST: metricValue(snapshot, 'CHEST')
+    FAT_MASS: metricValue(snapshot, 'FAT_MASS')
   };
 }
 
@@ -171,25 +162,6 @@ function EditSnapshotDrawerContent({
           </div>
         </label>
       ))}
-
-      <div className="border-t border-slate-200 pt-4">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Weekly measurements</h3>
-        {MEASUREMENT_METRICS.map(({ metricType, label, unit }) => (
-          <label key={metricType} className="mb-4 block last:mb-0">
-            <span className={labelClassName()}>{label}</span>
-            <div className="flex items-center gap-2">
-              <input
-                className={inputClassName()}
-                type="number"
-                step="0.01"
-                value={draft[metricType]}
-                onChange={(event) => updateDraft(metricType, event.target.value)}
-              />
-              <span className="text-sm text-slate-500">{unitFor(snapshot, metricType, unit)}</span>
-            </div>
-          </label>
-        ))}
-      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

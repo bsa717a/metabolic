@@ -30,7 +30,7 @@ export function CoachSnapshotPreview({
 
   return (
     <>
-      <div className="mt-4 rounded-xl border border-app-border bg-app-surface p-3">
+      <div className="rounded-xl border border-app-border bg-app-surface p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-bold">Recent snapshots</h3>

@@ -10,6 +10,7 @@ import { getCoachHydrationStats, setWaterGoal } from './hydrationService.js';
 import { getMealsForDate } from './nutritionService.js';
 import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
+import { saveProgramMetricSnapshot } from './programService.js';
 import { sendResultsReadyEmail } from './emailService.js';
 import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsReadyNotification.js';
 import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone } from './twilioOutboundService.js';
@@ -254,6 +255,7 @@ function serializeCoachSession(session: {
   occurredAt: Date;
   notes: string;
   linkedCheckInId: string | null;
+  linkedSnapshotId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -264,9 +266,126 @@ function serializeCoachSession(session: {
     occurredAt: session.occurredAt.toISOString(),
     notes: session.notes,
     linkedCheckInId: session.linkedCheckInId,
+    linkedSnapshotId: session.linkedSnapshotId,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString()
   };
+}
+
+const MEASUREMENT_METRIC_TYPES = ['WAIST', 'HIPS', 'CHEST'] as const;
+
+function utcStartOfToday() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function buildSnapshotPayloadFromProgram(
+  metrics: Array<{ metricType: string; currentValue: unknown; unit: string }>,
+  existingSnapshot: { values: Array<{ metricType: string; currentValue: unknown; unit: string }> } | null
+) {
+  const bodyPayload = metrics
+    .filter((metric) => !MEASUREMENT_METRIC_TYPES.includes(metric.metricType as (typeof MEASUREMENT_METRIC_TYPES)[number]))
+    .map((metric) => {
+      const saved = existingSnapshot?.values.find((value) => value.metricType === metric.metricType);
+      return {
+        metricType: metric.metricType,
+        currentValue: saved ? Number(saved.currentValue) : Number(metric.currentValue),
+        unit: saved?.unit ?? metric.unit
+      };
+    });
+
+  const measurementPayload = MEASUREMENT_METRIC_TYPES.flatMap((metricType) => {
+    const saved = existingSnapshot?.values.find((value) => value.metricType === metricType);
+    if (!saved) return [];
+    return [{
+      metricType,
+      currentValue: Number(saved.currentValue),
+      unit: saved.unit
+    }];
+  });
+
+  return [...bodyPayload, ...measurementPayload];
+}
+
+async function linkSessionToSnapshot(sessionId: string, snapshotId: string, notes: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.coachSession.updateMany({
+      where: { linkedSnapshotId: snapshotId, id: { not: sessionId } },
+      data: { linkedSnapshotId: null }
+    });
+
+    return tx.coachSession.update({
+      where: { id: sessionId },
+      data: { notes, linkedSnapshotId: snapshotId }
+    });
+  });
+}
+
+export async function saveCoachSessionComplete(
+  actor: { id: string; role: Role },
+  data: { userId: string; notes: string; sessionId?: string }
+) {
+  await requireCoachClient(actor, data.userId);
+
+  const program = await prisma.program.findFirst({
+    where: { userId: data.userId, status: ProgramStatus.ACTIVE },
+    include: { metrics: true }
+  });
+  if (!program) throw new Error('No active program found for this client');
+
+  const today = utcStartOfToday();
+  const existingSnapshot = await prisma.programMetricSnapshot.findUnique({
+    where: { programId_date: { programId: program.id, date: today } },
+    include: { values: true }
+  });
+
+  const payload = buildSnapshotPayloadFromProgram(program.metrics, existingSnapshot);
+  if (!payload.length) throw new Error('No metrics configured for this program yet');
+  if (payload.some((metric) => !Number.isFinite(metric.currentValue))) {
+    throw new Error('Please enter valid current values before saving a session.');
+  }
+
+  const snapshot = await saveProgramMetricSnapshot(actor, program.id, payload);
+  const notes = data.notes.trim();
+
+  if (data.sessionId) {
+    const existing = await prisma.coachSession.findUnique({ where: { id: data.sessionId } });
+    if (!existing || existing.coachId !== actor.id || existing.userId !== data.userId) {
+      throw new Error('Session not found');
+    }
+
+    const session = await linkSessionToSnapshot(data.sessionId, snapshot.id, notes);
+    return serializeCoachSession(session);
+  }
+
+  const todayEnd = addUtcDays(today, 1);
+  const todaySession = await prisma.coachSession.findFirst({
+    where: {
+      coachId: actor.id,
+      userId: data.userId,
+      occurredAt: { gte: today, lt: todayEnd }
+    }
+  });
+
+  const session = todaySession
+    ? await linkSessionToSnapshot(todaySession.id, snapshot.id, notes)
+    : await prisma.$transaction(async (tx) => {
+        await tx.coachSession.updateMany({
+          where: { linkedSnapshotId: snapshot.id },
+          data: { linkedSnapshotId: null }
+        });
+        return tx.coachSession.create({
+          data: {
+            coachId: actor.id,
+            userId: data.userId,
+            notes,
+            occurredAt: today,
+            linkedSnapshotId: snapshot.id
+          }
+        });
+      });
+
+  return serializeCoachSession(session);
 }
 
 async function requireLinkedCheckInForSession(

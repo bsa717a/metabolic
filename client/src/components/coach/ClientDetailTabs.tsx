@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import { todayKey } from '../../services/api';
-import type { CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary } from '../../types';
+import type { CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
 import { clientInitials, clientName, formatNextSession } from '../../utils/coachClientUtils';
@@ -55,7 +55,10 @@ export function ClientDetailTabs({
   onSendText,
   onSavingChange,
   onError,
-  onRefresh
+  onRefresh,
+  selectedSnapshotId,
+  onSelectSnapshotId,
+  snapshots
 }: {
   client: CoachClient;
   dashboard: Dashboard | null;
@@ -73,6 +76,9 @@ export function ClientDetailTabs({
   onSavingChange: (saving: boolean) => void;
   onError: (message: string) => void;
   onRefresh: () => Promise<void>;
+  selectedSnapshotId: string | null;
+  onSelectSnapshotId: (id: string | null) => void;
+  snapshots: ProgramMetricSnapshot[];
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [planDate, setPlanDate] = useState(() => todayKey());
@@ -280,13 +286,22 @@ export function ClientDetailTabs({
         )}
 
         {activeTab === 'metrics' && (
-          <ClientMetricsPanel program={dashboard?.program ?? null} onRefresh={onRefresh} />
+          <ClientMetricsPanel
+            program={dashboard?.program ?? null}
+            snapshots={snapshots}
+            selectedSnapshotId={selectedSnapshotId}
+            onSelectSnapshotId={onSelectSnapshotId}
+            onRefresh={onRefresh}
+          />
         )}
 
         {activeTab === 'measurements' && (
           <ClientMeasurementsPanel
             program={dashboard?.program ?? null}
             userId={client.id}
+            snapshots={snapshots}
+            selectedSnapshotId={selectedSnapshotId}
+            onRefresh={onRefresh}
           />
         )}
       </div>

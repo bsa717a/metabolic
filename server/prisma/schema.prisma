@@ -359,11 +359,13 @@ model CoachSession {
   occurredAt DateTime @default(now())
   notes String @db.Text
   linkedCheckInId String?
+  linkedSnapshotId String? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   coach User @relation("CoachSessions", fields: [coachId], references: [id], onDelete: Cascade)
   user User @relation("ClientSessions", fields: [userId], references: [id], onDelete: Cascade)
   linkedCheckIn CoachCheckIn? @relation(fields: [linkedCheckInId], references: [id], onDelete: SetNull)
+  linkedSnapshot ProgramMetricSnapshot? @relation(fields: [linkedSnapshotId], references: [id], onDelete: SetNull)
   @@index([coachId, userId, occurredAt(sort: Desc)])
   @@index([userId, occurredAt(sort: Desc)])
 }
@@ -415,6 +417,7 @@ model ProgramMetricSnapshot {
   updatedAt DateTime @updatedAt
   program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
   values ProgramMetricSnapshotValue[]
+  coachSession CoachSession?
   @@unique([programId, date])
 }
 

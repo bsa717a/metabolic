@@ -48,7 +48,12 @@ function normalizePhotoUrl(value: string | null | undefined) {
   }
 }
 
-function serializeSnapshot(snapshot: Awaited<ReturnType<typeof listProgramMetricSnapshots>>[number]) {
+function serializeSnapshot(snapshot: {
+  id: string;
+  date: Date;
+  values: Array<{ metricType: string; currentValue: unknown; unit: string }>;
+  coachSession?: { notes: string } | null;
+}) {
   return {
     id: snapshot.id,
     date: snapshot.date.toISOString().slice(0, 10),
@@ -56,7 +61,8 @@ function serializeSnapshot(snapshot: Awaited<ReturnType<typeof listProgramMetric
       metricType: value.metricType,
       currentValue: Number(value.currentValue),
       unit: value.unit
-    }))
+    })),
+    sessionNotes: snapshot.coachSession?.notes?.trim() ? snapshot.coachSession.notes : null
   };
 }
 

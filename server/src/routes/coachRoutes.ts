@@ -10,6 +10,7 @@ import {
   createCoachCheckIn,
   createCoachSession,
   listCoachSessions,
+  saveCoachSessionComplete,
   updateCoachSession,
   deleteCoachClientGroup,
   deleteCoachCheckIn,
@@ -168,6 +169,11 @@ const sessionUpdateBody = z
     linkedCheckInId: z.string().trim().min(1).nullable().optional()
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
+const sessionCompleteBody = z.object({
+  userId: z.string().trim().min(1),
+  notes: z.string(),
+  sessionId: z.string().trim().min(1).optional()
+});
 const sessionListQuery = z.object({ userId: z.string().trim().min(1) });
 const sendResultsSmsBody = z
   .object({
@@ -249,6 +255,16 @@ export async function coachRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid session' });
     try {
       return await createCoachSession(request.appUser!, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save session' });
+    }
+  });
+
+  app.post('/api/coach/sessions/complete', { preHandler: coachOnly }, async (request, reply) => {
+    const parsed = sessionCompleteBody.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid session' });
+    try {
+      return await saveCoachSessionComplete(request.appUser!, parsed.data);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save session' });
     }

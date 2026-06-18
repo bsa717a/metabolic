@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Settings } from 'lucide-react';
 import { api, todayKey } from '../services/api';
-import type { ClientGroup, CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary } from '../types';
+import type { ClientGroup, CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../types';
 import type { GamificationDashboard } from '../types/gamification';
 import type { CoachHydrationStats } from '../types/hydration';
 import { CoachCalendar } from '../components/coach/CoachCalendar';
@@ -12,6 +12,7 @@ import { ClientGroupsDrawer } from '../components/coach/ClientGroupsDrawer';
 import { ClientRoster } from '../components/coach/ClientRoster';
 import { CoachSettingsDrawer } from '../components/coach/CoachSettingsDrawer';
 import { ScheduleCheckInDrawer } from '../components/coach/ScheduleCheckInDrawer';
+import { CoachSnapshotPreview } from '../components/coach/CoachSnapshotPreview';
 import { SessionNotesPanel } from '../components/coach/SessionNotesPanel';
 import { EditAccountDetailsDrawer } from '../components/user/EditAccountDetailsDrawer';
 import { Button } from '../components/ui/Button';
@@ -51,6 +52,8 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
 
   const selectedGroup = useMemo(
     () => clientGroups.find((group) => group.id === selectedGroupId) ?? null,
@@ -99,6 +102,17 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       setClients(clientRows);
     } catch {
       // Keep the existing list if a background refresh fails.
+    }
+  }, []);
+
+  const loadSnapshots = useCallback(async (programId: string) => {
+    try {
+      const rows = await api<ProgramMetricSnapshot[]>(`/api/programs/${programId}/metric-snapshots`);
+      setSnapshots(rows);
+      setSelectedSnapshotId((current) => (current && rows.some((row) => row.id === current) ? current : null));
+    } catch {
+      setSnapshots([]);
+      setSelectedSnapshotId(null);
     }
   }, []);
 
@@ -179,6 +193,18 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   }, [loadDashboard, selectedClient]);
 
   useEffect(() => {
+    setSelectedSnapshotId(null);
+  }, [selectedClient?.id]);
+
+  useEffect(() => {
+    if (!dashboard?.program?.id) {
+      setSnapshots([]);
+      return;
+    }
+    void loadSnapshots(dashboard.program.id);
+  }, [dashboard?.program?.id, loadSnapshots]);
+
+  useEffect(() => {
     if (!selectedClientId) return;
     if (visibleClients.some((client) => client.id === selectedClientId)) return;
     const fallbackId = visibleClients[0]?.id;
@@ -211,7 +237,21 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
 
   async function refreshClientData() {
     if (!selectedClient) return;
-    await Promise.all([load(), loadDashboard(selectedClient.id), loadClients()]);
+    const programId = dashboard?.program?.id;
+    await Promise.all([
+      load(),
+      loadDashboard(selectedClient.id),
+      loadClients(),
+      programId ? loadSnapshots(programId) : Promise.resolve()
+    ]);
+  }
+
+  function handleSnapshotUpdated(updated: ProgramMetricSnapshot) {
+    setSnapshots((current) => {
+      const index = current.findIndex((snapshot) => snapshot.id === updated.id);
+      if (index === -1) return [updated, ...current].sort((a, b) => b.date.localeCompare(a.date));
+      return current.map((snapshot) => (snapshot.id === updated.id ? updated : snapshot));
+    });
   }
 
   function handleCalendarSelectClient(userId: string) {
@@ -412,6 +452,9 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 onSavingChange={setSaving}
                 onError={setError}
                 onRefresh={refreshClientData}
+                selectedSnapshotId={selectedSnapshotId}
+                onSelectSnapshotId={setSelectedSnapshotId}
+                snapshots={snapshots}
               />
             ) : (
               <Card>
@@ -426,8 +469,10 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 key={selectedClient.id}
                 clientId={selectedClient.id}
                 clientName={clientName(selectedClient)}
+                programId={dashboard?.program?.id ?? null}
                 onScheduleSession={() => setScheduleOpen(true)}
                 onSendResults={sendResultsEmail}
+                onSessionSaved={refreshClientData}
               />
             ) : (
               <Card>
@@ -435,6 +480,16 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 <p className="mt-1 text-sm text-app-text-muted">Select a client to start a session.</p>
               </Card>
             )}
+
+            {selectedClient && dashboard?.program?.id ? (
+              <CoachSnapshotPreview
+                programId={dashboard.program.id}
+                snapshots={snapshots}
+                selectedId={selectedSnapshotId}
+                onSelect={setSelectedSnapshotId}
+                onSnapshotUpdated={handleSnapshotUpdated}
+              />
+            ) : null}
 
             {selectedClient ? (
               <Card>
