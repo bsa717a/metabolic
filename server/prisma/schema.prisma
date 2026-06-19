@@ -175,6 +175,9 @@ model User {
   defaultNutritionTemplateId String?
   defaultExerciseTemplateId String?
   waterGoalOz Int @default(64)
+  timezone String?
+  smsOptedOut Boolean @default(false)
+  smsRemindersEnabled Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organizations UserOrganization[]
@@ -210,6 +213,7 @@ model User {
   bloodPanels BloodPanel[] @relation("BloodPanelUser")
   bloodPanelsEntered BloodPanel[] @relation("BloodPanelEnteredBy")
   hydrationEntries HydrationEntry[]
+  smsNudgeLogs SmsNudgeLog[]
   clientProfile ClientProfile?
   defaultNutritionTemplate NutritionPlanTemplate? @relation("CoachDefaultNutritionTemplate", fields: [defaultNutritionTemplateId], references: [id], onDelete: SetNull)
   defaultExerciseTemplate ExerciseTemplate? @relation("CoachDefaultExerciseTemplate", fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
@@ -681,6 +685,24 @@ model SmsMessage {
   status SmsStatus @default(RECEIVED)
   createdAt DateTime @default(now())
   user User? @relation(fields: [userId], references: [id])
+}
+
+enum SmsNudgeKind {
+  MEAL_REMINDER
+  EVENING_RECAP
+}
+
+model SmsNudgeLog {
+  id String @id @default(cuid())
+  userId String
+  kind SmsNudgeKind
+  date String
+  refId String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, date, refId])
+  @@index([userId, date])
 }
 
 model ProgramTemplate {

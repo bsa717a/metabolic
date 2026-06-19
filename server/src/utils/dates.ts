@@ -23,6 +23,38 @@ export function localDateKey(date = new Date(), timeZone = "America/Los_Angeles"
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
+/** Wall-clock parts (local date key + minutes since midnight) for a timezone. */
+export function localTimeParts(timeZone: string, date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const hour = Number(value("hour")) % 24;
+  const minute = Number(value("minute"));
+  return {
+    dateKey: `${value("year")}-${value("month")}-${value("day")}`,
+    hour,
+    minute,
+    minutesOfDay: hour * 60 + minute
+  };
+}
+
+/**
+ * Calendar day key (YYYY-MM-DD) to use for a user's "today". Uses the user's
+ * timezone when known so meal logs, dashboards, and reminders all agree on the
+ * same day; falls back to the UTC day (the app-wide default) when unset.
+ */
+export function userDayKey(timeZone: string | null | undefined, date = new Date()) {
+  if (timeZone) return localDateKey(date, timeZone);
+  return toDateKey(startOfUtcDay(date));
+}
+
 export function addUtcDays(date: Date, days: number) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);

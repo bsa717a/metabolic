@@ -18,6 +18,7 @@ import { gamificationRoutes } from './routes/gamificationRoutes.js';
 import { coachRoutes } from './routes/coachRoutes.js';
 import { bloodPanelRoutes } from './routes/bloodPanelRoutes.js';
 import { hydrationRoutes } from './routes/hydrationRoutes.js';
+import { internalRoutes } from './routes/internalRoutes.js';
 
 async function main() {
   const app = Fastify({ logger: true, bodyLimit: 16 * 1024 * 1024 });
@@ -50,6 +51,7 @@ async function main() {
   await app.register(onboardingRoutes);
   await app.register(gamificationRoutes);
   await app.register(hydrationRoutes);
+  await app.register(internalRoutes);
 
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {
     app.log.error(error);

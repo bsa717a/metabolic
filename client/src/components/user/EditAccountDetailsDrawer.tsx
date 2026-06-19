@@ -19,7 +19,24 @@ type AccountDraft = {
   lastName: string;
   email: string;
   phone: string;
+  timezone: string;
+  smsRemindersEnabled: boolean;
 };
+
+const COMMON_TIMEZONES = [
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Phoenix',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'Pacific/Honolulu'
+];
+
+function timezoneOptions(current: string) {
+  const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return Array.from(new Set([current, detected, ...COMMON_TIMEZONES].filter(Boolean)));
+}
 
 export function EditAccountDetailsDrawer({
   open,
@@ -66,7 +83,9 @@ function EditAccountDetailsDrawerContent({
     firstName: '',
     lastName: '',
     email: '',
-    phone: ''
+    phone: '',
+    timezone: '',
+    smsRemindersEnabled: true
   });
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [canEditClientNotes, setCanEditClientNotes] = useState(false);
@@ -85,7 +104,9 @@ function EditAccountDetailsDrawerContent({
           firstName: details.firstName,
           lastName: details.lastName,
           email: details.email,
-          phone: details.phone ?? ''
+          phone: details.phone ?? '',
+          timezone: details.timezone ?? '',
+          smsRemindersEnabled: details.smsRemindersEnabled ?? true
         });
         setProfileDraft(profileToDraft(details));
         setCanEditClientNotes(details.canEditClientNotes);
@@ -109,9 +130,11 @@ function EditAccountDetailsDrawerContent({
     setSaving(true);
     setError('');
     try {
-      const payload: Record<string, string | number | null> = {
+      const payload: Record<string, string | number | boolean | null> = {
         ...buildProfilePayload(profileDraft, canEditClientNotes),
-        phone: accountDraft.phone.trim() ? accountDraft.phone.trim() : null
+        phone: accountDraft.phone.trim() ? accountDraft.phone.trim() : null,
+        timezone: accountDraft.timezone.trim() ? accountDraft.timezone.trim() : null,
+        smsRemindersEnabled: accountDraft.smsRemindersEnabled
       };
 
       if (mode === 'self') {
@@ -200,6 +223,37 @@ function EditAccountDetailsDrawerContent({
             onChange={(event) => updateAccount('phone', event.target.value)}
             placeholder="Optional"
           />
+        </label>
+
+        <label className="block">
+          <span className={labelClassName()}>Timezone</span>
+          <select
+            className={inputClassName()}
+            value={accountDraft.timezone}
+            onChange={(event) => updateAccount('timezone', event.target.value)}
+          >
+            <option value="">Not set</option>
+            {timezoneOptions(accountDraft.timezone).map((zone) => (
+              <option key={zone} value={zone}>
+                {zone}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-app-text-muted">
+            Used to time meal reminder texts. Reminders are skipped until this is set.
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
+            checked={accountDraft.smsRemindersEnabled}
+            onChange={(event) => updateAccount('smsRemindersEnabled', event.target.checked)}
+          />
+          <span className="text-sm text-slate-600 dark:text-app-text-muted">
+            Text me reminders before meals and a short evening check-in.
+          </span>
         </label>
       </div>
 

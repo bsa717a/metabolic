@@ -1,9 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { handleSms } from '../services/smsIntentService.js';
 import { normalizePhone } from '../utils/phone.js';
+import { isValidTwilioRequest } from '../utils/twilioSignature.js';
 
 export async function smsRoutes(app: FastifyInstance) {
   app.post('/api/sms/webhook', async (request, reply) => {
+    if (!isValidTwilioRequest(request)) {
+      return reply.code(403).send({ error: 'Invalid Twilio signature' });
+    }
     const body = request.body as {
       From?: string;
       AccountSid?: string;

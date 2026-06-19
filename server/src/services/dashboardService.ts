@@ -1,23 +1,28 @@
 import { ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { ensureTodayDailyLog } from './dailyLogService.js';
+import { ensureDailyLog } from './dailyLogService.js';
 import { sortScheduledExercises } from './exerciseService.js';
-import { startOfUtcDay } from '../utils/dates.js';
+import { parseDateParam, startOfUtcDay } from '../utils/dates.js';
 import { n, round } from '../utils/numbers.js';
 
 function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }) {
   return meal.items.length > 0 || n(meal.plannedCalories) > 0 || n(meal.actualCalories) > 0 || meal.status !== 'PLANNED';
 }
 
-export async function getTodayDashboard(userId: string) {
-  const today = startOfUtcDay();
+/**
+ * Loads the dashboard for a user's day. `dateKey` (YYYY-MM-DD) selects the
+ * calendar day; when omitted it defaults to the UTC day. Pass the user's local
+ * day key (see `userDayKey`) so SMS reminders and logging stay timezone-correct.
+ */
+export async function getTodayDashboard(userId: string, dateKey?: string) {
+  const today = dateKey ? parseDateParam(dateKey) : startOfUtcDay();
   const program = await prisma.program.findFirst({
     where: { userId, status: ProgramStatus.ACTIVE },
     include: { metrics: true }
   });
   if (!program) return { program: null, dailyLog: null, meals: [], exercises: [], summary: null, weightTrend: [] };
 
-  const dailyLog = await ensureTodayDailyLog(userId, program);
+  const dailyLog = await ensureDailyLog(userId, program, today);
   const [meals, rawExercises, weightTrend] = await Promise.all([
     prisma.meal.findMany({ where: { dailyLogId: dailyLog.id }, include: { items: true }, orderBy: { mealNumber: 'asc' } }),
     prisma.scheduledExercise.findMany({ where: { userId, scheduledDate: today }, include: { exercise: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),

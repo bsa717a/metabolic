@@ -62,6 +62,9 @@ export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export type ChatChannel = 'web' | 'sms';
 
+/** LOG = report food already eaten; SUGGEST = ask what to eat; CHAT = anything else. */
+export type NutritionIntent = 'LOG' | 'SUGGEST' | 'CHAT';
+
 export interface AiProvider {
   lookupFood(input: string): Promise<FoodEstimate[]>;
   lookupFoodFromImage(image: { data: string; mimeType: string }, input?: string): Promise<FoodEstimate[]>;
@@ -69,6 +72,7 @@ export interface AiProvider {
   suggestMealOptions(input: string, context: string): Promise<MealSuggestionResult>;
   enrichShoppingList(items: ShoppingListInputItem[], storeName?: string | null): Promise<EnrichedShoppingListResult>;
   chat(messages: ChatMessage[], context: string, channel?: ChatChannel): Promise<string>;
+  classifyNutritionIntent(message: string): Promise<NutritionIntent>;
 }
 
 const foodEstimateSchema = z.object({
@@ -220,6 +224,7 @@ Return exactly 4 distinct exercises. Keep descriptions under 140 characters. Use
 const MEAL_SUGGESTION_PROMPT = `Suggest restaurant or meal choices that fit the user's current macro context.
 Use common menu knowledge when the user names a restaurant, but make clear options are approximate.
 If the user mentions multiple restaurants, include a useful spread across those restaurants instead of only one.
+Respect the user's allergies and dietary preferences from the macro context — never suggest an option that conflicts with them.
 Return JSON only: { "intro": string, "options": [ { "name": string, "description": string, "calories": number, "protein": grams, "carbs": grams, "fat": grams }, ... ] }
 Return 3 practical, distinct options. Keep intro conversational and under 220 characters. Keep each description under 160 characters.`;
 
@@ -236,24 +241,34 @@ Every input id must appear exactly once. Keep groceryDescription under 120 chara
 
 const MEAL_SUGGESTION_TIMEOUT_MS = 7000;
 const SHOPPING_LIST_TIMEOUT_MS = 12000;
+const CLASSIFY_INTENT_TIMEOUT_MS = 4000;
 
-const ASSISTANT_SYSTEM = `You are a concise metabolic health coach assistant for the Metabolic app.
-Answer using the user's live program data when relevant. Be practical and specific.
-Keep responses short unless the user asks for detail. Use plain language, not markdown headers.
+const CLASSIFY_INTENT_PROMPT = `Classify the user's text message into exactly one nutrition intent.
+LOG = they are reporting food they already ate or are eating right now (it should be logged). Examples: "had a burrito bowl", "just ate 6 oz chicken and rice", "finished my lunch".
+SUGGEST = they are asking what/where to eat or naming a place and want recommendations (do NOT log yet). Examples: "what should I get at Chipotle?", "I'm at the airport, ideas?", "any good high protein options?".
+CHAT = anything else: general questions, greetings, status checks, or non-food messages.
+Return JSON only: { "intent": "LOG" | "SUGGEST" | "CHAT" }`;
+
+const classifyIntentSchema = z.object({
+  intent: z.enum(['LOG', 'SUGGEST', 'CHAT'])
+});
+
+const ASSISTANT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
+Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Use the user's first name occasionally when it feels natural.
+Answer using the user's live program data, macros, meals, allergies, and dietary preferences when relevant. Be practical and specific.
+Never recommend foods that conflict with the user's stated allergies or dietary preferences.
+Keep responses short unless they ask for detail. Use plain language, not markdown headers.
 If data is missing, say what you would need rather than inventing numbers.
-Be warm and encouraging when the user is doing well — celebrate meals logged, exercises completed, and consistency.
-Keep motivation genuine and tied to their actual progress, not generic hype.`;
+Celebrate real wins — meals logged, workouts done, protein hit, consistency — and keep encouragement genuine and tied to their actual progress, never generic hype.`;
 
-const SMS_ASSISTANT_ADDENDUM = `You are replying over SMS or WhatsApp.
+const SMS_ASSISTANT_ADDENDUM = `You are texting the user like a nutritionist friend over SMS or iMessage. Sound human, warm, and concise — a friend who texts back fast.
 Keep answers under 320 characters when you can. Hard limit 1500 characters.
-Use plain text only — no markdown, bullets, asterisks, or headers.
-When listing meals or exercises, use short numbered lines.
-For meal-planning questions, use the user's actual meals, macros, and targets from context — do not invent foods or numbers.
-You cannot change the user's data. Never say you marked exercises or meals complete unless program data already shows that status.
-If the user wants to mark a meal eaten, tell them to say "mark this meal complete" or "mark lunch as eaten".
-If the user wants to mark exercises done, tell them to say "mark all exercises done" or "mark done" for the next one.
-If the user wants to log water, tell them to text "16 oz water", "drank a glass of water", or "log 24 oz water".
-End with a brief line of encouragement when it fits — e.g. sticking to the plan, finishing workouts, or hitting protein. One short sentence, not cheesy.`;
+Use plain text only — no markdown, bullets, asterisks, or headers. When listing meals or options, use short numbered lines.
+Use the user's actual meals, macros, targets, allergies, and dietary preferences from context — never invent foods or numbers, and never suggest anything that conflicts with their allergies or preferences.
+You cannot change the user's data. Never claim you logged food or marked something complete unless the program data already shows it.
+They can text you what they ate (e.g. "had 6 oz chicken and rice for lunch") and you log it for them. They can text a meal photo and you estimate it.
+To mark a meal eaten, they can say "mark this meal complete" or "mark lunch as eaten". To finish workouts, "mark all exercises done" or "mark done". To log water, "16 oz water" or "drank a glass of water".
+End with a brief, genuine line of encouragement when it fits. One short sentence, never cheesy.`;
 
 function normalizeEstimate(parsed: z.infer<typeof foodEstimateSchema>): FoodEstimate {
   return {
@@ -685,6 +700,13 @@ export class MockAiProvider implements AiProvider {
     if (last.includes('calorie')) return `Calorie guidance uses your live targets.${suffix}`;
     return `AI assistant is in mock mode. Set AI_PROVIDER=gemini and GEMINI_API_KEY in server/.env.${suffix}`;
   }
+
+  async classifyNutritionIntent(message: string): Promise<NutritionIntent> {
+    const text = message.toLowerCase().trim();
+    if (/\b(ate|had|grabbed|finished|devoured|demolished|chowed|scarfed)\b/.test(text)) return 'LOG';
+    if (text.endsWith('?') || /\b(what|where|which|should|suggest|recommend|options?|ideas?)\b/.test(text)) return 'SUGGEST';
+    return 'CHAT';
+  }
 }
 
 function wrapAiError(error: unknown, action: string): Error {
@@ -897,6 +919,22 @@ ${JSON.stringify(items)}`;
       return result.response.text().trim();
     } catch (error) {
       throw wrapAiError(error, 'chat');
+    }
+  }
+
+  async classifyNutritionIntent(message: string): Promise<NutritionIntent> {
+    const prompt = `${CLASSIFY_INTENT_PROMPT}\n\nMessage: ${message.trim()}`;
+    try {
+      const result = await withTimeout(
+        this.foodModel().generateContent(prompt),
+        CLASSIFY_INTENT_TIMEOUT_MS,
+        'Intent classification'
+      );
+      const parsed = classifyIntentSchema.safeParse(parseModelJson(result.response.text()));
+      if (parsed.success) return parsed.data.intent;
+      return new MockAiProvider().classifyNutritionIntent(message);
+    } catch {
+      return new MockAiProvider().classifyNutritionIntent(message);
     }
   }
 }
