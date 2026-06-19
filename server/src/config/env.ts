@@ -25,10 +25,16 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional().default(""),
   TWILIO_AUTH_TOKEN: z.string().optional().default(""),
   TWILIO_PHONE_NUMBER: z.string().optional().default(""),
+  TWILIO_VALIDATE_SIGNATURE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  TWILIO_WEBHOOK_URL: z.string().optional().default(""),
   SENDGRID_API_KEY: z.string().optional().default(""),
   SENDGRID_FROM_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   SENDGRID_FROM_NAME: z.string().optional().default("Master Metabolic"),
-  CLIENT_URL: z.string().url().default("http://localhost:5173")
+  CLIENT_URL: z.string().url().default("http://localhost:5173"),
+  CRON_SECRET: z.string().optional().default("")
 });
 
 export const env = envSchema.parse(process.env);

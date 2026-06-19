@@ -63,6 +63,8 @@ function serializeProfile(
     phone: string | null;
     gender: string | null;
     birthDate: Date | null;
+    timezone: string | null;
+    smsRemindersEnabled: boolean;
     clientProfile: ClientProfileRecord | null;
   },
   options: { includeClientNotes: boolean }
@@ -73,6 +75,8 @@ function serializeProfile(
     lastName: user.lastName,
     email: user.email,
     phone: user.phone,
+    timezone: user.timezone,
+    smsRemindersEnabled: user.smsRemindersEnabled,
     ...serializeDemographics(user),
     ...height,
     medicalConditions: user.clientProfile?.medicalConditions ?? null,
@@ -82,6 +86,15 @@ function serializeProfile(
     clientNotes: options.includeClientNotes ? user.clientProfile?.coachNotes ?? null : null,
     canEditClientNotes: options.includeClientNotes
   };
+}
+
+function validateTimezone(value: string) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return value;
+  } catch {
+    throw new Error('Enter a valid timezone (for example, America/Denver).');
+  }
 }
 
 function validateHeight(feet: number | null | undefined, inches: number | null | undefined) {
@@ -130,6 +143,8 @@ async function loadProfileUser(userId: string) {
       phone: true,
       gender: true,
       birthDate: true,
+      timezone: true,
+      smsRemindersEnabled: true,
       clientProfile: { select: clientProfileSelect }
     }
   });
@@ -175,6 +190,8 @@ export async function updateUserProfile(
     foodAllergies?: string | null;
     dietaryPreferences?: string | null;
     clientNotes?: string | null;
+    timezone?: string | null;
+    smsRemindersEnabled?: boolean;
   }
 ) {
   await assertProfileAccess(actor, userId);
@@ -185,6 +202,8 @@ export async function updateUserProfile(
     phone?: string | null;
     gender?: string | null;
     birthDate?: Date | null;
+    timezone?: string | null;
+    smsRemindersEnabled?: boolean;
   } = {};
 
   if (input.firstName !== undefined || input.lastName !== undefined) {
@@ -214,6 +233,13 @@ export async function updateUserProfile(
   }
   if (input.birthDate !== undefined) {
     userData.birthDate = input.birthDate ? parseDateParam(input.birthDate) : null;
+  }
+  if (input.timezone !== undefined) {
+    const timezone = normalizeText(input.timezone);
+    userData.timezone = timezone ? validateTimezone(timezone) : null;
+  }
+  if (input.smsRemindersEnabled !== undefined) {
+    userData.smsRemindersEnabled = input.smsRemindersEnabled;
   }
 
   const profileData: {

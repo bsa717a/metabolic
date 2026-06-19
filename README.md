@@ -60,14 +60,18 @@ echo -n YOUR_TWILIO_PHONE_NUMBER | gcloud secrets create TWILIO_PHONE_NUMBER --d
 echo -n YOUR_SENDGRID_API_KEY | gcloud secrets create SENDGRID_API_KEY --data-file=-
 echo -n DoNotReply@MasterMetabolic.com | gcloud secrets create SENDGRID_FROM_EMAIL --data-file=-
 echo -n 'Master Metabolic' | gcloud secrets create SENDGRID_FROM_NAME --data-file=-
+# Shared secret for the proactive SMS reminder scheduler
+echo -n "$(openssl rand -hex 32)" | gcloud secrets create CRON_SECRET --data-file=-
 ```
+
+SMS/MMS notes: set `TWILIO_PHONE_NUMBER` with the `sms:` prefix (e.g. `sms:+13853634403`) so the number sends and receives over SMS+MMS. The number must be MMS-enabled in the Twilio console for users to text meal photos (including photos sent from iMessage, which arrive as MMS). Point the Twilio messaging webhook to `https://<api-url>/api/sms/webhook`. `gcp-deploy.sh` provisions a Cloud Scheduler job (`metabolic-sms-tick`, every 5 minutes) that calls `/api/internal/sms/tick` to send pre-meal reminders and an evening recap; it is gated by the `CRON_SECRET` header.
 
 Grant the Cloud Run service account access after first deploy:
 
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe metabolic-v1 --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME; do
+for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME CRON_SECRET; do
   gcloud secrets add-iam-policy-binding "$s" \
     --member="serviceAccount:${SA}" \
     --role="roles/secretmanager.secretAccessor"

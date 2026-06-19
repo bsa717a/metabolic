@@ -1,4 +1,5 @@
 import { clsx } from 'clsx';
+import { createPortal } from 'react-dom';
 
 export function Drawer({
   open,
@@ -13,7 +14,10 @@ export function Drawer({
   onClose: () => void;
   panelClassName?: string;
 }) {
-  return (
+  // Render in a portal on document.body so the fixed overlay isn't trapped by an
+  // ancestor that establishes a containing block for fixed descendants (e.g. the
+  // header's backdrop-filter / transform).
+  return createPortal(
     <div className={clsx('fixed inset-0 z-50 transition', open ? 'pointer-events-auto' : 'pointer-events-none')}>
       <div
         className={clsx('absolute inset-0 bg-slate-950/30 transition-opacity', open ? 'opacity-100' : 'opacity-0')}
@@ -34,6 +38,7 @@ export function Drawer({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible">{children}</div>
       </aside>
-    </div>
+    </div>,
+    document.body
   );
 }

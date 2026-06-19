@@ -61,11 +61,40 @@ TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,\
 TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,\
 SENDGRID_API_KEY=SENDGRID_API_KEY:latest,\
 SENDGRID_FROM_EMAIL=SENDGRID_FROM_EMAIL:latest,\
-SENDGRID_FROM_NAME=SENDGRID_FROM_NAME:latest" \
+SENDGRID_FROM_NAME=SENDGRID_FROM_NAME:latest,\
+CRON_SECRET=CRON_SECRET:latest" \
   --set-env-vars "NODE_ENV=production,AI_PROVIDER=gemini"
 
 API_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
 echo "API URL: $API_URL"
+
+echo "==> Ensure Cloud Scheduler job for proactive SMS reminders"
+CRON_SECRET_VALUE="$(gcloud secrets versions access latest --secret=CRON_SECRET 2>/dev/null || true)"
+if [[ -n "$CRON_SECRET_VALUE" ]]; then
+  gcloud services enable cloudscheduler.googleapis.com --quiet
+  SCHEDULER_ARGS=(
+    --location "$REGION"
+    --schedule "*/5 * * * *"
+    --uri "${API_URL}/api/internal/sms/tick"
+    --http-method POST
+    --attempt-deadline 60s
+  )
+  if gcloud scheduler jobs describe metabolic-sms-tick --location "$REGION" >/dev/null 2>&1; then
+    gcloud scheduler jobs update http metabolic-sms-tick "${SCHEDULER_ARGS[@]}" \
+      --update-headers "X-Cron-Secret=${CRON_SECRET_VALUE}"
+  else
+    gcloud scheduler jobs create http metabolic-sms-tick "${SCHEDULER_ARGS[@]}" \
+      --headers "X-Cron-Secret=${CRON_SECRET_VALUE}"
+  fi
+else
+  echo "CRON_SECRET secret not found; skipping Cloud Scheduler setup."
+  echo "  Create it with: echo -n \"\$(openssl rand -hex 32)\" | gcloud secrets create CRON_SECRET --data-file=-"
+fi
+
+echo "==> Enable Twilio webhook signature validation"
+gcloud run services update "$SERVICE_NAME" \
+  --region "$REGION" \
+  --update-env-vars "TWILIO_VALIDATE_SIGNATURE=true,TWILIO_WEBHOOK_URL=${API_URL}/api/sms/webhook"
 
 has_client_env=false
 if [[ -n "${VITE_FIREBASE_API_KEY:-}" ]]; then

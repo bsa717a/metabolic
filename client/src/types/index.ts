@@ -26,6 +26,8 @@ export type UserAccountDetails = UserClientProfile & {
   lastName: string;
   email: string;
   phone: string | null;
+  timezone: string | null;
+  smsRemindersEnabled: boolean;
 };
 export type UserSummary = Pick<AppUser, 'id' | 'firstName' | 'lastName' | 'email'>;
 export type AdminUser = AppUser & {
