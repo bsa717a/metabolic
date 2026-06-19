@@ -3,11 +3,16 @@ import { resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 
 // Load env (DATABASE_URL etc.) before any PrismaClient is constructed.
+// Never override vars already set by the shell (e.g. Cloud SQL proxy URL).
+const preservedDatabaseUrl = process.env.DATABASE_URL;
 for (const envPath of [resolve(process.cwd(), '.env'), resolve(process.cwd(), 'server/.env')]) {
   if (existsSync(envPath)) {
-    loadDotenv({ path: envPath, override: true });
+    loadDotenv({ path: envPath, override: false });
     break;
   }
+}
+if (preservedDatabaseUrl) {
+  process.env.DATABASE_URL = preservedDatabaseUrl;
 }
 
 /** Path to the legacy MySQL dump. Override with LEGACY_DUMP_PATH. */

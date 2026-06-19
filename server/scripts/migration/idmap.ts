@@ -26,7 +26,9 @@ export interface IdMap {
 
 const DEFAULT_MAP: IdMap = { users: {}, coaches: {}, programs: {}, foods: {}, exercises: {}, notes: {} };
 
-export const IDMAP_PATH = resolve(process.cwd(), '.tmp', 'migration-idmap.json');
+export const IDMAP_PATH = process.env.MIGRATION_IDMAP_PATH
+  ? resolve(process.env.MIGRATION_IDMAP_PATH)
+  : resolve(process.cwd(), '.tmp', 'migration-idmap.json');
 
 export function loadIdMap(path: string = IDMAP_PATH): IdMap {
   if (!existsSync(path)) return structuredClone(DEFAULT_MAP);
