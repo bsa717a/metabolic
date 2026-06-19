@@ -4,7 +4,8 @@ import { getTodayDashboard } from './dashboardService.js';
 import { markAllPlannedExercisesDone, markDone } from './exerciseService.js';
 import { addMealItem, markMealEatenAsPlanned } from './nutritionService.js';
 import { chatWithSmsAssistant, suggestMealOptions } from './assistantService.js';
-import { toDateKey, userDayKey } from '../utils/dates.js';
+import { toDateKey, userDayKey, localTimeParts } from '../utils/dates.js';
+import { resolveNextMeal } from '../utils/meals.js';
 import { getAiProvider, type ChatMessage, type MealSuggestionResult } from './aiService.js';
 import { lookupFood, lookupFoodFromImage, type FoodLookupResult } from './foodLookupService.js';
 import { env } from '../config/env.js';
@@ -308,8 +309,8 @@ function pickPhotoAcknowledgement() {
 
 type WriteAction = Exclude<SmsAction, { intent: null } | { intent: 'LOG_FOOD' }>;
 
-async function handleWriteAction(userId: string, dateKey: string, action: WriteAction) {
-  const dashboard = await getTodayDashboard(userId, dateKey);
+async function handleWriteAction(userId: string, dateKey: string, timeZone: string | null, action: WriteAction) {
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
   const todayKey = dashboard.dailyLog ? toDateKey(dashboard.dailyLog.date) : dateKey;
 
   if (action.intent === 'MARK_ALL_EXERCISES_DONE') {
@@ -339,8 +340,8 @@ async function handleWriteAction(userId: string, dateKey: string, action: WriteA
         : 'No meals left to mark complete today.';
     }
     await markMealEatenAsPlanned(userId, meal.id);
-    const updated = await getTodayDashboard(userId, dateKey);
-    const nextMeal = updated.meals.find((entry) => !['EATEN_AS_PLANNED', 'SKIPPED', 'MISSED'].includes(entry.status));
+    const updated = await getTodayDashboard(userId, dateKey, timeZone);
+    const nextMeal = updated.nextMeal;
     const nextPart = nextMeal
       ? ` Next up: ${nextMeal.name}${nextMeal.plannedTime ? ` at ${nextMeal.plannedTime}` : ''}.`
       : ' All meals are complete for today.';
@@ -364,7 +365,7 @@ async function handleWriteAction(userId: string, dateKey: string, action: WriteA
 }
 
 /** Resolves which meal to log into: a named meal, the next open meal, the last meal, or a new one. */
-async function resolveTargetMeal(userId: string, dateKey: string, mealNameHint?: string) {
+async function resolveTargetMeal(userId: string, dateKey: string, mealNameHint?: string, timeZone?: string | null) {
   const log = await ensureDailyLogByUserId(userId, dateKey);
   if (!log) throw new Error('No active program found for today.');
 
@@ -379,8 +380,9 @@ async function resolveTargetMeal(userId: string, dateKey: string, mealNameHint?:
     if (named) return named;
   }
 
+  const minutesOfDay = timeZone ? localTimeParts(timeZone).minutesOfDay : undefined;
   return (
-    meals.find((meal) => !['EATEN_AS_PLANNED', 'SKIPPED', 'MISSED'].includes(meal.status)) ??
+    resolveNextMeal(meals, minutesOfDay) ??
     meals[meals.length - 1] ??
     prisma.meal.create({
       data: {
@@ -439,21 +441,21 @@ async function logLookupResultToMeal(userId: string, mealId: string, result: Foo
   return { count: names.length, names, calories, protein };
 }
 
-async function handleFoodLog(userId: string, dateKey: string, foodText: string, mealNameHint?: string) {
+async function handleFoodLog(userId: string, dateKey: string, timeZone: string | null, foodText: string, mealNameHint?: string) {
   const cleaned = foodText.trim();
   if (!cleaned) {
     return 'Tell me what you ate (like "6 oz chicken and a cup of rice") and I will log it for you.';
   }
 
   const result = await lookupFood(userId, cleaned);
-  const meal = await resolveTargetMeal(userId, dateKey, mealNameHint);
+  const meal = await resolveTargetMeal(userId, dateKey, mealNameHint, timeZone);
   const logged = await logLookupResultToMeal(userId, meal.id, result);
 
   if (!logged.count) {
     return 'I could not pin down the macros on that. Try naming the foods and rough amounts, like "2 eggs and a slice of toast".';
   }
 
-  const dashboard = await getTodayDashboard(userId, dateKey);
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
   const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
   const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
   const foodList = logged.names.join(', ');
@@ -584,8 +586,8 @@ function summarizeFoodPhotoEstimate(result: FoodLookupResult) {
   return `Estimated from your plate: ${Math.round(totals.calories)} cal, ${Math.round(totals.protein)}g protein, ${Math.round(totals.carbs)}g carbs, ${Math.round(totals.fat)}g fat. I see: ${foodList}. Photo estimates are approximate.`;
 }
 
-async function logFoodPhotoEstimates(userId: string, dateKey: string, result: FoodLookupResult, message: string) {
-  const meal = await resolveTargetMeal(userId, dateKey, parseMealName(message));
+async function logFoodPhotoEstimates(userId: string, dateKey: string, timeZone: string | null, result: FoodLookupResult, message: string) {
+  const meal = await resolveTargetMeal(userId, dateKey, parseMealName(message), timeZone);
   const estimates = result.items
     .filter((item) => item.source === 'ai')
     .map((item) => item.estimate);
@@ -606,10 +608,10 @@ async function logFoodPhotoEstimates(userId: string, dateKey: string, result: Fo
   return { mealName: meal.name, count: estimates.length };
 }
 
-async function handleFoodPhoto(userId: string, dateKey: string, media: SmsMedia, message: string) {
+async function handleFoodPhoto(userId: string, dateKey: string, timeZone: string | null, media: SmsMedia, message: string) {
   const image = await downloadSmsImage(media);
   const result = await lookupFoodFromImage(userId, image, message);
-  const logged = await logFoodPhotoEstimates(userId, dateKey, result, message);
+  const logged = await logFoodPhotoEstimates(userId, dateKey, timeZone, result, message);
   const summary = summarizeFoodPhotoEstimate(result);
   return logged.count > 0 ? `${summary} Logged to ${logged.mealName}.` : summary;
 }
@@ -617,7 +619,7 @@ async function handleFoodPhoto(userId: string, dateKey: string, media: SmsMedia,
 async function processFoodPhotoInBackground(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
   let response: string;
   try {
-    response = await handleFoodPhoto(user.id, userDayKey(user.timezone), media, message);
+    response = await handleFoodPhoto(user.id, userDayKey(user.timezone), user.timezone, media, message);
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Assistant unavailable';
     response = `Sorry, I could not answer that right now. ${detail}`;
@@ -703,11 +705,11 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   let response: string;
   try {
     if (action.intent === 'LOG_FOOD') {
-      response = await handleFoodLog(user.id, dateKey, action.foodText, action.mealName);
+      response = await handleFoodLog(user.id, dateKey, user.timezone, action.foodText, action.mealName);
     } else if (action.intent) {
-      response = await handleWriteAction(user.id, dateKey, action);
+      response = await handleWriteAction(user.id, dateKey, user.timezone, action);
     } else if (freeformRoute === 'LOG_FOOD') {
-      response = await handleFoodLog(user.id, dateKey, extractFoodDescription(message), parseMealName(message));
+      response = await handleFoodLog(user.id, dateKey, user.timezone, extractFoodDescription(message), parseMealName(message));
     } else if (freeformRoute === 'MEAL_SUGGESTION') {
       response = await handleMealSuggestion(user.id, message);
     } else {

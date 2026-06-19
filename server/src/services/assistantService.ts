@@ -1,19 +1,22 @@
 import { getTodayDashboard } from './dashboardService.js';
 import { getAiProvider, type ChatMessage } from './aiService.js';
 import { prisma } from '../db/prisma.js';
+import { userDayKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
 
-/** Allergies, dietary preferences, and first name for personalizing AI replies. */
+/** Allergies, dietary preferences, timezone, and first name for personalizing AI replies. */
 export async function loadPersonalization(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       firstName: true,
+      timezone: true,
       clientProfile: { select: { foodConditions: true, dietNotes: true } }
     }
   });
   return {
     firstName: user?.firstName ?? null,
+    timezone: user?.timezone ?? null,
     foodAllergies: user?.clientProfile?.foodConditions ?? null,
     dietaryPreferences: user?.clientProfile?.dietNotes ?? null
   };
@@ -46,7 +49,8 @@ function exerciseSummary(exercises: Awaited<ReturnType<typeof getTodayDashboard>
 }
 
 export async function buildAssistantContext(userId: string) {
-  const dashboard = await getTodayDashboard(userId);
+  const personalization = await loadPersonalization(userId);
+  const dashboard = await getTodayDashboard(userId, userDayKey(personalization.timezone), personalization.timezone);
   if (!dashboard.program) {
     return JSON.stringify({ hasProgram: false, message: 'User has no active program.' });
   }
@@ -68,6 +72,7 @@ export async function buildAssistantContext(userId: string) {
         }
       : null,
     summary: dashboard.summary,
+    nextMeal: dashboard.nextMeal,
     meals: mealSummary(dashboard.meals),
     upcomingMeals: dashboard.meals
       .filter((meal) => !['EATEN_AS_PLANNED', 'SKIPPED', 'MISSED'].includes(meal.status))
@@ -84,10 +89,8 @@ export async function buildAssistantContext(userId: string) {
 
 /** Compact context for SMS — keeps Gemini system instructions within size limits. */
 export async function buildSmsAssistantContext(userId: string) {
-  const [dashboard, personalization] = await Promise.all([
-    getTodayDashboard(userId),
-    loadPersonalization(userId)
-  ]);
+  const personalization = await loadPersonalization(userId);
+  const dashboard = await getTodayDashboard(userId, userDayKey(personalization.timezone), personalization.timezone);
   if (!dashboard.program) {
     return JSON.stringify({
       hasProgram: false,
@@ -105,7 +108,8 @@ export async function buildSmsAssistantContext(userId: string) {
     profile: {
       firstName: personalization.firstName,
       foodAllergies: personalization.foodAllergies,
-      dietaryPreferences: personalization.dietaryPreferences
+      dietaryPreferences: personalization.dietaryPreferences,
+      timezone: personalization.timezone
     },
     program: { name: dashboard.program.name, status: dashboard.program.status },
     today: dashboard.dailyLog
@@ -118,6 +122,7 @@ export async function buildSmsAssistantContext(userId: string) {
         }
       : null,
     summary: dashboard.summary,
+    nextMeal: dashboard.nextMeal,
     mealsToday: dashboard.meals.map((meal) => ({
       mealNumber: meal.mealNumber,
       name: meal.name,
@@ -126,7 +131,7 @@ export async function buildSmsAssistantContext(userId: string) {
       plannedCalories: n(meal.plannedCalories),
       plannedProtein: n(meal.plannedProtein),
       topItems: meal.items
-        .filter((item) => item.type === 'PLANNED')
+        .filter((item) => item.type === 'PLANNED' && item.nameSnapshot.trim())
         .slice(0, 4)
         .map((item) => item.nameSnapshot)
     })),
@@ -159,10 +164,8 @@ export async function chatWithAssistant(userId: string, messages: ChatMessage[])
 }
 
 export async function suggestMealOptions(userId: string, inputText: string) {
-  const [dashboard, personalization] = await Promise.all([
-    getTodayDashboard(userId),
-    loadPersonalization(userId)
-  ]);
+  const personalization = await loadPersonalization(userId);
+  const dashboard = await getTodayDashboard(userId, userDayKey(personalization.timezone), personalization.timezone);
   const context = JSON.stringify({
     profile: {
       firstName: personalization.firstName,

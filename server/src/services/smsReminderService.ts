@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { isTwilioConfigured, isTwilioSenderPhone, sendOutboundMessage } from './twilioOutboundService.js';
 import { localTimeParts } from '../utils/dates.js';
+import { COMPLETED_MEAL_STATUSES, parsePlannedMinutes } from '../utils/meals.js';
 import { n } from '../utils/numbers.js';
 
 const REMIND_WINDOW_MIN = 15;
@@ -10,24 +11,12 @@ const REMIND_WINDOW_MAX = 30;
 const RECAP_HOUR = 20;
 const RECAP_WINDOW_MINUTES = 30;
 
-const COMPLETED_MEAL_STATUSES = new Set(['EATEN_AS_PLANNED', 'SKIPPED', 'MISSED']);
-
 type ReminderUser = {
   id: string;
   phone: string | null;
   timezone: string | null;
   firstName: string;
 };
-
-function parsePlannedMinutes(plannedTime: string | null): number | null {
-  if (!plannedTime) return null;
-  const match = plannedTime.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (hour > 23 || minute > 59) return null;
-  return hour * 60 + minute;
-}
 
 function isUniqueViolation(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
