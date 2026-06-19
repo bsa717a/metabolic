@@ -68,28 +68,10 @@ CRON_SECRET=CRON_SECRET:latest" \
 API_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
 echo "API URL: $API_URL"
 
-echo "==> Ensure Cloud Scheduler job for proactive SMS reminders"
-CRON_SECRET_VALUE="$(gcloud secrets versions access latest --secret=CRON_SECRET 2>/dev/null || true)"
-if [[ -n "$CRON_SECRET_VALUE" ]]; then
-  gcloud services enable cloudscheduler.googleapis.com --quiet
-  SCHEDULER_ARGS=(
-    --location "$REGION"
-    --schedule "*/5 * * * *"
-    --uri "${API_URL}/api/internal/sms/tick"
-    --http-method POST
-    --attempt-deadline 60s
-  )
-  if gcloud scheduler jobs describe metabolic-sms-tick --location "$REGION" >/dev/null 2>&1; then
-    gcloud scheduler jobs update http metabolic-sms-tick "${SCHEDULER_ARGS[@]}" \
-      --update-headers "X-Cron-Secret=${CRON_SECRET_VALUE}"
-  else
-    gcloud scheduler jobs create http metabolic-sms-tick "${SCHEDULER_ARGS[@]}" \
-      --headers "X-Cron-Secret=${CRON_SECRET_VALUE}"
-  fi
-else
-  echo "CRON_SECRET secret not found; skipping Cloud Scheduler setup."
-  echo "  Create it with: echo -n \"\$(openssl rand -hex 32)\" | gcloud secrets create CRON_SECRET --data-file=-"
-fi
+echo "==> Ensure Cloud Scheduler job for proactive SMS reminders (best-effort)"
+# CI often lacks permission to enable APIs or create scheduler jobs. Do not fail
+# deploy when scheduler setup fails; run ./scripts/setup-sms-scheduler.sh once as admin.
+API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-sms-scheduler.sh" || true
 
 echo "==> Enable Twilio webhook signature validation"
 gcloud run services update "$SERVICE_NAME" \

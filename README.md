@@ -64,7 +64,11 @@ echo -n 'Master Metabolic' | gcloud secrets create SENDGRID_FROM_NAME --data-fil
 echo -n "$(openssl rand -hex 32)" | gcloud secrets create CRON_SECRET --data-file=-
 ```
 
-SMS/MMS notes: set `TWILIO_PHONE_NUMBER` with the `sms:` prefix (e.g. `sms:+13853634403`) so the number sends and receives over SMS+MMS. The number must be MMS-enabled in the Twilio console for users to text meal photos (including photos sent from iMessage, which arrive as MMS). Point the Twilio messaging webhook to `https://<api-url>/api/sms/webhook`. `gcp-deploy.sh` provisions a Cloud Scheduler job (`metabolic-sms-tick`, every 5 minutes) that calls `/api/internal/sms/tick` to send pre-meal reminders and an evening recap; it is gated by the `CRON_SECRET` header.
+SMS/MMS notes: set `TWILIO_PHONE_NUMBER` with the `sms:` prefix (e.g. `sms:+13853634403`) so the number sends and receives over SMS+MMS. The number must be MMS-enabled in the Twilio console for users to text meal photos (including photos sent from iMessage, which arrive as MMS). Point the Twilio messaging webhook to `https://<api-url>/api/sms/webhook`. Proactive reminders use a Cloud Scheduler job (`metabolic-sms-tick`, every 5 minutes) that calls `/api/internal/sms/tick`, gated by the `CRON_SECRET` header. Deploy tries to configure this in best-effort mode; if CI lacks scheduler permissions, run once as a project admin:
+
+```bash
+./scripts/setup-sms-scheduler.sh
+```
 
 Grant the Cloud Run service account access after first deploy:
 
