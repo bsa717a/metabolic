@@ -16,7 +16,7 @@ function hasCompleteMetrics(metrics: Array<{ metricType: string }>) {
 async function ensureCompleteProgramMetrics(programId: string) {
   const program = await prisma.program.findUnique({
     where: { id: programId },
-    include: { metrics: true }
+    include: { metrics: true, user: true }
   });
   if (!program) return null;
 
