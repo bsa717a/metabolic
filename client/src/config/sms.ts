@@ -1,5 +1,5 @@
 /** Public SMS number for opt-in disclosure (E.164). Override with VITE_SMS_PHONE_NUMBER at build time. */
-export const SMS_PHONE_NUMBER = import.meta.env.VITE_SMS_PHONE_NUMBER?.trim() || '+19044030781';
+export const SMS_PHONE_NUMBER = import.meta.env.VITE_SMS_PHONE_NUMBER?.trim() || '+13853634403';
 
 export function formatSmsPhoneDisplay(phone: string) {
   const digits = phone.replace(/\D/g, '');
