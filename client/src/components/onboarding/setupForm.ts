@@ -43,7 +43,7 @@ export function validateSetupForm(form: SetupFormState, options: SubmitOptions =
   return null;
 }
 
-export function buildSetupPayload(form: SetupFormState, options: SubmitOptions = {}) {
+export function buildSetupPayload(form: SetupFormState) {
   const currentWeight = Number(form.weight);
   const resolvedGoalWeight = hasValidCurrentWeight(Number(form.goalWeight))
     ? Number(form.goalWeight)
@@ -73,7 +73,7 @@ export async function submitSetupForm(form: SetupFormState, options: SubmitOptio
 
   await api('/api/onboarding/setup', {
     method: 'POST',
-    body: JSON.stringify(buildSetupPayload(form, options))
+    body: JSON.stringify(buildSetupPayload(form))
   });
 }
 
