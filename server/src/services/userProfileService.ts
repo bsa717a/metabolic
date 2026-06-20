@@ -4,6 +4,7 @@ import { prisma } from '../db/prisma.js';
 import { canAccessProgramClient, canAccessUser, isAdmin, isAssignedCoach } from '../auth/requireRole.js';
 import { normalizeGender } from './bloodPanelMetrics.js';
 import { parseDateParam } from '../utils/dates.js';
+import { normalizePhone } from '../utils/phone.js';
 
 type Actor = { id: string; role: Role };
 
@@ -223,7 +224,8 @@ export async function updateUserProfile(
     userData.lastName = lastName;
   }
   if (input.phone !== undefined) {
-    userData.phone = normalizeText(input.phone) ?? null;
+    const trimmed = input.phone?.trim();
+    userData.phone = trimmed ? normalizePhone(trimmed) : null;
   }
   if (input.gender !== undefined) {
     userData.gender = input.gender ? normalizeGender(input.gender) : null;

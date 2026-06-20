@@ -14,6 +14,7 @@ import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { logWater } from './hydrationService.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
 import { n } from '../utils/numbers.js';
+import { normalizePhone, phonesMatch } from '../utils/phone.js';
 import {
   smsHelpResponseMessage,
   smsNoAccountResponseMessage,
@@ -62,6 +63,36 @@ type SmsMedia = {
 };
 
 type SmsUser = NonNullable<Awaited<ReturnType<typeof prisma.user.findFirst>>>;
+
+async function findUserBySmsPhone(phone: string) {
+  const normalized = normalizePhone(phone);
+  const exact = await prisma.user.findFirst({ where: { phone: normalized } });
+  if (exact) return exact;
+
+  const digits = normalized.replace(/\D/g, '');
+  if (digits.length < 10) return null;
+
+  const variants = new Set<string>([normalized]);
+  if (digits.length === 11 && digits.startsWith('1')) {
+    variants.add(digits.slice(1));
+    variants.add(`+${digits}`);
+  }
+  if (digits.length === 10) {
+    variants.add(digits);
+    variants.add(`+1${digits}`);
+  }
+
+  for (const variant of variants) {
+    const user = await prisma.user.findFirst({ where: { phone: variant } });
+    if (user) return user;
+  }
+
+  const users = await prisma.user.findMany({
+    where: { phone: { not: null } },
+    take: 500
+  });
+  return users.find((candidate) => phonesMatch(candidate.phone, normalized)) ?? null;
+}
 
 function smsKeyword(message: string) {
   return message.trim().toUpperCase();
@@ -643,14 +674,21 @@ async function respondUnknownSmsUser(phone: string, inboundMessage: string, inte
   await prisma.smsMessage.create({
     data: { phone, direction: 'INBOUND', message: inboundMessage, intent, status: 'PROCESSED', response }
   });
-  await prisma.smsMessage.create({
+  const outbound = await prisma.smsMessage.create({
     data: { phone, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
   });
+  // Twilio Advanced Opt-Out may auto-reply to START/HELP before our TwiML is shown; send via API too.
+  try {
+    await sendOutboundMessage(phone, response);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Could not send text message.';
+    await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+  }
   return { response };
 }
 
 export async function handleSms(phone: string, message: string, media?: SmsMedia) {
-  const user = await prisma.user.findFirst({ where: { phone } });
+  const user = await findUserBySmsPhone(phone);
   if (!media && isSmsStartKeyword(message)) {
     if (!user) {
       return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT');
