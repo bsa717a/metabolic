@@ -130,9 +130,15 @@ export async function buildSmsAssistantContext(userId: string) {
       status: meal.status,
       plannedCalories: n(meal.plannedCalories),
       plannedProtein: n(meal.plannedProtein),
+      actualCalories: n(meal.actualCalories),
+      actualProtein: n(meal.actualProtein),
       topItems: meal.items
         .filter((item) => item.type === 'PLANNED' && item.nameSnapshot.trim())
         .slice(0, 4)
+        .map((item) => item.nameSnapshot),
+      loggedItems: meal.items
+        .filter((item) => item.type === 'ACTUAL' && item.nameSnapshot.trim())
+        .slice(0, 6)
         .map((item) => item.nameSnapshot)
     })),
     upcomingMeals: dashboard.meals

@@ -2,19 +2,43 @@ import { MealStatus, HydrationSource, SmsDirection } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { markAllPlannedExercisesDone, markDone } from './exerciseService.js';
-import { addMealItem, markMealEatenAsPlanned } from './nutritionService.js';
+import { addMealItem, markMealEatenAsPlanned, moveMealItemsToMeal } from './nutritionService.js';
 import { chatWithSmsAssistant, suggestMealOptions } from './assistantService.js';
 import { toDateKey, userDayKey, localTimeParts } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
 import { getAiProvider, type ChatMessage, type MealSuggestionResult } from './aiService.js';
-import { lookupFood, lookupFoodFromImage, type FoodLookupResult } from './foodLookupService.js';
+import { lookupFood, lookupFoodFromImage, summarizeFoodLookup, type FoodLookupResult } from './foodLookupService.js';
 import { env } from '../config/env.js';
-import { sendOutboundMessage } from './twilioOutboundService.js';
+import { sendOutboundMessage, isTwilioConfigured } from './twilioOutboundService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { logWater } from './hydrationService.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
 import { n } from '../utils/numbers.js';
 import { normalizePhone, phonesMatch } from '../utils/phone.js';
+import {
+  assistantResponseLooksLikeMealFailure,
+  assistantResponseLooksLikePhotoEstimate,
+  classifyFoodRegex,
+  extractFoodDescription,
+  isFoodLogFollowUp,
+  looksLikeFoodAdd,
+  looksLikeFoodLogRetry,
+  mergeFoodLogFollowUp,
+  normalizeMealNameHint,
+  parseFoodLogAction,
+  parsePhotoEstimateFoodNames,
+  parseLoggedFoodFromAssistantResponse,
+  parsePhotoEstimateIntent,
+  parsePhotoEstimateTotals,
+  serializePhotoEstimateIntent,
+  PHOTO_ESTIMATE_LOGGED_INTENT,
+  type StoredPhotoEstimateItem,
+  parseMealName,
+  parseTargetMealFromText,
+  isEffectivelyZeroCalories,
+  smsZeroCalorieCheckResponse,
+  wantsPhotoLog
+} from '../utils/smsFoodParse.js';
 import {
   smsHelpResponseMessage,
   smsNoAccountResponseMessage,
@@ -27,7 +51,10 @@ export type SmsIntent =
   | 'MARK_EXERCISE_DONE'
   | 'MARK_MEAL_COMPLETE'
   | 'LOG_FOOD'
+  | 'LOG_PHOTO_ESTIMATE'
   | 'LOG_WATER'
+  | 'MEAL_CORRECTION'
+  | 'MACRO_STATUS'
   | 'MEAL_SUGGESTION'
   | 'FOOD_PHOTO'
   | 'AI_CHAT';
@@ -36,6 +63,14 @@ export type SmsIntent =
 type FreeformFoodRoute = 'LOG_FOOD' | 'MEAL_SUGGESTION' | null;
 
 const SMS_MAX_LENGTH = 1500;
+
+/** Thrown for user-facing SMS copy that should not be wrapped in a generic error prefix. */
+class SmsResponseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SmsResponseError';
+  }
+}
 
 function capSms(text: string) {
   const trimmed = text.trim();
@@ -47,14 +82,19 @@ type SmsAction =
   | { intent: 'MARK_ALL_EXERCISES_DONE' }
   | { intent: 'MARK_EXERCISE_DONE'; exerciseName?: string }
   | { intent: 'MARK_MEAL_COMPLETE'; mealName?: string }
-  | { intent: 'LOG_FOOD'; foodText: string; mealName: string }
+  | { intent: 'LOG_FOOD'; foodText: string; mealName?: string }
+  | { intent: 'LOG_PHOTO_ESTIMATE'; mealName?: string }
+  | { intent: 'MEAL_CORRECTION'; targetMealName: string }
+  | { intent: 'MACRO_STATUS' }
   | { intent: 'LOG_WATER'; text: string; amountOz: number }
   | { intent: null };
 
 const MEAL_NAME_PATTERN = /\b(breakfast|lunch|dinner|snack|brunch)\b/i;
 const EXERCISE_COMPLETE_PATTERN = /\b(done|complete|completed|finished|check(?:ed)?\s+off)\b/i;
-const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const MAX_SMS_IMAGE_BYTES = 10 * 1024 * 1024;
+const FOOD_PHOTO_TIMEOUT_MS = 25_000;
+const PHOTO_PROCESSING_ACK = 'Got your photo — estimating calories now. I will text you in a moment.';
 
 type SmsMedia = {
   url: string;
@@ -123,15 +163,11 @@ function smsOptOutResponse() {
 }
 
 function wantsMarkMealComplete(text: string) {
+  if (looksLikeFoodAdd(text)) return false;
   if (/\bmeal\b/i.test(text) && /\b(complete|completed|done|eaten|as planned)\b/i.test(text)) return true;
   if (/\bmark\b.*\b(breakfast|lunch|dinner|snack|brunch)\b/i.test(text)) return true;
   if (/\b(ate|finished|completed|done with)\b.*\b(this )?(my )?(breakfast|lunch|dinner|snack|meal)\b/i.test(text)) return true;
   return false;
-}
-
-function parseMealName(text: string) {
-  const match = text.match(MEAL_NAME_PATTERN);
-  return match?.[1];
 }
 
 function wantsMarkAllExercises(text: string) {
@@ -199,9 +235,21 @@ function wantsMarkExerciseDone(text: string) {
 export function parseSmsAction(message: string): SmsAction {
   const text = message.toLowerCase().trim();
 
-  // Explicit "log <food> for <meal>" is always a food command, even if it mentions water.
-  const logMatch = message.match(/log\s+(.+?)\s+for\s+(.+)/i);
-  if (logMatch) return { intent: 'LOG_FOOD', foodText: logMatch[1], mealName: logMatch[2] };
+  const foodAction = parseFoodLogAction(message);
+  if (foodAction.intent === 'LOG_FOOD') {
+    return {
+      intent: 'LOG_FOOD',
+      foodText: foodAction.foodText,
+      mealName: foodAction.mealName
+    };
+  }
+  if (foodAction.intent === 'LOG_PHOTO_ESTIMATE') {
+    return { intent: 'LOG_PHOTO_ESTIMATE', mealName: foodAction.mealName };
+  }
+  if (foodAction.intent === 'MEAL_CORRECTION') {
+    return { intent: 'MEAL_CORRECTION', targetMealName: foodAction.targetMealName };
+  }
+  if (foodAction.intent === 'MACRO_STATUS') return { intent: 'MACRO_STATUS' };
 
   const waterAmount = parseWaterAmountOz(message);
   if (waterAmount != null) {
@@ -211,7 +259,7 @@ export function parseSmsAction(message: string): SmsAction {
   if (wantsMarkAllExercises(text)) return { intent: 'MARK_ALL_EXERCISES_DONE' };
 
   if (wantsMarkMealComplete(text)) {
-    return { intent: 'MARK_MEAL_COMPLETE', mealName: parseMealName(text) };
+    return { intent: 'MARK_MEAL_COMPLETE', mealName: parseTargetMealFromText(text) ?? parseMealName(text) };
   }
 
   if (wantsMarkExerciseDone(text)) {
@@ -221,31 +269,6 @@ export function parseSmsAction(message: string): SmsAction {
   return { intent: null };
 }
 
-const FOOD_SIGNAL_PATTERN =
-  /\b(eat|ate|eaten|eating|food|meal|breakfast|brunch|lunch|dinner|snack|hungry|craving|crave|order|ordering|ordered|restaurant|menu|calories?|protein|carbs?|macros?|pizza|burger|salad|sandwich|sub|bowl|taco|burrito|sushi|steak|chicken|beef|fish|rice|pasta|eggs?|oatmeal|smoothie|shake|coffee|latte|dessert|cook|cooking|recipe|drink|drinks|grab|grabbed)\b/i;
-const PAST_FOOD_PATTERN =
-  /\b(i\s+)?(just\s+)?(ate|had|grabbed|finished|devoured|demolished|chowed|scarfed|ordered|got|drank)\b/i;
-const SUGGESTION_PATTERN =
-  /\b(what (?:can|should|do|could) i (?:eat|order|get|have|make)|what (?:can|should|do) you (?:suggest|recommend)|what do you (?:suggest|recommend)|where (?:can|should) i|any (?:suggestions?|ideas?|recommendations?)|should i (?:get|order|eat|have)|good options?|what'?s good|recommend|suggest)\b/i;
-const AT_VENUE_PATTERN =
-  /\b(i'?m|im|we'?re|were)\s+(at|going to|heading to|headed to|about to|thinking (?:about|of))\b/i;
-
-/** Deterministic classification of free-form food text. AMBIGUOUS defers to the AI classifier. */
-function classifyFoodRegex(message: string): 'LOG_FOOD' | 'MEAL_SUGGESTION' | 'AMBIGUOUS' | null {
-  const text = message.toLowerCase().trim();
-  if (!text) return null;
-  const isQuestion = text.endsWith('?');
-
-  if (SUGGESTION_PATTERN.test(text)) return 'MEAL_SUGGESTION';
-  if (isQuestion && FOOD_SIGNAL_PATTERN.test(text)) return 'MEAL_SUGGESTION';
-  if (AT_VENUE_PATTERN.test(text)) {
-    if (isQuestion || FOOD_SIGNAL_PATTERN.test(text)) return 'MEAL_SUGGESTION';
-    return 'AMBIGUOUS';
-  }
-  if (!isQuestion && PAST_FOOD_PATTERN.test(text) && FOOD_SIGNAL_PATTERN.test(text)) return 'LOG_FOOD';
-  if (FOOD_SIGNAL_PATTERN.test(text)) return 'AMBIGUOUS';
-  return null;
-}
 
 /** Routes free-form text: regex first, AI fallback only when ambiguous. */
 async function classifyFreeformFood(message: string): Promise<FreeformFoodRoute> {
@@ -263,16 +286,41 @@ async function classifyFreeformFood(message: string): Promise<FreeformFoodRoute>
   return null;
 }
 
-/** Strips conversational framing ("I had ... for lunch") to leave just the food description. */
-function extractFoodDescription(message: string) {
-  let text = message.trim();
-  text = text.replace(/\s+for\s+(breakfast|brunch|lunch|dinner|snack)\b.*$/i, '');
-  text = text.replace(/^for\s+(breakfast|brunch|lunch|dinner|snack)[,:\s]+/i, '');
-  text = text.replace(
-    /^(i\s+)?(just\s+)?(ate|had|grabbed|finished|devoured|demolished|chowed|scarfed|ordered|got|drank|am eating|am having|having)\s+/i,
-    ''
-  );
-  return text.trim();
+type RecentSmsContext = {
+  priorInbound?: string;
+  priorOutbound?: string;
+};
+
+async function loadRecentSmsContext(userId: string, phone: string): Promise<RecentSmsContext> {
+  const rows = await prisma.smsMessage.findMany({
+    where: { userId, phone },
+    orderBy: { createdAt: 'desc' },
+    take: 4
+  });
+
+  const priorInbound = rows.find((row) => row.direction === SmsDirection.INBOUND)?.message ?? undefined;
+  const priorOutbound = rows.find((row) => row.direction === SmsDirection.OUTBOUND)?.response ?? undefined;
+  return { priorInbound, priorOutbound };
+}
+
+function resolveFreeformFoodLog(message: string, context: RecentSmsContext) {
+  if (
+    context.priorInbound &&
+    (isFoodLogFollowUp(message) || assistantResponseLooksLikeMealFailure(context.priorOutbound ?? ''))
+  ) {
+    const merged = mergeFoodLogFollowUp(context.priorInbound, message);
+    if (merged.foodText) {
+      return {
+        foodText: merged.foodText,
+        mealName: merged.mealName ?? normalizeMealNameHint(parseTargetMealFromText(message))
+      };
+    }
+  }
+
+  return {
+    foodText: extractFoodDescription(message),
+    mealName: normalizeMealNameHint(parseTargetMealFromText(message))
+  };
 }
 
 async function loadSmsChatHistory(userId: string, phone: string, limit = 8): Promise<ChatMessage[]> {
@@ -317,6 +365,46 @@ function findMealToMark(
   return incomplete.find((meal) => meal.name.toLowerCase().includes(query));
 }
 
+function findAnyMealByName(meals: Array<{ name: string; status: string }>, mealName?: string) {
+  if (!mealName) return undefined;
+  const query = mealName.toLowerCase();
+  return meals.find((meal) => meal.name.toLowerCase().includes(query));
+}
+
+function smsLogFoodExamples(mealLabel?: string) {
+  const meal = (mealLabel ?? 'lunch').toLowerCase();
+  return `Try texting: "Add 2 oz peanuts to ${meal}", "Log chicken and rice for ${meal}", or "I had a protein shake for ${meal}".`;
+}
+
+function smsMealLookupFailureResponse(
+  mealName: string,
+  meals: Array<{ name: string; status: string }>,
+  purpose: 'log' | 'mark_complete'
+) {
+  const label = normalizeMealNameHint(mealName) ?? mealName;
+  const existing = findAnyMealByName(meals, label);
+
+  if (existing && ['EATEN_AS_PLANNED', 'SKIPPED', 'MISSED'].includes(existing.status)) {
+    if (existing.status === 'EATEN_AS_PLANNED') {
+      const lead =
+        purpose === 'mark_complete'
+          ? `${existing.name} is already marked complete.`
+          : `${existing.name} is already marked complete, but you can still add food to it.`;
+      return capSms(`${lead} ${smsLogFoodExamples(existing.name.toLowerCase())} Text HELP for more commands.`);
+    }
+    const statusLabel = existing.status === 'SKIPPED' ? 'skipped' : 'missed';
+    return capSms(
+      `${existing.name} is marked ${statusLabel} today. ${smsLogFoodExamples(label)} Text HELP for more commands.`
+    );
+  }
+
+  const lead =
+    purpose === 'mark_complete'
+      ? `I could not find an open meal matching "${label}".`
+      : `I could not find "${label}" on today's meals.`;
+  return capSms(`${lead} ${smsLogFoodExamples(label)} Text HELP for more commands.`);
+}
+
 function pickEncouragement() {
   const lines = [
     'Way to go on sticking to the plan!',
@@ -327,19 +415,14 @@ function pickEncouragement() {
   return lines[Math.floor(Math.random() * lines.length)];
 }
 
-function pickPhotoAcknowledgement() {
-  const lines = [
-    'Got your photo. My tiny nutrition detective hat is on. I will send the estimate shortly.',
-    'Plate pic received. I am putting on my macro goggles now.',
-    'Photo locked in. Time to interrogate those carbs, politely.',
-    'Got it. The calorie calculator goblin is crunching numbers.',
-    'Meal photo received. I am doing food math so you do not have to.',
-    'Nice, got the plate. Stand by while I turn pixels into macros.'
-  ];
-  return lines[Math.floor(Math.random() * lines.length)];
-}
-
-type WriteAction = Exclude<SmsAction, { intent: null } | { intent: 'LOG_FOOD' }>;
+type WriteAction = Exclude<
+  SmsAction,
+  | { intent: null }
+  | { intent: 'LOG_FOOD' }
+  | { intent: 'LOG_PHOTO_ESTIMATE' }
+  | { intent: 'MEAL_CORRECTION' }
+  | { intent: 'MACRO_STATUS' }
+>;
 
 async function handleWriteAction(userId: string, dateKey: string, timeZone: string | null, action: WriteAction) {
   const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
@@ -367,9 +450,10 @@ async function handleWriteAction(userId: string, dateKey: string, timeZone: stri
   if (action.intent === 'MARK_MEAL_COMPLETE') {
     const meal = findMealToMark(dashboard.meals, action.mealName);
     if (!meal) {
-      return action.mealName
-        ? `I could not find an open meal matching "${action.mealName}".`
-        : 'No meals left to mark complete today.';
+      if (action.mealName) {
+        return smsMealLookupFailureResponse(action.mealName, dashboard.meals, 'mark_complete');
+      }
+      return capSms(`No meals left to mark complete today. ${smsLogFoodExamples()} Text HELP for more commands.`);
     }
     await markMealEatenAsPlanned(userId, meal.id);
     const updated = await getTodayDashboard(userId, dateKey, timeZone);
@@ -408,8 +492,10 @@ async function resolveTargetMeal(userId: string, dateKey: string, mealNameHint?:
   });
 
   if (mealNameHint) {
-    const named = meals.find((meal) => meal.name.toLowerCase().includes(mealNameHint.toLowerCase()));
+    const normalized = normalizeMealNameHint(mealNameHint) ?? mealNameHint;
+    const named = meals.find((meal) => meal.name.toLowerCase().includes(normalized.toLowerCase()));
     if (named) return named;
+    throw new SmsResponseError(smsMealLookupFailureResponse(normalized, meals, 'log'));
   }
 
   const minutesOfDay = timeZone ? localTimeParts(timeZone).minutesOfDay : undefined;
@@ -473,19 +559,176 @@ async function logLookupResultToMeal(userId: string, mealId: string, result: Foo
   return { count: names.length, names, calories, protein };
 }
 
+function photoEstimateItemsFromResult(result: FoodLookupResult): StoredPhotoEstimateItem[] {
+  return result.items
+    .filter((item) => item.source === 'ai')
+    .map((item) => ({
+      name: item.estimate.normalizedFoodName,
+      calories: item.estimate.calories,
+      protein: item.estimate.protein,
+      carbs: item.estimate.carbs,
+      fat: item.estimate.fat
+    }));
+}
+
+async function logPhotoEstimateItems(userId: string, mealId: string, items: StoredPhotoEstimateItem[]) {
+  const names: string[] = [];
+  let calories = 0;
+  let protein = 0;
+
+  for (const estimate of items) {
+    await addMealItem(userId, mealId, {
+      type: 'ACTUAL',
+      nameSnapshot: estimate.name,
+      quantity: 1,
+      unit: 'serving',
+      calories: estimate.calories,
+      protein: estimate.protein,
+      carbs: estimate.carbs,
+      fat: estimate.fat
+    });
+    names.push(estimate.name);
+    calories += estimate.calories;
+    protein += estimate.protein;
+  }
+
+  return { count: names.length, names, calories, protein };
+}
+
+function buildLoggedFoodResponse(mealName: string, names: string[], calories: number, protein: number, dateKey: string, timeZone: string | null, userId: string) {
+  return getTodayDashboard(userId, dateKey, timeZone).then((dashboard) => {
+    const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+    const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+    const foodList = names.join(', ');
+    return capSms(
+      `Logged to ${mealName}: ${foodList} — about ${Math.round(calories)} cal and ${Math.round(
+        protein
+      )}g protein. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+    );
+  });
+}
+
+async function findLastSmsLoggedBatch(userId: string, phone: string, dateKey: string) {
+  const lastOutbound = await prisma.smsMessage.findFirst({
+    where: {
+      userId,
+      phone,
+      direction: SmsDirection.OUTBOUND,
+      response: { contains: 'Logged to' }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (!lastOutbound?.response) return null;
+
+  const parsed = parseLoggedFoodFromAssistantResponse(lastOutbound.response);
+  if (!parsed) return null;
+
+  const log = await ensureDailyLogByUserId(userId, dateKey);
+  if (!log) return null;
+
+  const sourceMeal = await prisma.meal.findFirst({
+    where: {
+      dailyLogId: log.id,
+      name: { contains: parsed.mealName, mode: 'insensitive' }
+    },
+    include: {
+      items: {
+        where: { type: 'ACTUAL' },
+        orderBy: { createdAt: 'desc' }
+      }
+    }
+  });
+  if (!sourceMeal?.items.length) return null;
+
+  const matched = sourceMeal.items.filter((item) => {
+    const loggedAt = lastOutbound.createdAt;
+    const windowStart = new Date(loggedAt.getTime() - 10_000);
+    const windowEnd = new Date(loggedAt.getTime() + 60_000);
+    if (item.createdAt < windowStart || item.createdAt > windowEnd) return false;
+    return parsed.foodNames.some((name) => {
+      const itemName = item.nameSnapshot.toLowerCase();
+      const foodName = name.toLowerCase();
+      return itemName.includes(foodName) || foodName.includes(itemName);
+    });
+  });
+
+  if (!matched.length) return null;
+
+  return { sourceMeal, items: matched.slice(0, parsed.foodNames.length) };
+}
+
+async function handleMealCorrection(
+  userId: string,
+  phone: string,
+  dateKey: string,
+  timeZone: string | null,
+  targetMealName: string
+) {
+  const batch = await findLastSmsLoggedBatch(userId, phone, dateKey);
+  if (!batch) {
+    return capSms(
+      `I couldn't find a recent food log to move. ${smsLogFoodExamples(targetMealName)} Text HELP for more commands.`
+    );
+  }
+
+  const targetMeal = await resolveTargetMeal(userId, dateKey, targetMealName, timeZone);
+  if (targetMeal.id === batch.sourceMeal.id) {
+    return capSms(`That food is already logged to ${targetMeal.name}.`);
+  }
+
+  await moveMealItemsToMeal(
+    userId,
+    batch.items.map((item) => item.id),
+    targetMeal.id
+  );
+
+  const names = batch.items.map((item) => item.nameSnapshot).join(', ');
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+  const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+  const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+
+  return capSms(
+    `Moved to ${targetMeal.name}: ${names}. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+  );
+}
+
+async function handleMacroStatus(userId: string, dateKey: string, timeZone: string | null) {
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+  if (!dashboard.dailyLog) return 'No nutrition log found for today yet.';
+
+  const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+  const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+  const nextMeal = dashboard.nextMeal;
+  const nextPart = nextMeal
+    ? ` Next up: ${nextMeal.name}${nextMeal.plannedTime ? ` at ${nextMeal.plannedTime}` : ''}.`
+    : '';
+
+  return capSms(`You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today.${nextPart}`);
+}
+
 async function handleFoodLog(userId: string, dateKey: string, timeZone: string | null, foodText: string, mealNameHint?: string) {
   const cleaned = foodText.trim();
   if (!cleaned) {
-    return 'Tell me what you ate (like "6 oz chicken and a cup of rice") and I will log it for you.';
+    return capSms(
+      `Tell me what you ate with amounts, like "6 oz chicken and a cup of rice". ${smsLogFoodExamples(mealNameHint)}`
+    );
   }
 
   const result = await lookupFood(userId, cleaned);
   const meal = await resolveTargetMeal(userId, dateKey, mealNameHint, timeZone);
-  const logged = await logLookupResultToMeal(userId, meal.id, result);
+  const preview = summarizeFoodLookup(result);
 
-  if (!logged.count) {
-    return 'I could not pin down the macros on that. Try naming the foods and rough amounts, like "2 eggs and a slice of toast".';
+  if (!preview.count) {
+    return capSms(
+      'I could not pin down the macros on that. Try naming the foods and rough amounts, like "2 eggs and a slice of toast".'
+    );
   }
+
+  if (isEffectivelyZeroCalories(preview.calories, preview.protein)) {
+    return capSms(smsZeroCalorieCheckResponse(preview.names.join(', ') || cleaned, meal.name));
+  }
+
+  const logged = await logLookupResultToMeal(userId, meal.id, result);
 
   const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
   const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
@@ -557,14 +800,14 @@ function buildTwilioMediaFetchOptions(media: SmsMedia): RequestInit[] {
 function twilioMediaDownloadError(response: Response) {
   if (response.status === 401 || response.status === 403) {
     if (!env.TWILIO_AUTH_TOKEN) {
-      return new Error('Twilio requires authentication to download this WhatsApp photo, but TWILIO_AUTH_TOKEN is not configured.');
+      return new Error('Twilio requires authentication to download this meal photo, but TWILIO_AUTH_TOKEN is not configured.');
     }
-    return new Error('Twilio rejected the WhatsApp photo download. Check TWILIO_AUTH_TOKEN for the webhook account and try again.');
+    return new Error('Twilio rejected the meal photo download. Check TWILIO_AUTH_TOKEN for the webhook account and try again.');
   }
   if (response.status === 404) {
-    return new Error('Twilio could not find the WhatsApp photo. Please resend the image.');
+    return new Error('Twilio could not find the meal photo. Please resend the image.');
   }
-  return new Error('Could not download the WhatsApp photo. Please resend it.');
+  return new Error('Could not download the meal photo. Please resend it.');
 }
 
 async function downloadSmsImage(media: SmsMedia) {
@@ -574,12 +817,12 @@ async function downloadSmsImage(media: SmsMedia) {
     if (response.ok) break;
     if (![401, 403].includes(response.status)) break;
   }
-  if (!response) throw new Error('Could not download the WhatsApp photo. Please resend it.');
+  if (!response) throw new Error('Could not download the meal photo. Please resend it.');
   if (!response.ok) throw twilioMediaDownloadError(response);
 
   const mimeType = (media.mimeType || response.headers.get('content-type') || '').split(';')[0]!.trim().toLowerCase();
   if (!SUPPORTED_IMAGE_TYPES.has(mimeType)) {
-    throw new Error('Send a JPEG, PNG, or WebP food photo.');
+    throw new Error('Send a JPEG, PNG, or WebP meal photo. If you are texting from iPhone, try sending the photo again.');
   }
 
   const contentLength = Number(response.headers.get('content-length') ?? 0);
@@ -618,55 +861,206 @@ function summarizeFoodPhotoEstimate(result: FoodLookupResult) {
   return `Estimated from your plate: ${Math.round(totals.calories)} cal, ${Math.round(totals.protein)}g protein, ${Math.round(totals.carbs)}g carbs, ${Math.round(totals.fat)}g fat. I see: ${foodList}. Photo estimates are approximate.`;
 }
 
-async function logFoodPhotoEstimates(userId: string, dateKey: string, timeZone: string | null, result: FoodLookupResult, message: string) {
-  const meal = await resolveTargetMeal(userId, dateKey, parseMealName(message), timeZone);
-  const estimates = result.items
-    .filter((item) => item.source === 'ai')
-    .map((item) => item.estimate);
+type FoodPhotoReply = {
+  text: string;
+  logged: boolean;
+  mealName: string;
+  estimateItems: StoredPhotoEstimateItem[];
+};
 
-  for (const estimate of estimates) {
-    await addMealItem(userId, meal.id, {
-      type: 'ACTUAL',
-      nameSnapshot: estimate.normalizedFoodName,
-      quantity: 1,
-      unit: 'serving',
-      calories: estimate.calories,
-      protein: estimate.protein,
-      carbs: estimate.carbs,
-      fat: estimate.fat
-    });
-  }
-
-  return { mealName: meal.name, count: estimates.length };
-}
-
-async function handleFoodPhoto(userId: string, dateKey: string, timeZone: string | null, media: SmsMedia, message: string) {
+async function handleFoodPhoto(
+  userId: string,
+  dateKey: string,
+  timeZone: string | null,
+  media: SmsMedia,
+  message: string,
+  shouldLog: boolean
+): Promise<FoodPhotoReply> {
   const image = await downloadSmsImage(media);
-  const result = await lookupFoodFromImage(userId, image, message);
-  const logged = await logFoodPhotoEstimates(userId, dateKey, timeZone, result, message);
+  const result = await Promise.race([
+    lookupFoodFromImage(userId, image, message),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Photo analysis timed out. Please try again in a moment.')), FOOD_PHOTO_TIMEOUT_MS);
+    })
+  ]);
+  const meal = await resolveTargetMeal(userId, dateKey, parseTargetMealFromText(message) ?? parseMealName(message), timeZone);
+  const preview = summarizeFoodLookup(result);
+  const estimateItems = photoEstimateItemsFromResult(result);
+
+  if (!preview.count) {
+    return {
+      text: 'I could not estimate the food from that photo. Try sending a clearer plate photo with the whole meal visible.',
+      logged: false,
+      mealName: meal.name,
+      estimateItems: []
+    };
+  }
+
+  if (isEffectivelyZeroCalories(preview.calories, preview.protein)) {
+    return {
+      text: capSms(smsZeroCalorieCheckResponse(preview.names.join(', ') || 'your photo', meal.name)),
+      logged: false,
+      mealName: meal.name,
+      estimateItems: []
+    };
+  }
+
   const summary = summarizeFoodPhotoEstimate(result);
-  return logged.count > 0 ? `${summary} Logged to ${logged.mealName}.` : summary;
+
+  if (shouldLog) {
+    await logPhotoEstimateItems(userId, meal.id, estimateItems);
+    return {
+      text: capSms(`${summary} Logged to ${meal.name}.`),
+      logged: true,
+      mealName: meal.name,
+      estimateItems
+    };
+  }
+
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+  const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+  const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+
+  return {
+    text: capSms(
+      `${summary} Nothing logged yet — you have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. Text "log that for ${meal.name.toLowerCase()}" if you eat it.`
+    ),
+    logged: false,
+    mealName: meal.name,
+    estimateItems
+  };
 }
 
-async function processFoodPhotoInBackground(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
-  let response: string;
-  try {
-    response = await handleFoodPhoto(user.id, userDayKey(user.timezone), user.timezone, media, message);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Assistant unavailable';
-    response = `Sorry, I could not answer that right now. ${detail}`;
+async function handleLogLastPhotoEstimate(
+  userId: string,
+  phone: string,
+  dateKey: string,
+  timeZone: string | null,
+  mealNameHint?: string
+) {
+  const lastOutbound = await prisma.smsMessage.findFirst({
+    where: {
+      userId,
+      phone,
+      direction: SmsDirection.OUTBOUND,
+      OR: [{ intent: { startsWith: 'PHOTO_ESTIMATE:' } }, { response: { contains: 'Estimated from your plate' } }]
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (
+    !lastOutbound?.response ||
+    lastOutbound.intent === PHOTO_ESTIMATE_LOGGED_INTENT ||
+    !assistantResponseLooksLikePhotoEstimate(lastOutbound.response)
+  ) {
+    return capSms(
+      'I do not have a recent photo estimate to log. Send a meal photo first, or text what you ate with an amount.'
+    );
   }
 
-  await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response } });
-  const outbound = await prisma.smsMessage.create({
-    data: { phone, userId: user.id, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
-  });
-  try {
-    await sendOutboundMessage(phone, response);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Could not send text message.';
-    await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+  const stored = parsePhotoEstimateIntent(lastOutbound.intent);
+  let estimateItems = stored?.items ?? [];
+  if (!estimateItems.length) {
+    const names = parsePhotoEstimateFoodNames(lastOutbound.response);
+    const totals = parsePhotoEstimateTotals(lastOutbound.response);
+    if (names?.length && totals) {
+      const share = names.length;
+      estimateItems = names.map((name) => ({
+        name,
+        calories: totals.calories / share,
+        protein: totals.protein / share,
+        carbs: totals.carbs / share,
+        fat: totals.fat / share
+      }));
+    }
   }
+
+  if (!estimateItems.length) {
+    return capSms('I could not read the foods from your last photo estimate. Send the photo again or text what you ate.');
+  }
+
+  const meal = await resolveTargetMeal(
+    userId,
+    dateKey,
+    mealNameHint ?? stored?.mealName ?? parseTargetMealFromText(lastOutbound.response),
+    timeZone
+  );
+  const logged = await logPhotoEstimateItems(userId, meal.id, estimateItems);
+  const response = await buildLoggedFoodResponse(meal.name, logged.names, logged.calories, logged.protein, dateKey, timeZone, userId);
+
+  await prisma.smsMessage.update({
+    where: { id: lastOutbound.id },
+    data: { intent: PHOTO_ESTIMATE_LOGGED_INTENT, response }
+  });
+
+  return response;
+}
+
+function photoErrorResponse(error: unknown) {
+  if (error instanceof SmsResponseError) return error.message;
+  const detail = error instanceof Error ? error.message : 'Assistant unavailable';
+  return capSms(`Sorry, I could not analyze that photo right now. ${detail}`);
+}
+
+/** Processes a meal photo and records outbound SMS. Returns TwiML body when API send is not used. */
+async function deliverFoodPhotoReply(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
+  let reply: FoodPhotoReply;
+  const shouldLog = wantsPhotoLog(message);
+  try {
+    reply = await handleFoodPhoto(user.id, userDayKey(user.timezone), user.timezone, media, message, shouldLog);
+  } catch (error) {
+    reply = {
+      text: photoErrorResponse(error),
+      logged: false,
+      mealName: '',
+      estimateItems: []
+    };
+  }
+
+  const intent =
+    !reply.logged && reply.estimateItems.length
+      ? serializePhotoEstimateIntent(reply.estimateItems, reply.mealName)
+      : undefined;
+
+  await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response: reply.text } });
+  const outbound = await prisma.smsMessage.create({
+    data: {
+      phone,
+      userId: user.id,
+      direction: 'OUTBOUND',
+      message: reply.text,
+      response: reply.text,
+      intent,
+      status: 'PROCESSED'
+    }
+  });
+
+  if (isTwilioConfigured()) {
+    try {
+      await sendOutboundMessage(phone, reply.text);
+      return '';
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Could not send text message.';
+      await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+    }
+  }
+
+  return reply.text;
+}
+
+function processFoodPhotoInBackground(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
+  void deliverFoodPhotoReply(user, phone, media, message, inboundId).catch(async (error) => {
+    const detail = error instanceof Error ? error.message : 'Could not analyze photo.';
+    const response = capSms(`Sorry, I could not analyze that photo right now. ${detail}`);
+    await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response } });
+    if (isTwilioConfigured()) {
+      try {
+        await sendOutboundMessage(phone, response);
+      } catch {
+        // Best-effort error delivery.
+      }
+    }
+  });
 }
 
 async function respondUnknownSmsUser(phone: string, inboundMessage: string, intent: string) {
@@ -765,10 +1159,19 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
 
   const action = parseSmsAction(message);
   const isFoodPhoto = Boolean(media);
-  const freeformRoute: FreeformFoodRoute =
-    !isFoodPhoto && !action.intent && user ? await classifyFreeformFood(message) : null;
-  const intent = isFoodPhoto ? 'FOOD_PHOTO' : action.intent ?? freeformRoute ?? 'AI_CHAT';
-  const inboundMessage = message.trim() || (isFoodPhoto ? '[WhatsApp image]' : '');
+  const recentContext = user ? await loadRecentSmsContext(user.id, phone) : {};
+  let freeformRoute: FreeformFoodRoute = null;
+  if (!isFoodPhoto && !action.intent && user) {
+    if (looksLikeFoodLogRetry(message, recentContext)) {
+      freeformRoute = 'LOG_FOOD';
+    } else {
+      freeformRoute = await classifyFreeformFood(message);
+    }
+  }
+  const intent = isFoodPhoto
+    ? 'FOOD_PHOTO'
+    : action.intent ?? freeformRoute ?? 'AI_CHAT';
+  const inboundMessage = message.trim() || (isFoodPhoto ? '[Meal photo]' : '');
 
   const inbound = await prisma.smsMessage.create({
     data: { phone, userId: user?.id, direction: 'INBOUND', message: inboundMessage, intent }
@@ -787,8 +1190,14 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   }
 
   if (media) {
-    const response = pickPhotoAcknowledgement();
-    void processFoodPhotoInBackground(user, phone, media, message, inbound.id);
+    if (isTwilioConfigured()) {
+      const ack = capSms(PHOTO_PROCESSING_ACK);
+      await prisma.smsMessage.update({ where: { id: inbound.id }, data: { status: 'PROCESSED', response: ack } });
+      processFoodPhotoInBackground(user, phone, media, message, inbound.id);
+      return { inbound, response: ack };
+    }
+
+    const response = await deliverFoodPhotoReply(user, phone, media, message, inbound.id);
     return { inbound, response };
   }
 
@@ -797,18 +1206,35 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   try {
     if (action.intent === 'LOG_FOOD') {
       response = await handleFoodLog(user.id, dateKey, user.timezone, action.foodText, action.mealName);
+    } else if (action.intent === 'LOG_PHOTO_ESTIMATE') {
+      response = await handleLogLastPhotoEstimate(user.id, phone, dateKey, user.timezone, action.mealName);
+    } else if (action.intent === 'MEAL_CORRECTION') {
+      response = await handleMealCorrection(
+        user.id,
+        phone,
+        dateKey,
+        user.timezone,
+        action.targetMealName
+      );
+    } else if (action.intent === 'MACRO_STATUS') {
+      response = await handleMacroStatus(user.id, dateKey, user.timezone);
     } else if (action.intent) {
       response = await handleWriteAction(user.id, dateKey, user.timezone, action);
     } else if (freeformRoute === 'LOG_FOOD') {
-      response = await handleFoodLog(user.id, dateKey, user.timezone, extractFoodDescription(message), parseMealName(message));
+      const resolved = resolveFreeformFoodLog(message, recentContext);
+      response = await handleFoodLog(user.id, dateKey, user.timezone, resolved.foodText, resolved.mealName);
     } else if (freeformRoute === 'MEAL_SUGGESTION') {
       response = await handleMealSuggestion(user.id, message);
     } else {
       response = await handleAiChat(user.id, phone, message);
     }
   } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Assistant unavailable';
-    response = `Sorry, I could not answer that right now. ${detail}`;
+    if (error instanceof SmsResponseError) {
+      response = error.message;
+    } else {
+      const detail = error instanceof Error ? error.message : 'Assistant unavailable';
+      response = `Sorry, I could not answer that right now. ${detail}`;
+    }
   }
 
   await prisma.smsMessage.update({ where: { id: inbound.id }, data: { status: 'PROCESSED', response } });

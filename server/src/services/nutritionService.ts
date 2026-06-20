@@ -128,6 +128,29 @@ export async function updateMealItem(userId: string, itemId: string, data: Recor
   });
 }
 
+export async function moveMealItemsToMeal(userId: string, itemIds: string[], targetMealId: string) {
+  if (!itemIds.length) throw new Error('No items to move.');
+
+  return prisma.$transaction(async (tx) => {
+    const targetMeal = await tx.meal.findFirstOrThrow({ where: { id: targetMealId, userId } });
+    const sourceMealIds = new Set<string>();
+
+    for (const itemId of itemIds) {
+      const item = await tx.mealItem.findFirstOrThrow({ where: { id: itemId }, include: { meal: true } });
+      if (item.meal.userId !== userId) throw new Error('Not found');
+      sourceMealIds.add(item.mealId);
+      await tx.mealItem.update({ where: { id: itemId }, data: { mealId: targetMealId } });
+    }
+
+    for (const sourceMealId of sourceMealIds) {
+      await recalculateMealTotals(sourceMealId, tx);
+    }
+    await recalculateMealTotals(targetMealId, tx);
+    await recalculateDailyLogTotals(targetMeal.dailyLogId, tx);
+    return targetMeal;
+  });
+}
+
 export async function deleteMealItem(userId: string, itemId: string) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.mealItem.findUniqueOrThrow({ where: { id: itemId }, include: { meal: true } });

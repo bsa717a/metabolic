@@ -244,9 +244,9 @@ const SHOPPING_LIST_TIMEOUT_MS = 12000;
 const CLASSIFY_INTENT_TIMEOUT_MS = 4000;
 
 const CLASSIFY_INTENT_PROMPT = `Classify the user's text message into exactly one nutrition intent.
-LOG = they are reporting food they already ate or are eating right now (it should be logged). Examples: "had a burrito bowl", "just ate 6 oz chicken and rice", "finished my lunch".
+LOG = they are reporting food they already ate or are eating right now (it should be logged). Examples: "had a burrito bowl", "just ate 6 oz chicken and rice", "finished my lunch", "2 oz peanuts for breakfast".
 SUGGEST = they are asking what/where to eat or naming a place and want recommendations (do NOT log yet). Examples: "what should I get at Chipotle?", "I'm at the airport, ideas?", "any good high protein options?".
-CHAT = anything else: general questions, greetings, status checks, or non-food messages.
+CHAT = anything else: greetings, status checks, complaints about a previous log, corrections, or non-food messages. Examples: "why did you log that to lunch?", "thanks", "calories remaining" (if not clearly logging food).
 Return JSON only: { "intent": "LOG" | "SUGGEST" | "CHAT" }`;
 
 const classifyIntentSchema = z.object({
@@ -267,8 +267,9 @@ Use plain text only — no markdown, bullets, asterisks, or headers. When listin
 Use the user's actual meals, macros, targets, allergies, and dietary preferences from context — never invent foods or numbers, and never suggest anything that conflicts with their allergies or preferences.
 When they ask about their next meal, answer from the nextMeal field in context (name, plannedTime, items). Do not pick the first meal in upcomingMeals if nextMeal points to a different one.
 You cannot change the user's data. Never claim you logged food or marked something complete unless the program data already shows it.
-They can text you what they ate (e.g. "had 6 oz chicken and rice for lunch") and you log it for them. They can text a meal photo and you estimate it.
-To mark a meal eaten, they can say "mark this meal complete" or "mark lunch as eaten". To finish workouts, "mark all exercises done" or "mark done". To log water, "16 oz water" or "drank a glass of water".
+They can text you what they ate (e.g. "had 6 oz chicken and rice for lunch") and the system logs it for them — you cannot log food yourself. They can also say "Add 2 oz peanuts to breakfast" or "Log chicken for dinner". Food can be added to a meal even after it is marked complete. Meal photos return a calorie estimate only unless they ask to log in the caption (e.g. "log this for lunch") or text "log that for lunch" after the estimate.
+To mark a meal eaten as planned, they can say "mark lunch complete" or "mark breakfast as eaten". To finish workouts, "mark all exercises done" or "mark done". To log water, "16 oz water" or "drank a glass of water".
+If they say a log went to the wrong meal, they can text "that should be breakfast" and the system moves the last logged food. If they hit a meal error, suggest concrete examples like "Add 2 oz peanuts to breakfast" rather than only apologizing.
 End with a brief, genuine line of encouragement when it fits. One short sentence, never cheesy.`;
 
 function normalizeEstimate(parsed: z.infer<typeof foodEstimateSchema>): FoodEstimate {
