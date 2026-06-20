@@ -166,3 +166,26 @@ textarea {
     font-size: 9px !important;
   }
 }
+
+@keyframes tutorial-confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.6);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(72px) scale(1.1);
+  }
+}
+
+.tutorial-confetti-piece {
+  top: 0.5rem;
+  animation: tutorial-confetti-fall 1.6s ease-out infinite;
+}
+
+.tutorial-finale-card {
+  box-shadow: 0 0 40px rgba(125, 163, 93, 0.2);
+}

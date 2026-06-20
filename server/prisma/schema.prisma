@@ -178,6 +178,7 @@ model User {
   timezone String?
   smsOptedOut Boolean @default(false)
   smsRemindersEnabled Boolean @default(true)
+  dashboardTutorialCompletedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organizations UserOrganization[]

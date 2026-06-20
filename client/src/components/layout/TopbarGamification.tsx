@@ -1,3 +1,4 @@
+import { clsx } from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Award, Droplets, Flame, TrendingUp } from 'lucide-react';
@@ -8,12 +9,15 @@ import { LevelUpTopbarDrawer } from './LevelUpTopbarDrawer';
 import { ProgressRing } from '../gamification/ProgressRing';
 import { api } from '../../services/api';
 import type { GamificationDashboard } from '../../types/gamification';
+import { useTutorial } from '../tutorial/TutorialContext';
+import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamification';
 
 const TOPBAR_RING_SIZE = 44;
 const TOPBAR_MOBILE_ICON = 20;
 const TOPBAR_BADGE_SIZE = 80;
 
 export function TopbarGamification() {
+  const { demoMode, currentStepId } = useTutorial();
   const [data, setData] = useState<GamificationDashboard | null>(null);
   const [hydrationOpen, setHydrationOpen] = useState(false);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
@@ -36,17 +40,21 @@ export function TopbarGamification() {
     return () => window.removeEventListener('hydration-updated', refresh);
   }, [load]);
 
-  if (!data?.currentLevel) return null;
+  const view = getTutorialGamificationData(data, demoMode);
+  if (!view?.currentLevel) return null;
 
-  const { currentLevel, momentum, hydration, recentBadges } = data;
+  const { currentLevel, momentum, hydration, recentBadges } = view;
   const tasksDone = currentLevel.tasks.filter((t) => t.complete).length;
   const tasksTotal = currentLevel.tasks.length;
   const topBadge = recentBadges[0];
   const topBadgeArt = topBadge ? badgeArtUrl(topBadge.id) : null;
+  const showFoodStreak = demoMode || momentum.foodLoggingStreak > 0;
+  const showWaterStreak = demoMode || hydration.currentStreak > 0;
+  const pulseStreaks = demoMode && currentStepId === 'topbar-streaks';
 
   return (
     <div className="flex items-center justify-center gap-2 sm:gap-4 min-w-0 w-full max-w-2xl">
-      <div className="relative shrink-0 self-stretch flex items-center">
+      <div className="relative shrink-0 self-stretch flex items-center" data-tour="topbar-hydration">
         <button
           ref={hydrationButtonRef}
           type="button"
@@ -77,7 +85,7 @@ export function TopbarGamification() {
         />
       </div>
 
-      <div className="relative shrink-0 self-stretch flex items-center">
+      <div className="relative shrink-0 self-stretch flex items-center" data-tour="topbar-level">
         <button
           ref={levelUpButtonRef}
           type="button"
@@ -115,28 +123,33 @@ export function TopbarGamification() {
         />
       </div>
 
-      {momentum.foodLoggingStreak > 0 && (
+      {(showFoodStreak || showWaterStreak) && (
         <div
-          className="hidden sm:flex self-center items-center gap-1.5 shrink-0 text-app-text-muted"
-          title="Food logging streak"
+          data-tour="topbar-streaks"
+          className={clsx(
+            'flex self-center items-center gap-2 shrink-0 text-app-text-muted',
+            demoMode ? 'flex' : 'hidden sm:flex',
+            pulseStreaks && 'animate-pulse'
+          )}
         >
-          <Flame className="size-6 sm:size-8 shrink-0 text-brand-gold" />
-          <span className="text-base sm:text-lg font-bold tabular-nums">{momentum.foodLoggingStreak}d</span>
-        </div>
-      )}
-
-      {hydration.currentStreak > 0 && (
-        <div
-          className="hidden sm:flex self-center items-center gap-1.5 shrink-0 text-app-text-muted"
-          title="Hydration goal streak"
-        >
-          <Droplets className="size-6 sm:size-8 shrink-0 text-sky-500" />
-          <span className="text-base sm:text-lg font-bold tabular-nums">{hydration.currentStreak}d</span>
+          {showFoodStreak && (
+            <div className="flex items-center gap-1.5" title="Food logging streak">
+              <Flame className="size-6 sm:size-8 shrink-0 text-brand-gold" />
+              <span className="text-base sm:text-lg font-bold tabular-nums">{momentum.foodLoggingStreak}d</span>
+            </div>
+          )}
+          {showWaterStreak && (
+            <div className="flex items-center gap-1.5" title="Hydration goal streak">
+              <Droplets className="size-6 sm:size-8 shrink-0 text-sky-500" />
+              <span className="text-base sm:text-lg font-bold tabular-nums">{hydration.currentStreak}d</span>
+            </div>
+          )}
         </div>
       )}
 
       <Link
         to="/level-up/badges"
+        data-tour="topbar-badge"
         className="shrink-0 transition hover:opacity-90"
         title={topBadge?.name ?? 'View badges'}
         aria-label="View badges"
