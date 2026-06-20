@@ -712,9 +712,16 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
     await prisma.smsMessage.create({
       data: { phone, userId: user?.id, direction: 'INBOUND', message: message.trim(), intent: 'HELP', status: 'PROCESSED', response }
     });
-    await prisma.smsMessage.create({
+    const outbound = await prisma.smsMessage.create({
       data: { phone, userId: user?.id, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
     });
+    // A2P campaign auto-reply for HELP may only include STOP boilerplate; send full help via API too.
+    try {
+      await sendOutboundMessage(phone, response);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Could not send text message.';
+      await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+    }
     return { response };
   }
 
