@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
-import { setupFirstProgram, userNeedsSetup } from '../services/onboardingService.js';
+import { getSetupDraft, setupFirstProgram, userNeedsSetup } from '../services/onboardingService.js';
 
 const setupBody = z.object({
   programName: z.string().trim().min(1).max(120).optional(),
@@ -14,13 +14,18 @@ const setupBody = z.object({
   coachCode: z.string().trim().max(20).optional(),
   wantsCoach: z.boolean().optional(),
   gender: z.enum(['m', 'f', 'male', 'female']).optional(),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  timezone: z.string().trim().min(1).max(100).optional()
 });
 
 export async function onboardingRoutes(app: FastifyInstance) {
   app.get('/api/onboarding/status', { preHandler: requireAuth }, async (request) => {
     const needsSetup = await userNeedsSetup(request.appUser!.id);
     return { needsSetup };
+  });
+
+  app.get('/api/onboarding/setup-draft', { preHandler: requireAuth }, async (request) => {
+    return getSetupDraft(request.appUser!.id);
   });
 
   app.post('/api/onboarding/setup', { preHandler: requireAuth }, async (request, reply) => {

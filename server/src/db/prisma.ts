@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
+import path from "node:path";
 
 type PrismaGlobal = {
   prisma?: PrismaClient;
@@ -10,7 +11,11 @@ const globalForPrisma = globalThis as unknown as PrismaGlobal;
 
 function getPrismaClientMtime(): number {
   try {
-    return fs.statSync(require.resolve("@prisma/client")).mtimeMs;
+    const clientEntry = require.resolve("@prisma/client");
+    const generatedClient = path.join(path.dirname(clientEntry), "..", ".prisma", "client", "index.js");
+    const entryMtime = fs.statSync(clientEntry).mtimeMs;
+    const generatedMtime = fs.existsSync(generatedClient) ? fs.statSync(generatedClient).mtimeMs : 0;
+    return Math.max(entryMtime, generatedMtime);
   } catch {
     return 0;
   }
