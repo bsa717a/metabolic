@@ -85,6 +85,26 @@ export async function lookupFoodFromImage(
   return { source: 'ai', items };
 }
 
+export function summarizeFoodLookup(result: FoodLookupResult) {
+  const names: string[] = [];
+  let calories = 0;
+  let protein = 0;
+
+  for (const item of result.items) {
+    if (item.source === 'ai') {
+      names.push(item.estimate.normalizedFoodName);
+      calories += item.estimate.calories;
+      protein += item.estimate.protein;
+    } else {
+      names.push(item.food.name);
+      calories += n(item.food.calories);
+      protein += n(item.food.protein);
+    }
+  }
+
+  return { count: names.length, names, calories, protein };
+}
+
 export async function acceptFoodLookup(userId: string, lookupId: string, mealId?: string, type: MealItemType = MealItemType.ACTUAL) {
   const food = await prisma.$transaction(async (tx) => {
     const lookup = await tx.aiFoodLookup.findFirstOrThrow({ where: { id: lookupId, userId } });

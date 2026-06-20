@@ -7,7 +7,7 @@ export function smsOptInConfirmationMessage() {
 
 /** Auto-reply when a user texts HELP or INFO. Must match Twilio Messaging Service Advanced Opt-Out help message. */
 export function smsHelpResponseMessage() {
-  return `${SMS_BRAND_NAME} SMS: Ask "calories remaining", "what can I eat at this restaurant?", or log water with "16 oz water". Msg frequency varies. Msg & data rates may apply. Reply STOP to opt out. Email support@master-metabolic.com.`;
+  return `${SMS_BRAND_NAME} SMS: Log food with "Add 2 oz peanuts to breakfast" or "I had chicken and rice for lunch". Mark meals done with "mark lunch complete". Ask "calories remaining" or "what should I eat at Chipotle?". Log water: "16 oz water". Msg frequency varies. Msg & data rates may apply. Reply STOP to opt out. Email support@master-metabolic.com.`;
 }
 
 export function smsOptOutConfirmationMessage() {
