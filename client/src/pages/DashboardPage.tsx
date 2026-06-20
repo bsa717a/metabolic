@@ -10,6 +10,8 @@ import { TodayExercise } from '../components/dashboard/TodayExercise';
 import { MacroProgress } from '../components/dashboard/MacroProgress';
 import { WeightTrendChart } from '../components/dashboard/WeightTrendChart';
 import { isAdminRole, isCoachRole } from '../utils/roles';
+import { useTutorial } from '../components/tutorial/TutorialContext';
+
 function RemainingMacrosDisplay({
   caloriesRemaining,
   proteinRemaining
@@ -18,7 +20,10 @@ function RemainingMacrosDisplay({
   proteinRemaining: number;
 }) {
   return (
-    <div className="flex gap-6 sm:gap-8 text-left sm:text-center">
+    <div
+      data-tour="macros-remaining"
+      className="flex gap-6 sm:gap-8 text-left sm:text-center"
+    >
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-app-text-muted">Calories left</p>
         <p className="text-xl font-semibold tabular-nums text-brand-navy dark:text-brand-off-white">
@@ -64,10 +69,21 @@ function DateTimeDisplay() {
   );
 }
 
-function QuickLink({ to, icon: Icon, label }: { to: string; icon: typeof Target; label: string }) {
+function QuickLink({
+  to,
+  icon: Icon,
+  label,
+  tourId
+}: {
+  to: string;
+  icon: typeof Target;
+  label: string;
+  tourId?: string;
+}) {
   return (
     <Link
       to={to}
+      data-tour={tourId}
       className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-app-surface border border-app-border p-4 transition-all hover:-translate-y-1 hover:shadow-md hover:border-brand-green/50 text-app-text"
     >
       <Icon size={28} className="text-brand-green dark:text-brand-green-light mb-1" />
@@ -77,6 +93,7 @@ function QuickLink({ to, icon: Icon, label }: { to: string; icon: typeof Target;
 }
 
 export function DashboardPage({ user }: { user?: AppUser | null }) {
+  const { startTour, hasAutoStarted, isActive } = useTutorial();
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -113,6 +130,26 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
     void loadDashboard();
   }, [loadDashboard]);
 
+  useEffect(() => {
+    if (loading || error || !data?.program || user?.dashboardTutorialCompletedAt || hasAutoStarted || isActive) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      startTour();
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    loading,
+    error,
+    data?.program,
+    user?.dashboardTutorialCompletedAt,
+    hasAutoStarted,
+    isActive,
+    startTour
+  ]);
+
   if (loading) return <p className="text-app-text-muted">Loading dashboard...</p>;
   if (error) {
     return (
@@ -147,7 +184,9 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <DashboardWelcome firstName={user?.firstName} />
+        <div data-tour="welcome">
+          <DashboardWelcome firstName={user?.firstName} />
+        </div>
         <RemainingMacrosDisplay
           caloriesRemaining={s.caloriesRemaining}
           proteinRemaining={s.proteinRemaining}
@@ -157,11 +196,14 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
 
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-app-text-muted mb-3">Navigation</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div
+          data-tour="nav-tiles"
+          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4"
+        >
           <QuickLink to="/program" icon={Target} label="Metabolic Blueprint" />
           <QuickLink to="/nutrition" icon={Apple} label="Nutrition" />
           <QuickLink to="/exercise" icon={Dumbbell} label="Exercise" />
-          <QuickLink to="/level-up" icon={TrendingUp} label="Level Up" />
+          <QuickLink to="/level-up" icon={TrendingUp} label="Level Up" tourId="nav-level-up" />
           <QuickLink to="/progress" icon={LineChart} label="Progress" />
           {isCoachRole(user?.role) && <QuickLink to="/coach" icon={Users} label="Coach" />}
           {isAdminRole(user?.role) && <QuickLink to="/admin" icon={Settings} label="Admin" />}
@@ -169,13 +211,24 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <TodayNutrition meals={data.meals} onChange={() => loadDashboard({ silent: true })} />
-        <TodayExercise exercises={data.exercises} onChange={() => loadDashboard({ silent: true })} />
-        <MacroProgress dashboard={data} />
-        <WeightTrendChart data={data.weightTrend} />
+        <div data-tour="today-nutrition">
+          <TodayNutrition meals={data.meals} onChange={() => loadDashboard({ silent: true })} />
+        </div>
+        <div data-tour="today-exercise">
+          <TodayExercise exercises={data.exercises} onChange={() => loadDashboard({ silent: true })} />
+        </div>
+        <div data-tour="macro-progress">
+          <MacroProgress dashboard={data} />
+        </div>
+        <div data-tour="weight-trend">
+          <WeightTrendChart data={data.weightTrend} />
+        </div>
       </section>
 
-      <section className="rounded-2xl border border-dashed border-app-border bg-app-surface/70 p-6 text-center">
+      <section
+        data-tour="sms-quick-log"
+        className="rounded-2xl border border-dashed border-app-border bg-app-surface/70 p-6 text-center"
+      >
         <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Quick Log via SMS</h2>
         <p className="mt-2 text-sm text-app-text-muted max-w-xl mx-auto">
           You can quickly log meals by texting our AI assistant. SMS commands are supported directly through the backend webhook.

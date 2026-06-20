@@ -10,6 +10,7 @@ export type AppUser = {
   gender?: string | null;
   birthDate?: string | null;
   timezone?: string | null;
+  dashboardTutorialCompletedAt?: string | null;
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
 export type UserClientProfile = UserDemographics & {

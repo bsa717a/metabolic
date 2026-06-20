@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { UserAccountDetails } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
@@ -6,6 +7,7 @@ import { Drawer } from '../ui/Drawer';
 import { UserProfileFields } from './UserProfileFields';
 import { timezoneOptions } from '../../utils/timezoneOptions';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from './userProfileForm';
+import { useTutorial } from '../tutorial/TutorialContext';
 
 function labelClassName() {
   return 'mb-1 block text-sm font-medium text-slate-600 dark:text-app-text-muted';
@@ -65,6 +67,8 @@ function EditAccountDetailsDrawerContent({
   onClose: () => void;
   onSaved?: (details: UserAccountDetails) => void;
 }) {
+  const navigate = useNavigate();
+  const { startTour } = useTutorial();
   const [accountDraft, setAccountDraft] = useState<AccountDraft>({
     firstName: '',
     lastName: '',
@@ -246,6 +250,28 @@ function EditAccountDetailsDrawerContent({
       <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {mode === 'self' && (
+        <div className="rounded-xl border border-dashed border-app-border bg-app-muted/40 px-4 py-3">
+          <p className="text-sm font-medium text-brand-navy dark:text-brand-off-white">Dashboard tour</p>
+          <p className="mt-1 text-sm text-app-text-muted">
+            Replay the guided walkthrough of your dashboard, streaks, and badges.
+          </p>
+          <button
+            type="button"
+            className="mt-3 text-sm font-semibold text-brand-green transition hover:text-brand-green-light"
+            onClick={() => {
+              onClose();
+              if (window.location.pathname !== '/') {
+                navigate('/');
+              }
+              window.setTimeout(() => startTour({ replay: true }), 300);
+            }}
+          >
+            Replay dashboard tour
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-3 pt-2">
         <Button disabled={saving} onClick={save}>
