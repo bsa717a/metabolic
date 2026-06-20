@@ -687,11 +687,26 @@ async function respondUnknownSmsUser(phone: string, inboundMessage: string, inte
   return { response };
 }
 
-export async function handleSms(phone: string, message: string, media?: SmsMedia) {
+export async function handleSms(phone: string, message: string, media?: SmsMedia, twilioOptOutType?: string) {
   const user = await findUserBySmsPhone(phone);
   if (!media && isSmsStartKeyword(message)) {
     if (!user) {
       return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT');
+    }
+    if (twilioOptOutType === 'START') {
+      await prisma.user.update({ where: { id: user.id }, data: { smsOptedOut: false } });
+      await prisma.smsMessage.create({
+        data: {
+          phone,
+          userId: user.id,
+          direction: 'INBOUND',
+          message: message.trim(),
+          intent: 'OPT_IN',
+          status: 'PROCESSED',
+          response: smsOptInResponse()
+        }
+      });
+      return { response: '' };
     }
     const response = smsOptInResponse();
     await prisma.user.update({ where: { id: user.id }, data: { smsOptedOut: false } });
@@ -709,6 +724,12 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
       return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT');
     }
     const response = smsHelpResponse();
+    if (twilioOptOutType === 'HELP') {
+      await prisma.smsMessage.create({
+        data: { phone, userId: user.id, direction: 'INBOUND', message: message.trim(), intent: 'HELP', status: 'PROCESSED', response }
+      });
+      return { response: '' };
+    }
     await prisma.smsMessage.create({
       data: { phone, userId: user?.id, direction: 'INBOUND', message: message.trim(), intent: 'HELP', status: 'PROCESSED', response }
     });
@@ -733,6 +754,9 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
     await prisma.smsMessage.create({
       data: { phone, userId: user?.id, direction: 'INBOUND', message: message.trim(), intent: 'OPT_OUT', status: 'PROCESSED', response }
     });
+    if (twilioOptOutType === 'STOP') {
+      return { response: '' };
+    }
     await prisma.smsMessage.create({
       data: { phone, userId: user?.id, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
     });
