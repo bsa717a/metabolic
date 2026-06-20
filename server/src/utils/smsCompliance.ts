@@ -5,8 +5,9 @@ export function smsOptInConfirmationMessage() {
   return `${SMS_BRAND_NAME}: You're opted in for conversational SMS replies about meals, workouts, program status, progress, and support. Msg frequency varies. Msg & data rates may apply. Reply HELP for help or STOP to opt out.`;
 }
 
+/** Auto-reply when a user texts HELP or INFO. Must match Twilio Messaging Service Advanced Opt-Out help message. */
 export function smsHelpResponseMessage() {
-  return `${SMS_BRAND_NAME} SMS support: Text questions about your meals, workouts, program status, or progress. To log water, text "16 oz water" or "drank a glass of water". Msg frequency varies. Msg & data rates may apply. Reply STOP to opt out. Email support@master-metabolic.com for help.`;
+  return `${SMS_BRAND_NAME} SMS: Ask "calories remaining", "what can I eat at this restaurant?", or log water with "16 oz water". Msg frequency varies. Msg & data rates may apply. Reply STOP to opt out. Email support@master-metabolic.com.`;
 }
 
 export function smsOptOutConfirmationMessage() {
