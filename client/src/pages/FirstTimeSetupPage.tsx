@@ -1,13 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { BrandLogo } from '../components/brand/BrandLogo';
 import { ThemeToggle } from '../components/layout/ThemeToggle';
-import type { AppUser } from '../types';
+import { BirthDateInput } from '../components/ui/BirthDateInput';
+import { detectedTimezone, timezoneOptions } from '../utils/timezoneOptions';
+import { normalizeBirthDateKey, normalizeSetupGender } from '../utils/setupDraft';
+import type { AppUser, UserAccountDetails } from '../types';
 
 const inputClass =
   'w-full rounded-2xl border border-app-border bg-app-surface px-4 py-3.5 text-app-text placeholder:text-app-text-muted/70 focus:outline-none focus:ring-2 focus:ring-brand-green/40';
+
+const setupFieldClass = `${inputClass} h-12`;
+
+type SetupDraft = {
+  weight: string;
+  goalWeight: string;
+  bodyFat: string;
+  goalBodyFat: string;
+  gender: string;
+  birthDate: string;
+  timezone: string;
+  wantsCoach: boolean;
+};
 
 type FirstTimeSetupPageProps = {
   user?: AppUser | null;
@@ -16,17 +32,62 @@ type FirstTimeSetupPageProps = {
 
 export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps) {
   const navigate = useNavigate();
-  const [programName, setProgramName] = useState('My Metabolic Program');
   const [weight, setWeight] = useState('');
   const [goalWeight, setGoalWeight] = useState('');
   const [bodyFat, setBodyFat] = useState('');
   const [goalBodyFat, setGoalBodyFat] = useState('');
   const [coachCode, setCoachCode] = useState('');
   const [wantsCoach, setWantsCoach] = useState(false);
-  const [gender, setGender] = useState<'m' | 'f' | ''>('');
-  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState<'m' | 'f' | ''>(() => normalizeSetupGender(user?.gender));
+  const [birthDate, setBirthDate] = useState(() => normalizeBirthDateKey(user?.birthDate));
+  const [timezone, setTimezone] = useState(detectedTimezone);
+  const [loadingDraft, setLoadingDraft] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!user?.id) {
+      setLoadingDraft(false);
+      return;
+    }
+
+    let active = true;
+
+    Promise.all([
+      api<SetupDraft>('/api/onboarding/setup-draft').catch(() => ({} as SetupDraft)),
+      api<UserAccountDetails>(`/api/users/${user.id}/profile`).catch(() => null)
+    ])
+      .then(([draft, profile]) => {
+        if (!active) return;
+
+        if (draft.weight) setWeight(draft.weight);
+        if (draft.goalWeight) setGoalWeight(draft.goalWeight);
+        if (draft.bodyFat) setBodyFat(draft.bodyFat);
+        if (draft.goalBodyFat) setGoalBodyFat(draft.goalBodyFat);
+
+        const genderValue = normalizeSetupGender(
+          draft.gender || profile?.gender || user.gender
+        );
+        if (genderValue) setGender(genderValue);
+
+        const birthDateValue = normalizeBirthDateKey(
+          draft.birthDate || profile?.birthDate || user.birthDate
+        );
+        if (birthDateValue) setBirthDate(birthDateValue);
+
+        if (draft.timezone || profile?.timezone || user.timezone) {
+          setTimezone(draft.timezone || profile?.timezone || user.timezone || detectedTimezone());
+        }
+        if (draft.wantsCoach) setWantsCoach(true);
+      })
+      .finally(() => {
+        if (active) setLoadingDraft(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.gender, user?.birthDate, user?.timezone]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -52,13 +113,16 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
       setError('Enter a valid goal body fat percentage.');
       return;
     }
+    if (!timezone.trim()) {
+      setError('Select your timezone.');
+      return;
+    }
 
     setSubmitting(true);
     try {
       await api('/api/onboarding/setup', {
         method: 'POST',
         body: JSON.stringify({
-          programName: programName.trim() || undefined,
           weight: currentWeight,
           goalWeight: targetWeight,
           ...(currentBodyFat !== undefined ? { bodyFat: currentBodyFat } : {}),
@@ -66,7 +130,8 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
           ...(coachCode.trim() ? { coachCode: coachCode.trim() } : {}),
           ...(wantsCoach ? { wantsCoach: true } : {}),
           ...(gender ? { gender } : {}),
-          ...(birthDate ? { birthDate } : {})
+          ...(birthDate ? { birthDate } : {}),
+          timezone: timezone.trim()
         })
       });
       onComplete();
@@ -94,22 +159,36 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
             Welcome, {firstName}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-app-text-muted">
-            Let&apos;s create your first program so you can explore nutrition, exercise, and progress tracking.
+            A few quick details help us personalize your plan, track progress from your starting point, and send reminders at the right times.
           </p>
         </div>
 
         <form className="space-y-5" onSubmit={submit}>
+          {loadingDraft ? (
+            <p className="text-sm text-app-text-muted">Loading your saved details…</p>
+          ) : null}
+
           <div>
-            <label htmlFor="program-name" className="mb-2 block text-sm font-medium text-app-text">
-              Program name
+            <label htmlFor="timezone" className="mb-2 block text-sm font-medium text-app-text">
+              Timezone
             </label>
-            <input
-              id="program-name"
+            <select
+              id="timezone"
               className={inputClass}
-              value={programName}
-              onChange={(e) => setProgramName(e.target.value)}
-              placeholder="My Metabolic Program"
-            />
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              required
+            >
+              <option value="">Select timezone</option>
+              {timezoneOptions(timezone).map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-sm text-app-text-muted">
+              Used for daily logs, meal reminders, and your evening check-in.
+            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -187,18 +266,17 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
           </div>
 
           <div className="rounded-2xl border border-app-border bg-app-muted/40 p-4">
-            <p className="text-sm font-semibold text-app-text">Lab reference profile</p>
+            <p className="text-sm font-semibold text-app-text">Personal details</p>
             <p className="mt-1 text-sm text-app-text-muted">
-              Optional now. Helps classify future blood panel results against the right age and gender ranges.
+              Optional for now. Together with your weight above, age and profile details help us tailor your starting
+              nutrition and exercise plan.
             </p>
-            <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="gender" className="mb-2 block text-sm font-medium text-app-text">
-                  Gender
-                </label>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-start">
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-app-text">Gender</span>
                 <select
                   id="gender"
-                  className={inputClass}
+                  className={setupFieldClass}
                   value={gender}
                   onChange={(e) => setGender(e.target.value as 'm' | 'f' | '')}
                 >
@@ -206,19 +284,17 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
                   <option value="f">Female</option>
                   <option value="m">Male</option>
                 </select>
-              </div>
-              <div>
-                <label htmlFor="birth-date" className="mb-2 block text-sm font-medium text-app-text">
-                  Birth date
-                </label>
-                <input
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-app-text">Birth date</span>
+                <BirthDateInput
+                  key={birthDate || 'empty'}
                   id="birth-date"
-                  className={inputClass}
-                  type="date"
                   value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
+                  onChange={setBirthDate}
+                  fieldClass={setupFieldClass}
                 />
-              </div>
+              </label>
             </div>
           </div>
 
@@ -256,10 +332,10 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || loadingDraft}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-navy px-6 py-3.5 text-sm font-semibold text-brand-off-white shadow-md transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
           >
-            {submitting ? 'Creating your program…' : 'Start my program'}
+            {submitting ? 'Creating your program…' : 'Kickstart my Metabolism'}
             {!submitting && <ArrowRight size={16} aria-hidden />}
           </button>
 

@@ -7,6 +7,7 @@ import { FoodTable } from '../components/admin/FoodTable';
 import { NutritionTemplatesTable } from '../components/admin/NutritionTemplatesTable';
 import { UserTable } from '../components/admin/UserTable';
 import { AdminGamificationPanel } from '../components/admin/AdminGamificationPanel';
+import { AdminSettingsPanel } from '../components/admin/AdminSettingsPanel';
 
 const cards = [
   'Users',
@@ -30,7 +31,8 @@ const interactiveSections = new Set<AdminSection>([
   'AI Review Queue',
   'Nutrition Templates',
   'Exercise Templates',
-  'Gamification'
+  'Gamification',
+  'Settings'
 ]);
 
 export function AdminPage() {
@@ -62,6 +64,7 @@ export function AdminPage() {
       {activeSection === 'Nutrition Templates' && <NutritionTemplatesTable />}
       {activeSection === 'Exercise Templates' && <ExerciseTemplatesTable />}
       {activeSection === 'Gamification' && <AdminGamificationPanel />}
+      {activeSection === 'Settings' && <AdminSettingsPanel />}
     </div>
   );
 }

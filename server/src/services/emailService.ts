@@ -69,6 +69,76 @@ export async function sendResultsReadyEmail(options: {
   }
 }
 
+export async function sendCoachRequestNotificationEmail(options: {
+  to: string;
+  client: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string | null;
+  };
+  coachCode: string | null;
+  adminUsersUrl: string;
+}) {
+  if (!isEmailConfigured()) {
+    return;
+  }
+
+  sgMail.setApiKey(env.SENDGRID_API_KEY);
+
+  const clientName = `${options.client.firstName} ${options.client.lastName}`.trim() || 'A new user';
+  const subject = `Coach requested: ${clientName}`;
+  const coachCodeLine = options.coachCode
+    ? `Coach code entered: ${options.coachCode} (no matching coach found)`
+    : 'No coach code entered.';
+
+  const text = [
+    'A user requested to work with a real coach during setup.',
+    '',
+    `Name: ${clientName}`,
+    `Email: ${options.client.email}`,
+    `Phone: ${options.client.phone ?? 'Not provided'}`,
+    coachCodeLine,
+    '',
+    `Review in admin: ${options.adminUsersUrl}`,
+    '',
+    '— Master Metabolic'
+  ].join('\n');
+
+  const html = [
+    '<p>A user requested to work with a real coach during setup.</p>',
+    '<ul>',
+    `<li><strong>Name:</strong> ${escapeHtml(clientName)}</li>`,
+    `<li><strong>Email:</strong> ${escapeHtml(options.client.email)}</li>`,
+    `<li><strong>Phone:</strong> ${escapeHtml(options.client.phone ?? 'Not provided')}</li>`,
+    `<li><strong>Coach code:</strong> ${escapeHtml(options.coachCode ? `${options.coachCode} (no matching coach found)` : 'Not provided')}</li>`,
+    '</ul>',
+    `<p><a href="${escapeHtml(options.adminUsersUrl)}">Open admin users</a></p>`,
+    '<p>— Master Metabolic</p>'
+  ].join('');
+
+  try {
+    await sgMail.send({
+      to: options.to,
+      from: {
+        email: env.SENDGRID_FROM_EMAIL,
+        name: env.SENDGRID_FROM_NAME
+      },
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    const detail =
+      error && typeof error === 'object' && 'response' in error
+        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
+        : error instanceof Error
+          ? error.message
+          : 'Unknown SendGrid error';
+    throw new Error(`Could not send coach request email: ${detail.slice(0, 300)}`);
+  }
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll('&', '&amp;')

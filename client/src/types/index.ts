@@ -9,6 +9,7 @@ export type AppUser = {
   phone?: string;
   gender?: string | null;
   birthDate?: string | null;
+  timezone?: string | null;
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
 export type UserClientProfile = UserDemographics & {

@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { UserProfileFields } from './UserProfileFields';
+import { timezoneOptions } from '../../utils/timezoneOptions';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from './userProfileForm';
 
 function labelClassName() {
@@ -22,21 +23,6 @@ type AccountDraft = {
   timezone: string;
   smsRemindersEnabled: boolean;
 };
-
-const COMMON_TIMEZONES = [
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Phoenix',
-  'America/Los_Angeles',
-  'America/Anchorage',
-  'Pacific/Honolulu'
-];
-
-function timezoneOptions(current: string) {
-  const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return Array.from(new Set([current, detected, ...COMMON_TIMEZONES].filter(Boolean)));
-}
 
 export function EditAccountDetailsDrawer({
   open,

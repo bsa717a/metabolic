@@ -22,6 +22,7 @@ import {
   updateAdminFood,
   updateAdminUser
 } from '../services/adminService.js';
+import { getAdminSettings, updateAdminSettings } from '../services/adminSettingsService.js';
 import {
   addTemplateMealItem,
   cloneDailyLogToTemplate,
@@ -69,6 +70,12 @@ const userUpdateBody = z
 const coachAssignmentBody = z.object({
   coachId: z.string().trim().min(1)
 });
+
+const adminSettingsBody = z
+  .object({
+    coachRequestNotificationEmail: z.string().trim().email().nullable().optional()
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
 
 const foodUpdateBody = z
   .object({
@@ -218,6 +225,29 @@ const exerciseTemplateReorderBody = z.object({
 });
 
 export async function adminRoutes(app: FastifyInstance) {
+  app.get('/api/admin/settings', { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      return await getAdminSettings();
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to load admin settings');
+      return reply.code(500).send({ error: error instanceof Error ? error.message : 'Unable to load settings' });
+    }
+  });
+
+  app.patch('/api/admin/settings', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = adminSettingsBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid settings update' });
+    }
+
+    try {
+      return await updateAdminSettings(parsed.data);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to update admin settings');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update settings' });
+    }
+  });
+
   app.get('/api/admin/users', { preHandler: adminOnly }, async () => {
     const users = await listAdminUsers();
     return users.map(serializeAdminUser);

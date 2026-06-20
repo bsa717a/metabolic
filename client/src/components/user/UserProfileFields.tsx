@@ -1,4 +1,5 @@
 import type { ProfileDraft } from './userProfileForm';
+import { BirthDateInput } from '../ui/BirthDateInput';
 
 function labelClassName() {
   return 'mb-1 block text-sm font-medium text-slate-600 dark:text-app-text-muted';
@@ -41,11 +42,10 @@ export function UserProfileFields({
         </label>
         <label className="block">
           <span className={labelClassName()}>Birth date</span>
-          <input
-            className={inputClassName()}
-            type="date"
+          <BirthDateInput
             value={draft.birthDate}
-            onChange={(event) => onChange('birthDate', event.target.value)}
+            onChange={(value) => onChange('birthDate', value)}
+            fieldClass={inputClassName()}
           />
         </label>
       </div>
