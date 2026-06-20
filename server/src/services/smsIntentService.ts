@@ -16,6 +16,7 @@ import { parseWaterAmountOz } from '../utils/waterParse.js';
 import { n } from '../utils/numbers.js';
 import {
   smsHelpResponseMessage,
+  smsNoAccountResponseMessage,
   smsOptInConfirmationMessage,
   smsOptOutConfirmationMessage
 } from '../utils/smsCompliance.js';
@@ -637,23 +638,38 @@ async function processFoodPhotoInBackground(user: SmsUser, phone: string, media:
   }
 }
 
+async function respondUnknownSmsUser(phone: string, inboundMessage: string, intent: string) {
+  const response = capSms(smsNoAccountResponseMessage(env.CLIENT_URL));
+  await prisma.smsMessage.create({
+    data: { phone, direction: 'INBOUND', message: inboundMessage, intent, status: 'PROCESSED', response }
+  });
+  await prisma.smsMessage.create({
+    data: { phone, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
+  });
+  return { response };
+}
+
 export async function handleSms(phone: string, message: string, media?: SmsMedia) {
   const user = await prisma.user.findFirst({ where: { phone } });
   if (!media && isSmsStartKeyword(message)) {
-    const response = smsOptInResponse();
-    if (user) {
-      await prisma.user.update({ where: { id: user.id }, data: { smsOptedOut: false } });
+    if (!user) {
+      return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT');
     }
+    const response = smsOptInResponse();
+    await prisma.user.update({ where: { id: user.id }, data: { smsOptedOut: false } });
     await prisma.smsMessage.create({
-      data: { phone, userId: user?.id, direction: 'INBOUND', message: message.trim(), intent: 'OPT_IN', status: 'PROCESSED', response }
+      data: { phone, userId: user.id, direction: 'INBOUND', message: message.trim(), intent: 'OPT_IN', status: 'PROCESSED', response }
     });
     await prisma.smsMessage.create({
-      data: { phone, userId: user?.id, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
+      data: { phone, userId: user.id, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
     });
     return { response };
   }
 
   if (!media && isSmsHelpKeyword(message)) {
+    if (!user) {
+      return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT');
+    }
     const response = smsHelpResponse();
     await prisma.smsMessage.create({
       data: { phone, userId: user?.id, direction: 'INBOUND', message: message.trim(), intent: 'HELP', status: 'PROCESSED', response }
@@ -690,8 +706,14 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   });
 
   if (!user) {
-    const response = 'We could not find a Metabolic user for this phone number.';
-    await prisma.smsMessage.create({ data: { phone, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' } });
+    const response = capSms(smsNoAccountResponseMessage(env.CLIENT_URL));
+    await prisma.smsMessage.update({
+      where: { id: inbound.id },
+      data: { status: 'PROCESSED', response, intent: 'NO_ACCOUNT' }
+    });
+    await prisma.smsMessage.create({
+      data: { phone, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
+    });
     return { inbound, response };
   }
 
