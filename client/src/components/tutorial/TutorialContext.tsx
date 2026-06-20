@@ -57,6 +57,7 @@ export function TutorialProvider({
     setIsActive(false);
     setCurrentStepId(null);
     setIsReplay(false);
+    setHasAutoStarted(false);
   }, []);
 
   const startTour = useCallback((options?: { replay?: boolean }) => {
