@@ -9,7 +9,7 @@ import { resolveNextMeal } from '../utils/meals.js';
 import { getAiProvider, type ChatMessage, type MealSuggestionResult } from './aiService.js';
 import { lookupFood, lookupFoodFromImage, summarizeFoodLookup, type FoodLookupResult } from './foodLookupService.js';
 import { env } from '../config/env.js';
-import { sendOutboundMessage } from './twilioOutboundService.js';
+import { sendOutboundMessage, isTwilioConfigured } from './twilioOutboundService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { logWater } from './hydrationService.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
@@ -17,6 +17,7 @@ import { n } from '../utils/numbers.js';
 import { normalizePhone, phonesMatch } from '../utils/phone.js';
 import {
   assistantResponseLooksLikeMealFailure,
+  assistantResponseLooksLikePhotoEstimate,
   classifyFoodRegex,
   extractFoodDescription,
   isFoodLogFollowUp,
@@ -25,11 +26,18 @@ import {
   mergeFoodLogFollowUp,
   normalizeMealNameHint,
   parseFoodLogAction,
+  parsePhotoEstimateFoodNames,
   parseLoggedFoodFromAssistantResponse,
+  parsePhotoEstimateIntent,
+  parsePhotoEstimateTotals,
+  serializePhotoEstimateIntent,
+  PHOTO_ESTIMATE_LOGGED_INTENT,
+  type StoredPhotoEstimateItem,
   parseMealName,
   parseTargetMealFromText,
   isEffectivelyZeroCalories,
-  smsZeroCalorieCheckResponse
+  smsZeroCalorieCheckResponse,
+  wantsPhotoLog
 } from '../utils/smsFoodParse.js';
 import {
   smsHelpResponseMessage,
@@ -43,6 +51,7 @@ export type SmsIntent =
   | 'MARK_EXERCISE_DONE'
   | 'MARK_MEAL_COMPLETE'
   | 'LOG_FOOD'
+  | 'LOG_PHOTO_ESTIMATE'
   | 'LOG_WATER'
   | 'MEAL_CORRECTION'
   | 'MACRO_STATUS'
@@ -74,6 +83,7 @@ type SmsAction =
   | { intent: 'MARK_EXERCISE_DONE'; exerciseName?: string }
   | { intent: 'MARK_MEAL_COMPLETE'; mealName?: string }
   | { intent: 'LOG_FOOD'; foodText: string; mealName?: string }
+  | { intent: 'LOG_PHOTO_ESTIMATE'; mealName?: string }
   | { intent: 'MEAL_CORRECTION'; targetMealName: string }
   | { intent: 'MACRO_STATUS' }
   | { intent: 'LOG_WATER'; text: string; amountOz: number }
@@ -81,8 +91,10 @@ type SmsAction =
 
 const MEAL_NAME_PATTERN = /\b(breakfast|lunch|dinner|snack|brunch)\b/i;
 const EXERCISE_COMPLETE_PATTERN = /\b(done|complete|completed|finished|check(?:ed)?\s+off)\b/i;
-const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const MAX_SMS_IMAGE_BYTES = 10 * 1024 * 1024;
+const FOOD_PHOTO_TIMEOUT_MS = 25_000;
+const PHOTO_PROCESSING_ACK = 'Got your photo — estimating calories now. I will text you in a moment.';
 
 type SmsMedia = {
   url: string;
@@ -230,6 +242,9 @@ export function parseSmsAction(message: string): SmsAction {
       foodText: foodAction.foodText,
       mealName: foodAction.mealName
     };
+  }
+  if (foodAction.intent === 'LOG_PHOTO_ESTIMATE') {
+    return { intent: 'LOG_PHOTO_ESTIMATE', mealName: foodAction.mealName };
   }
   if (foodAction.intent === 'MEAL_CORRECTION') {
     return { intent: 'MEAL_CORRECTION', targetMealName: foodAction.targetMealName };
@@ -400,21 +415,13 @@ function pickEncouragement() {
   return lines[Math.floor(Math.random() * lines.length)];
 }
 
-function pickPhotoAcknowledgement() {
-  const lines = [
-    'Got your photo. My tiny nutrition detective hat is on. I will send the estimate shortly.',
-    'Plate pic received. I am putting on my macro goggles now.',
-    'Photo locked in. Time to interrogate those carbs, politely.',
-    'Got it. The calorie calculator goblin is crunching numbers.',
-    'Meal photo received. I am doing food math so you do not have to.',
-    'Nice, got the plate. Stand by while I turn pixels into macros.'
-  ];
-  return lines[Math.floor(Math.random() * lines.length)];
-}
-
 type WriteAction = Exclude<
   SmsAction,
-  { intent: null } | { intent: 'LOG_FOOD' } | { intent: 'MEAL_CORRECTION' } | { intent: 'MACRO_STATUS' }
+  | { intent: null }
+  | { intent: 'LOG_FOOD' }
+  | { intent: 'LOG_PHOTO_ESTIMATE' }
+  | { intent: 'MEAL_CORRECTION' }
+  | { intent: 'MACRO_STATUS' }
 >;
 
 async function handleWriteAction(userId: string, dateKey: string, timeZone: string | null, action: WriteAction) {
@@ -550,6 +557,55 @@ async function logLookupResultToMeal(userId: string, mealId: string, result: Foo
   }
 
   return { count: names.length, names, calories, protein };
+}
+
+function photoEstimateItemsFromResult(result: FoodLookupResult): StoredPhotoEstimateItem[] {
+  return result.items
+    .filter((item) => item.source === 'ai')
+    .map((item) => ({
+      name: item.estimate.normalizedFoodName,
+      calories: item.estimate.calories,
+      protein: item.estimate.protein,
+      carbs: item.estimate.carbs,
+      fat: item.estimate.fat
+    }));
+}
+
+async function logPhotoEstimateItems(userId: string, mealId: string, items: StoredPhotoEstimateItem[]) {
+  const names: string[] = [];
+  let calories = 0;
+  let protein = 0;
+
+  for (const estimate of items) {
+    await addMealItem(userId, mealId, {
+      type: 'ACTUAL',
+      nameSnapshot: estimate.name,
+      quantity: 1,
+      unit: 'serving',
+      calories: estimate.calories,
+      protein: estimate.protein,
+      carbs: estimate.carbs,
+      fat: estimate.fat
+    });
+    names.push(estimate.name);
+    calories += estimate.calories;
+    protein += estimate.protein;
+  }
+
+  return { count: names.length, names, calories, protein };
+}
+
+function buildLoggedFoodResponse(mealName: string, names: string[], calories: number, protein: number, dateKey: string, timeZone: string | null, userId: string) {
+  return getTodayDashboard(userId, dateKey, timeZone).then((dashboard) => {
+    const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+    const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+    const foodList = names.join(', ');
+    return capSms(
+      `Logged to ${mealName}: ${foodList} — about ${Math.round(calories)} cal and ${Math.round(
+        protein
+      )}g protein. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+    );
+  });
 }
 
 async function findLastSmsLoggedBatch(userId: string, phone: string, dateKey: string) {
@@ -744,14 +800,14 @@ function buildTwilioMediaFetchOptions(media: SmsMedia): RequestInit[] {
 function twilioMediaDownloadError(response: Response) {
   if (response.status === 401 || response.status === 403) {
     if (!env.TWILIO_AUTH_TOKEN) {
-      return new Error('Twilio requires authentication to download this WhatsApp photo, but TWILIO_AUTH_TOKEN is not configured.');
+      return new Error('Twilio requires authentication to download this meal photo, but TWILIO_AUTH_TOKEN is not configured.');
     }
-    return new Error('Twilio rejected the WhatsApp photo download. Check TWILIO_AUTH_TOKEN for the webhook account and try again.');
+    return new Error('Twilio rejected the meal photo download. Check TWILIO_AUTH_TOKEN for the webhook account and try again.');
   }
   if (response.status === 404) {
-    return new Error('Twilio could not find the WhatsApp photo. Please resend the image.');
+    return new Error('Twilio could not find the meal photo. Please resend the image.');
   }
-  return new Error('Could not download the WhatsApp photo. Please resend it.');
+  return new Error('Could not download the meal photo. Please resend it.');
 }
 
 async function downloadSmsImage(media: SmsMedia) {
@@ -761,12 +817,12 @@ async function downloadSmsImage(media: SmsMedia) {
     if (response.ok) break;
     if (![401, 403].includes(response.status)) break;
   }
-  if (!response) throw new Error('Could not download the WhatsApp photo. Please resend it.');
+  if (!response) throw new Error('Could not download the meal photo. Please resend it.');
   if (!response.ok) throw twilioMediaDownloadError(response);
 
   const mimeType = (media.mimeType || response.headers.get('content-type') || '').split(';')[0]!.trim().toLowerCase();
   if (!SUPPORTED_IMAGE_TYPES.has(mimeType)) {
-    throw new Error('Send a JPEG, PNG, or WebP food photo.');
+    throw new Error('Send a JPEG, PNG, or WebP meal photo. If you are texting from iPhone, try sending the photo again.');
   }
 
   const contentLength = Number(response.headers.get('content-length') ?? 0);
@@ -805,70 +861,206 @@ function summarizeFoodPhotoEstimate(result: FoodLookupResult) {
   return `Estimated from your plate: ${Math.round(totals.calories)} cal, ${Math.round(totals.protein)}g protein, ${Math.round(totals.carbs)}g carbs, ${Math.round(totals.fat)}g fat. I see: ${foodList}. Photo estimates are approximate.`;
 }
 
-async function logFoodPhotoEstimates(userId: string, dateKey: string, timeZone: string | null, result: FoodLookupResult, message: string) {
-  const meal = await resolveTargetMeal(userId, dateKey, parseTargetMealFromText(message) ?? parseMealName(message), timeZone);
-  const estimates = result.items
-    .filter((item) => item.source === 'ai')
-    .map((item) => item.estimate);
+type FoodPhotoReply = {
+  text: string;
+  logged: boolean;
+  mealName: string;
+  estimateItems: StoredPhotoEstimateItem[];
+};
 
-  for (const estimate of estimates) {
-    await addMealItem(userId, meal.id, {
-      type: 'ACTUAL',
-      nameSnapshot: estimate.normalizedFoodName,
-      quantity: 1,
-      unit: 'serving',
-      calories: estimate.calories,
-      protein: estimate.protein,
-      carbs: estimate.carbs,
-      fat: estimate.fat
-    });
-  }
-
-  return { mealName: meal.name, count: estimates.length };
-}
-
-async function handleFoodPhoto(userId: string, dateKey: string, timeZone: string | null, media: SmsMedia, message: string) {
+async function handleFoodPhoto(
+  userId: string,
+  dateKey: string,
+  timeZone: string | null,
+  media: SmsMedia,
+  message: string,
+  shouldLog: boolean
+): Promise<FoodPhotoReply> {
   const image = await downloadSmsImage(media);
-  const result = await lookupFoodFromImage(userId, image, message);
+  const result = await Promise.race([
+    lookupFoodFromImage(userId, image, message),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Photo analysis timed out. Please try again in a moment.')), FOOD_PHOTO_TIMEOUT_MS);
+    })
+  ]);
   const meal = await resolveTargetMeal(userId, dateKey, parseTargetMealFromText(message) ?? parseMealName(message), timeZone);
   const preview = summarizeFoodLookup(result);
+  const estimateItems = photoEstimateItemsFromResult(result);
 
   if (!preview.count) {
-    return 'I could not estimate the food from that photo. Try sending a clearer plate photo with the whole meal visible.';
+    return {
+      text: 'I could not estimate the food from that photo. Try sending a clearer plate photo with the whole meal visible.',
+      logged: false,
+      mealName: meal.name,
+      estimateItems: []
+    };
   }
 
   if (isEffectivelyZeroCalories(preview.calories, preview.protein)) {
-    return capSms(smsZeroCalorieCheckResponse(preview.names.join(', ') || 'your photo', meal.name));
+    return {
+      text: capSms(smsZeroCalorieCheckResponse(preview.names.join(', ') || 'your photo', meal.name)),
+      logged: false,
+      mealName: meal.name,
+      estimateItems: []
+    };
   }
 
-  const logged = await logFoodPhotoEstimates(userId, dateKey, timeZone, result, message);
   const summary = summarizeFoodPhotoEstimate(result);
-  return logged.count > 0 ? `${summary} Logged to ${logged.mealName}.` : summary;
+
+  if (shouldLog) {
+    await logPhotoEstimateItems(userId, meal.id, estimateItems);
+    return {
+      text: capSms(`${summary} Logged to ${meal.name}.`),
+      logged: true,
+      mealName: meal.name,
+      estimateItems
+    };
+  }
+
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+  const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+  const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+
+  return {
+    text: capSms(
+      `${summary} Nothing logged yet — you have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. Text "log that for ${meal.name.toLowerCase()}" if you eat it.`
+    ),
+    logged: false,
+    mealName: meal.name,
+    estimateItems
+  };
 }
 
-async function processFoodPhotoInBackground(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
-  let response: string;
-  try {
-    response = await handleFoodPhoto(user.id, userDayKey(user.timezone), user.timezone, media, message);
-  } catch (error) {
-    if (error instanceof SmsResponseError) {
-      response = error.message;
-    } else {
-      const detail = error instanceof Error ? error.message : 'Assistant unavailable';
-      response = `Sorry, I could not answer that right now. ${detail}`;
+async function handleLogLastPhotoEstimate(
+  userId: string,
+  phone: string,
+  dateKey: string,
+  timeZone: string | null,
+  mealNameHint?: string
+) {
+  const lastOutbound = await prisma.smsMessage.findFirst({
+    where: {
+      userId,
+      phone,
+      direction: SmsDirection.OUTBOUND,
+      OR: [{ intent: { startsWith: 'PHOTO_ESTIMATE:' } }, { response: { contains: 'Estimated from your plate' } }]
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (
+    !lastOutbound?.response ||
+    lastOutbound.intent === PHOTO_ESTIMATE_LOGGED_INTENT ||
+    !assistantResponseLooksLikePhotoEstimate(lastOutbound.response)
+  ) {
+    return capSms(
+      'I do not have a recent photo estimate to log. Send a meal photo first, or text what you ate with an amount.'
+    );
+  }
+
+  const stored = parsePhotoEstimateIntent(lastOutbound.intent);
+  let estimateItems = stored?.items ?? [];
+  if (!estimateItems.length) {
+    const names = parsePhotoEstimateFoodNames(lastOutbound.response);
+    const totals = parsePhotoEstimateTotals(lastOutbound.response);
+    if (names?.length && totals) {
+      const share = names.length;
+      estimateItems = names.map((name) => ({
+        name,
+        calories: totals.calories / share,
+        protein: totals.protein / share,
+        carbs: totals.carbs / share,
+        fat: totals.fat / share
+      }));
     }
   }
 
-  await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response } });
-  const outbound = await prisma.smsMessage.create({
-    data: { phone, userId: user.id, direction: 'OUTBOUND', message: response, response, status: 'PROCESSED' }
-  });
-  try {
-    await sendOutboundMessage(phone, response);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Could not send text message.';
-    await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+  if (!estimateItems.length) {
+    return capSms('I could not read the foods from your last photo estimate. Send the photo again or text what you ate.');
   }
+
+  const meal = await resolveTargetMeal(
+    userId,
+    dateKey,
+    mealNameHint ?? stored?.mealName ?? parseTargetMealFromText(lastOutbound.response),
+    timeZone
+  );
+  const logged = await logPhotoEstimateItems(userId, meal.id, estimateItems);
+  const response = await buildLoggedFoodResponse(meal.name, logged.names, logged.calories, logged.protein, dateKey, timeZone, userId);
+
+  await prisma.smsMessage.update({
+    where: { id: lastOutbound.id },
+    data: { intent: PHOTO_ESTIMATE_LOGGED_INTENT, response }
+  });
+
+  return response;
+}
+
+function photoErrorResponse(error: unknown) {
+  if (error instanceof SmsResponseError) return error.message;
+  const detail = error instanceof Error ? error.message : 'Assistant unavailable';
+  return capSms(`Sorry, I could not analyze that photo right now. ${detail}`);
+}
+
+/** Processes a meal photo and records outbound SMS. Returns TwiML body when API send is not used. */
+async function deliverFoodPhotoReply(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
+  let reply: FoodPhotoReply;
+  const shouldLog = wantsPhotoLog(message);
+  try {
+    reply = await handleFoodPhoto(user.id, userDayKey(user.timezone), user.timezone, media, message, shouldLog);
+  } catch (error) {
+    reply = {
+      text: photoErrorResponse(error),
+      logged: false,
+      mealName: '',
+      estimateItems: []
+    };
+  }
+
+  const intent =
+    !reply.logged && reply.estimateItems.length
+      ? serializePhotoEstimateIntent(reply.estimateItems, reply.mealName)
+      : undefined;
+
+  await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response: reply.text } });
+  const outbound = await prisma.smsMessage.create({
+    data: {
+      phone,
+      userId: user.id,
+      direction: 'OUTBOUND',
+      message: reply.text,
+      response: reply.text,
+      intent,
+      status: 'PROCESSED'
+    }
+  });
+
+  if (isTwilioConfigured()) {
+    try {
+      await sendOutboundMessage(phone, reply.text);
+      return '';
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Could not send text message.';
+      await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+    }
+  }
+
+  return reply.text;
+}
+
+function processFoodPhotoInBackground(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
+  void deliverFoodPhotoReply(user, phone, media, message, inboundId).catch(async (error) => {
+    const detail = error instanceof Error ? error.message : 'Could not analyze photo.';
+    const response = capSms(`Sorry, I could not analyze that photo right now. ${detail}`);
+    await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response } });
+    if (isTwilioConfigured()) {
+      try {
+        await sendOutboundMessage(phone, response);
+      } catch {
+        // Best-effort error delivery.
+      }
+    }
+  });
 }
 
 async function respondUnknownSmsUser(phone: string, inboundMessage: string, intent: string) {
@@ -979,7 +1171,7 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   const intent = isFoodPhoto
     ? 'FOOD_PHOTO'
     : action.intent ?? freeformRoute ?? 'AI_CHAT';
-  const inboundMessage = message.trim() || (isFoodPhoto ? '[WhatsApp image]' : '');
+  const inboundMessage = message.trim() || (isFoodPhoto ? '[Meal photo]' : '');
 
   const inbound = await prisma.smsMessage.create({
     data: { phone, userId: user?.id, direction: 'INBOUND', message: inboundMessage, intent }
@@ -998,8 +1190,14 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   }
 
   if (media) {
-    const response = pickPhotoAcknowledgement();
-    void processFoodPhotoInBackground(user, phone, media, message, inbound.id);
+    if (isTwilioConfigured()) {
+      const ack = capSms(PHOTO_PROCESSING_ACK);
+      await prisma.smsMessage.update({ where: { id: inbound.id }, data: { status: 'PROCESSED', response: ack } });
+      processFoodPhotoInBackground(user, phone, media, message, inbound.id);
+      return { inbound, response: ack };
+    }
+
+    const response = await deliverFoodPhotoReply(user, phone, media, message, inbound.id);
     return { inbound, response };
   }
 
@@ -1008,6 +1206,8 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   try {
     if (action.intent === 'LOG_FOOD') {
       response = await handleFoodLog(user.id, dateKey, user.timezone, action.foodText, action.mealName);
+    } else if (action.intent === 'LOG_PHOTO_ESTIMATE') {
+      response = await handleLogLastPhotoEstimate(user.id, phone, dateKey, user.timezone, action.mealName);
     } else if (action.intent === 'MEAL_CORRECTION') {
       response = await handleMealCorrection(
         user.id,

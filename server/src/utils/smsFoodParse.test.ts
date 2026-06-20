@@ -10,9 +10,14 @@ import {
   mergeFoodLogFollowUp,
   parseFoodLogAction,
   parseLoggedFoodFromAssistantResponse,
+  parsePhotoEstimateFoodNames,
+  parsePhotoEstimateIntent,
+  parsePhotoEstimateTotals,
+  serializePhotoEstimateIntent,
   parseTargetMealFromText,
   smsZeroCalorieCheckResponse,
-  wantsMacroStatus
+  wantsMacroStatus,
+  wantsPhotoLog
 } from './smsFoodParse.js';
 
 describe('parseTargetMealFromText', () => {
@@ -93,6 +98,37 @@ describe('parseLoggedFoodFromAssistantResponse', () => {
       { mealName: 'Lunch', foodNames: ['2 ounces peanuts'] }
     );
   });
+
+  it('parses photo caption logs that combine estimate and logged meal', () => {
+    assert.deepEqual(
+      parseLoggedFoodFromAssistantResponse(
+        'Estimated from your plate: 450 cal, 35g protein, 40g carbs, 12g fat. I see: chicken, rice. Photo estimates are approximate. Logged to Lunch.'
+      ),
+      { mealName: 'Lunch', foodNames: ['chicken', 'rice'] }
+    );
+  });
+});
+
+describe('photo estimate intent storage', () => {
+  it('round-trips stored photo estimate items', () => {
+    const intent = serializePhotoEstimateIntent(
+      [{ name: 'chicken', calories: 300, protein: 30, carbs: 0, fat: 10 }],
+      'Lunch'
+    );
+    assert.deepEqual(parsePhotoEstimateIntent(intent), {
+      items: [{ name: 'chicken', calories: 300, protein: 30, carbs: 0, fat: 10 }],
+      mealName: 'Lunch'
+    });
+  });
+
+  it('parses macro totals from estimate text', () => {
+    assert.deepEqual(parsePhotoEstimateTotals('Estimated from your plate: 450 cal, 35g protein, 40g carbs, 12g fat. I see: chicken.'), {
+      calories: 450,
+      protein: 35,
+      carbs: 40,
+      fat: 12
+    });
+  });
 });
 
 describe('assistantResponseLooksLikeMealFailure', () => {
@@ -141,5 +177,23 @@ describe('looksLikeFoodLogRetry', () => {
     };
     assert.equal(looksLikeFoodLogRetry('thanks', context), false);
     assert.equal(looksLikeFoodLogRetry('2 oz peanuts for breakfast', context), true);
+  });
+});
+
+describe('meal photo preview vs log', () => {
+  it('does not treat a plain photo caption as log intent', () => {
+    assert.equal(wantsPhotoLog(''), false);
+    assert.equal(wantsPhotoLog('what is this'), false);
+  });
+
+  it('logs when the caption asks to log', () => {
+    assert.equal(wantsPhotoLog('log this for lunch'), true);
+  });
+
+  it('supports follow-up logging after an estimate', () => {
+    assert.equal(parseFoodLogAction('log that for breakfast').intent, 'LOG_PHOTO_ESTIMATE');
+    assert.deepEqual(parsePhotoEstimateFoodNames(
+      'Estimated from your plate: 450 cal, 35g protein, 40g carbs, 12g fat. I see: chicken, rice. Photo estimates are approximate. Nothing logged yet.'
+    ), ['chicken', 'rice']);
   });
 });

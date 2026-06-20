@@ -17,6 +17,7 @@ export const MACRO_STATUS_PATTERN =
 
 export type SmsFoodAction =
   | { intent: 'LOG_FOOD'; foodText: string; mealName?: string }
+  | { intent: 'LOG_PHOTO_ESTIMATE'; mealName?: string }
   | { intent: 'MEAL_CORRECTION'; targetMealName: string }
   | { intent: 'MACRO_STATUS' }
   | { intent: null };
@@ -152,6 +153,86 @@ export function assistantResponseLooksLikeMealFailure(response: string) {
   return /already marked complete|could not find.*meal|Try texting:/i.test(response);
 }
 
+export function assistantResponseLooksLikePhotoEstimate(response: string) {
+  return /^Estimated from your plate:/i.test(response) && !/Logged to/i.test(response);
+}
+
+export type StoredPhotoEstimateItem = {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
+export const PHOTO_ESTIMATE_INTENT_PREFIX = 'PHOTO_ESTIMATE:';
+export const PHOTO_ESTIMATE_LOGGED_INTENT = 'PHOTO_ESTIMATE_LOGGED';
+
+export function serializePhotoEstimateIntent(items: StoredPhotoEstimateItem[], mealName?: string) {
+  return `${PHOTO_ESTIMATE_INTENT_PREFIX}${JSON.stringify({ items, mealName })}`;
+}
+
+export function parsePhotoEstimateIntent(intent: string | null | undefined) {
+  if (!intent?.startsWith(PHOTO_ESTIMATE_INTENT_PREFIX)) return null;
+  try {
+    return JSON.parse(intent.slice(PHOTO_ESTIMATE_INTENT_PREFIX.length)) as {
+      items: StoredPhotoEstimateItem[];
+      mealName?: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function parsePhotoEstimateTotals(response: string) {
+  const match = response.match(
+    /Estimated from your plate:\s*(\d+)\s*cal,\s*(\d+)g protein,\s*(\d+)g carbs,\s*(\d+)g fat/i
+  );
+  if (!match) return null;
+  return {
+    calories: Number(match[1]),
+    protein: Number(match[2]),
+    carbs: Number(match[3]),
+    fat: Number(match[4])
+  };
+}
+
+export function parsePhotoEstimateFoodNames(response: string) {
+  const match = response.match(/\bI see:\s*(.+?)\.\s*Photo estimates/i);
+  if (!match) return null;
+  return match[1]!
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+/** Caption on a meal photo asks to log it, not just estimate. */
+export function wantsPhotoLog(caption: string) {
+  const text = caption.trim();
+  if (!text) return false;
+  if (/\b(log|add|track|record)\b/i.test(text) && /\b(this|that|it|photo|plate|meal)\b/i.test(text)) {
+    return true;
+  }
+  if (/\b(log|add)\b/i.test(text) && parseTargetMealFromText(text)) return true;
+  if (/\b(i\s+)?(ate|had|finished|eating)\b/i.test(text) && FOOD_SIGNAL_PATTERN.test(text)) return true;
+  return false;
+}
+
+/** Follow-up text after a photo estimate — "log that for lunch". */
+export function wantsLogPhotoEstimate(message: string) {
+  const text = message.trim();
+  if (!text) return false;
+  if (looksLikeFoodAdd(text) && !/\b(that|this|it|the photo|my plate)\b/i.test(text)) return false;
+  if (/\d+\s*(?:oz|ounce|ounces|g|gram|grams|cup|cups|slice|slices|piece|pieces)\b/i.test(text)) {
+    return false;
+  }
+  if (/\b(log|add|track|record)\b/i.test(text) && /\b(that|this|it|the photo|my plate)\b/i.test(text)) {
+    return true;
+  }
+  if (/\b(i\s+)?(ate|had|finished)\b/i.test(text) && /\b(that|this|it)\b/i.test(text)) return true;
+  return false;
+}
+
 /** After a meal lookup error, only retry logging when the reply still looks like food. */
 export function looksLikeFoodLogRetry(
   message: string,
@@ -175,19 +256,39 @@ export function smsZeroCalorieCheckResponse(foodLabel: string, mealName: string)
 
 /** Parse "Logged to Lunch: peanuts, rice — about 322 cal" from an outbound SMS. */
 export function parseLoggedFoodFromAssistantResponse(response: string) {
-  const match = response.match(/^Logged to ([^:]+):\s*(.+?)\s*(?:—|-)\s*about\s+\d/i);
-  if (!match) return null;
-  const mealName = match[1]!.trim();
-  const foodList = match[2]!
-    .trim()
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (!foodList.length) return null;
-  return { mealName, foodNames: foodList };
+  const standard = response.match(/^Logged to ([^:]+):\s*(.+?)\s*(?:—|-)\s*about\s+\d/i);
+  if (standard) {
+    const mealName = standard[1]!.trim();
+    const foodList = standard[2]!
+      .trim()
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (!foodList.length) return null;
+    return { mealName, foodNames: foodList };
+  }
+
+  const photoLogged = response.match(
+    /^Estimated from your plate:.*?I see:\s*(.+?)\.\s*Photo estimates.*?Logged to ([^.]+)\./is
+  );
+  if (photoLogged) {
+    const foodList = photoLogged[1]!
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (!foodList.length) return null;
+    return { mealName: photoLogged[2]!.trim(), foodNames: foodList };
+  }
+
+  return null;
 }
 
 export function parseFoodLogAction(message: string): SmsFoodAction {
+  if (wantsMacroStatus(message)) return { intent: 'MACRO_STATUS' };
+  if (wantsLogPhotoEstimate(message)) {
+    return { intent: 'LOG_PHOTO_ESTIMATE', mealName: normalizeMealNameHint(parseTargetMealFromText(message)) };
+  }
+
   const logMatch = message.match(/\blog\s+(.+?)\s+for\s+(.+)/i);
   if (logMatch) {
     return {
