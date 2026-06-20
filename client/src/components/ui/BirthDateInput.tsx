@@ -59,7 +59,7 @@ export function BirthDateInput({
       onChange(iso);
       return;
     }
-    if (!next) onChange('');
+    onChange('');
   }
 
   function handleBlur() {

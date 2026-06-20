@@ -5,6 +5,3 @@ CREATE TABLE "AppSetting" (
 
     CONSTRAINT "AppSetting_pkey" PRIMARY KEY ("key")
 );
-
-INSERT INTO "AppSetting" ("key", "value", "updatedAt")
-VALUES ('coach_request_notification_email', 'derek.fowler@gmail.com', CURRENT_TIMESTAMP);

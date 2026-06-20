@@ -38,6 +38,16 @@ function formatMetricValue(value: unknown) {
   return String(numeric);
 }
 
+function resolveMetricNumber(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+}
+
+export function hasValidCurrentWeight(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0;
+}
+
 export async function getSetupDraft(userId: string) {
   const [user, program] = await Promise.all([
     prisma.user.findUnique({
@@ -58,16 +68,18 @@ export async function getSetupDraft(userId: string) {
   const weightMetric = program?.metrics.find((metric) => metric.metricType === 'WEIGHT');
   const bodyFatMetric = program?.metrics.find((metric) => metric.metricType === 'BODY_FAT');
   const gender = normalizeGender(user?.gender);
+  const weight = formatMetricValue(weightMetric?.currentValue);
 
   return {
-    weight: formatMetricValue(weightMetric?.currentValue),
+    weight,
     goalWeight: formatMetricValue(weightMetric?.goalValue),
     bodyFat: formatMetricValue(bodyFatMetric?.currentValue),
     goalBodyFat: formatMetricValue(bodyFatMetric?.goalValue),
     gender: gender ?? (user?.gender?.trim() ?? ''),
     birthDate: user?.birthDate ? toDateKey(user.birthDate) : '',
     timezone: user?.timezone?.trim() ?? '',
-    wantsCoach: Boolean(user?.coachRequestedAt)
+    wantsCoach: Boolean(user?.coachRequestedAt),
+    hasExistingWeight: hasValidCurrentWeight(weightMetric?.currentValue ?? weight)
   };
 }
 
@@ -191,11 +203,23 @@ async function applyCoachSupport(
   }
 
   if (input.wantsCoach || input.coachCode?.trim()) {
-    await prisma.user.update({
+    const existing = await prisma.user.findUnique({
       where: { id: userId },
-      data: { coachRequestedAt: new Date() }
+      select: { coachRequestedAt: true }
     });
-    return { coach: null, shouldNotifyCoachRequest: Boolean(input.wantsCoach) };
+    const hadPriorCoachRequest = Boolean(existing?.coachRequestedAt);
+
+    if (!hadPriorCoachRequest) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { coachRequestedAt: new Date() }
+      });
+    }
+
+    return {
+      coach: null,
+      shouldNotifyCoachRequest: Boolean(input.wantsCoach) && !hadPriorCoachRequest
+    };
   }
 
   return { coach: null, shouldNotifyCoachRequest: false };
@@ -216,18 +240,13 @@ async function updateActiveProgramFromSetup(
     throw new Error('A timezone is required to finish setup.');
   }
 
-  const bodyFat =
-    input.bodyFat ??
-    Number(program.metrics.find((metric) => metric.metricType === 'BODY_FAT')?.currentValue) ??
-    30;
-  const goalBodyFat =
-    input.goalBodyFat ??
-    Number(program.metrics.find((metric) => metric.metricType === 'BODY_FAT')?.goalValue) ??
-    18;
+  const bodyFatMetric = program.metrics.find((metric) => metric.metricType === 'BODY_FAT');
+  const bodyFat = input.bodyFat ?? resolveMetricNumber(bodyFatMetric?.currentValue, 30);
+  const goalBodyFat = input.goalBodyFat ?? resolveMetricNumber(bodyFatMetric?.goalValue, 18);
   const caloriesMetric = program.metrics.find((metric) => metric.metricType === 'CALORIES');
   const proteinMetric = program.metrics.find((metric) => metric.metricType === 'PROTEIN');
-  const calories = input.calorieTarget ?? Number(caloriesMetric?.currentValue ?? 2200);
-  const protein = input.proteinTarget ?? Number(proteinMetric?.currentValue ?? 190);
+  const calories = input.calorieTarget ?? resolveMetricNumber(caloriesMetric?.currentValue, 2200);
+  const protein = input.proteinTarget ?? resolveMetricNumber(proteinMetric?.currentValue, 190);
 
   const updatesByType: Partial<Record<ProgramMetric['metricType'], { currentValue: number; goalValue: number }>> = {
     WEIGHT: { currentValue: input.weight, goalValue: input.goalWeight },
