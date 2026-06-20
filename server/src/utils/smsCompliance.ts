@@ -12,3 +12,8 @@ export function smsHelpResponseMessage() {
 export function smsOptOutConfirmationMessage() {
   return `${SMS_BRAND_NAME}: You have opted out and will no longer receive SMS messages from this number. Reply START to resubscribe.`;
 }
+
+export function smsNoAccountResponseMessage(siteUrl: string) {
+  const url = siteUrl.replace(/\/$/, '');
+  return `${SMS_BRAND_NAME}: We don't have a Metabolic account for this number yet. Kick-start your metabolism at ${url} — create your account, add this phone number, then text START to log meals and get coaching by SMS.`;
+}

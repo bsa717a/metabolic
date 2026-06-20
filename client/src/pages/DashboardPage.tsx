@@ -11,6 +11,7 @@ import { MacroProgress } from '../components/dashboard/MacroProgress';
 import { WeightTrendChart } from '../components/dashboard/WeightTrendChart';
 import { isAdminRole, isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
+import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
 
 function RemainingMacrosDisplay({
   caloriesRemaining,
@@ -231,7 +232,17 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
       >
         <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Quick Log via SMS</h2>
         <p className="mt-2 text-sm text-app-text-muted max-w-xl mx-auto">
-          You can quickly log meals by texting our AI assistant. SMS commands are supported directly through the backend webhook.
+          Text meals, photos, or questions to our AI assistant. To get started, text{' '}
+          <strong className="text-brand-navy dark:text-brand-off-white">START</strong> to:
+        </p>
+        <a
+          href={`sms:${SMS_PHONE_NUMBER}?body=START`}
+          className="mt-4 inline-block text-lg font-semibold tracking-wide text-brand-green transition hover:text-brand-green-light"
+        >
+          {SMS_PHONE_DISPLAY}
+        </a>
+        <p className="mt-3 text-xs text-app-text-muted max-w-lg mx-auto">
+          Your phone number must be linked to your Metabolic account. Message and data rates may apply.
         </p>
       </section>
     </div>
