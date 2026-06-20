@@ -380,9 +380,10 @@ export async function evaluateLevelTasks(userId: string, levelId: string) {
 async function updateStreak(
   userId: string,
   streakType: StreakType,
-  completedToday: boolean
+  completedToday: boolean,
+  eventDate?: Date
 ): Promise<void> {
-  const today = startOfUtcDay();
+  const today = startOfUtcDay(eventDate);
   const config = STREAK_GRACE_CONFIG[streakType];
   let streak = await prisma.userStreak.findUnique({
     where: { userId_streakType: { userId, streakType } }
@@ -658,11 +659,11 @@ export async function recordFoodLogDay(userId: string, dailyLogId: string, date:
 export async function recordWaterGoalDay(userId: string, dailyLogId: string) {
   const log = await prisma.dailyLog.findUnique({
     where: { id: dailyLogId },
-    select: { waterActualOz: true, waterTargetOz: true, waterGoalMet: true }
+    select: { waterActualOz: true, waterTargetOz: true, waterGoalMet: true, date: true }
   });
   if (!log || !log.waterGoalMet || log.waterActualOz < log.waterTargetOz) return runProgressionEvaluation(userId);
 
-  await updateStreak(userId, StreakType.WATER_GOAL_DAILY, true);
+  await updateStreak(userId, StreakType.WATER_GOAL_DAILY, true, log.date);
   return runProgressionEvaluation(userId);
 }
 
@@ -670,8 +671,8 @@ export async function recordWaterGoalDay(userId: string, dailyLogId: string) {
  * Reverses a WATER_GOAL_DAILY credit for today (e.g. after the user undoes a hydration entry
  * and the daily goal is no longer met). Only acts if the streak was credited today.
  */
-export async function revertWaterGoalDay(userId: string) {
-  const today = startOfUtcDay();
+export async function revertWaterGoalDay(userId: string, eventDate: Date) {
+  const today = startOfUtcDay(eventDate);
   const streak = await prisma.userStreak.findUnique({
     where: { userId_streakType: { userId, streakType: StreakType.WATER_GOAL_DAILY } }
   });

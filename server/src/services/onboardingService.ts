@@ -1,6 +1,6 @@
 import { ProgramStatus, Role, Visibility, type ProgramMetric } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { startOfUtcDay, parseDateParam, toDateKey } from '../utils/dates.js';
+import { parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
 import { normalizeGender } from './bloodPanelMetrics.js';
 import { buildProgramMetrics, missingProgramMetrics } from '../utils/programMetrics.js';
 import { fatMassLbs, leanTissueMassLbs } from '../utils/bodyComposition.js';
@@ -347,18 +347,21 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     return updateActiveProgramFromSetup(userId, existingActiveProgram, input);
   }
 
-  const [template, coach, globalNutritionTemplate, globalExerciseTemplate] = await Promise.all([
+  const [template, coach, globalNutritionTemplate, globalExerciseTemplate, existingUser] = await Promise.all([
     prisma.programTemplate.findFirst({ orderBy: { createdAt: 'asc' } }),
     findCoachByCode(normalizeCoachCode(input.coachCode)),
     findGlobalNutritionTemplate(),
-    findGlobalExerciseTemplate()
+    findGlobalExerciseTemplate(),
+    prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })
   ]);
   const defaultNutritionTemplateId = coach?.defaultNutritionTemplateId ?? globalNutritionTemplate?.id ?? null;
   const defaultExerciseTemplateId = coach?.defaultExerciseTemplateId ?? globalExerciseTemplate?.id ?? null;
   const calories = input.calorieTarget ?? Number(globalNutritionTemplate?.calorieTarget ?? template?.defaultCalories ?? 2200);
   const protein = input.proteinTarget ?? Number(globalNutritionTemplate?.proteinTarget ?? template?.defaultProtein ?? 190);
   const programName = input.programName?.trim() || DEFAULT_PROGRAM_NAME;
-  const today = startOfUtcDay();
+  const timezone = input.timezone?.trim() || existingUser?.timezone || null;
+  const today = parseDateParam(userDayKey(timezone));
+  const todayKey = userDayKey(timezone);
   const targetEndDate = new Date(today.getTime() + 16 * 7 * 86400000);
 
   const program = await prisma.$transaction(async (tx) => {
@@ -411,7 +414,7 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
   }
   if (defaultExerciseTemplateId) {
     await prisma.$transaction(async (tx) => {
-      await applyTemplateExercisesToDate(tx, defaultExerciseTemplateId, program.id, userId, today.toISOString().slice(0, 10));
+      await applyTemplateExercisesToDate(tx, defaultExerciseTemplateId, program.id, userId, todayKey);
     });
   } else {
     await seedDefaultExercises(userId, program.id, today);

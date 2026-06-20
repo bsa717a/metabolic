@@ -1,6 +1,6 @@
 import { MealItemType, MealStatus, Prisma, ProgramStatus, type Program, type ProgramMetric } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { parseDateParam, startOfUtcDay, toDateKey } from '../utils/dates.js';
+import { parseDateParam, startOfUtcDay, userDayKey } from '../utils/dates.js';
 import { applyDefaultTemplateToNewLogOutsideTx } from './nutritionTemplateApply.js';
 import { applyDefaultTemplateToNewDayOutsideTx } from './exerciseTemplateApply.js';
 
@@ -205,8 +205,17 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
   return dailyLog;
 }
 
+export async function userTodayDate(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true }
+  });
+  return parseDateParam(userDayKey(user?.timezone ?? null));
+}
+
 export async function ensureTodayDailyLog(userId: string, program: Program & { metrics: ProgramMetric[] }) {
-  return ensureDailyLog(userId, program, startOfUtcDay());
+  const day = await userTodayDate(userId);
+  return ensureDailyLog(userId, program, day);
 }
 
 export async function ensureDailyLogByUserId(userId: string, date: string) {
@@ -220,5 +229,11 @@ export async function ensureDailyLogByUserId(userId: string, date: string) {
 }
 
 export async function ensureTodayDailyLogByUserId(userId: string) {
-  return ensureDailyLogByUserId(userId, toDateKey(startOfUtcDay()));
+  const day = await userTodayDate(userId);
+  const program = await prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    include: { metrics: true }
+  });
+  if (!program) return null;
+  return ensureDailyLog(userId, program, day);
 }

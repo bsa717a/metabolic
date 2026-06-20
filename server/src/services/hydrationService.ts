@@ -2,7 +2,7 @@ import { HydrationSource, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { addUtcDays, startOfUtcDay } from '../utils/dates.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
-import { ensureTodayDailyLogByUserId } from './dailyLogService.js';
+import { ensureTodayDailyLogByUserId, userTodayDate } from './dailyLogService.js';
 import { recordWaterGoalDay, revertWaterGoalDay } from '../gamification/progressionEngine.js';
 
 export type HydrationSummary = {
@@ -169,7 +169,7 @@ export async function undoLastEntry(userId: string) {
   await prisma.hydrationEntry.delete({ where: { id: lastEntry.id } });
   const updated = await recalcDailyWater(dailyLog.id);
   if (!updated.waterGoalMet) {
-    await revertWaterGoalDay(userId);
+    await revertWaterGoalDay(userId, dailyLog.date);
   }
 
   return getHydrationSummary(userId);
@@ -186,7 +186,7 @@ export async function setWaterGoal(userId: string, goalOz: number) {
     data: { waterGoalOz: rounded }
   });
 
-  const today = startOfUtcDay();
+  const today = await userTodayDate(userId);
   await prisma.dailyLog.updateMany({
     where: { userId, date: today },
     data: { waterTargetOz: rounded }
@@ -221,8 +221,9 @@ export async function getCoachHydrationStats(userId: string) {
     where: { userId, status: ProgramStatus.ACTIVE }
   });
   if (program) {
+    const today = await userTodayDate(userId);
     const todayLog = await prisma.dailyLog.findUnique({
-      where: { userId_date: { userId, date: startOfUtcDay() } }
+      where: { userId_date: { userId, date: today } }
     });
     if (todayLog) {
       todayActual = todayLog.waterActualOz;
