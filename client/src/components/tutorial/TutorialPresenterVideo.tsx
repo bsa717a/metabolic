@@ -75,13 +75,14 @@ export function TutorialPresenterVideo({
       if (ready) return;
       ready = true;
       setLoadState('ready');
+      video.muted = true;
       void video.play().catch(() => {
-        // Autoplay may require interaction; controls remain available.
+        // Unmuted autoplay is blocked; controls stay available for manual play.
       });
     };
 
     const tryReady = () => {
-      if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) markReady();
+      if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) markReady();
     };
 
     const handleError = () => setLoadState('error');
@@ -93,8 +94,8 @@ export function TutorialPresenterVideo({
     tryReady();
 
     const timeout = window.setTimeout(() => {
-      if (!ready && video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) markReady();
-    }, 20_000);
+      if (!ready && video.readyState >= HTMLMediaElement.HAVE_METADATA) markReady();
+    }, 8_000);
 
     return () => {
       window.clearTimeout(timeout);
@@ -155,6 +156,7 @@ export function TutorialPresenterVideo({
         }}
         src={PRESENTER_VIDEO_SRC}
         playsInline
+        muted
         controls
         preload="auto"
         aria-label="Dashboard tutorial video"

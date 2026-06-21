@@ -54,7 +54,10 @@ export function TopbarGamification() {
 
   return (
     <div className="flex items-center justify-center gap-2 sm:gap-4 min-w-0 w-full max-w-2xl">
-      <div className="relative shrink-0 self-stretch flex items-center" data-tour="topbar-hydration">
+      <div
+        className="relative shrink-0 self-stretch flex items-center gap-1 sm:gap-1.5"
+        data-tour="topbar-hydration"
+      >
         <button
           ref={hydrationButtonRef}
           type="button"
@@ -78,6 +81,18 @@ export function TopbarGamification() {
             size="sm"
           />
         </button>
+        {showWaterStreak && (
+          <div
+            className={clsx(
+              'flex shrink-0 items-center gap-1.5 text-app-text-muted',
+              pulseStreaks && 'animate-pulse'
+            )}
+            title="Hydration goal streak"
+          >
+            <Droplets className="size-6 shrink-0 text-sky-500 sm:size-8" />
+            <span className="text-base font-bold tabular-nums sm:text-lg">{hydration.currentStreak}d</span>
+          </div>
+        )}
         <HydrationTopbarDrawer
           open={hydrationOpen}
           onClose={() => setHydrationOpen(false)}
@@ -123,27 +138,19 @@ export function TopbarGamification() {
         />
       </div>
 
-      {(showFoodStreak || showWaterStreak) && (
+      {showFoodStreak && (
         <div
           data-tour="topbar-streaks"
           className={clsx(
-            'flex self-center items-center gap-2 shrink-0 text-app-text-muted',
+            'flex shrink-0 items-center gap-1.5 self-center text-app-text-muted',
             demoMode ? 'flex' : 'hidden sm:flex',
             pulseStreaks && 'animate-pulse'
           )}
         >
-          {showFoodStreak && (
-            <div className="flex items-center gap-1.5" title="Food logging streak">
-              <Flame className="size-6 sm:size-8 shrink-0 text-brand-gold" />
-              <span className="text-base sm:text-lg font-bold tabular-nums">{momentum.foodLoggingStreak}d</span>
-            </div>
-          )}
-          {showWaterStreak && (
-            <div className="flex items-center gap-1.5" title="Hydration goal streak">
-              <Droplets className="size-6 sm:size-8 shrink-0 text-sky-500" />
-              <span className="text-base sm:text-lg font-bold tabular-nums">{hydration.currentStreak}d</span>
-            </div>
-          )}
+          <div className="flex items-center gap-1.5" title="Food logging streak">
+            <Flame className="size-6 shrink-0 text-brand-gold sm:size-8" />
+            <span className="text-base font-bold tabular-nums sm:text-lg">{momentum.foodLoggingStreak}d</span>
+          </div>
         </div>
       )}
 
