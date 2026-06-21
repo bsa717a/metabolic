@@ -107,7 +107,10 @@ fi
 echo "==> Phase 3: body-composition progress history"
 run_phase npx tsx scripts/migration/03-progress.ts
 
-echo "==> Phase 4: validate + report"
+echo "==> Phase 4: historical daily plans (nutrition + exercise)"
+run_phase npx tsx scripts/migration/04-daily-plans.ts
+
+echo "==> Phase 5: validate + report"
 run_phase npx tsx scripts/migration/validate-and-report.ts
 
 echo ""

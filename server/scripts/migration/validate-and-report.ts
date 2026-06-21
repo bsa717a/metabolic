@@ -43,6 +43,8 @@ async function main(): Promise<void> {
     parseTable(DUMP_PATH, 'circuits').filter((r) => (r.name ?? '').trim()).length;
   const legacyUsers = countValidUsers();
   const legacySessions = parseTable(DUMP_PATH, 'training_sessions').length;
+  const legacyNutritionPlans = parseTable(DUMP_PATH, 'nutritionPrograms').length;
+  const legacyExercisePlans = parseTable(DUMP_PATH, 'exercisePrograms').length;
 
   const [
     foods,
@@ -57,7 +59,12 @@ async function main(): Promise<void> {
     progressSnapshots,
     profiles,
     profilesWithHeight,
-    profilesWithConditions
+    profilesWithConditions,
+    legacyDailyLogs,
+    legacyDailyMeals,
+    legacyMealItems,
+    legacyScheduledExercises,
+    usersWithDailyPlans
   ] = await Promise.all([
     prisma.food.count({ where: { source: 'IMPORTED' } }),
     prisma.exercise.count(),
@@ -80,7 +87,14 @@ async function main(): Promise<void> {
           { dietNotes: { not: null } }
         ]
       }
-    })
+    }),
+    prisma.dailyLog.count({ where: { notes: { startsWith: 'legacy:' } } }),
+    prisma.meal.count({ where: { dailyLog: { notes: { startsWith: 'legacy:' } } } }),
+    prisma.mealItem.count({ where: { meal: { dailyLog: { notes: { startsWith: 'legacy:' } } } } }),
+    prisma.scheduledExercise.count({ where: { status: 'PLANNED' } }),
+    prisma.dailyLog
+      .findMany({ where: { notes: { startsWith: 'legacy:' } }, distinct: ['userId'], select: { userId: true } })
+      .then((rows) => rows.length)
   ]);
 
   const spot = await prisma.user.findUnique({
@@ -128,6 +142,13 @@ ${row('Users (coaches/admins)', legacyUsers.coaches, coaches)}
 ${row('Coach assignments', '-', assignments)}
 ${row('Programs', '-', programs)}
 ${row('Metric snapshots (<= sessions)', legacySessions, metricSnapshots)}
+${row('Daily plans (nutrition)', legacyNutritionPlans, '-')}
+${row('Daily plans (exercise)', legacyExercisePlans, '-')}
+${row('Daily logs (legacy import)', '-', legacyDailyLogs)}
+${row('Daily meals (legacy import)', '-', legacyDailyMeals)}
+${row('Daily meal items (legacy import)', '-', legacyMealItems)}
+${row('Scheduled exercises (PLANNED)', '-', legacyScheduledExercises)}
+${row('Users with imported daily plans', '-', usersWithDailyPlans)}
 ${row('Progress snapshots', '-', progressSnapshots)}
 ${row('Client profiles', '-', profiles)}
 ${row('Profiles with height', '-', profilesWithHeight)}
@@ -142,7 +163,7 @@ ${spotLines.join('\n')}
 ## Notes
 
 - Metric snapshots are de-duplicated to one per calendar day, so the count is <= raw legacy training_sessions (${legacySessions}).
-- Out-of-scope (Core migration): legacy nutritionPrograms / exercisePrograms daily history.
+- Daily plans are joined via training_sessions (nutritionPrograms.owner_id / exercisePrograms.owner_id reference training_sessions.id). One DailyLog is materialized per (user, day); same-day duplicates keep the highest session_number. Plans whose session or user did not migrate are skipped.
 `;
 
   mkdirSync(dirname(REPORT_PATH), { recursive: true });

@@ -202,6 +202,13 @@ export async function copyExercisesFromDate(
   const program = await getActiveProgram(userId);
   if (!program) throw new Error('No active program found');
 
+  const targetLog = await prisma.dailyLog.findUnique({
+    where: { userId_date: { userId, date: parseDateParam(targetDate) } }
+  });
+  if (targetLog?.notes?.startsWith('legacy:')) {
+    throw new Error('This day is an imported historical plan and cannot be modified.');
+  }
+
   const source = await getScheduledExercises(userId, sourceDate);
   if (!source.length) throw new Error(`No exercises found on ${sourceDate}`);
 

@@ -353,6 +353,9 @@ export async function applyTemplateToDailyLog(
 ) {
   const log = await ensureDailyLogByUserId(userId, date);
   if (!log) throw new Error('No active program found');
+  if (log.notes?.startsWith('legacy:')) {
+    throw new Error('This day is an imported historical plan and cannot be modified.');
+  }
 
   const template = await prisma.nutritionPlanTemplate.findUnique({ where: { id: templateId } });
   if (!template) throw new Error('Template not found');

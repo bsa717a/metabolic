@@ -218,6 +218,10 @@ export async function copyMealFromPreviousDay(userId: string, mealId: string) {
       include: { dailyLog: true }
     });
 
+    if (meal.dailyLog.notes?.startsWith('legacy:')) {
+      throw new Error('This day is an imported historical plan and cannot be modified.');
+    }
+
     const priorLog = await tx.dailyLog.findFirst({
       where: { userId, date: { lt: meal.dailyLog.date } },
       orderBy: { date: 'desc' },
