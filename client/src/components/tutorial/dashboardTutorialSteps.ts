@@ -67,7 +67,7 @@ export const DASHBOARD_TUTORIAL_STEPS: DashboardTutorialStep[] = [
     target: '[data-tour="topbar-streaks"]',
     quip: 'Streaks: the only fire you should play with.',
     title: 'Fire good. Chain sad. (Recoverable.)',
-    body: "Flame = consecutive days you logged food like a responsible legend. Droplet = consecutive days you hit your water goal. Miss a day? Grace days exist — we're tough on habits, soft on humans. (These numbers are demo mode. Yours start at zero. We're doing a little street magic for the tour.)",
+    body: "Flame = consecutive days you logged food like a responsible legend. Miss a day? Grace days exist — we're tough on habits, soft on humans. (Water streak lives next to the bottle. These numbers are demo mode. Yours start at zero. We're doing a little street magic for the tour.)",
     cta: 'Next →',
     placement: 'below'
   },
