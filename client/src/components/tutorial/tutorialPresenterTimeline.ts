@@ -93,15 +93,6 @@ export function resolvePresenterLayout(keyframe: PresenterKeyframe): {
   return { top, left, width, height };
 }
 
-export function scrollSlotIntoView(slot: PresenterSlot) {
-  if (slot === 'center') {
-    document.querySelector(NAV_TILES_SELECTOR)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    return;
-  }
-  const target = document.querySelector(SLOT_TARGETS[slot]);
-  target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }

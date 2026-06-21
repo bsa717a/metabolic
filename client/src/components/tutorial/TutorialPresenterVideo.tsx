@@ -5,7 +5,6 @@ import {
   getActiveKeyframe,
   PRESENTER_VIDEO_SRC,
   resolvePresenterLayout,
-  scrollSlotIntoView,
   type PresenterKeyframe
 } from './tutorialPresenterTimeline';
 
@@ -22,11 +21,25 @@ export function TutorialPresenterVideo({
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [layout, setLayout] = useState(() => resolvePresenterLayout(getActiveKeyframe(0)));
   const [keyframe, setKeyframe] = useState<PresenterKeyframe>(() => getActiveKeyframe(0));
-  const lastSlotRef = useRef(keyframe.slot);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
 
   const updateLayout = useCallback((active: PresenterKeyframe) => {
     setKeyframe(active);
     setLayout(resolvePresenterLayout(active));
+  }, []);
+
+  const startPlayback = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.muted = false;
+    video.volume = 1;
+    try {
+      await video.play();
+      setPlaybackBlocked(false);
+    } catch {
+      setPlaybackBlocked(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -35,10 +48,6 @@ export function TutorialPresenterVideo({
 
     const handleTimeUpdate = () => {
       const active = getActiveKeyframe(video.currentTime);
-      if (active.slot !== lastSlotRef.current) {
-        lastSlotRef.current = active.slot;
-        scrollSlotIntoView(active.slot);
-      }
       updateLayout(active);
     };
 
@@ -46,17 +55,22 @@ export function TutorialPresenterVideo({
       onComplete();
     };
 
+    const handlePlay = () => {
+      setPlaybackBlocked(false);
+    };
+
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('ended', handleEnded);
+    video.addEventListener('play', handlePlay);
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('play', handlePlay);
     };
   }, [loadState, onComplete, updateLayout]);
 
   useEffect(() => {
     if (loadState !== 'ready') return;
-    scrollSlotIntoView('center');
     const handleResize = () => updateLayout(getActiveKeyframe(videoRef.current?.currentTime ?? 0));
     window.addEventListener('resize', handleResize);
     window.addEventListener('scroll', handleResize, true);
@@ -75,10 +89,7 @@ export function TutorialPresenterVideo({
       if (ready) return;
       ready = true;
       setLoadState('ready');
-      video.muted = true;
-      void video.play().catch(() => {
-        // Unmuted autoplay is blocked; controls stay available for manual play.
-      });
+      void startPlayback();
     };
 
     const tryReady = () => {
@@ -102,7 +113,7 @@ export function TutorialPresenterVideo({
       video.removeEventListener('canplaythrough', tryReady);
       video.removeEventListener('loadeddata', tryReady);
     };
-  }, []);
+  }, [startPlayback]);
 
   return (
     <>
@@ -156,11 +167,24 @@ export function TutorialPresenterVideo({
         }}
         src={PRESENTER_VIDEO_SRC}
         playsInline
-        muted
         controls
         preload="auto"
         aria-label="Dashboard tutorial video"
       />
+
+      {loadState === 'ready' && playbackBlocked && (
+        <div
+          className="fixed z-[67] flex items-center justify-center rounded-2xl bg-black/45 backdrop-blur-[1px]"
+          style={{
+            top: layout.top,
+            left: layout.left,
+            width: layout.width,
+            height: layout.height
+          }}
+        >
+          <Button onClick={() => void startPlayback()}>Start tour</Button>
+        </div>
+      )}
 
       {loadState === 'ready' && (
         <div
