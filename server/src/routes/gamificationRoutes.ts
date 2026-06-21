@@ -14,11 +14,14 @@ import { addExtraFood, logMealGamification } from '../services/gamificationFoodS
 import { requireRole } from '../auth/requireRole.js';
 import { LEVEL_DEFINITIONS, BADGE_DEFINITIONS } from '../gamification/definitions.js';
 import { syncGamificationDefinitions } from '../services/gamificationService.js';
+import { parseClientDayQuery, resolveRequestTimeZone } from '../utils/dates.js';
 
 export async function gamificationRoutes(app: FastifyInstance) {
   app.get('/api/gamification/dashboard', { preHandler: requireAuth }, async (request) => {
     await ensureGamificationUser(request.appUser!.id);
-    return getGamificationDashboard(request.appUser!.id);
+    const { dateKey, timeZone: clientTimeZone } = parseClientDayQuery(request.query);
+    const timeZone = resolveRequestTimeZone(clientTimeZone, request.appUser!.timezone);
+    return getGamificationDashboard(request.appUser!.id, dateKey, timeZone);
   });
 
   app.get('/api/gamification/journey', { preHandler: requireAuth }, async (request) => {

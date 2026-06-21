@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { Bar, BarChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { api } from '../services/api';
+import { api, todayDateParam } from '../services/api';
 import type { Dashboard } from '../types';
 import { Card } from '../components/ui/Card';
 
@@ -12,7 +12,7 @@ export function ProgressPage() {
 
   useEffect(() => {
     setLoading(true);
-    api<Dashboard>('/api/dashboard/today')
+    api<Dashboard>(`/api/dashboard/today?${todayDateParam()}`)
       .then(setData)
       .finally(() => setLoading(false));
   }, []);

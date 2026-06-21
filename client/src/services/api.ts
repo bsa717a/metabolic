@@ -41,6 +41,22 @@ export function todayKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+/** Query params for endpoints that scope data to the user's local calendar day. */
+export function clientTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return '';
+  }
+}
+
+export function todayDateParam() {
+  const params = new URLSearchParams({ date: todayKey() });
+  const timeZone = clientTimeZone();
+  if (timeZone) params.set('timeZone', timeZone);
+  return params.toString();
+}
+
 export function parseDateKey(date: string) {
   const [year, month, day] = date.split('-').map(Number);
   return new Date(Date.UTC(year, month - 1, day));

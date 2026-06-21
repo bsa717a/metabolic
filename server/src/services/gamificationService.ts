@@ -7,8 +7,8 @@ import {
   runProgressionEvaluation,
   type ProgressionCelebration
 } from '../gamification/progressionEngine.js';
-import { ensureTodayDailyLog } from './dailyLogService.js';
-import { startOfUtcDay } from '../utils/dates.js';
+import { ensureDailyLog } from './dailyLogService.js';
+import { parseDateParam, userDayKey } from '../utils/dates.js';
 
 export async function syncGamificationDefinitions() {
   for (const level of LEVEL_DEFINITIONS) {
@@ -112,7 +112,7 @@ export async function ensureGamificationUser(userId: string) {
   }
 }
 
-export async function getGamificationDashboard(userId: string) {
+export async function getGamificationDashboard(userId: string, dateKey?: string, timeZone?: string | null) {
   await ensureGamificationUser(userId);
   await runProgressionEvaluation(userId);
 
@@ -171,7 +171,15 @@ export async function getGamificationDashboard(userId: string) {
     currentStreak: waterStreak?.currentCount ?? 0
   };
   if (program) {
-    const dailyLog = await ensureTodayDailyLog(userId, program);
+    const resolvedDateKey =
+      dateKey && /^\d{4}-\d{2}-\d{2}$/.test(dateKey)
+        ? dateKey
+        : userDayKey(
+            timeZone ??
+              (await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } }))?.timezone ??
+              null
+          );
+    const dailyLog = await ensureDailyLog(userId, program, parseDateParam(resolvedDateKey));
     const targetOz = dailyLog.waterTargetOz;
     const actualOz = dailyLog.waterActualOz;
     hydration = {
@@ -408,25 +416,12 @@ export async function ensureDailyFoodLog(userId: string, dateStr: string) {
   });
   if (!program) throw new Error('No active program');
 
-  const dailyLog = await ensureTodayDailyLog(userId, program);
-  if (dateStr) {
-    const { parseDateParam } = await import('../utils/dates.js');
-    const day = parseDateParam(dateStr);
-    const log = await prisma.dailyLog.findUnique({
-      where: { userId_date: { userId, date: day } }
-    });
-    if (log) {
-      return prisma.dailyFoodLog.upsert({
-        where: { dailyLogId: log.id },
-        create: { userId, dailyLogId: log.id, date: day },
-        update: {}
-      });
-    }
-  }
+  const day = parseDateParam(dateStr);
+  const dailyLog = await ensureDailyLog(userId, program, day);
 
   return prisma.dailyFoodLog.upsert({
     where: { dailyLogId: dailyLog.id },
-    create: { userId, dailyLogId: dailyLog.id, date: dailyLog.date },
+    create: { userId, dailyLogId: dailyLog.id, date: day },
     update: {}
   });
 }

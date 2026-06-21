@@ -1,8 +1,8 @@
 import { HydrationSource, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { addUtcDays, startOfUtcDay } from '../utils/dates.js';
+import { addUtcDays, parseDateKeyParam, parseDateParam, startOfUtcDay, userDayKey } from '../utils/dates.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
-import { ensureTodayDailyLogByUserId, userTodayDate } from './dailyLogService.js';
+import { ensureDailyLogByUserId, userTodayDate } from './dailyLogService.js';
 import { recordWaterGoalDay, revertWaterGoalDay } from '../gamification/progressionEngine.js';
 
 export type HydrationSummary = {
@@ -70,16 +70,31 @@ async function recalcDailyWater(dailyLogId: string) {
   return updated;
 }
 
-async function ensureTodayLog(userId: string) {
-  const dailyLog = await ensureTodayDailyLogByUserId(userId);
+async function resolveDateKey(userId: string, dateKey?: string | null, timeZone?: string | null) {
+  const explicit = parseDateKeyParam(dateKey);
+  if (explicit) return explicit;
+  const tz =
+    timeZone ??
+    (await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } }))?.timezone ??
+    null;
+  return userDayKey(tz);
+}
+
+async function ensureUserDailyLog(userId: string, dateKey?: string | null, timeZone?: string | null) {
+  const resolved = await resolveDateKey(userId, dateKey, timeZone);
+  const dailyLog = await ensureDailyLogByUserId(userId, resolved);
   if (!dailyLog) throw new Error('No active program found');
   return dailyLog;
 }
 
-export async function getHydrationSummary(userId: string): Promise<HydrationSummary> {
+export async function getHydrationSummary(
+  userId: string,
+  dateKey?: string | null,
+  timeZone?: string | null
+): Promise<HydrationSummary> {
   const [user, dailyLog, waterStreak, goalMetDays, last30DayHitPercent] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { waterGoalOz: true } }),
-    ensureTodayLog(userId),
+    ensureUserDailyLog(userId, dateKey, timeZone),
     prisma.userStreak.findUnique({
       where: { userId_streakType: { userId, streakType: 'WATER_GOAL_DAILY' } }
     }),
@@ -117,7 +132,7 @@ export async function getHydrationSummary(userId: string): Promise<HydrationSumm
 
 export async function logWater(
   userId: string,
-  input: { amountOz?: number; text?: string; source?: HydrationSource }
+  input: { amountOz?: number; text?: string; source?: HydrationSource; dateKey?: string | null; timeZone?: string | null }
 ) {
   let amountOz = input.amountOz;
   if (amountOz == null && input.text) {
@@ -127,7 +142,7 @@ export async function logWater(
     throw new Error('Could not parse a valid water amount. Try "16 oz water" or "drank a glass of water".');
   }
 
-  const dailyLog = await ensureTodayLog(userId);
+  const dailyLog = await ensureUserDailyLog(userId, input.dateKey, input.timeZone);
   const source = input.source ?? HydrationSource.MANUAL;
 
   await prisma.$transaction(async (tx) => {
@@ -146,7 +161,7 @@ export async function logWater(
   });
 
   const updated = await recalcDailyWater(dailyLog.id);
-  const summary = await getHydrationSummary(userId);
+  const summary = await getHydrationSummary(userId, input.dateKey, input.timeZone);
 
   return {
     amountOz: Math.round(amountOz),
@@ -158,8 +173,8 @@ export async function logWater(
   };
 }
 
-export async function undoLastEntry(userId: string) {
-  const dailyLog = await ensureTodayLog(userId);
+export async function undoLastEntry(userId: string, dateKey?: string | null, timeZone?: string | null) {
+  const dailyLog = await ensureUserDailyLog(userId, dateKey, timeZone);
   const lastEntry = await prisma.hydrationEntry.findFirst({
     where: { dailyLogId: dailyLog.id },
     orderBy: { createdAt: 'desc' }
@@ -172,10 +187,15 @@ export async function undoLastEntry(userId: string) {
     await revertWaterGoalDay(userId, dailyLog.date);
   }
 
-  return getHydrationSummary(userId);
+  return getHydrationSummary(userId, dateKey, timeZone);
 }
 
-export async function setWaterGoal(userId: string, goalOz: number) {
+export async function setWaterGoal(
+  userId: string,
+  goalOz: number,
+  dateKey?: string | null,
+  timeZone?: string | null
+) {
   if (!Number.isFinite(goalOz) || goalOz < 1 || goalOz > 512) {
     throw new Error('Water goal must be between 1 and 512 ounces');
   }
@@ -186,7 +206,8 @@ export async function setWaterGoal(userId: string, goalOz: number) {
     data: { waterGoalOz: rounded }
   });
 
-  const today = await userTodayDate(userId);
+  const todayKey = await resolveDateKey(userId, dateKey, timeZone);
+  const today = parseDateParam(todayKey);
   await prisma.dailyLog.updateMany({
     where: { userId, date: today },
     data: { waterTargetOz: rounded }
@@ -199,7 +220,7 @@ export async function setWaterGoal(userId: string, goalOz: number) {
     await recalcDailyWater(dailyLog.id);
   }
 
-  return getHydrationSummary(userId);
+  return getHydrationSummary(userId, dateKey, timeZone);
 }
 
 export async function getCoachHydrationStats(userId: string) {

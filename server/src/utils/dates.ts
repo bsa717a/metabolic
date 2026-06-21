@@ -55,6 +55,39 @@ export function userDayKey(timeZone: string | null | undefined, date = new Date(
   return toDateKey(startOfUtcDay(date));
 }
 
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function parseDateKeyParam(dateKey?: string | null) {
+  return dateKey && DATE_KEY_RE.test(dateKey) ? dateKey : undefined;
+}
+
+export function parseClientTimeZone(value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: trimmed });
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `date` and `timeZone` query params sent by the web client for local-day scoping. */
+export function parseClientDayQuery(query: unknown) {
+  const params = (query ?? {}) as { date?: string; timeZone?: string };
+  return {
+    dateKey: parseDateKeyParam(params.date),
+    timeZone: parseClientTimeZone(params.timeZone)
+  };
+}
+
+export function resolveRequestTimeZone(
+  clientTimeZone: string | undefined,
+  profileTimeZone: string | null | undefined
+) {
+  return clientTimeZone ?? profileTimeZone ?? null;
+}
+
 export function addUtcDays(date: Date, days: number) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
