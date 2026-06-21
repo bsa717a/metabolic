@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Camera, ChevronDown, Leaf, Plus, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
-import { api } from '../../services/api';
+import { api, todayDateParam } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
 import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
 import { Badge } from '../ui/Badge';
@@ -374,7 +374,7 @@ export function TodayNutrition({
       setSaving(true);
       setError(null);
       try {
-        await api('/api/hydration/log', {
+        await api(`/api/hydration/log?${todayDateParam()}`, {
           method: 'POST',
           body: JSON.stringify({ text: input, source: 'AI' })
         });

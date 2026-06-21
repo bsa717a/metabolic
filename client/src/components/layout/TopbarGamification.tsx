@@ -7,7 +7,7 @@ import { HydrationTopbarDrawer } from '../hydration/HydrationTopbarDrawer';
 import { WaterBottle } from '../hydration/WaterBottle';
 import { LevelUpTopbarDrawer } from './LevelUpTopbarDrawer';
 import { ProgressRing } from '../gamification/ProgressRing';
-import { api } from '../../services/api';
+import { api, todayDateParam } from '../../services/api';
 import type { GamificationDashboard } from '../../types/gamification';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamification';
@@ -25,7 +25,7 @@ export function TopbarGamification() {
   const levelUpButtonRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(() => {
-    api<GamificationDashboard>('/api/gamification/dashboard')
+    api<GamificationDashboard>(`/api/gamification/dashboard?${todayDateParam()}`)
       .then(setData)
       .catch(() => setData(null));
   }, []);

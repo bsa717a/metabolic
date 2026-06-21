@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Droplets, Save, Undo2 } from 'lucide-react';
 import { WaterBottle } from './WaterBottle';
-import { api } from '../../services/api';
+import { api, todayDateParam } from '../../services/api';
 import type { HydrationLogResponse, HydrationSummary } from '../../types/hydration';
 
 function notifyHydrationUpdated() {
@@ -27,7 +27,7 @@ export function HydrationPanel({ variant = 'page', onClose }: HydrationPanelProp
     setLoading(true);
     setError('');
     try {
-      const data = await api<HydrationSummary>('/api/hydration');
+      const data = await api<HydrationSummary>(`/api/hydration?${todayDateParam()}`);
       setSummary(data);
       setGoalDraft(String(data.goalOz));
     } catch (err) {
@@ -45,7 +45,7 @@ export function HydrationPanel({ variant = 'page', onClose }: HydrationPanelProp
     setSaving(true);
     setError('');
     try {
-      const result = await api<HydrationLogResponse>('/api/hydration/log', {
+      const result = await api<HydrationLogResponse>(`/api/hydration/log?${todayDateParam()}`, {
         method: 'POST',
         body: JSON.stringify({ amountOz })
       });
@@ -68,7 +68,7 @@ export function HydrationPanel({ variant = 'page', onClose }: HydrationPanelProp
     setSaving(true);
     setError('');
     try {
-      const data = await api<HydrationSummary>('/api/hydration/goal', {
+      const data = await api<HydrationSummary>(`/api/hydration/goal?${todayDateParam()}`, {
         method: 'PATCH',
         body: JSON.stringify({ goalOz })
       });
@@ -85,7 +85,7 @@ export function HydrationPanel({ variant = 'page', onClose }: HydrationPanelProp
     setSaving(true);
     setError('');
     try {
-      const data = await api<HydrationSummary>('/api/hydration/undo', { method: 'POST' });
+      const data = await api<HydrationSummary>(`/api/hydration/undo?${todayDateParam()}`, { method: 'POST' });
       setSummary(data);
       notifyHydrationUpdated();
     } catch (err) {

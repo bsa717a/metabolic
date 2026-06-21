@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Target, Apple, Dumbbell, LineChart, Settings, TrendingUp, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { api } from '../services/api';
+import { api, todayDateParam } from '../services/api';
 import { getIdToken } from '../services/auth';
 import { DashboardWelcome } from '../components/dashboard/DashboardWelcome';
 import type { AppUser, Dashboard } from '../types';
@@ -111,7 +111,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
         throw new Error('Not signed in yet. Please refresh or sign in again.');
       }
 
-      const dashboard = await api<Dashboard>('/api/dashboard/today');
+      const dashboard = await api<Dashboard>(`/api/dashboard/today?${todayDateParam()}`);
       if (dashboard.program && !dashboard.summary) {
         throw new Error('Dashboard data is incomplete. Restart the backend server and try again.');
       }

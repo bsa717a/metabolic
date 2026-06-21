@@ -2,7 +2,7 @@ import { ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { ensureDailyLog } from './dailyLogService.js';
 import { sortScheduledExercises } from './exerciseService.js';
-import { parseDateParam, localTimeParts, startOfUtcDay, userDayKey } from '../utils/dates.js';
+import { parseDateParam, localTimeParts, userDayKey } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
 import { n, round } from '../utils/numbers.js';
 
@@ -10,14 +10,28 @@ function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; 
   return meal.items.length > 0 || n(meal.plannedCalories) > 0 || n(meal.actualCalories) > 0 || meal.status !== 'PLANNED';
 }
 
+function mealsForNutritionDisplay<T extends { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }>(
+  meals: T[]
+) {
+  const activeMeals = meals.filter(hasNutritionActivity);
+  return activeMeals.length ? activeMeals : meals;
+}
+
 /**
  * Loads the dashboard for a user's day. `dateKey` (YYYY-MM-DD) selects the
- * calendar day; when omitted it defaults to the UTC day. Pass the user's local
- * day key (see `userDayKey`) so SMS reminders and logging stay timezone-correct.
+ * calendar day. Pass the client's browser timezone (with `date`) so meal timing
+ * matches the web UI; SMS and other server callers use the profile timezone.
  */
 export async function getTodayDashboard(userId: string, dateKey?: string, timeZone?: string | null) {
-  const resolvedDateKey = dateKey ?? (timeZone ? userDayKey(timeZone) : undefined);
-  const today = resolvedDateKey ? parseDateParam(resolvedDateKey) : startOfUtcDay();
+  let resolvedDateKey = dateKey;
+  if (!resolvedDateKey) {
+    const tz =
+      timeZone ??
+      (await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } }))?.timezone ??
+      null;
+    resolvedDateKey = userDayKey(tz);
+  }
+  const today = parseDateParam(resolvedDateKey);
   const program = await prisma.program.findFirst({
     where: { userId, status: ProgramStatus.ACTIVE },
     include: { metrics: true }
@@ -30,7 +44,7 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
     prisma.scheduledExercise.findMany({ where: { userId, scheduledDate: today }, include: { exercise: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
     prisma.dailyLog.findMany({ where: { userId, weight: { not: null } }, orderBy: { date: 'asc' }, take: 30 })
   ]);
-  const nutritionMeals = meals.filter(hasNutritionActivity);
+  const nutritionMeals = mealsForNutritionDisplay(meals);
   const exercises = sortScheduledExercises(rawExercises);
 
   const weightMetric = program.metrics.find((metric) => metric.metricType === 'WEIGHT');
