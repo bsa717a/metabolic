@@ -30,8 +30,7 @@ export function NutritionPage() {
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [editMealId, setEditMealId] = useState<string>();
-  const [editMode, setEditMode] = useState<'PLANNED' | 'ACTUAL'>('PLANNED');
+  const [logActualMealId, setLogActualMealId] = useState<string>();
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
@@ -77,22 +76,16 @@ export function NutritionPage() {
     setSearchParams(date === todayKey() ? {} : { date }, { replace: true });
   }
 
-  function openEditPlan(mealId: string) {
-    setEditMode('PLANNED');
-    setEditMealId(mealId);
-  }
-
   function openLogActual(mealId: string) {
-    setEditMode('ACTUAL');
-    setEditMealId(mealId);
+    setLogActualMealId(mealId);
   }
 
   function openAiFromDrawer(mealId: string, mode: 'PLANNED' | 'ACTUAL') {
-    setEditMealId(undefined);
+    setLogActualMealId(undefined);
     setAiState({ mealId, itemType: mode });
   }
 
-  const editMeal = meals.find((meal) => meal.id === editMealId);
+  const logActualMeal = meals.find((meal) => meal.id === logActualMealId);
   const dayTotals = meals.reduce(
     (sum, meal) => ({
       plannedCalories: sum.plannedCalories + Number(meal.plannedCalories),
@@ -204,7 +197,6 @@ export function NutritionPage() {
         meals={meals}
         selectedDate={selectedDate}
         onChange={() => load(selectedDate)}
-        onEditPlan={openEditPlan}
         onLogActual={openLogActual}
       />
 
@@ -224,10 +216,10 @@ export function NutritionPage() {
       )}
 
       <EditMealPlanDrawer
-        open={Boolean(editMealId)}
-        meal={editMeal}
-        mode={editMode}
-        onClose={() => setEditMealId(undefined)}
+        open={Boolean(logActualMealId)}
+        meal={logActualMeal}
+        mode="ACTUAL"
+        onClose={() => setLogActualMealId(undefined)}
         onSaved={() => load(selectedDate)}
         onAskAi={openAiFromDrawer}
       />

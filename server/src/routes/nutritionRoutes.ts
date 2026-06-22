@@ -9,6 +9,7 @@ import { prisma } from '../db/prisma.js';
 
 const mealUpdateSchema = z
   .object({
+    name: z.string().min(1).optional(),
     plannedTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
     plannedCalories: z.number().optional(),
     plannedProtein: z.number().optional(),
