@@ -38,9 +38,12 @@ export function getActiveKeyframe(currentTime: number): PresenterKeyframe {
 
 function getNavigationSectionBottom() {
   const navTiles = document.querySelector(NAV_TILES_SELECTOR);
-  if (navTiles) return navTiles.getBoundingClientRect().bottom;
+  if (navTiles) {
+    const bottom = navTiles.getBoundingClientRect().bottom;
+    if (bottom > 0) return bottom;
+  }
   const header = document.querySelector('header');
-  return (header ? header.getBoundingClientRect().bottom : 72) + 240;
+  return (header ? header.getBoundingClientRect().bottom : 72) + 16;
 }
 
 function getVideoDimensions(size: PresenterSize) {
