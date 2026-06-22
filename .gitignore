@@ -12,3 +12,5 @@ coverage
 .tmp
 .firebase
 .cursor
+backups/
+client/public/tutorial/presrenter.mp4

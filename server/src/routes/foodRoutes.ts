@@ -7,6 +7,18 @@ import { prisma } from '../db/prisma.js';
 const foodBody = z.object({ name: z.string(), servingSize: z.number().default(1), servingUnit: z.string().default('serving'), calories: z.number(), protein: z.number(), carbs: z.number(), fat: z.number(), brand: z.string().optional() });
 
 export async function foodRoutes(app: FastifyInstance) {
+  app.get('/api/foods/recent', { preHandler: requireAuth }, async (request) => {
+    const limit = Math.min(Number((request.query as { limit?: string }).limit ?? 10), 25);
+    const recentItems = await prisma.mealItem.findMany({
+      where: { meal: { userId: request.appUser!.id }, foodId: { not: null }, type: 'PLANNED' },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['foodId'],
+      take: limit,
+      include: { food: true }
+    });
+    return recentItems.filter((item) => item.food).map((item) => item.food!);
+  });
+
   app.get('/api/foods', { preHandler: requireAuth }, async (request) => {
     const query = String((request.query as { query?: string }).query ?? '').trim();
     if (query.length < 2) return [];
