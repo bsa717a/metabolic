@@ -186,7 +186,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
               >
                 <UserRound size={16} aria-hidden />
                 <span className="hidden md:inline">Hi, {user.firstName}</span>
-                <span className="md:hidden">Profile</span>
+                <span className="md:hidden">{user.firstName}</span>
               </button>
               {profileOpen && (
                 <ul
