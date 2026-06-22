@@ -1,3 +1,4 @@
+import { clsx } from 'clsx';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -10,6 +11,21 @@ type TopbarAnchorDrawerProps = {
   panelClassName?: string;
 };
 
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return isMobile;
+}
+
 export function TopbarAnchorDrawer({
   open,
   onClose,
@@ -19,7 +35,9 @@ export function TopbarAnchorDrawer({
   panelClassName = 'w-[min(calc(100vw-1.5rem),22rem)] max-h-[min(70vh,32rem)]'
 }: TopbarAnchorDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [top, setTop] = useState(0);
+  const [anchorCenterX, setAnchorCenterX] = useState(0);
+  const isMobile = useIsMobileViewport();
 
   useLayoutEffect(() => {
     if (!open || !anchorRef.current) return;
@@ -28,10 +46,8 @@ export function TopbarAnchorDrawer({
       const anchor = anchorRef.current;
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + 8,
-        left: rect.left + rect.width / 2
-      });
+      setTop(rect.bottom + 8);
+      setAnchorCenterX(rect.left + rect.width / 2);
     }
 
     updatePosition();
@@ -61,8 +77,11 @@ export function TopbarAnchorDrawer({
       <div className="fixed inset-0 z-40 bg-slate-950/20" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
-        className={`fixed z-50 -translate-x-1/2 origin-top overflow-y-auto rounded-2xl border border-app-border bg-app-surface p-4 shadow-2xl ${panelClassName}`}
-        style={{ top: position.top, left: position.left }}
+        className={clsx(
+          'fixed z-50 origin-top -translate-x-1/2 overflow-y-auto rounded-2xl border border-app-border bg-app-surface p-4 shadow-2xl',
+          panelClassName
+        )}
+        style={{ top, left: isMobile ? '50%' : anchorCenterX }}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}

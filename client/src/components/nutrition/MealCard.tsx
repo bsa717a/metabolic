@@ -33,13 +33,11 @@ function formatMealTotals(calories: number, protein: number, carbs: number, fat:
 }
 
 function ActionsDropdown({
-  meal,
   future,
   onLogActual,
   onMarkEaten,
   onCopyFromYesterday,
 }: {
-  meal: Meal;
   future: boolean;
   onLogActual: () => void;
   onMarkEaten: () => void;
@@ -246,7 +244,6 @@ export function MealCard({
                 </button>
               )}
               <ActionsDropdown
-                meal={meal}
                 future={future}
                 onLogActual={() => onLogActual(meal.id)}
                 onMarkEaten={() => void markPlannedAsEaten()}

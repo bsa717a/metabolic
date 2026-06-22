@@ -29,7 +29,7 @@ export function BrandLogo({
   const content = (
     <>
       <BrandMark size={markSize} />
-      <div className="min-w-0">
+      <div className="min-w-0 hidden sm:block">
         <p className="leading-none">
           <span className="text-lg font-semibold tracking-tight text-brand-navy dark:text-brand-off-white sm:text-xl">
             Metabolic
@@ -55,7 +55,7 @@ export function BrandLogo({
     );
   }
 
-  return <div className={rootClass}>{content}</div>;
+  return <div className={rootClass} aria-label="Metabolic OS">{content}</div>;
 }
 
 export function BrandMarkIcon({ size = 32, className }: { size?: number; className?: string }) {

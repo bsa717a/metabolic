@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Target, Apple, Dumbbell, LineChart, Settings, TrendingUp, Users } from 'lucide-react';
+import { Target, Apple, Dumbbell, Flame, LineChart, Settings, TrendingUp, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
 import { getIdToken } from '../services/auth';
@@ -21,21 +21,33 @@ function RemainingMacrosDisplay({
   proteinRemaining: number;
 }) {
   return (
-    <div
-      data-tour="macros-remaining"
-      className="flex gap-6 sm:gap-8 text-left sm:text-center"
-    >
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-app-text-muted">Calories left</p>
-        <p className="text-xl font-semibold tabular-nums text-brand-navy dark:text-brand-off-white">
-          {caloriesRemaining}
-        </p>
+    <div data-tour="macros-remaining">
+      {/* Mobile: compact horizontal row */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-app-text sm:hidden">
+        <span className="inline-flex items-center gap-1.5">
+          <Flame size={16} className="text-brand-gold" aria-hidden />
+          <span className="tabular-nums">{caloriesRemaining}</span> kcal left
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Dumbbell size={16} className="text-brand-green" aria-hidden />
+          <span className="tabular-nums">{proteinRemaining}g</span> protein left
+        </span>
       </div>
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-app-text-muted">Protein left</p>
-        <p className="text-xl font-semibold tabular-nums text-brand-navy dark:text-brand-off-white">
-          {proteinRemaining}g
-        </p>
+
+      {/* Desktop: stacked label + big number */}
+      <div className="hidden gap-6 sm:flex sm:gap-8 sm:text-center">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-app-text-muted">Calories left</p>
+          <p className="text-xl font-semibold tabular-nums text-brand-navy dark:text-brand-off-white">
+            {caloriesRemaining}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-app-text-muted">Protein left</p>
+          <p className="text-xl font-semibold tabular-nums text-brand-navy dark:text-brand-off-white">
+            {proteinRemaining}g
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -50,7 +62,7 @@ function DateTimeDisplay() {
   }, []);
 
   return (
-    <div className="text-left sm:text-right">
+    <div className="hidden text-left sm:block sm:text-right">
       <p className="text-sm font-semibold text-brand-navy dark:text-brand-off-white">
         {now.toLocaleDateString(undefined, {
           weekday: 'long',
@@ -195,7 +207,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
         <DateTimeDisplay />
       </div>
 
-      <section>
+      <section className="hidden sm:block">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-app-text-muted mb-3">Navigation</h2>
         <div
           data-tour="nav-tiles"
