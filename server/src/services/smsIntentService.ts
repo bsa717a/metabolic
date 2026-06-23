@@ -9,7 +9,7 @@ import { resolveNextMeal } from '../utils/meals.js';
 import { getAiProvider, type ChatMessage, type MealSuggestionResult } from './aiService.js';
 import { lookupFood, lookupFoodFromImage, summarizeFoodLookup, type FoodLookupResult } from './foodLookupService.js';
 import { env } from '../config/env.js';
-import { sendOutboundMessage, isTwilioConfigured } from './twilioOutboundService.js';
+import { sendOutboundMessage, isTwilioConfigured, type TwilioMessageChannel } from './twilioOutboundService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { logWater } from './hydrationService.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
@@ -36,6 +36,7 @@ import {
   parseMealName,
   parseTargetMealFromText,
   isEffectivelyZeroCalories,
+  isMarkMealAsPlannedMessage,
   smsZeroCalorieCheckResponse,
   wantsPhotoLog
 } from '../utils/smsFoodParse.js';
@@ -91,7 +92,14 @@ type SmsAction =
 
 const MEAL_NAME_PATTERN = /\b(breakfast|lunch|dinner|snack|brunch)\b/i;
 const EXERCISE_COMPLETE_PATTERN = /\b(done|complete|completed|finished|check(?:ed)?\s+off)\b/i;
-const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+const SUPPORTED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif'
+]);
 const MAX_SMS_IMAGE_BYTES = 10 * 1024 * 1024;
 const FOOD_PHOTO_TIMEOUT_MS = 25_000;
 const PHOTO_PROCESSING_ACK = 'Got your photo — estimating calories now. I will text you in a moment.';
@@ -163,6 +171,7 @@ function smsOptOutResponse() {
 }
 
 function wantsMarkMealComplete(text: string) {
+  if (isMarkMealAsPlannedMessage(text)) return true;
   if (looksLikeFoodAdd(text)) return false;
   if (/\bmeal\b/i.test(text) && /\b(complete|completed|done|eaten|as planned)\b/i.test(text)) return true;
   if (/\bmark\b.*\b(breakfast|lunch|dinner|snack|brunch)\b/i.test(text)) return true;
@@ -822,7 +831,9 @@ async function downloadSmsImage(media: SmsMedia) {
 
   const mimeType = (media.mimeType || response.headers.get('content-type') || '').split(';')[0]!.trim().toLowerCase();
   if (!SUPPORTED_IMAGE_TYPES.has(mimeType)) {
-    throw new Error('Send a JPEG, PNG, or WebP meal photo. If you are texting from iPhone, try sending the photo again.');
+    throw new Error(
+      'Send a JPEG, PNG, WebP, or HEIC meal photo. If you are texting from iPhone, try sending the photo again.'
+    );
   }
 
   const contentLength = Number(response.headers.get('content-length') ?? 0);
@@ -1003,7 +1014,14 @@ function photoErrorResponse(error: unknown) {
 }
 
 /** Processes a meal photo and records outbound SMS. Returns TwiML body when API send is not used. */
-async function deliverFoodPhotoReply(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
+async function deliverFoodPhotoReply(
+  user: SmsUser,
+  phone: string,
+  media: SmsMedia,
+  message: string,
+  inboundId: string,
+  channel: TwilioMessageChannel
+) {
   let reply: FoodPhotoReply;
   const shouldLog = wantsPhotoLog(message);
   try {
@@ -1037,7 +1055,7 @@ async function deliverFoodPhotoReply(user: SmsUser, phone: string, media: SmsMed
 
   if (isTwilioConfigured()) {
     try {
-      await sendOutboundMessage(phone, reply.text);
+      await sendOutboundMessage(phone, reply.text, channel);
       return '';
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Could not send text message.';
@@ -1048,19 +1066,92 @@ async function deliverFoodPhotoReply(user: SmsUser, phone: string, media: SmsMed
   return reply.text;
 }
 
-function processFoodPhotoInBackground(user: SmsUser, phone: string, media: SmsMedia, message: string, inboundId: string) {
-  void deliverFoodPhotoReply(user, phone, media, message, inboundId).catch(async (error) => {
+function processFoodPhotoInBackground(
+  user: SmsUser,
+  phone: string,
+  media: SmsMedia,
+  message: string,
+  inboundId: string,
+  channel: TwilioMessageChannel
+) {
+  void deliverFoodPhotoReply(user, phone, media, message, inboundId, channel).catch(async (error) => {
     const detail = error instanceof Error ? error.message : 'Could not analyze photo.';
     const response = capSms(`Sorry, I could not analyze that photo right now. ${detail}`);
     await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response } });
     if (isTwilioConfigured()) {
       try {
-        await sendOutboundMessage(phone, response);
+        await sendOutboundMessage(phone, response, channel);
       } catch {
         // Best-effort error delivery.
       }
     }
   });
+}
+
+async function sendPhotoProcessingAck(
+  user: SmsUser,
+  phone: string,
+  inboundId: string,
+  channel: TwilioMessageChannel
+) {
+  const ack = capSms(PHOTO_PROCESSING_ACK);
+  await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response: ack } });
+  const outbound = await prisma.smsMessage.create({
+    data: {
+      phone,
+      userId: user.id,
+      direction: 'OUTBOUND',
+      message: ack,
+      response: ack,
+      intent: 'PHOTO_ACK',
+      status: 'PROCESSED'
+    }
+  });
+
+  if (!isTwilioConfigured()) {
+    return { ack, deliveredViaApi: false };
+  }
+
+  try {
+    await sendOutboundMessage(phone, ack, channel);
+    return { ack, deliveredViaApi: true };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Could not send text message.';
+    await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+    return { ack, deliveredViaApi: false };
+  }
+}
+
+async function respondMediaMissing(user: SmsUser, phone: string, inboundId: string, channel: TwilioMessageChannel) {
+  const response = capSms(
+    'I got your message but could not load the photo. Try sending it again, or text what you ate with amounts.'
+  );
+  await prisma.smsMessage.update({
+    where: { id: inboundId },
+    data: { status: 'PROCESSED', response, intent: 'FOOD_PHOTO_MISSING' }
+  });
+  const outbound = await prisma.smsMessage.create({
+    data: {
+      phone,
+      userId: user.id,
+      direction: 'OUTBOUND',
+      message: response,
+      response,
+      status: 'PROCESSED'
+    }
+  });
+
+  if (isTwilioConfigured()) {
+    try {
+      await sendOutboundMessage(phone, response, channel);
+      return { response, deliveredViaApi: true };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Could not send text message.';
+      await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+    }
+  }
+
+  return { response, deliveredViaApi: false };
 }
 
 async function respondUnknownSmsUser(phone: string, inboundMessage: string, intent: string) {
@@ -1081,7 +1172,14 @@ async function respondUnknownSmsUser(phone: string, inboundMessage: string, inte
   return { response };
 }
 
-export async function handleSms(phone: string, message: string, media?: SmsMedia, twilioOptOutType?: string) {
+export async function handleSms(
+  phone: string,
+  message: string,
+  media?: SmsMedia,
+  twilioOptOutType?: string,
+  channel: TwilioMessageChannel = 'sms',
+  mediaMissing = false
+) {
   const user = await findUserBySmsPhone(phone);
   if (!media && isSmsStartKeyword(message)) {
     if (!user) {
@@ -1158,6 +1256,7 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   }
 
   const action = parseSmsAction(message);
+  const hasTextBody = message.trim().length > 0;
   const isFoodPhoto = Boolean(media);
   const recentContext = user ? await loadRecentSmsContext(user.id, phone) : {};
   let freeformRoute: FreeformFoodRoute = null;
@@ -1170,8 +1269,10 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
   }
   const intent = isFoodPhoto
     ? 'FOOD_PHOTO'
-    : action.intent ?? freeformRoute ?? 'AI_CHAT';
-  const inboundMessage = message.trim() || (isFoodPhoto ? '[Meal photo]' : '');
+    : mediaMissing && !hasTextBody
+      ? 'FOOD_PHOTO_MISSING'
+      : action.intent ?? freeformRoute ?? 'AI_CHAT';
+  const inboundMessage = message.trim() || (isFoodPhoto || mediaMissing ? '[Meal photo]' : '');
 
   const inbound = await prisma.smsMessage.create({
     data: { phone, userId: user?.id, direction: 'INBOUND', message: inboundMessage, intent }
@@ -1189,15 +1290,19 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
     return { inbound, response };
   }
 
+  if (mediaMissing && !hasTextBody) {
+    const { response, deliveredViaApi } = await respondMediaMissing(user, phone, inbound.id, channel);
+    return { inbound, response: deliveredViaApi ? '' : response };
+  }
+
   if (media) {
     if (isTwilioConfigured()) {
-      const ack = capSms(PHOTO_PROCESSING_ACK);
-      await prisma.smsMessage.update({ where: { id: inbound.id }, data: { status: 'PROCESSED', response: ack } });
-      processFoodPhotoInBackground(user, phone, media, message, inbound.id);
-      return { inbound, response: ack };
+      const { ack, deliveredViaApi } = await sendPhotoProcessingAck(user, phone, inbound.id, channel);
+      processFoodPhotoInBackground(user, phone, media, message, inbound.id, channel);
+      return { inbound, response: deliveredViaApi ? '' : ack };
     }
 
-    const response = await deliverFoodPhotoReply(user, phone, media, message, inbound.id);
+    const response = await deliverFoodPhotoReply(user, phone, media, message, inbound.id, channel);
     return { inbound, response };
   }
 
@@ -1235,6 +1340,12 @@ export async function handleSms(phone: string, message: string, media?: SmsMedia
       const detail = error instanceof Error ? error.message : 'Assistant unavailable';
       response = `Sorry, I could not answer that right now. ${detail}`;
     }
+  }
+
+  if (mediaMissing && hasTextBody) {
+    response = capSms(
+      `${response}\n\nI could not load the photo attachment — send the image again if you wanted a calorie estimate from it.`
+    );
   }
 
   await prisma.smsMessage.update({ where: { id: inbound.id }, data: { status: 'PROCESSED', response } });
