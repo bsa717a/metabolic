@@ -1,7 +1,17 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, FunctionCallingMode } from '@google/generative-ai';
+import type { FunctionDeclaration, Part } from '@google/generative-ai';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { formatGroceryDescription } from '../utils/groceryConversion.js';
+import {
+  classifyFoodRegex,
+  extractFoodDescription,
+  looksLikeFoodAdd,
+  normalizeMealNameHint,
+  parseTargetMealFromText,
+  wantsMacroStatus
+} from '../utils/smsFoodParse.js';
+import { parseWaterAmountOz } from '../utils/waterParse.js';
 
 export type FoodEstimate = {
   normalizedFoodName: string;
@@ -65,6 +75,23 @@ export type ChatChannel = 'web' | 'sms';
 /** LOG = report food already eaten; SUGGEST = ask what to eat; CHAT = anything else. */
 export type NutritionIntent = 'LOG' | 'SUGGEST' | 'CHAT';
 
+/** Executes a tool the model called and returns a JSON-serializable result the model can read. */
+export type AgentToolExecutor = (
+  name: string,
+  args: Record<string, unknown>
+) => Promise<Record<string, unknown>>;
+
+export type AgentRunInput = {
+  /** Conversation turns, with the user's current message last. */
+  messages: ChatMessage[];
+  /** Program data JSON (from buildSmsAssistantContext). */
+  context: string;
+  tools: FunctionDeclaration[];
+  toolExecutor: AgentToolExecutor;
+  /** When aborted, the loop stops calling tools (used for hard timeouts). */
+  abortSignal?: AbortSignal;
+};
+
 export interface AiProvider {
   lookupFood(input: string): Promise<FoodEstimate[]>;
   lookupFoodFromImage(image: { data: string; mimeType: string }, input?: string): Promise<FoodEstimate[]>;
@@ -73,6 +100,8 @@ export interface AiProvider {
   enrichShoppingList(items: ShoppingListInputItem[], storeName?: string | null): Promise<EnrichedShoppingListResult>;
   chat(messages: ChatMessage[], context: string, channel?: ChatChannel): Promise<string>;
   classifyNutritionIntent(message: string): Promise<NutritionIntent>;
+  /** Conversational tool-calling loop for SMS — reads context + history, calls tools, returns the reply text. */
+  runAgent(input: AgentRunInput): Promise<string>;
 }
 
 const foodEstimateSchema = z.object({
@@ -270,6 +299,21 @@ You cannot change the user's data. Never claim you logged food or marked somethi
 They can text you what they ate (e.g. "had 6 oz chicken and rice for lunch") and the system logs it for them — you cannot log food yourself. They can also say "Add 2 oz peanuts to breakfast" or "Log chicken for dinner". Food can be added to a meal even after it is marked complete. Meal photos return a calorie estimate only unless they ask to log in the caption (e.g. "log this for lunch") or text "log that for lunch" after the estimate.
 To mark a meal eaten as planned, they can say "mark lunch complete" or "mark breakfast as eaten". To finish workouts, "mark all exercises done" or "mark done". To log water, "16 oz water" or "drank a glass of water".
 If they say a log went to the wrong meal, they can text "that should be breakfast" and the system moves the last logged food. If they hit a meal error, suggest concrete examples like "Add 2 oz peanuts to breakfast" rather than only apologizing.
+End with a brief, genuine line of encouragement when it fits. One short sentence, never cheesy.`;
+
+const MAX_TOOL_ITERATIONS = 4;
+
+const AGENT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app, texting them over SMS/iMessage. Warm, upbeat, concise — a knowledgeable friend who texts back fast.
+You CAN take real actions through the provided tools: log food, estimate a meal photo, log a photo estimate, move a food to a different meal, mark a meal eaten as planned, mark exercises done, log water, check macros, and suggest meals. Use them whenever the user is clearly asking you to do one of those things.
+Tool results come back as a "result" string already written for SMS. When a tool returns a "result", relay it to the user nearly verbatim — do not re-paraphrase exact calorie, protein, or macro numbers. If a tool returns an "error", briefly explain it and suggest a concrete next step.
+Decide intent from the whole conversation, not just the last line — the program data and recent turns are provided.
+When the user attaches a meal photo (the message will say so), call analyze_meal_photo. Pass log=true only when they clearly want it logged (e.g. "here's lunch", "log this", "I ate this"); otherwise estimate and offer to log it.
+For a follow-up like "log that for dinner" referring to a previous photo estimate (no new photo this message), call log_photo_estimate.
+Only do what the user asked. Do not log food, mark things complete, or change data unless they asked. Never call the same action twice for one request.
+If a write action is genuinely ambiguous and you cannot reasonably guess a required detail (e.g. which meal), call request_clarification with the tool name, the args you already have, and a short question — do NOT guess wildly. Prefer acting on a sensible default when the guess is safe and easy to correct.
+If the program data includes a pendingAction, the user's message is answering that earlier question — fill in the missing argument and call that tool now.
+Keep replies under 320 characters when you can; hard limit 1500. Plain text only — no markdown, asterisks, or headers; use short numbered lines for lists.
+Use the user's real meals, macros, targets, allergies, and dietary preferences from context. Never invent foods or numbers, and never suggest anything that conflicts with their allergies or preferences.
 End with a brief, genuine line of encouragement when it fits. One short sentence, never cheesy.`;
 
 function normalizeEstimate(parsed: z.infer<typeof foodEstimateSchema>): FoodEstimate {
@@ -709,6 +753,41 @@ export class MockAiProvider implements AiProvider {
     if (text.endsWith('?') || /\b(what|where|which|should|suggest|recommend|options?|ideas?)\b/.test(text)) return 'SUGGEST';
     return 'CHAT';
   }
+
+  async runAgent(input: AgentRunInput): Promise<string> {
+    const { messages, toolExecutor } = input;
+    const last = messages.at(-1)?.content ?? '';
+
+    if (/\[the user attached a meal photo/i.test(last)) {
+      const wantsLog = /\b(log|ate|had|here'?s|finished|eating)\b/i.test(last);
+      const out = await toolExecutor('analyze_meal_photo', {
+        log: wantsLog,
+        mealName: parseTargetMealFromText(last)
+      });
+      return String(out.result ?? out.error ?? 'Here is your photo estimate.');
+    }
+
+    const water = parseWaterAmountOz(last);
+    if (water != null) {
+      const out = await toolExecutor('log_water', { amountOz: water, text: last });
+      return String(out.result ?? out.error ?? 'Logged your water.');
+    }
+
+    if (looksLikeFoodAdd(last) || classifyFoodRegex(last) === 'LOG_FOOD') {
+      const out = await toolExecutor('log_food', {
+        foodText: extractFoodDescription(last),
+        mealName: normalizeMealNameHint(parseTargetMealFromText(last))
+      });
+      return String(out.result ?? out.error ?? 'Logged it.');
+    }
+
+    if (wantsMacroStatus(last)) {
+      const out = await toolExecutor('get_macro_status', {});
+      return String(out.result ?? out.error ?? 'Here is where you stand today.');
+    }
+
+    return 'Got it! (mock agent — set AI_PROVIDER=gemini for the full conversation.)';
+  }
 }
 
 function wrapAiError(error: unknown, action: string): Error {
@@ -938,6 +1017,68 @@ ${JSON.stringify(items)}`;
       return new MockAiProvider().classifyNutritionIntent(message);
     } catch {
       return new MockAiProvider().classifyNutritionIntent(message);
+    }
+  }
+
+  async runAgent(input: AgentRunInput): Promise<string> {
+    const { messages, context, tools, toolExecutor, abortSignal } = input;
+    const last = messages.at(-1);
+    if (!last) throw new Error('Message required');
+
+    const contextTurn = [
+      { role: 'user' as const, parts: [{ text: `Program data (JSON):\n${context}` }] },
+      { role: 'model' as const, parts: [{ text: 'Understood. I will use this program data and the tools to help.' }] }
+    ];
+    const history = [
+      ...contextTurn,
+      ...messages.slice(0, -1).map((message) => ({
+        role: message.role === 'assistant' ? ('model' as const) : ('user' as const),
+        parts: [{ text: message.content }]
+      }))
+    ];
+
+    // Text + tools model — NOT the JSON-mode foodModel (responseMimeType JSON is incompatible with tool calling).
+    const model = this.client.getGenerativeModel({
+      model: this.model,
+      systemInstruction: { role: 'user', parts: [{ text: AGENT_SYSTEM }] },
+      tools: [{ functionDeclarations: tools }],
+      toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+    });
+
+    try {
+      const chat = model.startChat({ history });
+      let result = await chat.sendMessage(last.content);
+
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
+        if (abortSignal?.aborted) throw new Error('SMS assistant cancelled');
+        const calls = result.response.functionCalls();
+        if (!calls?.length) break;
+
+        const responses: Part[] = [];
+        for (const call of calls) {
+          if (abortSignal?.aborted) throw new Error('SMS assistant cancelled');
+          let output: Record<string, unknown>;
+          try {
+            output = await toolExecutor(call.name, (call.args ?? {}) as Record<string, unknown>);
+          } catch (error) {
+            output = { error: error instanceof Error ? error.message : 'Tool failed.' };
+          }
+          responses.push({ functionResponse: { name: call.name, response: output } });
+        }
+
+        result = await chat.sendMessage(responses);
+      }
+
+      const trailingCalls = result.response.functionCalls();
+      if (trailingCalls?.length) {
+        return 'I need one more detail to finish that — could you say it a bit more specifically?';
+      }
+
+      const text = result.response.text().trim();
+      return text || 'Done!';
+    } catch (error) {
+      throw wrapAiError(error, 'assistant');
     }
   }
 }

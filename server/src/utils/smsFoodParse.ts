@@ -192,6 +192,64 @@ export function parsePhotoEstimateIntent(intent: string | null | undefined) {
   }
 }
 
+/** Reads a photo estimate from a PHOTO_ESTIMATE intent or one stashed on a pending action. */
+export function parseStoredPhotoEstimate(intent: string | null | undefined) {
+  const direct = parsePhotoEstimateIntent(intent);
+  if (direct?.items.length) return direct;
+  const pending = parsePendingAction(intent);
+  if (pending?.photoEstimate?.items.length) return pending.photoEstimate;
+  return null;
+}
+
+/** A tool the agent wanted to run but is waiting on a missing argument before it can. */
+export type PendingAction = {
+  tool: string;
+  args: Record<string, unknown>;
+  question: string;
+  createdAt: number;
+  /** Stashed alongside a clarification so "log that" still works on the next turn. */
+  photoEstimate?: {
+    items: StoredPhotoEstimateItem[];
+    mealName?: string;
+  };
+};
+
+export const PENDING_ACTION_INTENT_PREFIX = 'PENDING_ACTION:';
+export const PENDING_ACTION_DONE_INTENT = 'PENDING_ACTION_DONE';
+/** A clarifying question expires after 15 minutes — after that a reply is treated as a fresh message. */
+export const PENDING_ACTION_TTL_MS = 15 * 60_000;
+
+export function serializePendingAction(action: PendingAction) {
+  return `${PENDING_ACTION_INTENT_PREFIX}${JSON.stringify(action)}`;
+}
+
+export function parsePendingAction(intent: string | null | undefined): PendingAction | null {
+  if (!intent?.startsWith(PENDING_ACTION_INTENT_PREFIX)) return null;
+  try {
+    const parsed = JSON.parse(intent.slice(PENDING_ACTION_INTENT_PREFIX.length)) as PendingAction;
+    if (!parsed?.tool || typeof parsed.tool !== 'string') return null;
+    return {
+      tool: parsed.tool,
+      args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {},
+      question: typeof parsed.question === 'string' ? parsed.question : '',
+      createdAt: typeof parsed.createdAt === 'number' ? parsed.createdAt : 0,
+      photoEstimate:
+        parsed.photoEstimate &&
+        typeof parsed.photoEstimate === 'object' &&
+        Array.isArray((parsed.photoEstimate as { items?: unknown }).items)
+          ? (parsed.photoEstimate as PendingAction['photoEstimate'])
+          : undefined
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** True when a stored pending action is still recent enough to resume against the next reply. */
+export function isPendingActionFresh(action: PendingAction, now: number) {
+  return now - action.createdAt <= PENDING_ACTION_TTL_MS;
+}
+
 export function parsePhotoEstimateTotals(response: string) {
   const match = response.match(
     /Estimated from your (?:photo|plate):\s*(\d+)\s*cal,\s*(\d+)g protein,\s*(\d+)g carbs,\s*(\d+)g fat/i
