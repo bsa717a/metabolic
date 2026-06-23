@@ -112,6 +112,12 @@ describe('parseLoggedFoodFromAssistantResponse', () => {
       ),
       { mealName: 'Lunch', foodNames: ['chicken', 'rice'] }
     );
+    assert.deepEqual(
+      parseLoggedFoodFromAssistantResponse(
+        'Estimated from your photo: 200 cal, 3g protein, 24g carbs, 11g fat. I see: Miss Vickie\'s chips. Photo estimates are approximate. Logged to Snack.'
+      ),
+      { mealName: 'Snack', foodNames: ["Miss Vickie's chips"] }
+    );
   });
 });
 

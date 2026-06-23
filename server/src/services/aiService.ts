@@ -791,7 +791,8 @@ class GeminiAiProvider implements AiProvider {
   async lookupFoodFromImage(image: { data: string; mimeType: string }, input = ''): Promise<FoodEstimate[]> {
     const prompt = `${FOOD_LOOKUP_PROMPT}
 
-Estimate the visible food in this image. Use the optional user note only as context; do not invent foods that are not visible.
+Estimate the visible food in this image. If the photo shows packaged food with a Nutrition Facts panel or printed calories per package/serving, read those label values and use them — do not guess when the label is readable.
+Use the optional user note only as context; do not invent foods that are not visible.
 Optional user note: ${input.trim() || 'none'}`;
 
     try {
