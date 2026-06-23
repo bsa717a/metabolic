@@ -5,6 +5,10 @@ import { inferTwilioChannel, type TwilioMessageChannel } from '../services/twili
 import { normalizePhone } from '../utils/phone.js';
 import { isValidTwilioRequest } from '../utils/twilioSignature.js';
 
+function twimlMessage(response: string) {
+  return `<Response><Message>${xmlEscapeTwiml(response)}</Message></Response>`;
+}
+
 export async function smsRoutes(app: FastifyInstance) {
   app.post('/api/sms/webhook', async (request, reply) => {
     if (!isValidTwilioRequest(request)) {
@@ -17,9 +21,17 @@ export async function smsRoutes(app: FastifyInstance) {
     const optOutType = String(body.OptOutType ?? body.optOutType ?? '').trim().toUpperCase() || undefined;
     const channel: TwilioMessageChannel = inferTwilioChannel(rawFrom);
     const { media, mediaMissing } = extractSmsMediaFromWebhook(body);
-    const { response } = await handleSms(phone, message, media, optOutType, channel, mediaMissing);
+    const result = await handleSms(phone, message, media, optOutType, channel, mediaMissing);
+
     reply.header('content-type', 'text/xml');
-    if (!response) return '<Response></Response>';
-    return `<Response><Message>${xmlEscapeTwiml(response)}</Message></Response>`;
+    const twiml = result.response ? twimlMessage(result.response) : '<Response></Response>';
+
+    if (result.deferredWork) {
+      reply.send(twiml);
+      await result.deferredWork();
+      return;
+    }
+
+    return twiml;
   });
 }

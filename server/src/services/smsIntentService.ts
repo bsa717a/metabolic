@@ -101,13 +101,26 @@ const SUPPORTED_IMAGE_TYPES = new Set([
   'image/heif'
 ]);
 const MAX_SMS_IMAGE_BYTES = 10 * 1024 * 1024;
-const FOOD_PHOTO_TIMEOUT_MS = 25_000;
+/** Keep under Twilio's 15s webhook budget once media download + ack are done. */
+const FOOD_PHOTO_TIMEOUT_MS = 12_000;
 const PHOTO_PROCESSING_ACK = 'Got your photo — estimating calories now. I will text you in a moment.';
 
 type SmsMedia = {
   url: string;
   mimeType?: string;
   accountSid?: string;
+};
+
+type DownloadedSmsImage = {
+  data: string;
+  mimeType: string;
+};
+
+export type HandleSmsResult = {
+  inbound?: Awaited<ReturnType<typeof prisma.smsMessage.create>>;
+  response: string;
+  /** Finish photo analysis after the webhook response is sent (Cloud Run keeps the request alive). */
+  deferredWork?: () => Promise<void>;
 };
 
 type SmsUser = NonNullable<Awaited<ReturnType<typeof prisma.user.findFirst>>>;
@@ -869,7 +882,7 @@ function summarizeFoodPhotoEstimate(result: FoodLookupResult) {
   );
   const foodList = estimates.map((item) => item.normalizedFoodName).join(', ');
 
-  return `Estimated from your plate: ${Math.round(totals.calories)} cal, ${Math.round(totals.protein)}g protein, ${Math.round(totals.carbs)}g carbs, ${Math.round(totals.fat)}g fat. I see: ${foodList}. Photo estimates are approximate.`;
+  return `Estimated from your photo: ${Math.round(totals.calories)} cal, ${Math.round(totals.protein)}g protein, ${Math.round(totals.carbs)}g carbs, ${Math.round(totals.fat)}g fat. I see: ${foodList}. Photo estimates are approximate.`;
 }
 
 type FoodPhotoReply = {
@@ -885,9 +898,10 @@ async function handleFoodPhoto(
   timeZone: string | null,
   media: SmsMedia,
   message: string,
-  shouldLog: boolean
+  shouldLog: boolean,
+  preloadedImage?: DownloadedSmsImage
 ): Promise<FoodPhotoReply> {
-  const image = await downloadSmsImage(media);
+  const image = preloadedImage ?? (await downloadSmsImage(media));
   const result = await Promise.race([
     lookupFoodFromImage(userId, image, message),
     new Promise<never>((_, reject) => {
@@ -954,7 +968,7 @@ async function handleLogLastPhotoEstimate(
       userId,
       phone,
       direction: SmsDirection.OUTBOUND,
-      OR: [{ intent: { startsWith: 'PHOTO_ESTIMATE:' } }, { response: { contains: 'Estimated from your plate' } }]
+      OR: [{ intent: { startsWith: 'PHOTO_ESTIMATE:' } }, { response: { contains: 'Estimated from your photo' } }, { response: { contains: 'Estimated from your plate' } }]
     },
     orderBy: { createdAt: 'desc' }
   });
@@ -1013,19 +1027,28 @@ function photoErrorResponse(error: unknown) {
   return capSms(`Sorry, I could not analyze that photo right now. ${detail}`);
 }
 
-/** Processes a meal photo and records outbound SMS. Returns TwiML body when API send is not used. */
+/** Processes a meal photo and records outbound SMS. Returns TwiML fallback when API send fails. */
 async function deliverFoodPhotoReply(
   user: SmsUser,
   phone: string,
   media: SmsMedia,
   message: string,
   inboundId: string,
-  channel: TwilioMessageChannel
+  channel: TwilioMessageChannel,
+  preloadedImage?: DownloadedSmsImage
 ) {
   let reply: FoodPhotoReply;
   const shouldLog = wantsPhotoLog(message);
   try {
-    reply = await handleFoodPhoto(user.id, userDayKey(user.timezone), user.timezone, media, message, shouldLog);
+    reply = await handleFoodPhoto(
+      user.id,
+      userDayKey(user.timezone),
+      user.timezone,
+      media,
+      message,
+      shouldLog,
+      preloadedImage
+    );
   } catch (error) {
     reply = {
       text: photoErrorResponse(error),
@@ -1060,32 +1083,65 @@ async function deliverFoodPhotoReply(
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Could not send text message.';
       await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
+      return reply.text;
     }
   }
 
   return reply.text;
 }
 
-function processFoodPhotoInBackground(
+async function beginIncomingFoodPhoto(
   user: SmsUser,
   phone: string,
   media: SmsMedia,
   message: string,
   inboundId: string,
   channel: TwilioMessageChannel
-) {
-  void deliverFoodPhotoReply(user, phone, media, message, inboundId, channel).catch(async (error) => {
-    const detail = error instanceof Error ? error.message : 'Could not analyze photo.';
-    const response = capSms(`Sorry, I could not analyze that photo right now. ${detail}`);
-    await prisma.smsMessage.update({ where: { id: inboundId }, data: { status: 'PROCESSED', response } });
-    if (isTwilioConfigured()) {
-      try {
-        await sendOutboundMessage(phone, response, channel);
-      } catch {
-        // Best-effort error delivery.
+): Promise<HandleSmsResult> {
+  if (isTwilioConfigured()) {
+    const { ack, deliveredViaApi } = await sendPhotoProcessingAck(user, phone, inboundId, channel);
+    return {
+      response: deliveredViaApi ? '' : ack,
+      deferredWork: async () => {
+        try {
+          const preloadedImage = await downloadSmsImage(media);
+          const twimlFallback = await deliverFoodPhotoReply(
+            user,
+            phone,
+            media,
+            message,
+            inboundId,
+            channel,
+            preloadedImage
+          );
+          if (twimlFallback) {
+            await sendOutboundMessage(phone, twimlFallback, channel).catch(() => undefined);
+          }
+        } catch (error) {
+          const response = capSms(photoErrorResponse(error));
+          await prisma.smsMessage
+            .update({ where: { id: inboundId }, data: { status: 'PROCESSED', response } })
+            .catch(() => undefined);
+          await sendOutboundMessage(phone, response, channel).catch(() => undefined);
+        }
       }
-    }
-  });
+    };
+  }
+
+  let preloadedImage: DownloadedSmsImage;
+  try {
+    preloadedImage = await downloadSmsImage(media);
+  } catch (error) {
+    const response = photoErrorResponse(error);
+    await prisma.smsMessage.update({
+      where: { id: inboundId },
+      data: { status: 'PROCESSED', response, intent: 'FOOD_PHOTO' }
+    });
+    return { response };
+  }
+
+  const response = await deliverFoodPhotoReply(user, phone, media, message, inboundId, channel, preloadedImage);
+  return { response };
 }
 
 async function sendPhotoProcessingAck(
@@ -1179,7 +1235,7 @@ export async function handleSms(
   twilioOptOutType?: string,
   channel: TwilioMessageChannel = 'sms',
   mediaMissing = false
-) {
+): Promise<HandleSmsResult> {
   const user = await findUserBySmsPhone(phone);
   if (!media && isSmsStartKeyword(message)) {
     if (!user) {
@@ -1296,14 +1352,8 @@ export async function handleSms(
   }
 
   if (media) {
-    if (isTwilioConfigured()) {
-      const { ack, deliveredViaApi } = await sendPhotoProcessingAck(user, phone, inbound.id, channel);
-      processFoodPhotoInBackground(user, phone, media, message, inbound.id, channel);
-      return { inbound, response: deliveredViaApi ? '' : ack };
-    }
-
-    const response = await deliverFoodPhotoReply(user, phone, media, message, inbound.id, channel);
-    return { inbound, response };
+    const photoResult = await beginIncomingFoodPhoto(user, phone, media, message, inbound.id, channel);
+    return { inbound, ...photoResult };
   }
 
   const dateKey = userDayKey(user.timezone);

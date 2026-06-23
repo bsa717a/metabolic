@@ -162,7 +162,7 @@ export function assistantResponseLooksLikeMealFailure(response: string) {
 }
 
 export function assistantResponseLooksLikePhotoEstimate(response: string) {
-  return /^Estimated from your plate:/i.test(response) && !/Logged to/i.test(response);
+  return /^Estimated from your (?:photo|plate):/i.test(response) && !/Logged to/i.test(response);
 }
 
 export type StoredPhotoEstimateItem = {
@@ -194,7 +194,7 @@ export function parsePhotoEstimateIntent(intent: string | null | undefined) {
 
 export function parsePhotoEstimateTotals(response: string) {
   const match = response.match(
-    /Estimated from your plate:\s*(\d+)\s*cal,\s*(\d+)g protein,\s*(\d+)g carbs,\s*(\d+)g fat/i
+    /Estimated from your (?:photo|plate):\s*(\d+)\s*cal,\s*(\d+)g protein,\s*(\d+)g carbs,\s*(\d+)g fat/i
   );
   if (!match) return null;
   return {
@@ -277,7 +277,7 @@ export function parseLoggedFoodFromAssistantResponse(response: string) {
   }
 
   const photoLogged = response.match(
-    /^Estimated from your plate:.*?I see:\s*(.+?)\.\s*Photo estimates.*?Logged to ([^.]+)\./is
+    /^Estimated from your (?:photo|plate):.*?I see:\s*(.+?)\.\s*Photo estimates.*?Logged to ([^.]+)\./is
   );
   if (photoLogged) {
     const foodList = photoLogged[1]!
