@@ -63,7 +63,7 @@ SENDGRID_API_KEY=SENDGRID_API_KEY:latest,\
 SENDGRID_FROM_EMAIL=SENDGRID_FROM_EMAIL:latest,\
 SENDGRID_FROM_NAME=SENDGRID_FROM_NAME:latest,\
 CRON_SECRET=CRON_SECRET:latest" \
-  --set-env-vars "NODE_ENV=production,AI_PROVIDER=gemini"
+  --set-env-vars "NODE_ENV=production,AI_PROVIDER=gemini,SMS_AGENT_MODE=agent"
 
 API_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
 echo "API URL: $API_URL"
