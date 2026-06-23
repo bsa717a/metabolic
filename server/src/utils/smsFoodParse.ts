@@ -29,6 +29,12 @@ export function parseMealName(text: string) {
   return match?.[1];
 }
 
+/** "Log breakfast as planned" — mark meal complete, not log food named "as planned". */
+export function isMarkMealAsPlannedMessage(text: string) {
+  if (!MEAL_NAME_PATTERN.test(text)) return false;
+  return /\b(?:as\s+planned|eaten\s+as\s+planned|as\s+eaten)\b/i.test(text);
+}
+
 /** Prefer the meal tied to for/to/at, or the one named in a correction — not the first word match. */
 export function parseTargetMealFromText(text: string): string | undefined {
   const explicit = [...text.matchAll(/\b(?:for|to|at|into|on)\s+(?:my\s+)?(?:the\s+)?(breakfast|brunch|lunch|dinner|snack)\b/gi)];
@@ -53,6 +59,7 @@ export function normalizeMealNameHint(hint?: string) {
 }
 
 export function looksLikeFoodAdd(text: string) {
+  if (isMarkMealAsPlannedMessage(text)) return false;
   if (/\b(add|log|track|record|put)\b/i.test(text) && MEAL_NAME_PATTERN.test(text)) return true;
   if (/\d+\s*(?:oz|ounce|ounces|g|gram|grams|cup|cups|tbsp|slice|slices|piece|pieces)\b/i.test(text)) return true;
   return false;
@@ -98,6 +105,7 @@ export function classifyFoodRegex(message: string): 'LOG_FOOD' | 'MEAL_SUGGESTIO
   if (!text) return null;
   const isQuestion = text.endsWith('?') || /\?/.test(text);
 
+  if (isMarkMealAsPlannedMessage(text)) return null;
   if (isMealCorrectionMessage(text)) return null;
   if (META_CORRECTION_PATTERN.test(text)) return null;
   if (looksLikeFoodAdd(text)) return 'LOG_FOOD';

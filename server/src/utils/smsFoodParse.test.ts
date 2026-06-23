@@ -5,6 +5,7 @@ import {
   classifyFoodRegex,
   extractFoodDescription,
   isEffectivelyZeroCalories,
+  isMarkMealAsPlannedMessage,
   isMealCorrectionMessage,
   looksLikeFoodLogRetry,
   mergeFoodLogFollowUp,
@@ -55,6 +56,11 @@ describe('parseFoodLogAction', () => {
 });
 
 describe('classifyFoodRegex', () => {
+  it('does not treat log-as-planned as a food log', () => {
+    assert.equal(classifyFoodRegex('Log breakfast as planned'), null);
+    assert.equal(isMarkMealAsPlannedMessage('Mark breakfast has eaten as planned'), true);
+  });
+
   it('does not treat correction questions as food logs', () => {
     assert.equal(
       classifyFoodRegex('Why would you like that for lunch? I said that I had it for breakfast'),

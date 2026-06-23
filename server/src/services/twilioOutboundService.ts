@@ -1,6 +1,8 @@
 import { env } from '../config/env.js';
 import { normalizePhone, phoneDigits } from '../utils/phone.js';
 
+export type TwilioMessageChannel = 'sms' | 'whatsapp';
+
 export function isTwilioConfigured() {
   return Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER);
 }
@@ -11,6 +13,10 @@ export function usesWhatsAppChannel() {
   return true;
 }
 
+export function inferTwilioChannel(address: string): TwilioMessageChannel {
+  return address.trim().toLowerCase().startsWith('whatsapp:') ? 'whatsapp' : 'sms';
+}
+
 export function twilioSenderPhone() {
   return normalizePhone(env.TWILIO_PHONE_NUMBER);
 }
@@ -19,16 +25,27 @@ export function isTwilioSenderPhone(phone: string) {
   return phoneDigits(phone) === phoneDigits(env.TWILIO_PHONE_NUMBER);
 }
 
-function twilioFromAddress() {
-  const from = env.TWILIO_PHONE_NUMBER.trim();
-  const lower = from.toLowerCase();
-  if (lower.startsWith('whatsapp:') || lower.startsWith('sms:')) return from;
-  return `whatsapp:${normalizePhone(from)}`;
+function stripChannelPrefix(address: string) {
+  return address.trim().replace(/^(whatsapp|sms):/i, '');
 }
 
-function twilioToAddress(phone: string) {
+function twilioFromAddress(channel: TwilioMessageChannel) {
+  const from = env.TWILIO_PHONE_NUMBER.trim();
+  const lower = from.toLowerCase();
+  const bare = normalizePhone(stripChannelPrefix(from));
+
+  if (channel === 'sms') {
+    if (lower.startsWith('sms:')) return from;
+    return `sms:${bare}`;
+  }
+
+  if (lower.startsWith('whatsapp:')) return from;
+  return `whatsapp:${bare}`;
+}
+
+function twilioToAddress(phone: string, channel: TwilioMessageChannel) {
   const normalized = normalizePhone(phone);
-  if (usesWhatsAppChannel()) return `whatsapp:${normalized}`;
+  if (channel === 'whatsapp') return `whatsapp:${normalized}`;
   return normalized;
 }
 
@@ -53,16 +70,23 @@ function formatTwilioSendError(detail: string) {
   return `Could not send text message: ${detail.slice(0, 300)}`;
 }
 
-export async function sendOutboundMessage(phone: string, message: string) {
+function defaultOutboundChannel(phone: string) {
+  if (inferTwilioChannel(phone) === 'whatsapp') return 'whatsapp';
+  return usesWhatsAppChannel() ? 'whatsapp' : 'sms';
+}
+
+export async function sendOutboundMessage(phone: string, message: string, channel?: TwilioMessageChannel) {
   if (!isTwilioConfigured()) {
     throw new Error('Twilio outbound messaging is not configured.');
   }
 
   validateOutboundRecipient(phone);
 
+  const resolvedChannel = channel ?? defaultOutboundChannel(phone);
+
   const params = new URLSearchParams({
-    From: twilioFromAddress(),
-    To: twilioToAddress(phone),
+    From: twilioFromAddress(resolvedChannel),
+    To: twilioToAddress(phone, resolvedChannel),
     Body: message
   });
   const token = Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString('base64');
