@@ -7,7 +7,7 @@ import { chatWithSmsAssistant, suggestMealOptions } from './assistantService.js'
 import { toDateKey, userDayKey, localTimeParts } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
 import { getAiProvider, type ChatMessage, type MealSuggestionResult } from './aiService.js';
-import { lookupFood, lookupFoodFromImage, summarizeFoodLookup, type FoodLookupResult } from './foodLookupService.js';
+import { lookupFood, lookupFoodFromImage, lookupHasRoughEstimate, summarizeFoodLookup, type FoodLookupResult } from './foodLookupService.js';
 import { env } from '../config/env.js';
 import { sendOutboundMessage, isTwilioConfigured, type TwilioMessageChannel } from './twilioOutboundService.js';
 import { runSmsAgentEntry } from './smsAgentService.js';
@@ -758,11 +758,14 @@ export async function handleFoodLog(userId: string, dateKey: string, timeZone: s
   const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
   const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
   const foodList = logged.names.join(', ');
+  const roughNote = lookupHasRoughEstimate(result)
+    ? ' That’s a rough estimate — reply with the right calories or amount to correct it.'
+    : '';
 
   return capSms(
     `Logged to ${meal.name}: ${foodList} — about ${Math.round(logged.calories)} cal and ${Math.round(
       logged.protein
-    )}g protein. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+    )}g protein.${roughNote} You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
   );
 }
 
