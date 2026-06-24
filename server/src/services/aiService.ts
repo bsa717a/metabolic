@@ -243,6 +243,10 @@ const enrichedShoppingListResponseSchema = z.object({
 });
 
 const FOOD_LOOKUP_PROMPT = `Estimate nutrition for each distinct food in the input.
+Scale to the stated amount (e.g. "6 oz") using the food's realistic calorie density — most cooked foods are 30-80 cal/oz; only oils, nuts, butter, and cheese exceed ~150 cal/oz.
+For a named restaurant or brand item, use that product's actual published nutrition when you know it; otherwise estimate from the generic food type and portion.
+Calories must be consistent with the macros: roughly 4 cal per gram of protein, 4 per gram of carbs, and 9 per gram of fat.
+Set confidence below 0.5 when you are unsure of a specific branded or restaurant item.
 Return JSON only: { "items": [ { "normalizedFoodName": string (include portion), "calories": number, "protein": grams, "carbs": grams, "fat": grams, "confidence": 0-1 }, ... ] }
 Each food line must be its own item. Never combine multiple foods into one entry.`;
 
@@ -316,15 +320,41 @@ Keep replies under 320 characters when you can; hard limit 1500. Plain text only
 Use the user's real meals, macros, targets, allergies, and dietary preferences from context. Never invent foods or numbers, and never suggest anything that conflicts with their allergies or preferences.
 End with a brief, genuine line of encouragement when it fits. One short sentence, never cheesy.`;
 
+/**
+ * Sanity check: reported calories should roughly track the macros (~4 cal/g protein & carbs, 9 cal/g fat).
+ * When they diverge by >25%, keep the reported calories (labels and published nutrition often round
+ * differently than macro math) and mark inconsistent so callers lower confidence and surface a rough estimate.
+ */
+export function reconcileCalories(
+  calories: number,
+  protein: number,
+  carbs: number,
+  fat: number
+): { calories: number; inconsistent: boolean } {
+  const rounded = Math.round(calories);
+  const implied = protein * 4 + carbs * 4 + fat * 9;
+  if (implied <= 0) return { calories: rounded, inconsistent: false };
+  const deviation = Math.abs(rounded - implied) / Math.max(implied, rounded, 1);
+  if (deviation > 0.25) return { calories: rounded, inconsistent: true };
+  return { calories: rounded, inconsistent: false };
+}
+
 function normalizeEstimate(parsed: z.infer<typeof foodEstimateSchema>): FoodEstimate {
+  const protein = roundMacro(parsed.protein);
+  const carbs = roundMacro(parsed.carbs);
+  const fat = roundMacro(parsed.fat);
+  const { calories, inconsistent } = reconcileCalories(parsed.calories, protein, carbs, fat);
+  const confidence = inconsistent
+    ? Math.min(roundConfidence(parsed.confidence), 0.4)
+    : roundConfidence(parsed.confidence);
+
   return {
-    ...parsed,
     normalizedFoodName: parsed.normalizedFoodName.trim(),
-    calories: Math.round(parsed.calories),
-    protein: roundMacro(parsed.protein),
-    carbs: roundMacro(parsed.carbs),
-    fat: roundMacro(parsed.fat),
-    confidence: roundConfidence(parsed.confidence)
+    calories,
+    protein,
+    carbs,
+    fat,
+    confidence
   };
 }
 

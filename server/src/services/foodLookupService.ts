@@ -6,7 +6,8 @@ import { n } from '../utils/numbers.js';
 
 export type FoodLookupItem =
   | { source: 'existing'; line: string; food: Awaited<ReturnType<typeof findExistingFood>> & object }
-  | { source: 'ai'; line: string; lookup: { id: string }; estimate: FoodEstimate };
+  // `accurate` = from a curated source (the local Food table, seeded by us); false = an LLM estimate (flag as rough).
+  | { source: 'ai'; line: string; lookup: { id: string }; estimate: FoodEstimate; accurate: boolean };
 
 export type FoodLookupResult = {
   source: 'existing' | 'ai' | 'mixed';
@@ -38,21 +39,29 @@ export async function lookupFood(userId: string, inputText: string): Promise<Foo
   const needsAi: string[] = [];
 
   for (const line of lines.length ? lines : [inputText.trim()]) {
+    // 1. Local Food table (curated — seeded by us / learned from corrections): trusted, exact, free.
     const food = await findExistingFood(userId, line);
     if (food) {
       items.push({ source: 'existing', line, food });
-    } else {
-      needsAi.push(line);
+      continue;
     }
+
+    // 2. LLM fallback — a rough estimate, flagged as such for the user.
+    needsAi.push(line);
   }
 
   if (needsAi.length > 0) {
     const estimates = await getAiProvider().lookupFood(needsAi.join('\n'));
-    for (let index = 0; index < needsAi.length; index++) {
-      const line = needsAi[index]!;
-      const estimate = estimates[index] ?? estimates[estimates.length - 1]!;
+    // Iterate over the estimates, not the input lines: a single line can list several distinct
+    // foods (e.g. "three eggs and a half tbsp olive oil"), which the model returns as separate
+    // items. When the counts line up we keep the original line text; otherwise we fall back to
+    // the estimate's own name so no food is ever silently dropped.
+    const aligned = estimates.length === needsAi.length;
+    for (let index = 0; index < estimates.length; index++) {
+      const estimate = estimates[index]!;
+      const line = aligned ? needsAi[index]! : estimate.normalizedFoodName;
       const lookup = await prisma.aiFoodLookup.create({ data: { userId, inputText: line, ...estimate } });
-      items.push({ source: 'ai', line, lookup, estimate });
+      items.push({ source: 'ai', line, lookup, estimate, accurate: false });
     }
   }
 
@@ -61,6 +70,11 @@ export async function lookupFood(userId: string, inputText: string): Promise<Foo
   const source = hasExisting && hasAi ? 'mixed' : hasExisting ? 'existing' : 'ai';
 
   return { source, items };
+}
+
+/** True when any logged item is an LLM estimate rather than a curated database value. */
+export function lookupHasRoughEstimate(result: FoodLookupResult) {
+  return result.items.some((item) => item.source === 'ai' && item.accurate === false);
 }
 
 export async function lookupFoodFromImage(
@@ -79,7 +93,7 @@ export async function lookupFoodFromImage(
         ...estimate
       }
     });
-    items.push({ source: 'ai', line: estimate.normalizedFoodName, lookup, estimate });
+    items.push({ source: 'ai', line: estimate.normalizedFoodName, lookup, estimate, accurate: false });
   }
 
   return { source: 'ai', items };
