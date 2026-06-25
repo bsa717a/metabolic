@@ -396,6 +396,21 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
       data: buildProgramMetrics(created.id, input, calories, protein)
     });
 
+    if (defaultNutritionTemplateId || defaultExerciseTemplateId) {
+      // Week 1 plan history: the templates this program starts on. resolvePlanForDate would
+      // otherwise just fall back to the program defaults, so this is explicit history, not new
+      // behavior — and gives the coach a real first PlanPeriod to build the weekly timeline from.
+      await tx.planPeriod.create({
+        data: {
+          programId: created.id,
+          effectiveDate: today,
+          weekNumber: 1,
+          nutritionTemplateId: defaultNutritionTemplateId,
+          exerciseTemplateId: defaultExerciseTemplateId
+        }
+      });
+    }
+
     return created;
   });
 
