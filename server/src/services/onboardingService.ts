@@ -1,4 +1,4 @@
-import { ProgramStatus, Role, Visibility, type ProgramMetric } from '@prisma/client';
+import { ProgramMode, ProgramStatus, Role, Visibility, type ProgramMetric, type Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
 import { normalizeGender } from './bloodPanelMetrics.js';
@@ -136,6 +136,11 @@ type SetupInput = {
   proteinTarget?: number;
   coachCode?: string;
   wantsCoach?: boolean;
+  trackingOnly?: boolean;
+  heightFeet?: number;
+  heightInches?: number;
+  occupation?: string;
+  activityLevel?: number;
   gender?: string;
   birthDate?: string;
   timezone?: string;
@@ -144,6 +149,42 @@ type SetupInput = {
 function normalizeCoachCode(value?: string) {
   const normalized = value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   return normalized || null;
+}
+
+function buildClientProfileData(input: SetupInput) {
+  const clientProfileData: {
+    heightInches?: number;
+    heightRaw?: string;
+    occupation?: string;
+    activityLevel?: number;
+  } = {};
+  if (input.heightFeet !== undefined || input.heightInches !== undefined) {
+    const feet = input.heightFeet ?? 0;
+    const inches = input.heightInches ?? 0;
+    clientProfileData.heightInches = feet * 12 + inches;
+    clientProfileData.heightRaw = `${feet}'${inches}"`;
+  }
+  if (input.occupation?.trim()) {
+    clientProfileData.occupation = input.occupation.trim();
+  }
+  if (input.activityLevel !== undefined) {
+    clientProfileData.activityLevel = input.activityLevel;
+  }
+  return clientProfileData;
+}
+
+async function upsertClientProfileFromSetup(
+  userId: string,
+  input: SetupInput,
+  tx: Prisma.TransactionClient
+) {
+  const clientProfileData = buildClientProfileData(input);
+  if (!Object.keys(clientProfileData).length) return;
+  await tx.clientProfile.upsert({
+    where: { userId },
+    create: { userId, ...clientProfileData },
+    update: clientProfileData
+  });
 }
 
 async function findCoachByCode(code: string | null) {
@@ -227,7 +268,11 @@ async function applyCoachSupport(
 
 async function updateActiveProgramFromSetup(
   userId: string,
-  program: { id: string; metrics: ProgramMetric[] },
+  program: {
+    id: string;
+    coachId: string | null;
+    metrics: ProgramMetric[];
+  },
   input: SetupInput
 ) {
   const existingUser = await prisma.user.findUnique({
@@ -238,6 +283,26 @@ async function updateActiveProgramFromSetup(
 
   if (!hasTimezone && !input.timezone?.trim()) {
     throw new Error('A timezone is required to finish setup.');
+  }
+
+  const trackingOnly = input.trackingOnly === true;
+  const timezone = input.timezone?.trim() || existingUser?.timezone || null;
+  const today = parseDateParam(userDayKey(timezone));
+  const todayKey = userDayKey(timezone);
+
+  let coach: Awaited<ReturnType<typeof findCoachByCode>> = null;
+  let defaultNutritionTemplateId: string | null = null;
+  let defaultExerciseTemplateId: string | null = null;
+  if (!trackingOnly) {
+    coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
+    const [globalNutritionTemplate, globalExerciseTemplate] = await Promise.all([
+      findGlobalNutritionTemplate(),
+      findGlobalExerciseTemplate()
+    ]);
+    defaultNutritionTemplateId =
+      coach?.defaultNutritionTemplateId ?? globalNutritionTemplate?.id ?? null;
+    defaultExerciseTemplateId =
+      coach?.defaultExerciseTemplateId ?? globalExerciseTemplate?.id ?? null;
   }
 
   const bodyFatMetric = program.metrics.find((metric) => metric.metricType === 'BODY_FAT');
@@ -290,6 +355,42 @@ async function updateActiveProgramFromSetup(
       await tx.user.update({ where: { id: userId }, data: profileUpdate });
     }
 
+    await upsertClientProfileFromSetup(userId, input, tx);
+
+    await tx.program.update({
+      where: { id: program.id },
+      data: trackingOnly
+        ? {
+            mode: ProgramMode.SELF_DIRECTED,
+            coachId: null,
+            defaultNutritionTemplateId: null,
+            defaultExerciseTemplateId: null
+          }
+        : {
+            mode: ProgramMode.COACHED,
+            coachId: coach?.id ?? program.coachId,
+            defaultNutritionTemplateId,
+            defaultExerciseTemplateId
+          }
+    });
+
+    if (!trackingOnly && (defaultNutritionTemplateId || defaultExerciseTemplateId)) {
+      const existingPeriod = await tx.planPeriod.findFirst({
+        where: { programId: program.id, effectiveDate: today }
+      });
+      if (!existingPeriod) {
+        await tx.planPeriod.create({
+          data: {
+            programId: program.id,
+            effectiveDate: today,
+            weekNumber: 1,
+            nutritionTemplateId: defaultNutritionTemplateId,
+            exerciseTemplateId: defaultExerciseTemplateId
+          }
+        });
+      }
+    }
+
     for (const metric of program.metrics) {
       const update = updatesByType[metric.metricType];
       if (!update) continue;
@@ -321,14 +422,30 @@ async function updateActiveProgramFromSetup(
     }
   });
 
-  const { shouldNotifyCoachRequest } = await applyCoachSupport(userId, input, {
-    programId: program.id
-  });
+  const { shouldNotifyCoachRequest } = trackingOnly
+    ? { shouldNotifyCoachRequest: false }
+    : await applyCoachSupport(userId, input, { programId: program.id });
 
   const programWithMetrics = await prisma.program.findUniqueOrThrow({
     where: { id: program.id },
     include: { metrics: true }
   });
+
+  if (!trackingOnly) {
+    const dailyLog = await ensureTodayDailyLog(userId, programWithMetrics);
+    if (dailyLog && defaultNutritionTemplateId) {
+      await prisma.$transaction(async (tx) => {
+        await applyTemplateMealsToLog(tx, defaultNutritionTemplateId, dailyLog.id, userId);
+      });
+    }
+    if (defaultExerciseTemplateId) {
+      await prisma.$transaction(async (tx) => {
+        await applyTemplateExercisesToDate(tx, defaultExerciseTemplateId, program.id, userId, todayKey);
+      });
+    } else {
+      await seedDefaultExercises(userId, program.id, today);
+    }
+  }
 
   if (shouldNotifyCoachRequest) {
     await notifyCoachRequest(userId, { coachCode: input.coachCode });
@@ -354,8 +471,11 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     findGlobalExerciseTemplate(),
     prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })
   ]);
-  const defaultNutritionTemplateId = coach?.defaultNutritionTemplateId ?? globalNutritionTemplate?.id ?? null;
-  const defaultExerciseTemplateId = coach?.defaultExerciseTemplateId ?? globalExerciseTemplate?.id ?? null;
+  // Log-only ("just track my food"): a SELF_DIRECTED program with no coach, no templates, and no
+  // exercise scaffolding — but it still captures the user's calorie/protein goals as metrics.
+  const trackingOnly = input.trackingOnly === true;
+  const defaultNutritionTemplateId = trackingOnly ? null : coach?.defaultNutritionTemplateId ?? globalNutritionTemplate?.id ?? null;
+  const defaultExerciseTemplateId = trackingOnly ? null : coach?.defaultExerciseTemplateId ?? globalExerciseTemplate?.id ?? null;
   const calories = input.calorieTarget ?? Number(globalNutritionTemplate?.calorieTarget ?? template?.defaultCalories ?? 2200);
   const protein = input.proteinTarget ?? Number(globalNutritionTemplate?.proteinTarget ?? template?.defaultProtein ?? 190);
   const programName = input.programName?.trim() || DEFAULT_PROGRAM_NAME;
@@ -379,12 +499,15 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
       await tx.user.update({ where: { id: userId }, data: profileUpdate });
     }
 
+    await upsertClientProfileFromSetup(userId, input, tx);
+
     const created = await tx.program.create({
       data: {
         userId,
-        coachId: coach?.id ?? null,
+        coachId: trackingOnly ? null : coach?.id ?? null,
         name: programName,
         status: ProgramStatus.ACTIVE,
+        mode: trackingOnly ? ProgramMode.SELF_DIRECTED : ProgramMode.COACHED,
         startDate: today,
         targetEndDate,
         defaultNutritionTemplateId,
@@ -396,10 +519,27 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
       data: buildProgramMetrics(created.id, input, calories, protein)
     });
 
+    if (defaultNutritionTemplateId || defaultExerciseTemplateId) {
+      // Week 1 plan history: the templates this program starts on. resolvePlanForDate would
+      // otherwise just fall back to the program defaults, so this is explicit history, not new
+      // behavior — and gives the coach a real first PlanPeriod to build the weekly timeline from.
+      await tx.planPeriod.create({
+        data: {
+          programId: created.id,
+          effectiveDate: today,
+          weekNumber: 1,
+          nutritionTemplateId: defaultNutritionTemplateId,
+          exerciseTemplateId: defaultExerciseTemplateId
+        }
+      });
+    }
+
     return created;
   });
 
-  const { shouldNotifyCoachRequest } = await applyCoachSupport(userId, input, { programId: program.id });
+  const { shouldNotifyCoachRequest } = trackingOnly
+    ? { shouldNotifyCoachRequest: false }
+    : await applyCoachSupport(userId, input, { programId: program.id });
 
   const programWithMetrics = await prisma.program.findUniqueOrThrow({
     where: { id: program.id },
@@ -416,7 +556,7 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     await prisma.$transaction(async (tx) => {
       await applyTemplateExercisesToDate(tx, defaultExerciseTemplateId, program.id, userId, todayKey);
     });
-  } else {
+  } else if (!trackingOnly) {
     await seedDefaultExercises(userId, program.id, today);
   }
 

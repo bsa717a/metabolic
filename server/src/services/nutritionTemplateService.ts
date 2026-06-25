@@ -372,6 +372,20 @@ export async function applyTemplateToDailyLog(
         where: { id: program.id },
         data: { defaultNutritionTemplateId: templateId }
       });
+      // Weekly plan: record this template as the nutrition plan in effect from this date.
+      // resolvePlanForDate reads the latest PlanPeriod on/before a date (falling back to the program
+      // default), so this drives future days and builds per-week plan history. One PlanPeriod per
+      // (program, date): a same-day exercise apply updates this row rather than creating a second.
+      await tx.planPeriod.upsert({
+        where: { programId_effectiveDate: { programId: program.id, effectiveDate: log.date } },
+        create: {
+          programId: program.id,
+          effectiveDate: log.date,
+          nutritionTemplateId: templateId,
+          createdById: options?.actorId ?? null
+        },
+        update: { nutritionTemplateId: templateId }
+      });
     }
 
     await recalculateDailyLogTotals(log.id, tx);

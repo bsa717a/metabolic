@@ -50,6 +50,8 @@ export function buildSetupPayload(form: SetupFormState) {
     : currentWeight;
   const currentBodyFat = parseOptionalBodyFat(form.bodyFat);
   const targetBodyFat = parseOptionalBodyFat(form.goalBodyFat);
+  const heightFeet = form.heightFeet.trim() ? Number(form.heightFeet) : undefined;
+  const heightInches = form.heightInches.trim() ? Number(form.heightInches) : undefined;
   const timezone = form.timezone.trim() || detectedTimezone();
 
   return {
@@ -57,8 +59,13 @@ export function buildSetupPayload(form: SetupFormState) {
     goalWeight: resolvedGoalWeight,
     ...(currentBodyFat !== undefined && !Number.isNaN(currentBodyFat) ? { bodyFat: currentBodyFat } : {}),
     ...(targetBodyFat !== undefined && !Number.isNaN(targetBodyFat) ? { goalBodyFat: targetBodyFat } : {}),
-    ...(form.coachCode.trim() ? { coachCode: form.coachCode.trim() } : {}),
-    ...(form.wantsCoach ? { wantsCoach: true } : {}),
+    ...(heightFeet !== undefined && Number.isFinite(heightFeet) ? { heightFeet } : {}),
+    ...(heightInches !== undefined && Number.isFinite(heightInches) ? { heightInches } : {}),
+    ...(form.occupation.trim() ? { occupation: form.occupation.trim() } : {}),
+    ...(form.activityLevel ? { activityLevel: Number(form.activityLevel) } : {}),
+    ...(form.trackingOnly ? {} : form.coachCode.trim() ? { coachCode: form.coachCode.trim() } : {}),
+    ...(form.trackingOnly ? {} : form.wantsCoach ? { wantsCoach: true } : {}),
+    ...(form.trackingOnly ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
     timezone
@@ -83,8 +90,13 @@ export function createEmptySetupForm(): SetupFormState {
     goalWeight: '',
     bodyFat: '',
     goalBodyFat: '',
+    heightFeet: '',
+    heightInches: '',
+    occupation: '',
+    activityLevel: '',
     coachCode: '',
     wantsCoach: false,
+    trackingOnly: false,
     gender: '',
     birthDate: '',
     timezone: ''

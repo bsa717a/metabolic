@@ -11,7 +11,7 @@ import { lookupFood, lookupFoodFromImage, lookupHasRoughEstimate, summarizeFoodL
 import { env } from '../config/env.js';
 import { sendOutboundMessage, isTwilioConfigured, type TwilioMessageChannel } from './twilioOutboundService.js';
 import { runSmsAgentEntry } from './smsAgentService.js';
-import { ensureDailyLogByUserId } from './dailyLogService.js';
+import { ensureDailyLogByUserId, ensureSelfDirectedProgram } from './dailyLogService.js';
 import { logWater } from './hydrationService.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
 import { n } from '../utils/numbers.js';
@@ -506,7 +506,13 @@ export async function handleWriteAction(userId: string, dateKey: string, timeZon
 
 /** Resolves which meal to log into: a named meal, the next open meal, the last meal, or a new one. */
 async function resolveTargetMeal(userId: string, dateKey: string, mealNameHint?: string, timeZone?: string | null) {
-  const log = await ensureDailyLogByUserId(userId, dateKey);
+  // "Just log food" with no plan: provision a self-directed tracking program so the log lands,
+  // rather than erroring. No-op for users who already have an active (coached or self-directed) program.
+  let log = await ensureDailyLogByUserId(userId, dateKey);
+  if (!log) {
+    await ensureSelfDirectedProgram(userId);
+    log = await ensureDailyLogByUserId(userId, dateKey);
+  }
   if (!log) throw new Error('No active program found for today.');
 
   const meals = await prisma.meal.findMany({

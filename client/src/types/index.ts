@@ -16,6 +16,8 @@ export type UserDemographics = { gender: string | null; birthDate: string | null
 export type UserClientProfile = UserDemographics & {
   heightFeet: number | null;
   heightInches: number | null;
+  occupation: string | null;
+  activityLevel: number | null;
   medicalConditions: string | null;
   exerciseRestrictions: string | null;
   foodAllergies: string | null;

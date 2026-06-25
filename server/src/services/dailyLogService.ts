@@ -1,8 +1,9 @@
-import { MealItemType, MealStatus, Prisma, ProgramStatus, type Program, type ProgramMetric } from '@prisma/client';
+import { MealItemType, MealStatus, Prisma, ProgramMode, ProgramStatus, type Program, type ProgramMetric } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, startOfUtcDay, userDayKey } from '../utils/dates.js';
 import { applyDefaultTemplateToNewLogOutsideTx } from './nutritionTemplateApply.js';
 import { applyDefaultTemplateToNewDayOutsideTx } from './exerciseTemplateApply.js';
+import { resolvePlanForDate } from './planResolution.js';
 
 const DEFAULT_MEALS: [number, string, string][] = [
   [1, 'Breakfast', '07:30'],
@@ -119,6 +120,18 @@ async function seedExercisesForDate(
 
 export async function ensureDailyLog(userId: string, program: Program & { metrics: ProgramMetric[] }, targetDate: Date) {
   const day = startOfUtcDay(targetDate);
+
+  // The nutrition/exercise templates in effect for this date (weekly PlanPeriod), falling back to
+  // the program defaults so programs without PlanPeriods behave exactly as before. Resolved only on
+  // the branches that actually seed a plan — never on the hot path where the log already has meals.
+  const planProgramForDay = async () => {
+    const resolved = await resolvePlanForDate(program, day);
+    return {
+      ...program,
+      defaultNutritionTemplateId: resolved.nutritionTemplateId,
+      defaultExerciseTemplateId: resolved.exerciseTemplateId
+    };
+  };
   const existing = await prisma.dailyLog.findUnique({
     where: { userId_date: { userId, date: day } },
     include: { meals: true }
@@ -132,10 +145,13 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
       });
       if (priorLog?.meals.length) {
         await copyMealsFromLog(priorLog.id, existing.id, userId);
-      } else if (program.defaultNutritionTemplateId) {
-        await applyDefaultTemplateToNewLogOutsideTx(program, existing.id, userId);
       } else {
-        await createDefaultMeals(existing.id, userId);
+        const planProgram = await planProgramForDay();
+        if (planProgram.defaultNutritionTemplateId) {
+          await applyDefaultTemplateToNewLogOutsideTx(planProgram, existing.id, userId);
+        } else {
+          await createDefaultMeals(existing.id, userId);
+        }
       }
     }
     return existing;
@@ -192,15 +208,17 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
 
   if (!created) return dailyLog;
 
+  const planProgram = await planProgramForDay();
+
   if (fallbackLog?.meals.length) {
     await copyMealsFromLog(fallbackLog.id, dailyLog.id, userId);
-  } else if (program.defaultNutritionTemplateId) {
-    await applyDefaultTemplateToNewLogOutsideTx(program, dailyLog.id, userId);
+  } else if (planProgram.defaultNutritionTemplateId) {
+    await applyDefaultTemplateToNewLogOutsideTx(planProgram, dailyLog.id, userId);
   } else {
     await createDefaultMeals(dailyLog.id, userId);
   }
 
-  await seedExercisesForDate(program, userId, day);
+  await seedExercisesForDate(planProgram, userId, day);
 
   return dailyLog;
 }
@@ -216,6 +234,42 @@ export async function userTodayDate(userId: string) {
 export async function ensureTodayDailyLog(userId: string, program: Program & { metrics: ProgramMetric[] }) {
   const day = await userTodayDate(userId);
   return ensureDailyLog(userId, program, day);
+}
+
+const SELF_DIRECTED_PROGRAM_NAME = 'Food tracking';
+
+/**
+ * Gap A — "just log food" with no coach/plan. Returns the user's active program, or provisions a
+ * lightweight SELF_DIRECTED one (no coach, no templates, no metrics, so DailyLog falls back to its
+ * default targets) so logging works without a coached plan. If the user later onboards to coaching,
+ * setupFirstProgram finds and upgrades this same active program rather than creating a second one.
+ */
+export async function ensureSelfDirectedProgram(userId: string) {
+  const existing = await prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    include: { metrics: true }
+  });
+  if (existing) return existing;
+
+  const today = await userTodayDate(userId);
+  try {
+    await prisma.program.create({
+      data: {
+        userId,
+        name: SELF_DIRECTED_PROGRAM_NAME,
+        status: ProgramStatus.ACTIVE,
+        mode: ProgramMode.SELF_DIRECTED,
+        startDate: today
+      }
+    });
+  } catch (error) {
+    // Tolerate a concurrent provision; fall through to re-read the active program.
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) throw error;
+  }
+  return prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    include: { metrics: true }
+  });
 }
 
 export async function ensureDailyLogByUserId(userId: string, date: string) {
