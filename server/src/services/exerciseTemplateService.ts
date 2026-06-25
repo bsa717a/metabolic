@@ -282,6 +282,18 @@ export async function applyTemplateToDate(
         where: { id: program.id },
         data: { defaultExerciseTemplateId: templateId }
       });
+      // Weekly plan: record this template as the exercise plan in effect from this date (mirrors the
+      // nutrition apply path). Shares one PlanPeriod per (program, date) with a same-day nutrition apply.
+      await tx.planPeriod.upsert({
+        where: { programId_effectiveDate: { programId: program.id, effectiveDate: parseDateParam(date) } },
+        create: {
+          programId: program.id,
+          effectiveDate: parseDateParam(date),
+          exerciseTemplateId: templateId,
+          createdById: options?.actorId ?? null
+        },
+        update: { exerciseTemplateId: templateId }
+      });
     }
 
     const log = await tx.dailyLog.findUnique({
