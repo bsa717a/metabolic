@@ -26,6 +26,10 @@ enum ProgramStatus {
   COMPLETED
   ARCHIVED
 }
+enum ProgramMode {
+  COACHED
+  SELF_DIRECTED
+}
 enum MetricType {
   WEIGHT
   BODY_FAT
@@ -204,6 +208,7 @@ model User {
   mealTemplates MealTemplate[]
   nutritionPlanTemplatesCreated NutritionPlanTemplate[] @relation("NutritionPlanTemplateCreator")
   exerciseTemplatesCreated ExerciseTemplate[] @relation("ExerciseTemplateCreator")
+  planPeriodsCreated PlanPeriod[] @relation("PlanPeriodCreator")
   levelProgress UserLevelProgress[]
   badges UserBadge[]
   streaks UserStreak[]
@@ -371,6 +376,7 @@ model CoachSession {
   user User @relation("ClientSessions", fields: [userId], references: [id], onDelete: Cascade)
   linkedCheckIn CoachCheckIn? @relation(fields: [linkedCheckInId], references: [id], onDelete: SetNull)
   linkedSnapshot ProgramMetricSnapshot? @relation(fields: [linkedSnapshotId], references: [id], onDelete: SetNull)
+  planPeriod PlanPeriod?
   @@index([coachId, userId, occurredAt(sort: Desc)])
   @@index([userId, occurredAt(sort: Desc)])
 }
@@ -382,6 +388,7 @@ model Program {
   coachId String?
   name String
   status ProgramStatus @default(DRAFT)
+  mode ProgramMode @default(COACHED)
   startDate DateTime
   targetEndDate DateTime?
   createdAt DateTime @default(now())
@@ -398,6 +405,7 @@ model Program {
   defaultNutritionTemplate NutritionPlanTemplate? @relation(fields: [defaultNutritionTemplateId], references: [id], onDelete: SetNull)
   defaultExerciseTemplateId String?
   defaultExerciseTemplate ExerciseTemplate? @relation(fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
+  planPeriods PlanPeriod[]
 }
 
 model ProgramMetric {
@@ -423,6 +431,7 @@ model ProgramMetricSnapshot {
   program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
   values ProgramMetricSnapshotValue[]
   coachSession CoachSession?
+  planPeriods PlanPeriod[]
   @@unique([programId, date])
 }
 
@@ -741,6 +750,7 @@ model ExerciseTemplate {
   createdBy User? @relation("ExerciseTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
   items ExerciseTemplateItem[]
   programs Program[]
+  planPeriods PlanPeriod[]
   defaultForCoaches User[] @relation("CoachDefaultExerciseTemplate")
 }
 
@@ -775,6 +785,7 @@ model NutritionPlanTemplate {
   createdBy User? @relation("NutritionPlanTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
   meals NutritionTemplateMeal[]
   programs Program[]
+  planPeriods PlanPeriod[]
   defaultForCoaches User[] @relation("CoachDefaultNutritionTemplate")
 }
 
@@ -972,4 +983,30 @@ model AppSetting {
   key String @id
   value String
   updatedAt DateTime @updatedAt
+}
+
+/// The plan in effect for a program from `effectiveDate` until the next PlanPeriod.
+/// "Week" = period-to-period; resolveTemplateForDate reads the latest one on/before a date,
+/// falling back to the Program defaults so programs with no PlanPeriod behave exactly as before.
+model PlanPeriod {
+  id String @id @default(cuid())
+  programId String
+  effectiveDate DateTime
+  weekNumber Int?
+  nutritionTemplateId String?
+  exerciseTemplateId String?
+  coachSessionId String? @unique
+  sourceSnapshotId String?
+  notes String?
+  createdById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  nutritionTemplate NutritionPlanTemplate? @relation(fields: [nutritionTemplateId], references: [id], onDelete: SetNull)
+  exerciseTemplate ExerciseTemplate? @relation(fields: [exerciseTemplateId], references: [id], onDelete: SetNull)
+  coachSession CoachSession? @relation(fields: [coachSessionId], references: [id], onDelete: SetNull)
+  sourceSnapshot ProgramMetricSnapshot? @relation(fields: [sourceSnapshotId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("PlanPeriodCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  @@unique([programId, effectiveDate])
+  @@index([programId, effectiveDate])
 }
