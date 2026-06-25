@@ -241,6 +241,8 @@ model ClientProfile {
   foodConditions String?
   dietNotes String?
   coachNotes String?
+  occupation String?
+  activityLevel Int?
   heightInches Int?
   heightRaw String?
   targetBodyFat Decimal? @db.Decimal(10, 2)

@@ -5,6 +5,8 @@ export type ProfileDraft = {
   birthDate: string;
   heightFeet: string;
   heightInches: string;
+  occupation: string;
+  activityLevel: string;
   medicalConditions: string;
   exerciseRestrictions: string;
   foodAllergies: string;
@@ -18,6 +20,8 @@ export function emptyProfileDraft(): ProfileDraft {
     birthDate: '',
     heightFeet: '',
     heightInches: '',
+    occupation: '',
+    activityLevel: '',
     medicalConditions: '',
     exerciseRestrictions: '',
     foodAllergies: '',
@@ -32,6 +36,8 @@ export function profileToDraft(profile: UserAccountDetails): ProfileDraft {
     birthDate: profile.birthDate ?? '',
     heightFeet: profile.heightFeet != null ? String(profile.heightFeet) : '',
     heightInches: profile.heightInches != null ? String(profile.heightInches) : '',
+    occupation: profile.occupation ?? '',
+    activityLevel: profile.activityLevel != null ? String(profile.activityLevel) : '',
     medicalConditions: profile.medicalConditions ?? '',
     exerciseRestrictions: profile.exerciseRestrictions ?? '',
     foodAllergies: profile.foodAllergies ?? '',
@@ -47,7 +53,9 @@ export function buildProfilePayload(draft: ProfileDraft, canEditClientNotes: boo
     medicalConditions: draft.medicalConditions.trim() || null,
     exerciseRestrictions: draft.exerciseRestrictions.trim() || null,
     foodAllergies: draft.foodAllergies.trim() || null,
-    dietaryPreferences: draft.dietaryPreferences.trim() || null
+    dietaryPreferences: draft.dietaryPreferences.trim() || null,
+    occupation: draft.occupation.trim() || null,
+    activityLevel: draft.activityLevel ? Number(draft.activityLevel) : null
   };
 
   if (!draft.heightFeet.trim() && !draft.heightInches.trim()) {

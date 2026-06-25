@@ -1,5 +1,6 @@
 import type { ProfileDraft } from './userProfileForm';
 import { BirthDateInput } from '../ui/BirthDateInput';
+import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
 
 function labelClassName() {
   return 'mb-1 block text-sm font-medium text-slate-600 dark:text-app-text-muted';
@@ -81,6 +82,33 @@ export function UserProfileFields({
           </label>
         </div>
       </div>
+
+      <label className="block">
+        <span className={labelClassName()}>What do you do for a living?</span>
+        <input
+          className={inputClassName()}
+          placeholder="e.g. nurse, software developer, teacher"
+          maxLength={200}
+          value={draft.occupation}
+          onChange={(event) => onChange('occupation', event.target.value)}
+        />
+      </label>
+
+      <label className="block">
+        <span className={labelClassName()}>How active are you outside of work?</span>
+        <select
+          className={inputClassName()}
+          value={draft.activityLevel}
+          onChange={(event) => onChange('activityLevel', event.target.value)}
+        >
+          <option value="">Not set</option>
+          {ACTIVITY_LEVEL_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className="block">
         <span className={labelClassName()}>Medical conditions</span>

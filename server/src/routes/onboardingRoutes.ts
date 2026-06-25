@@ -13,6 +13,11 @@ const setupBody = z.object({
   proteinTarget: z.number().finite().positive().max(1000).optional(),
   coachCode: z.string().trim().max(20).optional(),
   wantsCoach: z.boolean().optional(),
+  trackingOnly: z.boolean().optional(),
+  heightFeet: z.number().int().min(0).max(8).optional(),
+  heightInches: z.number().int().min(0).max(11).optional(),
+  occupation: z.string().trim().max(200).optional(),
+  activityLevel: z.number().int().min(1).max(5).optional(),
   gender: z.enum(['m', 'f', 'male', 'female']).optional(),
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   timezone: z.string().trim().min(1).max(100).optional()

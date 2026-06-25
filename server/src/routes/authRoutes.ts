@@ -14,6 +14,8 @@ const profileBody = demographicsBody.extend({
   phone: z.string().max(40).nullable().optional(),
   heightFeet: z.number().int().min(0).max(8).nullable().optional(),
   heightInches: z.number().int().min(0).max(11).nullable().optional(),
+  occupation: z.string().trim().max(200).nullable().optional(),
+  activityLevel: z.number().int().min(1).max(5).nullable().optional(),
   medicalConditions: z.string().max(5000).nullable().optional(),
   exerciseRestrictions: z.string().max(5000).nullable().optional(),
   foodAllergies: z.string().max(5000).nullable().optional(),

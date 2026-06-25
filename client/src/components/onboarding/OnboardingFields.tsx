@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { HelpCircle } from 'lucide-react';
 import { BirthDateInput } from '../ui/BirthDateInput';
+import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
 import { detectedTimezone, timezoneOptions } from '../../utils/timezoneOptions';
 import type { SetupFormState } from '../../types/onboarding';
 import { onboardingCardClass, onboardingFieldClass, onboardingInputClass } from './onboardingStyles';
@@ -11,7 +14,8 @@ export function OnboardingWeightFields({
   showCurrentWeight = true,
   showGoalWeight = true,
   showCurrentBodyFat = true,
-  showGoalBodyFat = true
+  showGoalBodyFat = true,
+  showHeight = false
 }: {
   form: SetupFormState;
   onChange: (key: FieldKey, value: string | boolean) => void;
@@ -19,9 +23,11 @@ export function OnboardingWeightFields({
   showGoalWeight?: boolean;
   showCurrentBodyFat?: boolean;
   showGoalBodyFat?: boolean;
+  showHeight?: boolean;
 }) {
   const showWeightRow = showCurrentWeight || showGoalWeight;
   const showBodyFatRow = showCurrentBodyFat || showGoalBodyFat;
+  const [showBodyFatHelp, setShowBodyFatHelp] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -66,13 +72,60 @@ export function OnboardingWeightFields({
         </div>
       ) : null}
 
+      {showHeight ? (
+        <div>
+          <label htmlFor="height-feet" className="mb-2 block text-sm font-medium text-app-text">
+            Height
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <input
+              id="height-feet"
+              className={onboardingInputClass}
+              value={form.heightFeet}
+              onChange={(e) => onChange('heightFeet', e.target.value)}
+              placeholder="Feet"
+              inputMode="numeric"
+              type="number"
+              min="0"
+              max="8"
+              step="1"
+              aria-label="Height in feet"
+            />
+            <input
+              id="height-inches"
+              className={onboardingInputClass}
+              value={form.heightInches}
+              onChange={(e) => onChange('heightInches', e.target.value)}
+              placeholder="Inches"
+              inputMode="numeric"
+              type="number"
+              min="0"
+              max="11"
+              step="1"
+              aria-label="Height in inches"
+            />
+          </div>
+        </div>
+      ) : null}
+
       {showBodyFatRow ? (
         <div className={showCurrentBodyFat && showGoalBodyFat ? 'grid gap-4 sm:grid-cols-2' : undefined}>
           {showCurrentBodyFat ? (
             <div>
-              <label htmlFor="current-body-fat" className="mb-2 block text-sm font-medium text-app-text">
-                Current body fat (%)
-              </label>
+              <div className="mb-2 flex items-center gap-1.5">
+                <label htmlFor="current-body-fat" className="block text-sm font-medium text-app-text">
+                  Current body fat (%)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowBodyFatHelp((open) => !open)}
+                  className="text-app-text-muted transition hover:text-app-text"
+                  aria-label="How to measure body fat"
+                  aria-expanded={showBodyFatHelp}
+                >
+                  <HelpCircle size={15} aria-hidden />
+                </button>
+              </div>
               <input
                 id="current-body-fat"
                 className={onboardingInputClass}
@@ -85,6 +138,13 @@ export function OnboardingWeightFields({
                 max="75"
                 step="0.1"
               />
+              {showBodyFatHelp ? (
+                <p className="mt-2 text-xs leading-relaxed text-app-text-muted">
+                  Not sure? Estimate it with a body-fat scale, skinfold calipers, or a waist- and
+                  neck-based body-fat calculator. It&apos;s optional — leave it blank for now and you
+                  can update it later.
+                </p>
+              ) : null}
             </div>
           ) : null}
           {showGoalBodyFat ? (
@@ -123,6 +183,7 @@ export function OnboardingPersonalFields({
   showTimezone?: boolean;
   showCoach?: boolean;
 }) {
+  const [showActivityHelp, setShowActivityHelp] = useState(false);
   return (
     <div className="space-y-4">
       {showTimezone ? (
@@ -173,6 +234,55 @@ export function OnboardingPersonalFields({
             />
           </label>
         </div>
+
+      </div>
+
+      <div className={onboardingCardClass}>
+        <div className="mb-3 flex items-center gap-1.5">
+          <p className="text-sm font-semibold text-app-text">Daily activity</p>
+          <button
+            type="button"
+            onClick={() => setShowActivityHelp((open) => !open)}
+            className="text-app-text-muted transition hover:text-app-text"
+            aria-label="Why we ask about your activity"
+            aria-expanded={showActivityHelp}
+          >
+            <HelpCircle size={15} aria-hidden />
+          </button>
+        </div>
+        {showActivityHelp ? (
+          <p className="mb-3 text-xs leading-relaxed text-app-text-muted">
+            These help us gauge how active your typical day is — both your job and your time outside
+            it — so we can pick targets and a plan that fit your routine.
+          </p>
+        ) : null}
+        <label htmlFor="occupation" className="mb-1 block text-sm font-medium text-app-text">
+          What do you do for a living?
+        </label>
+        <input
+          id="occupation"
+          className={onboardingInputClass}
+          value={form.occupation}
+          onChange={(e) => onChange('occupation', e.target.value)}
+          placeholder="e.g. nurse, software developer, teacher"
+          maxLength={200}
+        />
+        <label htmlFor="activity-level" className="mb-1 mt-3 block text-sm font-medium text-app-text">
+          How active are you outside of work?
+        </label>
+        <select
+          id="activity-level"
+          className={onboardingFieldClass}
+          value={form.activityLevel}
+          onChange={(e) => onChange('activityLevel', e.target.value)}
+        >
+          <option value="">Select…</option>
+          {ACTIVITY_LEVEL_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {showCoach ? (

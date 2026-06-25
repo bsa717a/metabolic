@@ -14,6 +14,8 @@ const clientProfileSelect = {
   foodConditions: true,
   dietNotes: true,
   coachNotes: true,
+  occupation: true,
+  activityLevel: true,
   heightInches: true,
   heightRaw: true
 } as const;
@@ -24,6 +26,8 @@ type ClientProfileRecord = {
   foodConditions: string | null;
   dietNotes: string | null;
   coachNotes: string | null;
+  occupation: string | null;
+  activityLevel: number | null;
   heightInches: number | null;
   heightRaw: string | null;
 };
@@ -80,6 +84,8 @@ function serializeProfile(
     smsRemindersEnabled: user.smsRemindersEnabled,
     ...serializeDemographics(user),
     ...height,
+    occupation: user.clientProfile?.occupation ?? null,
+    activityLevel: user.clientProfile?.activityLevel ?? null,
     medicalConditions: user.clientProfile?.medicalConditions ?? null,
     exerciseRestrictions: user.clientProfile?.exerciseConditions ?? null,
     foodAllergies: user.clientProfile?.foodConditions ?? null,
@@ -186,6 +192,8 @@ export async function updateUserProfile(
     birthDate?: string | null;
     heightFeet?: number | null;
     heightInches?: number | null;
+    occupation?: string | null;
+    activityLevel?: number | null;
     medicalConditions?: string | null;
     exerciseRestrictions?: string | null;
     foodAllergies?: string | null;
@@ -250,12 +258,20 @@ export async function updateUserProfile(
     foodConditions?: string | null;
     dietNotes?: string | null;
     coachNotes?: string | null;
+    occupation?: string | null;
+    activityLevel?: number | null;
     heightInches?: number | null;
     heightRaw?: string | null;
   } = {};
 
   if (input.heightFeet !== undefined || input.heightInches !== undefined) {
     Object.assign(profileData, validateHeight(input.heightFeet, input.heightInches));
+  }
+  if (input.occupation !== undefined) {
+    profileData.occupation = normalizeText(input.occupation) ?? null;
+  }
+  if (input.activityLevel !== undefined) {
+    profileData.activityLevel = input.activityLevel;
   }
 
   if (input.medicalConditions !== undefined) {

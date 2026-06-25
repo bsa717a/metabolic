@@ -15,8 +15,13 @@ export type SetupFormState = {
   goalWeight: string;
   bodyFat: string;
   goalBodyFat: string;
+  heightFeet: string;
+  heightInches: string;
+  occupation: string;
+  activityLevel: string;
   coachCode: string;
   wantsCoach: boolean;
+  trackingOnly: boolean;
   gender: '' | 'm' | 'f';
   birthDate: string;
   timezone: string;
