@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Camera, ChevronDown, Leaf, Plus, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
-import { api, todayDateParam } from '../../services/api';
+import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
+import { parseFoodEntry } from '../../utils/foodEntryParse';
 import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
@@ -133,62 +134,6 @@ function fileToBase64(file: File) {
   });
 }
 
-function mealHintIndex(value: string) {
-  if (value === 'first' || value === '1st') return 0;
-  if (value === 'second' || value === '2nd') return 1;
-  if (value === 'third' || value === '3rd') return 2;
-  if (value === 'fourth' || value === '4th') return 3;
-  if (value === 'fifth' || value === '5th') return 4;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed - 1 : null;
-}
-
-function parseFoodEntry(meals: Meal[], input: string, expandedMealId: string | null) {
-  const lines = input
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const firstLine = lines[0] ?? '';
-  const lowerFirstLine = firstLine.toLowerCase();
-  const numberedMeal = lowerFirstLine.match(/^(\d+)\s*[).:-]?\s*(.+)$/);
-  const ordinalSnack = lowerFirstLine.match(/^(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)\s+snack\s*[).:-]?$/);
-  let targetMeal: Meal | undefined;
-  let foodLines = lines;
-
-  if (numberedMeal) {
-    const mealNumber = Number(numberedMeal[1]);
-    const label = numberedMeal[2]?.trim() ?? '';
-    const byNumber = meals.find((meal) => meal.mealNumber === mealNumber);
-    const labelMatchesMeal = byNumber && byNumber.name.toLowerCase() === label;
-    if (labelMatchesMeal || ['breakfast', 'snack', 'lunch', 'dinner'].includes(label)) {
-      targetMeal = byNumber;
-      foodLines = lines.slice(1);
-    }
-  } else if (ordinalSnack) {
-    const snacks = meals.filter((meal) => meal.name.toLowerCase().includes('snack'));
-    const snackIndex = mealHintIndex(ordinalSnack[1]);
-    targetMeal = snackIndex == null ? undefined : snacks[snackIndex];
-    foodLines = lines.slice(1);
-  } else {
-    const explicitMeal = meals.find((meal) => meal.name.toLowerCase() === lowerFirstLine);
-    if (explicitMeal || ['breakfast', 'snack', 'lunch', 'dinner'].includes(lowerFirstLine)) {
-      targetMeal =
-        explicitMeal ?? meals.find((meal) => meal.name.toLowerCase().includes(lowerFirstLine));
-      foodLines = lines.slice(1);
-    }
-  }
-
-  const foodText = foodLines.join('\n').trim();
-  const expandedMeal = expandedMealId ? meals.find((meal) => meal.id === expandedMealId) : undefined;
-  return { targetMeal: targetMeal ?? expandedMeal ?? selectSnackFallback(meals), foodText };
-}
-
-function selectSnackFallback(meals: Meal[]) {
-  const snacks = meals.filter((meal) => meal.name.toLowerCase().includes('snack'));
-  if (snacks.length) return new Date().getHours() < 12 ? snacks[0] : snacks[1] ?? snacks[0];
-  return meals[0];
-}
-
 function formatPlannedTime(plannedTime?: string | null) {
   if (!plannedTime) return null;
   const match = plannedTime.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
@@ -203,11 +148,15 @@ function formatPlannedTime(plannedTime?: string | null) {
 
 export function TodayNutrition({
   meals,
+  allMeals,
   onChange
 }: {
   meals: Meal[];
+  /** Full day meal list for add-food parsing; dashboard `meals` may hide untouched planned slots. */
+  allMeals?: Meal[];
   onChange: () => void | Promise<void>;
 }) {
+  const mealsForParse = allMeals ?? meals;
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
   const [entry, setEntry] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
@@ -225,6 +174,14 @@ export function TodayNutrition({
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [suggestionPrompt, setSuggestionPrompt] = useState('');
   const [suggestionIntro, setSuggestionIntro] = useState('');
+
+  // The meal this entry will log to (parsed from a "meal 5"/"for lunch"/"at 6pm" directive, or the
+  // expanded/next-meal fallback) — surfaced under the box so the user sees the target before adding.
+  const detectedMealLabel = useMemo(() => {
+    if (!entry.trim() || isWaterLogRequest(entry)) return undefined;
+    const { targetMeal, newMeal } = parseFoodEntry(meals, entry, expandedMealId, mealsForParse);
+    return targetMeal?.name ?? (newMeal ? `${newMeal.name} (new)` : undefined);
+  }, [entry, meals, mealsForParse, expandedMealId]);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   function toggleMeal(mealId: string) {
@@ -389,8 +346,8 @@ export function TodayNutrition({
       return;
     }
 
-    const { targetMeal, foodText } = parseFoodEntry(meals, input, expandedMealId);
-    if (!targetMeal) {
+    const { targetMeal, newMeal, foodText } = parseFoodEntry(meals, input, expandedMealId, mealsForParse);
+    if (!targetMeal && !newMeal) {
       setError('No meal is available for today.');
       return;
     }
@@ -416,13 +373,25 @@ export function TodayNutrition({
             body: JSON.stringify({ inputText: foodText })
           });
 
+      if (!lookup.items.length) throw new Error('Could not estimate nutrition for that food.');
+
+      // Log to the existing meal, or create the requested "Meal N" (at its time) first.
+      const mealId = targetMeal
+        ? targetMeal.id
+        : (
+            await api<{ id: string }>(`/api/daily-logs/${todayKey()}/meals`, {
+              method: 'POST',
+              body: JSON.stringify(newMeal)
+            })
+          ).id;
+
       const lookupIds = lookup.items
         .filter((item) => item.source === 'ai' && item.lookup?.id && item.estimate)
         .map((item) => item.lookup!.id);
       if (lookupIds.length) {
         await api('/api/ai/food-lookup/accept-batch', {
           method: 'POST',
-          body: JSON.stringify({ lookupIds, mealId: targetMeal.id, type: 'ACTUAL' })
+          body: JSON.stringify({ lookupIds, mealId, type: 'ACTUAL' })
         });
       }
 
@@ -430,7 +399,7 @@ export function TodayNutrition({
         lookup.items
           .filter((item) => item.source === 'existing' && item.food)
           .map((item) =>
-            api(`/api/meals/${targetMeal.id}/items`, {
+            api(`/api/meals/${mealId}/items`, {
               method: 'POST',
               body: JSON.stringify({
                 foodId: item.food!.id,
@@ -447,8 +416,7 @@ export function TodayNutrition({
           )
       );
 
-      if (!lookup.items.length) throw new Error('Could not estimate nutrition for that food.');
-      await api(`/api/gamification/meals/${targetMeal.id}/log`, {
+      await api(`/api/gamification/meals/${mealId}/log`, {
         method: 'POST',
         body: JSON.stringify({
           status: 'ATE_SOMETHING_DIFFERENT',
@@ -457,7 +425,7 @@ export function TodayNutrition({
       });
       setEntry('');
       clearPhoto();
-      setExpandedMealId(targetMeal.id);
+      setExpandedMealId(mealId);
       await onChange();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add food.');
@@ -550,6 +518,11 @@ export function TodayNutrition({
             </button>
           </div>
         </div>
+        {detectedMealLabel && (
+          <p className="mt-2 text-xs text-app-text-muted">
+            Logging to <span className="font-medium text-app-text">{detectedMealLabel}</span>
+          </p>
+        )}
         <input
           ref={photoInputRef}
           type="file"

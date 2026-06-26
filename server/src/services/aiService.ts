@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, FunctionCallingMode } from '@google/generative-ai';
-import type { FunctionDeclaration, Part } from '@google/generative-ai';
+import type { FunctionDeclaration, GenerationConfig, Part } from '@google/generative-ai';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { formatGroceryDescription } from '../utils/groceryConversion.js';
@@ -376,6 +376,20 @@ function splitFoodLines(input: string) {
     .split(/\n|,|;|•/)
     .map((line) => line.trim())
     .filter((line) => line.length >= 2);
+}
+
+// gemini-2.5-flash spends "thinking" tokens out of the maxOutputTokens budget, which intermittently
+// truncated structured JSON responses mid-array ("Expected ',' or ']' after array element"). Disable
+// thinking for the deterministic JSON-extraction models — the detailed prompts handle accuracy, and
+// disabling it frees the whole budget for output (also faster and cheaper). Not in the SDK types yet.
+type JsonGenConfig = GenerationConfig & { thinkingConfig: { thinkingBudget: number } };
+function jsonModelConfig(maxOutputTokens: number): JsonGenConfig {
+  return {
+    responseMimeType: 'application/json',
+    temperature: 0.2,
+    maxOutputTokens,
+    thinkingConfig: { thinkingBudget: 0 }
+  };
 }
 
 function parseModelJson(text: string) {
@@ -850,22 +864,14 @@ class GeminiAiProvider implements AiProvider {
   private foodModel() {
     return this.client.getGenerativeModel({
       model: this.model,
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-        maxOutputTokens: 2048
-      }
+      generationConfig: jsonModelConfig(2048)
     });
   }
 
   private exerciseModel() {
     return this.client.getGenerativeModel({
       model: this.model,
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-        maxOutputTokens: 4096
-      }
+      generationConfig: jsonModelConfig(4096)
     });
   }
 

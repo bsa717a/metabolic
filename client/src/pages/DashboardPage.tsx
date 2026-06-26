@@ -225,7 +225,11 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
 
       <section className="grid gap-6 lg:grid-cols-2">
         <div data-tour="today-nutrition">
-          <TodayNutrition meals={data.meals} onChange={() => loadDashboard({ silent: true })} />
+          <TodayNutrition
+            meals={data.meals}
+            allMeals={data.allMeals}
+            onChange={() => loadDashboard({ silent: true })}
+          />
         </div>
         <div data-tour="today-exercise">
           <TodayExercise exercises={data.exercises} onChange={() => loadDashboard({ silent: true })} />

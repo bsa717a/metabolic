@@ -41,10 +41,16 @@ export async function getMealsForDate(userId: string, date: string) {
   return mealsForNutritionDisplay(meals);
 }
 
-export async function createMeal(userId: string, date: string, data: { name: string; mealNumber: number }) {
+export async function createMeal(userId: string, date: string, data: { name: string; mealNumber: number; plannedTime?: string }) {
   const day = parseDateParam(date);
   const log = await prisma.dailyLog.findUniqueOrThrow({ where: { userId_date: { userId, date: day } } });
-  return prisma.meal.create({ data: { dailyLogId: log.id, userId, mealNumber: data.mealNumber, name: data.name } });
+  const existing = await prisma.meal.findFirst({
+    where: { dailyLogId: log.id, mealNumber: data.mealNumber }
+  });
+  if (existing) return existing;
+  return prisma.meal.create({
+    data: { dailyLogId: log.id, userId, mealNumber: data.mealNumber, name: data.name, plannedTime: data.plannedTime ?? null }
+  });
 }
 
 export async function markMealEatenAsPlanned(userId: string, mealId: string) {
