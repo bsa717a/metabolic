@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Check, Pencil, SkipForward } from 'lucide-react';
+import { Check, CircleX, Pencil } from 'lucide-react';
 import type { ScheduledExercise } from '../../types';
 import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
@@ -18,17 +18,35 @@ function formatPlan(item: ScheduledExercise) {
 function ExerciseTitle({
   name,
   bodyPart,
-  completed = false
+  completed = false,
+  skipped = false
 }: {
   name: string;
   bodyPart?: string | null;
   completed?: boolean;
+  skipped?: boolean;
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-      <p className={`font-semibold ${completed ? 'text-slate-600' : 'text-slate-900'}`}>{name}</p>
+      <p
+        className={`font-semibold ${
+          skipped
+            ? 'text-red-600 line-through decoration-red-400'
+            : completed
+              ? 'text-emerald-800'
+              : 'text-slate-900'
+        }`}
+      >
+        {name}
+      </p>
       {bodyPart && (
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{bodyPart}</span>
+        <span
+          className={`text-xs font-semibold uppercase tracking-wide ${
+            skipped ? 'text-red-400 line-through decoration-red-300' : completed ? 'text-emerald-600' : 'text-slate-400'
+          }`}
+        >
+          {bodyPart}
+        </span>
       )}
     </div>
   );
@@ -66,18 +84,20 @@ function ExerciseActionButton({
 
 function ExerciseActions({
   canComplete,
+  canUnskip,
   exerciseName,
   howToVideoUrl,
   onEdit,
   onDone,
-  onSkip
+  onSkipToggle
 }: {
   canComplete: boolean;
+  canUnskip?: boolean;
   exerciseName: string;
   howToVideoUrl?: string | null;
   onEdit: () => void;
   onDone?: () => void;
-  onSkip?: () => void;
+  onSkipToggle?: () => void;
 }) {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
@@ -85,9 +105,14 @@ function ExerciseActions({
       <ExerciseActionButton label="Edit exercise" onClick={onEdit}>
         <Pencil size={18} />
       </ExerciseActionButton>
-      {canComplete && onSkip && (
-        <ExerciseActionButton label="Skip exercise" variant="muted" onClick={onSkip}>
-          <SkipForward size={18} />
+      {canComplete && onSkipToggle && (
+        <ExerciseActionButton label="Skip exercise" variant="muted" onClick={onSkipToggle}>
+          <CircleX size={18} />
+        </ExerciseActionButton>
+      )}
+      {canUnskip && onSkipToggle && (
+        <ExerciseActionButton label="Unskip exercise" variant="muted" onClick={onSkipToggle}>
+          <CircleX size={18} />
         </ExerciseActionButton>
       )}
       {canComplete && onDone && (
@@ -114,44 +139,84 @@ export function ExerciseCard({
 }) {
   const future = isFuture(selectedDate);
   const isPlanned = item.status === 'PLANNED';
-  const canComplete = !future && isPlanned;
+  const isSkipped = item.status === 'SKIPPED';
+  const isDone = item.status === 'DONE';
   const isCompleted = !isPlanned;
+  const canComplete = !future && isPlanned;
+  const canUnskip = !future && isSkipped;
+  const planText = formatPlan(item);
 
   async function markDone() {
     await api(`/api/scheduled-exercises/${item.id}/mark-done`, { method: 'POST' });
     await onChange();
   }
 
-  async function skip() {
+  async function toggleSkip() {
     await api(`/api/scheduled-exercises/${item.id}/skip`, { method: 'POST' });
     await onChange();
   }
 
   if (isCompleted) {
-    return (
-      <div className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
-              <div className="flex min-w-0 items-center gap-2">
+    const completedCard = (
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
+            <div className="flex min-w-0 items-center gap-2">
+              {isDone && (
                 <span className="text-emerald-600" aria-hidden>
                   ✓
                 </span>
-                <ExerciseTitle name={item.exercise.name} bodyPart={item.exercise.bodyPart} completed />
-                {item.status !== 'DONE' && (
-                  <Badge tone={item.status === 'SKIPPED' ? 'slate' : 'yellow'}>{item.status}</Badge>
-                )}
-              </div>
-              <p className="text-sm text-slate-400 sm:min-w-0">{formatPlan(item)}</p>
+              )}
+              {isSkipped && (
+                <span className="text-red-500" aria-hidden>
+                  /
+                </span>
+              )}
+              <ExerciseTitle
+                name={item.exercise.name}
+                bodyPart={item.exercise.bodyPart}
+                completed={isDone}
+                skipped={isSkipped}
+              />
+              {!isDone && !isSkipped && <Badge tone="yellow">{item.status}</Badge>}
             </div>
+            <p
+              className={`text-sm sm:min-w-0 ${
+                isSkipped
+                  ? 'text-red-500 line-through decoration-red-300'
+                  : isDone
+                    ? 'text-emerald-700'
+                    : 'text-slate-400'
+              }`}
+            >
+              {planText}
+            </p>
           </div>
-          <ExerciseActions
-            canComplete={false}
-            exerciseName={item.exercise.name}
-            howToVideoUrl={item.exercise.howToVideoUrl}
-            onEdit={onEdit}
-          />
         </div>
+        <ExerciseActions
+          canComplete={false}
+          canUnskip={canUnskip}
+          exerciseName={item.exercise.name}
+          howToVideoUrl={item.exercise.howToVideoUrl}
+          onEdit={onEdit}
+          onSkipToggle={() => void toggleSkip()}
+        />
+      </div>
+    );
+
+    if (embedded) return completedCard;
+
+    return (
+      <div
+        className={`rounded-2xl border px-4 py-3 ${
+          isSkipped
+            ? 'border-red-200 bg-red-50'
+            : isDone
+              ? 'border-emerald-200 bg-emerald-50'
+              : 'border-slate-100 bg-slate-50/80'
+        }`}
+      >
+        {completedCard}
       </div>
     );
   }
@@ -161,7 +226,7 @@ export function ExerciseCard({
       <div className="min-w-0 flex-1">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
           <ExerciseTitle name={item.exercise.name} bodyPart={item.exercise.bodyPart} />
-          <p className="text-sm text-slate-500 sm:min-w-0">{formatPlan(item)}</p>
+          <p className="text-sm text-slate-500 sm:min-w-0">{planText}</p>
         </div>
       </div>
       <ExerciseActions
@@ -170,7 +235,7 @@ export function ExerciseCard({
         howToVideoUrl={item.exercise.howToVideoUrl}
         onEdit={onEdit}
         onDone={() => void markDone()}
-        onSkip={() => void skip()}
+        onSkipToggle={() => void toggleSkip()}
       />
     </div>
   );

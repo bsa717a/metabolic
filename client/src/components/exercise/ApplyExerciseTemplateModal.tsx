@@ -1,8 +1,19 @@
 import { useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { api } from '../../services/api';
-import type { ExercisePlanTemplateSummary, ScheduledExercise } from '../../types';
+import type { ExercisePlanTemplate, ExercisePlanTemplateSummary, ExerciseTemplateItem, ScheduledExercise } from '../../types';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+
+function formatTemplateItemPlan(item: ExerciseTemplateItem) {
+  if (item.sets != null) {
+    const weight = item.weight != null ? ` @ ${item.weight} lbs` : '';
+    return `${item.sets} sets × ${item.reps ?? '—'} reps${weight}`;
+  }
+  if (item.durationMinutes != null) return `${item.durationMinutes} min`;
+  if (item.weight != null) return `${item.weight} lbs`;
+  return 'No prescription set';
+}
 
 export function ApplyExerciseTemplateModal({
   open,
@@ -22,19 +33,23 @@ export function ApplyExerciseTemplateModal({
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [setAsDefault, setSetAsDefault] = useState(true);
-  const [applying, setApplying] = useState(false);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [templateDetails, setTemplateDetails] = useState<Record<string, ExercisePlanTemplate>>({});
+  const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   const hasCompleted = exercises.some((item) => item.status !== 'PLANNED');
+  const applying = applyingId !== null;
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError('');
+    setSelectedId(null);
+    setTemplateDetails({});
+    setDetailErrors({});
     api<ExercisePlanTemplateSummary[]>('/api/exercise-templates')
-      .then((rows) => {
-        setTemplates(rows);
-        setSelectedId(rows[0]?.id ?? null);
-      })
+      .then(setTemplates)
       .catch((err) => {
         setTemplates([]);
         setError(err instanceof Error ? err.message : 'Unable to load templates');
@@ -42,21 +57,52 @@ export function ApplyExerciseTemplateModal({
       .finally(() => setLoading(false));
   }, [open]);
 
-  async function apply() {
-    if (!selectedId) return;
-    setApplying(true);
+  async function loadTemplateDetail(templateId: string) {
+    if (templateDetails[templateId]) return;
+    setLoadingDetailId(templateId);
+    try {
+      const detail = await api<ExercisePlanTemplate>(`/api/exercise-templates/${templateId}`);
+      setTemplateDetails((current) => ({ ...current, [templateId]: detail }));
+      setDetailErrors((current) => {
+        const next = { ...current };
+        delete next[templateId];
+        return next;
+      });
+    } catch (err) {
+      setDetailErrors((current) => ({
+        ...current,
+        [templateId]: err instanceof Error ? err.message : 'Unable to load template details'
+      }));
+    } finally {
+      setLoadingDetailId((current) => (current === templateId ? null : current));
+    }
+  }
+
+  async function selectTemplate(templateId: string) {
+    setError('');
+    if (selectedId === templateId) {
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId(templateId);
+    await loadTemplateDetail(templateId);
+  }
+
+  async function apply(templateId: string) {
+    if (applying) return;
+    setApplyingId(templateId);
     setError('');
     try {
       await api(`/api/daily-logs/${selectedDate}/apply-exercise-template`, {
         method: 'POST',
-        body: JSON.stringify({ templateId: selectedId, setAsDefault })
+        body: JSON.stringify({ templateId, setAsDefault })
       });
       onApplied();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to apply template');
     } finally {
-      setApplying(false);
+      setApplyingId(null);
     }
   }
 
@@ -84,19 +130,64 @@ export function ApplyExerciseTemplateModal({
           <ul className="space-y-2">
             {templates.map((template) => {
               const selected = selectedId === template.id;
+              const detail = templateDetails[template.id];
+              const loadingDetail = loadingDetailId === template.id;
+              const detailError = detailErrors[template.id];
               return (
-                <li key={template.id}>
+                <li
+                  key={template.id}
+                  className={`rounded-2xl border transition ${
+                    selected ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : 'border-slate-200 bg-white'
+                  }`}
+                >
                   <button
                     type="button"
-                    className={`w-full rounded-2xl border p-4 text-left transition ${
-                      selected ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200' : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                    onClick={() => setSelectedId(template.id)}
+                    className="flex w-full items-start justify-between gap-3 p-4 text-left"
+                    disabled={applying}
+                    onClick={() => void selectTemplate(template.id)}
                   >
-                    <p className="font-semibold">{template.name}</p>
-                    {template.description && <p className="mt-1 text-sm text-slate-500">{template.description}</p>}
-                    <p className="mt-2 text-xs text-slate-400">{template.exerciseCount} exercises</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900">{template.name}</p>
+                      {template.description && <p className="mt-1 text-sm text-slate-500">{template.description}</p>}
+                      <p className="mt-2 text-xs text-slate-400">{template.exerciseCount} exercises</p>
+                    </div>
+                    <ChevronDown
+                      size={18}
+                      className={`shrink-0 text-slate-400 transition-transform ${selected ? 'rotate-180' : ''}`}
+                      aria-hidden
+                    />
                   </button>
+                  {selected && (
+                    <div className="border-t border-blue-200/80 px-4 pb-4 pt-3">
+                      {loadingDetail && <p className="text-sm text-slate-500">Loading exercises…</p>}
+                      {!loadingDetail && detail && detail.items.length > 0 && (
+                        <ul className="space-y-2">
+                          {detail.items.map((item) => (
+                            <li key={item.id} className="rounded-xl bg-white/80 px-3 py-2 text-sm ring-1 ring-blue-100">
+                              <p className="font-medium text-slate-900">{item.exercise.name}</p>
+                              <p className="mt-0.5 text-slate-500">{formatTemplateItemPlan(item)}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {!loadingDetail && detail && detail.items.length === 0 && (
+                        <p className="text-sm text-slate-500">This template has no exercises yet.</p>
+                      )}
+                      {!loadingDetail && !detail && detailError && (
+                        <p className="text-sm text-amber-700">Could not load preview. You can still apply this template.</p>
+                      )}
+                      {!loadingDetail && (
+                        <Button
+                          type="button"
+                          className="mt-3 px-3 py-1.5 text-xs"
+                          disabled={applying}
+                          onClick={() => void apply(template.id)}
+                        >
+                          {applyingId === template.id ? 'Applying…' : 'Apply'}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -112,10 +203,6 @@ export function ApplyExerciseTemplateModal({
           />
           <span>Use as my default plan for future days</span>
         </label>
-
-        <Button type="button" className="w-full" disabled={!selectedId || applying} onClick={() => void apply()}>
-          {applying ? 'Applying…' : 'Apply template'}
-        </Button>
       </div>
     </Drawer>
   );

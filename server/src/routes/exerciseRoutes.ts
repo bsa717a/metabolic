@@ -10,13 +10,14 @@ import {
   getExercises,
   getScheduledExercises,
   markDone,
-  markScheduledExercise,
   reorderScheduledExercises,
+  toggleSkipScheduledExercise,
   updateScheduledExercise
 } from '../services/exerciseService.js';
 import {
   applyTemplateToDate,
   getProgramDefaultTemplate,
+  getTemplateForActor,
   listTemplatesForUser
 } from '../services/exerciseTemplateService.js';
 import { prisma } from '../db/prisma.js';
@@ -97,6 +98,14 @@ export async function exerciseRoutes(app: FastifyInstance) {
     getProgramDefaultTemplate(request.appUser!.id)
   );
 
+  app.get('/api/exercise-templates/:id', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await getTemplateForActor((request.params as { id: string }).id, request.appUser!);
+    } catch {
+      return reply.code(404).send({ error: 'Template not found' });
+    }
+  });
+
   app.post('/api/daily-logs/:date/apply-exercise-template', { preHandler: requireAuth }, async (request, reply) => {
     const date = (request.params as { date: string }).date;
     const body = z
@@ -125,6 +134,6 @@ export async function exerciseRoutes(app: FastifyInstance) {
     markDone(request.appUser!.id, (request.params as { id: string }).id)
   );
   app.post('/api/scheduled-exercises/:id/skip', { preHandler: requireAuth }, async (request) =>
-    markScheduledExercise(request.appUser!.id, (request.params as { id: string }).id, 'SKIPPED')
+    toggleSkipScheduledExercise(request.appUser!.id, (request.params as { id: string }).id)
   );
 }
