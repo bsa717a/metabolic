@@ -52,3 +52,26 @@ describe('parseFoodEntry — meal directives', () => {
     expect(parse('breakfast burrito').foodText).toBe('breakfast burrito');
   });
 });
+
+describe('parseFoodEntry — creating a missing meal', () => {
+  // A day whose plan has only 4 meals (no meal 5).
+  const fourMeals = meals.filter((m) => m.mealNumber !== 5);
+
+  it('requests a new "Meal 5" with the stated time when it does not exist', () => {
+    const { targetMeal, newMeal, foodText } = parseFoodEntry(fourMeals, 'I had a meal 5 at 6pm\n6 oz chicken', null);
+    expect(targetMeal).toBeUndefined();
+    expect(newMeal).toEqual({ mealNumber: 5, name: 'Meal 5', plannedTime: '18:00' });
+    expect(foodText).toBe('6 oz chicken');
+  });
+
+  it('logs to the existing meal when the number is present (no new meal)', () => {
+    const { targetMeal, newMeal } = parseFoodEntry(meals, 'meal 5\nsteak', null);
+    expect(newMeal).toBeUndefined();
+    expect(targetMeal?.name).toBe('Dinner');
+  });
+
+  it('omits plannedTime when no time is given', () => {
+    const { newMeal } = parseFoodEntry(fourMeals, 'meal 5\nsteak', null);
+    expect(newMeal).toEqual({ mealNumber: 5, name: 'Meal 5', plannedTime: undefined });
+  });
+});

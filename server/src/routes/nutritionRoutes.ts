@@ -36,7 +36,13 @@ export async function nutritionRoutes(app: FastifyInstance) {
     return getMealsForDate(request.appUser!.id, date);
   });
   app.post('/api/daily-logs/:date/meals', { preHandler: requireAuth }, async (request) => {
-    const body = z.object({ name: z.string(), mealNumber: z.number() }).parse(request.body);
+    const body = z
+      .object({
+        name: z.string(),
+        mealNumber: z.number(),
+        plannedTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional()
+      })
+      .parse(request.body);
     return createMeal(request.appUser!.id, (request.params as { date: string }).date, body);
   });
   app.patch('/api/meals/:id', { preHandler: requireAuth }, async (request) => {

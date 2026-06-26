@@ -79,7 +79,7 @@ function cleanResidual(text: string): string {
     .trim();
 }
 
-type Directive = { meal?: Meal; residual: string; consumed: boolean };
+type Directive = { meal?: Meal; residual: string; consumed: boolean; requestedMealNumber?: number; requestedMinutes?: number };
 
 /** Pull a meal/time target out of the first line, returning the leftover food text (if any). */
 export function extractMealDirective(line: string, meals: Meal[]): Directive {
@@ -99,13 +99,14 @@ export function extractMealDirective(line: string, meals: Meal[]): Directive {
     const label = leading[2]?.trim() ?? '';
     const byNumber = meals.find((meal) => meal.mealNumber === num);
     if ((byNumber && byNumber.name.toLowerCase() === label) || (MEAL_NAMES as readonly string[]).includes(label)) {
-      return { meal: byNumber, residual: '', consumed: true };
+      return { meal: byNumber, residual: '', consumed: true, requestedMealNumber: num };
     }
   }
 
   let meal: Meal | undefined;
   let residual = line;
   let consumed = false;
+  let requestedMealNumber: number | undefined;
 
   const strip = (re: RegExp) => {
     residual = residual.replace(re, ' ');
@@ -113,7 +114,8 @@ export function extractMealDirective(line: string, meals: Meal[]): Directive {
 
   const numMatch = line.match(MEAL_NUMBER_RE);
   if (numMatch) {
-    meal = meals.find((m) => m.mealNumber === Number(numMatch[1]));
+    requestedMealNumber = Number(numMatch[1]);
+    meal = meals.find((m) => m.mealNumber === requestedMealNumber);
     strip(MEAL_NUMBER_RE);
     consumed = true;
   }
@@ -141,8 +143,12 @@ export function extractMealDirective(line: string, meals: Meal[]): Directive {
   }
 
   const minutes = timeToMinutes(line);
-  if (minutes != null && !meal && AT_TIME_RE.test(line)) {
-    meal = mealByPlannedTime(meals, minutes);
+  const atTime = minutes != null && AT_TIME_RE.test(line);
+  const requestedMinutes = atTime ? minutes : undefined;
+  // A time only selects an existing meal when no explicit meal number was given; otherwise an
+  // absent numbered meal should be created (with this time), not matched to the nearest one.
+  if (atTime && !meal && requestedMealNumber == null) {
+    meal = mealByPlannedTime(meals, minutes!);
     consumed = true;
   }
 
@@ -152,7 +158,13 @@ export function extractMealDirective(line: string, meals: Meal[]): Directive {
   if (minutes != null) {
     residual = residual.replace(/\b(?:at|around|@)\b/gi, ' ').replace(TIME_STRIP_RE, ' ');
   }
-  return { meal, residual: cleanResidual(residual), consumed: true };
+  return { meal, residual: cleanResidual(residual), consumed: true, requestedMealNumber, requestedMinutes };
+}
+
+function minutesToHHMM(mins: number): string {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 function selectSnackFallback(meals: Meal[]): Meal | undefined {
@@ -161,16 +173,33 @@ function selectSnackFallback(meals: Meal[]): Meal | undefined {
   return meals[0];
 }
 
-export function parseFoodEntry(meals: Meal[], input: string, expandedMealId: string | null) {
+export type NewMealRequest = { mealNumber: number; name: string; plannedTime?: string };
+export type FoodEntry = { targetMeal?: Meal; newMeal?: NewMealRequest; foodText: string };
+
+export function parseFoodEntry(meals: Meal[], input: string, expandedMealId: string | null): FoodEntry {
   const lines = input
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const { meal, residual, consumed } = extractMealDirective(lines[0] ?? '', meals);
+  const { meal, residual, consumed, requestedMealNumber, requestedMinutes } = extractMealDirective(lines[0] ?? '', meals);
   const foodLines = consumed ? (residual ? [residual, ...lines.slice(1)] : lines.slice(1)) : lines;
   const foodText = foodLines.join('\n').trim();
 
+  if (meal) return { targetMeal: meal, foodText };
+
+  // An explicit "meal N" that isn't on the day yet → create it ("Meal N", at the stated time).
+  if (requestedMealNumber != null && !meals.some((m) => m.mealNumber === requestedMealNumber)) {
+    return {
+      foodText,
+      newMeal: {
+        mealNumber: requestedMealNumber,
+        name: `Meal ${requestedMealNumber}`,
+        plannedTime: requestedMinutes != null ? minutesToHHMM(requestedMinutes) : undefined
+      }
+    };
+  }
+
   const expandedMeal = expandedMealId ? meals.find((m) => m.id === expandedMealId) : undefined;
-  return { targetMeal: meal ?? expandedMeal ?? selectSnackFallback(meals), foodText };
+  return { targetMeal: expandedMeal ?? selectSnackFallback(meals), foodText };
 }

@@ -173,9 +173,10 @@ export function TodayNutrition({
 
   // The meal this entry will log to (parsed from a "meal 5"/"for lunch"/"at 6pm" directive, or the
   // expanded/next-meal fallback) — surfaced under the box so the user sees the target before adding.
-  const detectedMeal = useMemo(() => {
+  const detectedMealLabel = useMemo(() => {
     if (!entry.trim() || isWaterLogRequest(entry)) return undefined;
-    return parseFoodEntry(meals, entry, expandedMealId).targetMeal;
+    const { targetMeal, newMeal } = parseFoodEntry(meals, entry, expandedMealId);
+    return targetMeal?.name ?? (newMeal ? `${newMeal.name} (new)` : undefined);
   }, [entry, meals, expandedMealId]);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -341,8 +342,8 @@ export function TodayNutrition({
       return;
     }
 
-    const { targetMeal, foodText } = parseFoodEntry(meals, input, expandedMealId);
-    if (!targetMeal) {
+    const { targetMeal, newMeal, foodText } = parseFoodEntry(meals, input, expandedMealId);
+    if (!targetMeal && !newMeal) {
       setError('No meal is available for today.');
       return;
     }
@@ -368,13 +369,25 @@ export function TodayNutrition({
             body: JSON.stringify({ inputText: foodText })
           });
 
+      if (!lookup.items.length) throw new Error('Could not estimate nutrition for that food.');
+
+      // Log to the existing meal, or create the requested "Meal N" (at its time) first.
+      const mealId = targetMeal
+        ? targetMeal.id
+        : (
+            await api<{ id: string }>(`/api/daily-logs/${todayDateParam()}/meals`, {
+              method: 'POST',
+              body: JSON.stringify(newMeal)
+            })
+          ).id;
+
       const lookupIds = lookup.items
         .filter((item) => item.source === 'ai' && item.lookup?.id && item.estimate)
         .map((item) => item.lookup!.id);
       if (lookupIds.length) {
         await api('/api/ai/food-lookup/accept-batch', {
           method: 'POST',
-          body: JSON.stringify({ lookupIds, mealId: targetMeal.id, type: 'ACTUAL' })
+          body: JSON.stringify({ lookupIds, mealId, type: 'ACTUAL' })
         });
       }
 
@@ -382,7 +395,7 @@ export function TodayNutrition({
         lookup.items
           .filter((item) => item.source === 'existing' && item.food)
           .map((item) =>
-            api(`/api/meals/${targetMeal.id}/items`, {
+            api(`/api/meals/${mealId}/items`, {
               method: 'POST',
               body: JSON.stringify({
                 foodId: item.food!.id,
@@ -399,8 +412,7 @@ export function TodayNutrition({
           )
       );
 
-      if (!lookup.items.length) throw new Error('Could not estimate nutrition for that food.');
-      await api(`/api/gamification/meals/${targetMeal.id}/log`, {
+      await api(`/api/gamification/meals/${mealId}/log`, {
         method: 'POST',
         body: JSON.stringify({
           status: 'ATE_SOMETHING_DIFFERENT',
@@ -409,7 +421,7 @@ export function TodayNutrition({
       });
       setEntry('');
       clearPhoto();
-      setExpandedMealId(targetMeal.id);
+      setExpandedMealId(mealId);
       await onChange();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add food.');
@@ -502,9 +514,9 @@ export function TodayNutrition({
             </button>
           </div>
         </div>
-        {detectedMeal && (
+        {detectedMealLabel && (
           <p className="mt-2 text-xs text-app-text-muted">
-            Logging to <span className="font-medium text-app-text">{detectedMeal.name}</span>
+            Logging to <span className="font-medium text-app-text">{detectedMealLabel}</span>
           </p>
         )}
         <input
