@@ -59,6 +59,7 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
     program,
     dailyLog,
     meals: nutritionMeals,
+    allMeals: meals,
     exercises,
     nextMeal: nextMeal
       ? {

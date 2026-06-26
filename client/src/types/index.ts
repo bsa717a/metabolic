@@ -211,7 +211,7 @@ export type ExercisePlanTemplate = ExercisePlanTemplateSummary & {
   createdById?: string | null;
   items: ExerciseTemplateItem[];
 };
-export type Dashboard = { program: Program | null; dailyLog: any; meals: Meal[]; exercises: Exercise[]; summary: { currentWeight: number; caloriesRemaining: number; proteinRemaining: number; nextMeal: string; exercisesLeft: number; goalProgress: number } | null; weightTrend: { date: string; weight: number }[] };
+export type Dashboard = { program: Program | null; dailyLog: any; meals: Meal[]; allMeals?: Meal[]; exercises: Exercise[]; summary: { currentWeight: number; caloriesRemaining: number; proteinRemaining: number; nextMeal: string; exercisesLeft: number; goalProgress: number } | null; weightTrend: { date: string; weight: number }[] };
 export type CoachClient = {
   id: string;
   firstName: string;

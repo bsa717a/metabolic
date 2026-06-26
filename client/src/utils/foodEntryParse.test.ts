@@ -74,4 +74,12 @@ describe('parseFoodEntry — creating a missing meal', () => {
     const { newMeal } = parseFoodEntry(fourMeals, 'meal 5\nsteak', null);
     expect(newMeal).toEqual({ mealNumber: 5, name: 'Meal 5', plannedTime: undefined });
   });
+
+  it('does not create a duplicate when dinner is hidden from the display list', () => {
+    const displayMeals = meals.filter((m) => m.mealNumber !== 5);
+    const { targetMeal, newMeal, foodText } = parseFoodEntry(displayMeals, 'meal 5\nsteak', null, meals);
+    expect(newMeal).toBeUndefined();
+    expect(targetMeal?.name).toBe('Dinner');
+    expect(foodText).toBe('steak');
+  });
 });

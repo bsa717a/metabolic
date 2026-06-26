@@ -148,11 +148,15 @@ function formatPlannedTime(plannedTime?: string | null) {
 
 export function TodayNutrition({
   meals,
+  allMeals,
   onChange
 }: {
   meals: Meal[];
+  /** Full day meal list for add-food parsing; dashboard `meals` may hide untouched planned slots. */
+  allMeals?: Meal[];
   onChange: () => void | Promise<void>;
 }) {
+  const mealsForParse = allMeals ?? meals;
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
   const [entry, setEntry] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
@@ -175,9 +179,9 @@ export function TodayNutrition({
   // expanded/next-meal fallback) — surfaced under the box so the user sees the target before adding.
   const detectedMealLabel = useMemo(() => {
     if (!entry.trim() || isWaterLogRequest(entry)) return undefined;
-    const { targetMeal, newMeal } = parseFoodEntry(meals, entry, expandedMealId);
+    const { targetMeal, newMeal } = parseFoodEntry(meals, entry, expandedMealId, mealsForParse);
     return targetMeal?.name ?? (newMeal ? `${newMeal.name} (new)` : undefined);
-  }, [entry, meals, expandedMealId]);
+  }, [entry, meals, mealsForParse, expandedMealId]);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   function toggleMeal(mealId: string) {
@@ -342,7 +346,7 @@ export function TodayNutrition({
       return;
     }
 
-    const { targetMeal, newMeal, foodText } = parseFoodEntry(meals, input, expandedMealId);
+    const { targetMeal, newMeal, foodText } = parseFoodEntry(meals, input, expandedMealId, mealsForParse);
     if (!targetMeal && !newMeal) {
       setError('No meal is available for today.');
       return;

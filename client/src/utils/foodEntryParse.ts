@@ -176,20 +176,26 @@ function selectSnackFallback(meals: Meal[]): Meal | undefined {
 export type NewMealRequest = { mealNumber: number; name: string; plannedTime?: string };
 export type FoodEntry = { targetMeal?: Meal; newMeal?: NewMealRequest; foodText: string };
 
-export function parseFoodEntry(meals: Meal[], input: string, expandedMealId: string | null): FoodEntry {
+export function parseFoodEntry(
+  meals: Meal[],
+  input: string,
+  expandedMealId: string | null,
+  allMeals?: Meal[]
+): FoodEntry {
+  const lookupMeals = allMeals ?? meals;
   const lines = input
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const { meal, residual, consumed, requestedMealNumber, requestedMinutes } = extractMealDirective(lines[0] ?? '', meals);
+  const { meal, residual, consumed, requestedMealNumber, requestedMinutes } = extractMealDirective(lines[0] ?? '', lookupMeals);
   const foodLines = consumed ? (residual ? [residual, ...lines.slice(1)] : lines.slice(1)) : lines;
   const foodText = foodLines.join('\n').trim();
 
   if (meal) return { targetMeal: meal, foodText };
 
   // An explicit "meal N" that isn't on the day yet → create it ("Meal N", at the stated time).
-  if (requestedMealNumber != null && !meals.some((m) => m.mealNumber === requestedMealNumber)) {
+  if (requestedMealNumber != null && !lookupMeals.some((m) => m.mealNumber === requestedMealNumber)) {
     return {
       foodText,
       newMeal: {
