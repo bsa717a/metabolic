@@ -95,6 +95,9 @@ export function ExerciseChecklist({
 
   const todo = exercises.filter((item) => item.status === 'PLANNED');
   const completed = exercises.filter((item) => item.status !== 'PLANNED');
+  const done = completed.filter((item) => item.status === 'DONE');
+  const skipped = completed.filter((item) => item.status === 'SKIPPED');
+  const otherCompleted = completed.filter((item) => item.status !== 'DONE' && item.status !== 'SKIPPED');
   const todoKey = todo.map((item) => item.id).join(',');
 
   useEffect(() => {
@@ -220,11 +223,45 @@ export function ExerciseChecklist({
         </section>
       )}
 
-      {completed.length > 0 && (
+      {done.length > 0 && (
         <section>
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Completed</h2>
           <div className="space-y-2">
-            {completed.map((item) => (
+            {done.map((item) => (
+              <ExerciseCard
+                key={item.id}
+                item={item}
+                selectedDate={selectedDate}
+                onChange={onChange}
+                onEdit={() => onEdit(item)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {skipped.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Skipped</h2>
+          <div className="space-y-2">
+            {skipped.map((item) => (
+              <ExerciseCard
+                key={item.id}
+                item={item}
+                selectedDate={selectedDate}
+                onChange={onChange}
+                onEdit={() => onEdit(item)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {otherCompleted.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Other</h2>
+          <div className="space-y-2">
+            {otherCompleted.map((item) => (
               <ExerciseCard
                 key={item.id}
                 item={item}
@@ -238,7 +275,7 @@ export function ExerciseChecklist({
       )}
 
       {!orderedTodo.length && completed.length > 0 && (
-        <p className="text-center text-sm text-emerald-700">All exercises done for this day.</p>
+        <p className="text-center text-sm text-emerald-700">All exercises logged for this day.</p>
       )}
     </div>
   );

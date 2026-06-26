@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { addMealItem, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
-import { applyTemplateToDailyLog, getProgramDefaultTemplate, listTemplatesForUser } from '../services/nutritionTemplateService.js';
+import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
 import { prisma } from '../db/prisma.js';
 
@@ -83,6 +83,14 @@ export async function nutritionRoutes(app: FastifyInstance) {
   app.get('/api/nutrition-templates/default', { preHandler: requireAuth }, async (request) =>
     getProgramDefaultTemplate(request.appUser!.id)
   );
+
+  app.get('/api/nutrition-templates/:id', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await getTemplateForActor((request.params as { id: string }).id, request.appUser!);
+    } catch {
+      return reply.code(404).send({ error: 'Template not found' });
+    }
+  });
 
   app.post('/api/daily-logs/:date/apply-template', { preHandler: requireAuth }, async (request, reply) => {
     const body = z

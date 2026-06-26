@@ -232,6 +232,17 @@ export async function copyExercisesFromPreviousDay(userId: string, targetDate: s
   return copyExercisesFromDate(userId, targetDate, toDateKey(prior.scheduledDate), { replace: true });
 }
 
+export async function toggleSkipScheduledExercise(userId: string, id: string) {
+  const existing = await prisma.scheduledExercise.findFirstOrThrow({ where: { id, userId } });
+  if (existing.status === ExerciseStatus.SKIPPED) {
+    return markScheduledExercise(userId, id, ExerciseStatus.PLANNED);
+  }
+  if (existing.status === ExerciseStatus.PLANNED) {
+    return markScheduledExercise(userId, id, ExerciseStatus.SKIPPED);
+  }
+  throw new Error('Only planned exercises can be skipped');
+}
+
 export async function markScheduledExercise(userId: string, id: string, status: ExerciseStatus) {
   const existing = await prisma.scheduledExercise.findFirstOrThrow({ where: { id, userId } });
   const scheduled = await prisma.scheduledExercise.update({

@@ -76,7 +76,8 @@ function AddExerciseDrawerContent({
   const [selectedAiLookupId, setSelectedAiLookupId] = useState<string>();
   const [aiLoading, setAiLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>();
+  const [catalogError, setCatalogError] = useState<string>();
+  const [createError, setCreateError] = useState<string>();
   const [aiError, setAiError] = useState<string>();
 
   useEffect(() => {
@@ -84,6 +85,7 @@ function AddExerciseDrawerContent({
   }, []);
 
   function selectExercise(item: ExerciseCatalogItem) {
+    setCatalogError(undefined);
     setSelected(item);
     setSets(toInput(item.defaultSets));
     setReps(toInput(item.defaultReps));
@@ -127,7 +129,7 @@ function AddExerciseDrawerContent({
   async function addFromCatalog() {
     if (!selected) return;
     setSaving(true);
-    setError(undefined);
+    setCatalogError(undefined);
     try {
       await api(`/api/daily-logs/${date}/exercises`, {
         method: 'POST',
@@ -145,7 +147,7 @@ function AddExerciseDrawerContent({
       await onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add exercise');
+      setCatalogError(err instanceof Error ? err.message : 'Could not add exercise');
     } finally {
       setSaving(false);
     }
@@ -155,7 +157,7 @@ function AddExerciseDrawerContent({
     const name = newName.trim();
     if (!name) return;
     setSaving(true);
-    setError(undefined);
+    setCreateError(undefined);
     try {
       const created = await api<ExerciseCatalogItem>('/api/exercises', {
         method: 'POST',
@@ -174,7 +176,7 @@ function AddExerciseDrawerContent({
       await onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create exercise');
+      setCreateError(err instanceof Error ? err.message : 'Could not create exercise');
     } finally {
       setSaving(false);
     }
@@ -188,111 +190,122 @@ function AddExerciseDrawerContent({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <ul className="max-h-48 space-y-1 overflow-y-auto">
-          {filtered.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
-                  selected?.id === item.id ? 'bg-slate-950 text-white' : 'hover:bg-slate-50'
+        <ul className="max-h-[min(60vh,20rem)] space-y-2 overflow-y-auto">
+          {filtered.map((item) => {
+            const isSelected = selected?.id === item.id;
+            return (
+              <li
+                key={item.id}
+                className={`rounded-xl border ${
+                  isSelected ? 'border-slate-900 bg-slate-50' : 'border-slate-200 bg-white'
                 }`}
-                onClick={() => selectExercise(item)}
               >
-                <span className="font-semibold">{item.name}</span>
-                {item.bodyPart && <span className="ml-2 opacity-70">{item.bodyPart}</span>}
-                {item.category && <span className="ml-2 opacity-50">{item.category}</span>}
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
+                    isSelected ? 'text-slate-900' : 'hover:bg-slate-50'
+                  }`}
+                  onClick={() => selectExercise(item)}
+                >
+                  <span className="font-semibold">{item.name}</span>
+                  {item.bodyPart && <span className="ml-2 text-slate-500">{item.bodyPart}</span>}
+                  {item.category && <span className="ml-2 text-slate-400">{item.category}</span>}
+                </button>
+                {isSelected && (
+                  <div className="space-y-3 border-t border-slate-200 px-3 pb-3 pt-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="text-sm">
+                        <span className="font-medium text-slate-700">Sets</span>
+                        <input
+                          type="number"
+                          min={0}
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                          value={sets}
+                          onChange={(event) => setSets(event.target.value)}
+                        />
+                      </label>
+                      <label className="text-sm">
+                        <span className="font-medium text-slate-700">Reps</span>
+                        <input
+                          type="number"
+                          min={0}
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                          value={reps}
+                          onChange={(event) => setReps(event.target.value)}
+                        />
+                      </label>
+                      <label className="text-sm">
+                        <span className="font-medium text-slate-700">Minutes</span>
+                        <input
+                          type="number"
+                          min={0}
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                          value={durationMinutes}
+                          onChange={(event) => setDurationMinutes(event.target.value)}
+                        />
+                      </label>
+                      <label className="text-sm">
+                        <span className="font-medium text-slate-700">Weight (lbs)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.5"
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                          value={weight}
+                          onChange={(event) => setWeight(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label className="block text-sm">
+                      <span className="font-medium text-slate-700">Body part</span>
+                      <select
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                        value={bodyPart}
+                        onChange={(event) => setBodyPart(event.target.value)}
+                      >
+                        <option value="">Select body part…</option>
+                        {EXERCISE_BODY_PARTS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-sm">
+                      <span className="font-medium text-slate-700">Type</span>
+                      <select
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                        value={category}
+                        onChange={(event) => setCategory(event.target.value)}
+                      >
+                        <option value="">Select type…</option>
+                        {EXERCISE_CATEGORIES.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-sm">
+                      <span className="font-medium text-slate-700">Description</span>
+                      <textarea
+                        className="mt-1 h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+                        placeholder="Notes, form cues, or instructions…"
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                      />
+                    </label>
+                    {catalogError && <p className="text-sm text-red-600">{catalogError}</p>}
+                    <Button onClick={() => void addFromCatalog()} disabled={saving}>
+                      {saving ? 'Adding…' : 'Add to day'}
+                    </Button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
           {!filtered.length && <li className="px-3 py-2 text-sm text-slate-500">No matches</li>}
         </ul>
-
-        {selected && (
-          <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="text-sm">
-              <span className="font-medium text-slate-700">Sets</span>
-              <input
-                type="number"
-                min={0}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                value={sets}
-                onChange={(event) => setSets(event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              <span className="font-medium text-slate-700">Reps</span>
-              <input
-                type="number"
-                min={0}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                value={reps}
-                onChange={(event) => setReps(event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              <span className="font-medium text-slate-700">Minutes</span>
-              <input
-                type="number"
-                min={0}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                value={durationMinutes}
-                onChange={(event) => setDurationMinutes(event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              <span className="font-medium text-slate-700">Weight (lbs)</span>
-              <input
-                type="number"
-                min={0}
-                step="0.5"
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-                value={weight}
-                onChange={(event) => setWeight(event.target.value)}
-              />
-            </label>
-          </div>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Body part</span>
-            <select
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-              value={bodyPart}
-              onChange={(event) => setBodyPart(event.target.value)}
-            >
-              <option value="">Select body part…</option>
-              {EXERCISE_BODY_PARTS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Type</span>
-            <select
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-            >
-              <option value="">Select type…</option>
-              {EXERCISE_CATEGORIES.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Description</span>
-            <textarea
-              className="mt-1 h-24 w-full rounded-xl border border-slate-200 px-3 py-2"
-              placeholder="Notes, form cues, or instructions…"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </label>
-          </>
-        )}
 
         <div className="border-t border-slate-100 pt-4">
           <p className="text-sm font-semibold text-slate-700">Or create new</p>
@@ -398,16 +411,12 @@ function AddExerciseDrawerContent({
               value={newDescription}
               onChange={(event) => setNewDescription(event.target.value)}
             />
+            {createError && <p className="text-sm text-red-600">{createError}</p>}
             <Button type="button" onClick={() => void createAndAdd()} disabled={saving || !newName.trim()}>
               {saving ? 'Adding…' : 'Create and add to day'}
             </Button>
           </div>
         </div>
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <Button onClick={() => void addFromCatalog()} disabled={saving || !selected}>
-          {saving ? 'Adding…' : 'Add to day'}
-        </Button>
       </div>
   );
 }
