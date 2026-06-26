@@ -242,6 +242,7 @@ export function NutritionPage() {
         <WeeklyPlanner
           weekDates={weekDates}
           days={weekDays}
+          selectedDate={selectedDate}
           onSelectDay={selectDate}
           onChange={reloadWeek}
           onLogActual={(mealId) => setLogActualMealId(mealId)}

@@ -105,6 +105,7 @@ export function AddFoodsPanel({
       <LogDifferentFoodModal
         open={aiOpen}
         mealId={selectedMeal?.id}
+        itemType={itemType}
         title={selectedLabel ? `Add food to ${selectedLabel}` : 'Add food'}
         onClose={() => setAiOpen(false)}
         onSaved={() => void onChange()}

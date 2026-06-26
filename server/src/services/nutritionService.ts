@@ -325,13 +325,17 @@ export async function copyDayPlanForward(userId: string, sourceDate: string, day
 
   const targetDateKeys = Array.from({ length: days }, (_, index) => toDateKey(addUtcDays(sourceDay, index + 1)));
 
+  const targetLogs: NonNullable<Awaited<ReturnType<typeof ensureDailyLogByUserId>>>[] = [];
   for (const targetKey of targetDateKeys) {
     const log = await ensureDailyLogByUserId(userId, targetKey);
     if (!log) {
       throw new Error('No active program found. Visit the dashboard first or contact your coach.');
     }
+    targetLogs.push(log);
+  }
 
-    await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
+    for (const log of targetLogs) {
       for (const source of sourceMeals) {
         let target = await tx.meal.findFirst({
           where: { dailyLogId: log.id, mealNumber: source.mealNumber }
@@ -371,8 +375,8 @@ export async function copyDayPlanForward(userId: string, sourceDate: string, day
       }
 
       await recalculateDailyLogTotals(log.id, tx);
-    });
-  }
+    }
+  });
 
   return { copiedDays: days, targetDates: targetDateKeys };
 }

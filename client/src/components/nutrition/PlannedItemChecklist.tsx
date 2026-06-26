@@ -26,10 +26,12 @@ function formatMacros(item: Pick<MealItem, 'calories' | 'protein' | 'carbs' | 'f
 
 export function PlannedItemChecklist({
   meal,
-  onChange
+  onChange,
+  allowLogging = true
 }: {
   meal: Meal;
   onChange: () => void | Promise<void>;
+  allowLogging?: boolean;
 }) {
   const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
   const actualItems = (meal.items ?? []).filter((item) => item.type === 'ACTUAL');
@@ -96,14 +98,16 @@ export function PlannedItemChecklist({
           const logged = isItemLogged(item);
           return (
             <li key={item.id} className="flex items-start gap-2 text-sm text-app-text">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-app-border"
-                checked={logged}
-                disabled={togglingId === item.id}
-                onChange={(event) => void togglePlannedItem(item.id, event.target.checked)}
-                aria-label={`Log ${item.nameSnapshot} as eaten`}
-              />
+              {allowLogging && (
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-app-border"
+                  checked={logged}
+                  disabled={togglingId === item.id}
+                  onChange={(event) => void togglePlannedItem(item.id, event.target.checked)}
+                  aria-label={`Log ${item.nameSnapshot} as eaten`}
+                />
+              )}
               <div className={`flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 ${logged ? 'text-app-text-muted line-through' : ''}`}>
                 <span className="min-w-0">{formatItemLine(item)}</span>
                 <span className="shrink-0 text-app-text-muted">{formatMacros(item)}</span>

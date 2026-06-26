@@ -208,7 +208,7 @@ export function MealCard({
             {plannedItems.length > 0 && ` · ${plannedItems.length} item${plannedItems.length === 1 ? '' : 's'}`}
           </p>
           <div className="mt-3">
-            <PlannedItemChecklist meal={meal} onChange={onChange} />
+            <PlannedItemChecklist meal={meal} onChange={onChange} allowLogging={!future} />
           </div>
         </>
       )}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import { formatDayAbbrev, formatDayNumber, isFuture, isToday } from '../../../services/api';
 import { MealCell } from './MealCell';
@@ -18,6 +18,7 @@ const GRID_TEMPLATE = { gridTemplateColumns: 'repeat(7, minmax(148px, 1fr))' } a
 export function WeeklyPlanner({
   weekDates,
   days,
+  selectedDate,
   onSelectDay,
   onChange,
   onLogActual,
@@ -25,23 +26,21 @@ export function WeeklyPlanner({
 }: {
   weekDates: string[];
   days: DayMeals[];
+  selectedDate: string;
   onSelectDay: (date: string) => void;
   onChange: () => void | Promise<void>;
   onLogActual: (mealId: string) => void;
   onAskAi: (mealId: string) => void;
 }) {
   const rows = useMemo(() => buildGridRows(days), [days]);
-  const [selectedState, setSelected] = useState<{ date: string; mealNumber: number } | null>(null);
+  const [selectedMealNumber, setSelectedMealNumber] = useState(rows[0]?.mealNumber ?? 1);
 
-  const selectionValid =
-    selectedState &&
-    weekDates.includes(selectedState.date) &&
-    rows.some((row) => row.mealNumber === selectedState.mealNumber);
-  const selected = selectionValid
-    ? selectedState
-    : rows.length
-    ? { date: weekDates[0], mealNumber: rows[0].mealNumber }
-    : null;
+  useEffect(() => {
+    setSelectedMealNumber(rows[0]?.mealNumber ?? 1);
+  }, [weekDates.join(','), rows[0]?.mealNumber]);
+
+  const activeDate = weekDates.includes(selectedDate) ? selectedDate : weekDates[0];
+  const selected = rows.length ? { date: activeDate, mealNumber: selectedMealNumber } : null;
 
   const selectedMeal = selected ? findMeal(days, selected.date, selected.mealNumber) : undefined;
   const selectedDayLabel = selected
@@ -65,7 +64,7 @@ export function WeeklyPlanner({
                       type="button"
                       onClick={() => {
                         onSelectDay(date);
-                        setSelected((prev) => ({ date, mealNumber: prev?.mealNumber ?? rows[0]?.mealNumber ?? 1 }));
+                        setSelectedMealNumber((prev) => prev ?? rows[0]?.mealNumber ?? 1);
                       }}
                       className={clsx(
                         'flex w-full flex-col items-center rounded-xl border px-2 py-1.5 transition',
@@ -103,7 +102,10 @@ export function WeeklyPlanner({
                       meal={meal}
                       future={isFuture(date)}
                       selected={selected?.date === date && selected?.mealNumber === row.mealNumber}
-                      onSelect={() => setSelected({ date, mealNumber: row.mealNumber })}
+                      onSelect={() => {
+                        onSelectDay(date);
+                        setSelectedMealNumber(row.mealNumber);
+                      }}
                       onChange={onChange}
                     />
                   );

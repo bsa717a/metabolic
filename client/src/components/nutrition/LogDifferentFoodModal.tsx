@@ -37,12 +37,14 @@ export function LogDifferentFoodModal({
   open,
   mealId,
   title = 'What did you have instead?',
+  itemType = 'ACTUAL',
   onClose,
   onSaved
 }: {
   open: boolean;
   mealId?: string;
   title?: string;
+  itemType?: 'PLANNED' | 'ACTUAL';
   onClose: () => void;
   onSaved?: (celebrations: GamificationCelebration[]) => void;
 }) {
@@ -136,7 +138,7 @@ export function LogDifferentFoodModal({
       if (lookupIds.length) {
         await api('/api/ai/food-lookup/accept-batch', {
           method: 'POST',
-          body: JSON.stringify({ lookupIds, mealId, type: 'ACTUAL' })
+          body: JSON.stringify({ lookupIds, mealId, type: itemType })
         });
       }
 
@@ -148,7 +150,7 @@ export function LogDifferentFoodModal({
               method: 'POST',
               body: JSON.stringify({
                 foodId: item.food!.id,
-                type: 'ACTUAL',
+                type: itemType,
                 nameSnapshot: item.food!.name,
                 quantity: 1,
                 unit: item.food!.servingUnit,
@@ -161,18 +163,22 @@ export function LogDifferentFoodModal({
           )
       );
 
-      const res = await api<{ celebrations: GamificationCelebration[] }>(
-        `/api/gamification/meals/${mealId}/log`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            status: 'ATE_SOMETHING_DIFFERENT',
-            actualFoodDescription: input || 'Uploaded meal photo'
-          })
-        }
-      );
+      if (itemType === 'ACTUAL') {
+        const res = await api<{ celebrations: GamificationCelebration[] }>(
+          `/api/gamification/meals/${mealId}/log`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              status: 'ATE_SOMETHING_DIFFERENT',
+              actualFoodDescription: input || 'Uploaded meal photo'
+            })
+          }
+        );
+        onSaved?.(res.celebrations ?? []);
+      } else {
+        onSaved?.([]);
+      }
 
-      onSaved?.(res.celebrations ?? []);
       close();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save what you ate.');
@@ -230,7 +236,9 @@ export function LogDifferentFoodModal({
           </div>
         )}
         <p className="text-xs text-app-text-muted">
-          AI will estimate the nutrition from your text or photo and add it as Actual food for this meal.
+          {itemType === 'ACTUAL'
+            ? 'AI will estimate the nutrition from your text or photo and add it as actual food for this meal.'
+            : 'AI will estimate the nutrition from your text or photo and add it to the plan for this meal.'}
         </p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <Button

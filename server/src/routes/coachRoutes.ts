@@ -6,6 +6,7 @@ import { requireRole } from '../auth/requireRole.js';
 import {
   applyCoachExerciseTemplate,
   applyCoachNutritionTemplate,
+  copyCoachClientDayForward,
   createCoachClientGroup,
   createCoachCheckIn,
   createCoachSession,
@@ -421,6 +422,20 @@ export async function coachRoutes(app: FastifyInstance) {
       });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply template' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/daily-logs/:date/copy-forward', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    const parsed = z.object({ days: z.number().int().min(1).max(31) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    try {
+      return await copyCoachClientDayForward(request.appUser!, userId, date, parsed.data.days);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day forward' });
     }
   });
 

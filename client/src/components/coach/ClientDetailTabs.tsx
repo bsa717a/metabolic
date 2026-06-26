@@ -7,6 +7,7 @@ import type { CoachHydrationStats } from '../../types/hydration';
 import { clientInitials, clientName, formatNextSession } from '../../utils/coachClientUtils';
 import { SendResultsMenu } from './SendResultsMenu';
 import { FoodPlanEditor } from './FoodPlanEditor';
+import { CoachWeeklyFoodReportModal } from './CoachWeeklyFoodReportModal';
 import { ExercisePlanEditor } from './ExercisePlanEditor';
 import { ClientMetricsPanel } from './ClientMetricsPanel';
 import { ClientMeasurementsPanel } from './ClientMeasurementsPanel';
@@ -82,6 +83,7 @@ export function ClientDetailTabs({
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [planDate, setPlanDate] = useState(() => todayKey());
+  const [weeklyReportOpen, setWeeklyReportOpen] = useState(false);
 
   const pct = client.compliancePct;
   const hydrationToday = engagement?.hydration.todayActualOz ?? 0;
@@ -144,15 +146,22 @@ export function ClientDetailTabs({
           <TabButton label="Measurements" active={activeTab === 'measurements'} onClick={() => setActiveTab('measurements')} />
         </div>
         {(activeTab === 'food' || activeTab === 'exercise') && (
-          <label className="pb-2 text-sm">
-            <span className="mb-1 block text-app-text-muted">Plan date</span>
-            <input
-              type="date"
-              className="rounded-xl border border-app-border bg-app-surface px-3 py-1.5"
-              value={planDate}
-              onChange={(event) => setPlanDate(event.target.value)}
-            />
-          </label>
+          <div className="flex items-end gap-2 pb-2">
+            <label className="text-sm">
+              <span className="mb-1 block text-app-text-muted">Plan date</span>
+              <input
+                type="date"
+                className="rounded-xl border border-app-border bg-app-surface px-3 py-1.5"
+                value={planDate}
+                onChange={(event) => setPlanDate(event.target.value)}
+              />
+            </label>
+            {activeTab === 'food' && (
+              <Button type="button" variant="secondary" onClick={() => setWeeklyReportOpen(true)}>
+                Weekly report
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -305,6 +314,13 @@ export function ClientDetailTabs({
           />
         )}
       </div>
+
+      <CoachWeeklyFoodReportModal
+        open={weeklyReportOpen}
+        clientId={client.id}
+        anchorDate={planDate}
+        onClose={() => setWeeklyReportOpen(false)}
+      />
     </Card>
   );
 }

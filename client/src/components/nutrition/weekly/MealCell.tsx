@@ -62,6 +62,7 @@ export function MealCell({
   onChange: () => void | Promise<void>;
 }) {
   const [pendingLogged, setPendingLogged] = useState<Record<string, boolean>>({});
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const planned = meal ? plannedItemsOf(meal) : [];
@@ -75,11 +76,14 @@ export function MealCell({
   }
 
   async function toggle(item: MealItem, checked: boolean) {
+    setToggleError(null);
     setTogglingId(item.id);
     setPendingLogged((prev) => ({ ...prev, [item.id]: checked }));
     try {
       await api(`/api/meal-items/${item.id}/set-logged`, { method: 'POST', body: JSON.stringify({ logged: checked }) });
       await onChange();
+    } catch (error) {
+      setToggleError(error instanceof Error ? error.message : 'Could not update this item.');
     } finally {
       setPendingLogged((prev) => {
         const next = { ...prev };
@@ -125,6 +129,7 @@ export function MealCell({
         <span className="mt-1 text-xs italic text-app-text-muted">+ add foods</span>
       ) : (
         <>
+          {toggleError && <p className="mt-1 text-[0.65rem] text-red-600">{toggleError}</p>}
           <div className="mt-1 flex min-w-0 items-center gap-1">
             <span className={clsx('h-2 w-2 shrink-0 rounded-full', statusDotClass(meal!.status))} />
             <span className="truncate text-[0.7rem] font-medium text-app-text-muted">
