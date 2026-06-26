@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Camera, ChevronDown, Leaf, Plus, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
-import { api, todayDateParam } from '../../services/api';
+import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
 import { parseFoodEntry } from '../../utils/foodEntryParse';
 import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
@@ -375,7 +375,7 @@ export function TodayNutrition({
       const mealId = targetMeal
         ? targetMeal.id
         : (
-            await api<{ id: string }>(`/api/daily-logs/${todayDateParam()}/meals`, {
+            await api<{ id: string }>(`/api/daily-logs/${todayKey()}/meals`, {
               method: 'POST',
               body: JSON.stringify(newMeal)
             })
