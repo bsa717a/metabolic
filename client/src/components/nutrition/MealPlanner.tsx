@@ -7,11 +7,15 @@ export function MealPlanner({
   selectedDate,
   onChange,
   onLogActual,
+  selectedMealId,
+  onSelectMeal,
 }: {
   meals: Meal[];
   selectedDate: string;
   onChange: () => void;
   onLogActual: (mealId: string) => void;
+  selectedMealId?: string;
+  onSelectMeal?: (mealId: string) => void;
 }) {
   const [editingMealId, setEditingMealId] = useState<string | undefined>();
 
@@ -42,6 +46,8 @@ export function MealPlanner({
           onEnterEditMode={handleEnterEditMode}
           onExitEditMode={handleExitEditMode}
           onLogActual={onLogActual}
+          selected={meal.id === selectedMealId}
+          onSelect={onSelectMeal}
         />
       ))}
     </div>

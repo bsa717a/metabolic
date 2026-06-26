@@ -1,8 +1,9 @@
 import { MealItemType, MealStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { parseDateParam } from '../utils/dates.js';
+import { addUtcDays, parseDateParam, toDateKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
 import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsService.js';
+import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { notifyMealActivity } from '../gamification/mealActivity.js';
 
 function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }) {
@@ -280,4 +281,102 @@ export async function copyMealFromPreviousDay(userId: string, mealId: string) {
     await recalculateMealTotals(mealId, tx);
     return tx.meal.findFirstOrThrow({ where: { id: mealId }, include: { items: true } });
   });
+}
+
+const MAX_COPY_FORWARD_DAYS = 31;
+
+/**
+ * Copies a source day's planned foods into each of the next `days` days. For every target day we
+ * match meals by mealNumber, replace that meal's PLANNED items with the source day's (leaving any
+ * logged ACTUAL items untouched), and recalculate totals. Target days are created/seeded as needed.
+ */
+export async function copyDayPlanForward(userId: string, sourceDate: string, days: number) {
+  if (!Number.isInteger(days) || days < 1 || days > MAX_COPY_FORWARD_DAYS) {
+    throw new Error(`Number of days must be between 1 and ${MAX_COPY_FORWARD_DAYS}.`);
+  }
+
+  const sourceDay = parseDateParam(sourceDate);
+  const sourceLog = await prisma.dailyLog.findUnique({
+    where: { userId_date: { userId, date: sourceDay } },
+    include: { meals: { include: { items: true }, orderBy: { mealNumber: 'asc' } } }
+  });
+
+  if (!sourceLog || !sourceLog.meals.length) {
+    throw new Error('There is no plan on the selected day to copy.');
+  }
+
+  const sourceMeals = sourceLog.meals.map((meal) => ({
+    mealNumber: meal.mealNumber,
+    name: meal.name,
+    plannedTime: meal.plannedTime,
+    plannedItems: meal.items
+      .filter((item) => item.type === MealItemType.PLANNED)
+      .map((item) => ({
+        foodId: item.foodId,
+        nameSnapshot: item.nameSnapshot,
+        quantity: item.quantity,
+        unit: item.unit,
+        calories: item.calories,
+        protein: item.protein,
+        carbs: item.carbs,
+        fat: item.fat
+      }))
+  }));
+
+  const targetDateKeys = Array.from({ length: days }, (_, index) => toDateKey(addUtcDays(sourceDay, index + 1)));
+
+  const targetLogs: NonNullable<Awaited<ReturnType<typeof ensureDailyLogByUserId>>>[] = [];
+  for (const targetKey of targetDateKeys) {
+    const log = await ensureDailyLogByUserId(userId, targetKey);
+    if (!log) {
+      throw new Error('No active program found. Visit the dashboard first or contact your coach.');
+    }
+    targetLogs.push(log);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const log of targetLogs) {
+      for (const source of sourceMeals) {
+        let target = await tx.meal.findFirst({
+          where: { dailyLogId: log.id, mealNumber: source.mealNumber }
+        });
+        if (!target) {
+          target = await tx.meal.create({
+            data: {
+              dailyLogId: log.id,
+              userId,
+              mealNumber: source.mealNumber,
+              name: source.name,
+              plannedTime: source.plannedTime,
+              status: MealStatus.PLANNED
+            }
+          });
+        }
+
+        await tx.mealItem.deleteMany({ where: { mealId: target.id, type: MealItemType.PLANNED } });
+        if (source.plannedItems.length) {
+          await tx.mealItem.createMany({
+            data: source.plannedItems.map((item) => ({
+              mealId: target!.id,
+              foodId: item.foodId,
+              type: MealItemType.PLANNED,
+              nameSnapshot: item.nameSnapshot,
+              quantity: item.quantity,
+              unit: item.unit,
+              calories: item.calories,
+              protein: item.protein,
+              carbs: item.carbs,
+              fat: item.fat
+            }))
+          });
+        }
+
+        await recalculateMealTotals(target.id, tx);
+      }
+
+      await recalculateDailyLogTotals(log.id, tx);
+    }
+  });
+
+  return { copiedDays: days, targetDates: targetDateKeys };
 }

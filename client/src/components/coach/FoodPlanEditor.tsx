@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { Meal, NutritionPlanTemplateSummary } from '../../types';
-import { CoachManualNutritionTemplateDrawer } from './CoachManualNutritionTemplateDrawer';
+import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { Button } from '../ui/Button';
 
 function mealCalories(meal: Meal) {
@@ -98,7 +98,7 @@ export function FoodPlanEditor({
         <Button disabled={saving || !nutritionTemplates.length} onClick={() => void applyTemplate()}>
           Apply template
         </Button>
-        <Button variant="secondary" disabled={!templateId} onClick={() => setManualOpen(true)}>
+        <Button variant="secondary" onClick={() => setManualOpen(true)}>
           Edit manually
         </Button>
       </div>
@@ -149,13 +149,16 @@ export function FoodPlanEditor({
         </ul>
       )}
 
-      <CoachManualNutritionTemplateDrawer
+      <CoachDayNutritionEditor
         open={manualOpen}
-        templateId={templateId}
+        clientId={clientId}
+        planDate={planDate}
+        nutritionTemplates={nutritionTemplates}
         onClose={() => {
           setManualOpen(false);
           void loadMeals();
         }}
+        onRefresh={onRefresh}
       />
     </div>
   );
