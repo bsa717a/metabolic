@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ClipboardPlus } from 'lucide-react';
-import type { Meal, MealItem } from '../../types';
+import { clsx } from 'clsx';
+import { ChevronDown } from 'lucide-react';
+import type { Meal } from '../../types';
 import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
-import { MealLogActions } from '../gamification/MealLogActions';
 import { MealCardEditor } from './MealCardEditor';
+import { PlannedItemChecklist } from './PlannedItemChecklist';
 
 function formatPlannedTime(plannedTime?: string | null) {
   if (!plannedTime) return null;
@@ -16,20 +17,6 @@ function formatPlannedTime(plannedTime?: string | null) {
     .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     .replace(' AM', 'am')
     .replace(' PM', 'pm');
-}
-
-function formatItemLine(item: MealItem) {
-  const qty = Number(item.quantity);
-  const qtyLabel = qty === 1 ? '' : `${qty} ${item.unit} `;
-  return `${qtyLabel}${item.nameSnapshot}`.trim();
-}
-
-function formatMacros(item: Pick<MealItem, 'calories' | 'protein' | 'carbs' | 'fat'>) {
-  return `${Math.round(Number(item.calories))} kcal · ${Math.round(Number(item.protein))}g P · ${Math.round(Number(item.carbs))}g C · ${Math.round(Number(item.fat))}g F`;
-}
-
-function formatMealTotals(calories: number, protein: number, carbs: number, fat: number) {
-  return `${Math.round(calories)} kcal · ${Math.round(protein)}g protein · ${Math.round(carbs)}g carbs · ${Math.round(fat)}g fat`;
 }
 
 function ActionsDropdown({
@@ -119,6 +106,8 @@ export function MealCard({
   onEnterEditMode,
   onExitEditMode,
   onLogActual,
+  selected = false,
+  onSelect,
 }: {
   meal: Meal;
   selectedDate: string;
@@ -127,64 +116,20 @@ export function MealCard({
   onEnterEditMode: (mealId: string) => void;
   onExitEditMode: () => void;
   onLogActual: (mealId: string) => void;
+  selected?: boolean;
+  onSelect?: (mealId: string) => void;
 }) {
   const future = isFuture(selectedDate);
   const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
-  const actualItems = (meal.items ?? []).filter((item) => item.type === 'ACTUAL');
-  const [pendingLogged, setPendingLogged] = useState<Record<string, boolean>>({});
   const [toggleError, setToggleError] = useState<string | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   const plannedTime = formatPlannedTime(meal.plannedTime);
-
-  function isPlannedItemLogged(plannedItem: MealItem) {
-    return actualItems.some(
-      (item) =>
-        item.linkedPlannedItemId === plannedItem.id ||
-        (!item.linkedPlannedItemId &&
-          item.nameSnapshot === plannedItem.nameSnapshot &&
-          Number(item.quantity) === Number(plannedItem.quantity) &&
-          (item.foodId ?? null) === (plannedItem.foodId ?? null))
-    );
-  }
-
-  function isItemLogged(plannedItem: MealItem) {
-    if (plannedItem.id in pendingLogged) return pendingLogged[plannedItem.id];
-    return isPlannedItemLogged(plannedItem);
-  }
-
-  async function togglePlannedItem(plannedItemId: string, logged: boolean) {
-    setToggleError(null);
-    setTogglingId(plannedItemId);
-    setPendingLogged((prev) => ({ ...prev, [plannedItemId]: logged }));
-    try {
-      await api(`/api/meal-items/${plannedItemId}/set-logged`, { method: 'POST', body: JSON.stringify({ logged }) });
-      setPendingLogged((prev) => {
-        const next = { ...prev };
-        delete next[plannedItemId];
-        return next;
-      });
-      await onChange();
-    } catch (error) {
-      setPendingLogged((prev) => {
-        const next = { ...prev };
-        delete next[plannedItemId];
-        return next;
-      });
-      setToggleError(error instanceof Error ? error.message : 'Could not update this item.');
-    } finally {
-      setTogglingId(null);
-    }
-  }
 
   async function markPlannedAsEaten() {
     setToggleError(null);
-    setPendingLogged(Object.fromEntries(plannedItems.map((item) => [item.id, true])));
     try {
       await api(`/api/meals/${meal.id}/mark-eaten-as-planned`, { method: 'POST' });
-      setPendingLogged({});
       await onChange();
     } catch (error) {
-      setPendingLogged({});
       setToggleError(error instanceof Error ? error.message : 'Could not mark planned as eaten.');
     }
   }
@@ -202,7 +147,13 @@ export function MealCard({
   }
 
   return (
-    <Card>
+    <div onClick={() => onSelect?.(meal.id)}>
+      <Card
+        className={clsx(
+          onSelect && 'cursor-pointer',
+          selected && 'border-brand-green ring-2 ring-brand-green/30'
+        )}
+      >
       {isEditing ? (
         <MealCardEditor
           key={editorKey}
@@ -232,91 +183,36 @@ export function MealCard({
               >
                 Edit plan
               </button>
-              {!future && (
-                <button
-                  type="button"
-                  aria-label="Log actual intake"
-                  title="Log actual intake"
-                  className="grid h-9 w-9 place-items-center rounded-xl text-blue-600 transition hover:bg-blue-50"
-                  onClick={() => onLogActual(meal.id)}
-                >
-                  <ClipboardPlus size={18} />
-                </button>
-              )}
               <ActionsDropdown
                 future={future}
                 onLogActual={() => onLogActual(meal.id)}
                 onMarkEaten={() => void markPlannedAsEaten()}
                 onCopyFromYesterday={() => void copyFromYesterday()}
               />
-              <Badge tone={meal.status.includes('EATEN') || meal.status === 'MODIFIED' ? 'green' : 'slate'}>
-                {meal.status.replaceAll('_', ' ')}
-              </Badge>
+              {(() => {
+                const displayStatus = meal.status === 'SKIPPED' ? 'PLANNED' : meal.status;
+                return (
+                  <Badge tone={displayStatus.includes('EATEN') || displayStatus === 'MODIFIED' ? 'green' : 'slate'}>
+                    {displayStatus.replaceAll('_', ' ')}
+                  </Badge>
+                );
+              })()}
             </div>
           </div>
 
           {toggleError && <p className="mt-2 text-sm text-red-600">{toggleError}</p>}
 
-          {/* Planned + Actual panels */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-yellow-50 p-3">
-              <p className="font-semibold">Planned</p>
-              {plannedItems.length > 0 ? (
-                <ul className="mt-2 space-y-1">
-                  {plannedItems.map((item) => {
-                    const logged = isItemLogged(item);
-                    return (
-                      <li key={item.id} className="flex items-start gap-2 text-sm text-slate-700">
-                        {!future && (
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300"
-                            checked={logged}
-                            disabled={togglingId === item.id}
-                            onChange={(event) => void togglePlannedItem(item.id, event.target.checked)}
-                            aria-label={`Log ${item.nameSnapshot} as eaten`}
-                          />
-                        )}
-                        <div className={`flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 ${logged ? 'text-slate-500 line-through' : ''}`}>
-                          <span className="min-w-0">{formatItemLine(item)}</span>
-                          <span className="shrink-0 text-slate-500">{formatMacros(item)}</span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-slate-500">No foods planned</p>
-              )}
-              <p className="mt-2 border-t border-yellow-100 pt-2 text-sm font-medium">
-                {formatMealTotals(meal.plannedCalories, meal.plannedProtein, meal.plannedCarbs, meal.plannedFat)}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-blue-50 p-3">
-              <p className="font-semibold">Actual</p>
-              {actualItems.length > 0 ? (
-                <ul className="mt-2 space-y-1">
-                  {actualItems.map((item) => (
-                    <li key={item.id} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm text-slate-700">
-                      <span className="min-w-0">{formatItemLine(item)}</span>
-                      <span className="shrink-0 text-slate-500">{formatMacros(item)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-slate-500">Nothing logged yet</p>
-              )}
-              <p className="mt-2 border-t border-blue-100 pt-2 text-sm font-medium">
-                {formatMealTotals(meal.actualCalories, meal.actualProtein, meal.actualCarbs, meal.actualFat)}
-              </p>
-            </div>
+          {/* Merged planned + actual (matches dashboard) */}
+          <p className="mt-2 text-sm text-app-text-muted">
+            {Math.round(Number(meal.actualCalories))} / {Math.round(Number(meal.plannedCalories))} kcal
+            {plannedItems.length > 0 && ` · ${plannedItems.length} item${plannedItems.length === 1 ? '' : 's'}`}
+          </p>
+          <div className="mt-3">
+            <PlannedItemChecklist meal={meal} onChange={onChange} />
           </div>
-
-          {!future && plannedItems.length > 0 && (
-            <MealLogActions mealId={meal.id} disabled={future} onLogged={() => void onChange()} />
-          )}
         </>
       )}
-    </Card>
+      </Card>
+    </div>
   );
 }

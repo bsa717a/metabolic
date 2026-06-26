@@ -60,7 +60,6 @@ export function MealCardEditor({
     plannedTime: meal.plannedTime ?? '',
     plannedItems: meal.items.filter((item) => item.type === 'PLANNED'),
   }));
-  const actualItems = meal.items.filter((item) => item.type === 'ACTUAL');
 
   const [localName, setLocalName] = useState(baseline.name);
   const [localTime, setLocalTime] = useState(baseline.plannedTime);
@@ -278,9 +277,8 @@ export function MealCardEditor({
         </div>
       </div>
 
-      {/* Planned + Actual panels */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {/* Planned panel (editable) */}
+      {/* Planned panel (editable) */}
+      <div>
         <div className="space-y-3 rounded-2xl bg-yellow-50 p-3">
           <p className="font-semibold">Planned</p>
 
@@ -384,29 +382,6 @@ export function MealCardEditor({
               </ul>
             )}
           </div>
-        </div>
-
-        {/* Actual panel (read-only, de-emphasized) */}
-        <div className="rounded-2xl bg-blue-50 p-3 opacity-70">
-          <p className="font-semibold">Actual</p>
-          {actualItems.length > 0 ? (
-            <ul className="mt-2 space-y-1">
-              {actualItems.map((item) => (
-                <li key={item.id} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm text-slate-700">
-                  <span className="min-w-0">
-                    {Number(item.quantity) !== 1 ? `${Number(item.quantity)} ${item.unit} ` : ''}
-                    {item.nameSnapshot}
-                  </span>
-                  <span className="shrink-0 text-slate-500">{formatMacros(item)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm text-slate-500">Nothing logged yet</p>
-          )}
-          <p className="mt-2 border-t border-blue-100 pt-2 text-sm font-medium text-slate-700">
-            {formatMealTotals(Number(meal.actualCalories), Number(meal.actualProtein), Number(meal.actualCarbs), Number(meal.actualFat))}
-          </p>
         </div>
       </div>
 

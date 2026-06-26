@@ -28,16 +28,24 @@ type LookupResult = {
   }>;
 };
 
-export function MealLogActions({
+/**
+ * The "Ate something different" box: describe a meal in text or a photo, let AI estimate the
+ * nutrition, and add it to a meal as ACTUAL (off-plan) food. Shared by the per-meal log actions
+ * and the Add foods panel so both surfaces use exactly the same flow.
+ */
+export function LogDifferentFoodModal({
+  open,
   mealId,
-  disabled,
-  onLogged
+  title = 'What did you have instead?',
+  onClose,
+  onSaved
 }: {
-  mealId: string;
-  disabled?: boolean;
-  onLogged?: (celebrations: GamificationCelebration[]) => void;
+  open: boolean;
+  mealId?: string;
+  title?: string;
+  onClose: () => void;
+  onSaved?: (celebrations: GamificationCelebration[]) => void;
 }) {
-  const [differentOpen, setDifferentOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,10 +59,11 @@ export function MealLogActions({
     });
   }
 
-  function closeDifferentModal() {
-    setDifferentOpen(false);
+  function close() {
     setError(null);
     clearPhoto();
+    setDescription('');
+    onClose();
   }
 
   function selectPhoto(file: File) {
@@ -89,32 +98,13 @@ export function MealLogActions({
     });
   }
 
-  async function logStatus(status: 'ATE_AS_PLANNED' | 'ATE_SOMETHING_DIFFERENT' | 'SKIPPED_MEAL') {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api<{ celebrations: GamificationCelebration[] }>(
-        `/api/gamification/meals/${mealId}/log`,
-        {
-          method: 'POST',
-          body: JSON.stringify(
-            status === 'ATE_SOMETHING_DIFFERENT'
-              ? { status, actualFoodDescription: description }
-              : { status }
-          )
-        }
-      );
-      closeDifferentModal();
-      setDescription('');
-      onLogged?.(res.celebrations ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function logDifferentFood() {
     const input = description.trim();
     if (!input && !photo) return;
+    if (!mealId) {
+      setError('Select a meal first.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -182,9 +172,8 @@ export function MealLogActions({
         }
       );
 
-      closeDifferentModal();
-      setDescription('');
-      onLogged?.(res.celebrations ?? []);
+      onSaved?.(res.celebrations ?? []);
+      close();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save what you ate.');
     } finally {
@@ -193,97 +182,65 @@ export function MealLogActions({
   }
 
   return (
-    <div className="mt-4 space-y-3 border-t border-app-border pt-4">
-      <p className="text-xs text-app-text-muted">
-        Plans change. Log what actually happened so your progress reflects real life.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="secondary"
-          disabled={disabled || loading}
-          onClick={() => void logStatus('ATE_AS_PLANNED')}
-          className="text-xs"
-        >
-          Ate as planned
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={disabled || loading}
-          onClick={() => setDifferentOpen(true)}
-          className="text-xs"
-        >
-          Ate something different
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={disabled || loading}
-          onClick={() => void logStatus('SKIPPED_MEAL')}
-          className="text-xs"
-        >
-          Skipped meal
-        </Button>
-      </div>
-
-      <Modal open={differentOpen} title="What did you have instead?" onClose={closeDifferentModal}>
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <textarea
-              className="min-h-28 flex-1 rounded-xl border border-app-border bg-app-bg p-3 text-sm"
-              rows={3}
-              placeholder="Describe what you ate, e.g. 6 oz grilled chicken and 1 cup rice"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+    <Modal open={open} title={title} onClose={close}>
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          <textarea
+            className="min-h-28 flex-1 rounded-xl border border-app-border bg-app-bg p-3 text-sm"
+            rows={3}
+            placeholder="Describe what you ate, e.g. 6 oz grilled chicken and 1 cup rice"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <button
+            type="button"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-app-border bg-app-muted text-app-text-muted transition hover:border-brand-green/40 hover:text-app-text"
+            title="Upload meal photo"
+            aria-label="Upload meal photo"
+            disabled={loading}
+            onClick={() => photoInputRef.current?.click()}
+          >
+            <Camera size={20} />
+          </button>
+        </div>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          disabled={loading}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) selectPhoto(file);
+            event.target.value = '';
+          }}
+        />
+        {photo && (
+          <div className="relative overflow-hidden rounded-xl border border-app-border">
+            <img src={photo.previewUrl} alt="Meal preview" className="h-40 w-full object-cover" />
             <button
               type="button"
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-app-border bg-app-muted text-app-text-muted transition hover:border-brand-green/40 hover:text-app-text"
-              title="Upload meal photo"
-              aria-label="Upload meal photo"
+              className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white"
+              aria-label="Remove meal photo"
               disabled={loading}
-              onClick={() => photoInputRef.current?.click()}
+              onClick={clearPhoto}
             >
-              <Camera size={20} />
+              <X size={16} />
             </button>
           </div>
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            disabled={loading}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) selectPhoto(file);
-              event.target.value = '';
-            }}
-          />
-          {photo && (
-            <div className="relative overflow-hidden rounded-xl border border-app-border">
-              <img src={photo.previewUrl} alt="Meal preview" className="h-40 w-full object-cover" />
-              <button
-                type="button"
-                className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white"
-                aria-label="Remove meal photo"
-                disabled={loading}
-                onClick={clearPhoto}
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-          <p className="text-xs text-app-text-muted">
-            AI will estimate the nutrition from your text or photo and add it as Actual food for this meal.
-          </p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button
-            disabled={(!description.trim() && !photo) || loading}
-            onClick={() => void logDifferentFood()}
-            className="w-full"
-          >
-            {loading ? 'Estimating…' : 'Save'}
-          </Button>
-        </div>
-      </Modal>
-    </div>
+        )}
+        <p className="text-xs text-app-text-muted">
+          AI will estimate the nutrition from your text or photo and add it as Actual food for this meal.
+        </p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <Button
+          disabled={(!description.trim() && !photo) || loading}
+          onClick={() => void logDifferentFood()}
+          className="w-full"
+        >
+          {loading ? 'Estimating…' : 'Save'}
+        </Button>
+      </div>
+    </Modal>
   );
 }

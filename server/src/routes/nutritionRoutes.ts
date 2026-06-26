@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
-import { addMealItem, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
+import { addMealItem, copyDayPlanForward, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
@@ -54,6 +54,14 @@ export async function nutritionRoutes(app: FastifyInstance) {
   });
   app.post('/api/meals/:id/mark-eaten-as-planned', { preHandler: requireAuth }, async (request) => markMealEatenAsPlanned(request.appUser!.id, (request.params as { id: string }).id));
   app.post('/api/meals/:id/copy-from-previous-day', { preHandler: requireAuth }, async (request) => copyMealFromPreviousDay(request.appUser!.id, (request.params as { id: string }).id));
+  app.post('/api/daily-logs/:date/copy-forward', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z.object({ days: z.number().int().min(1).max(31) }).parse(request.body);
+    try {
+      return await copyDayPlanForward(request.appUser!.id, (request.params as { date: string }).date, body.days);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day forward' });
+    }
+  });
   app.post('/api/meals/:id/items', { preHandler: requireAuth }, async (request) => addMealItem(request.appUser!.id, (request.params as { id: string }).id, request.body as Record<string, unknown>));
   app.patch('/api/meal-items/:id', { preHandler: requireAuth }, async (request) => updateMealItem(request.appUser!.id, (request.params as { id: string }).id, request.body as Record<string, unknown>));
   app.post('/api/meal-items/:id/set-logged', { preHandler: requireAuth }, async (request) => {

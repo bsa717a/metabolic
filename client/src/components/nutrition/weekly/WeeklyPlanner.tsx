@@ -1,0 +1,148 @@
+import { useMemo, useState } from 'react';
+import { clsx } from 'clsx';
+import { formatDayAbbrev, formatDayNumber, isFuture, isToday } from '../../../services/api';
+import { MealCell } from './MealCell';
+import { AddFoodsPanel } from './AddFoodsPanel';
+import { SelectedMealPanel } from './SelectedMealPanel';
+import { CopyDayForward } from './CopyDayForward';
+import {
+  buildGridRows,
+  dayActualKcal,
+  dayPlannedKcal,
+  findMeal,
+  type DayMeals
+} from './weeklyHelpers';
+
+const GRID_TEMPLATE = { gridTemplateColumns: 'repeat(7, minmax(148px, 1fr))' } as const;
+
+export function WeeklyPlanner({
+  weekDates,
+  days,
+  onSelectDay,
+  onChange,
+  onLogActual,
+  onAskAi
+}: {
+  weekDates: string[];
+  days: DayMeals[];
+  onSelectDay: (date: string) => void;
+  onChange: () => void | Promise<void>;
+  onLogActual: (mealId: string) => void;
+  onAskAi: (mealId: string) => void;
+}) {
+  const rows = useMemo(() => buildGridRows(days), [days]);
+  const [selectedState, setSelected] = useState<{ date: string; mealNumber: number } | null>(null);
+
+  const selectionValid =
+    selectedState &&
+    weekDates.includes(selectedState.date) &&
+    rows.some((row) => row.mealNumber === selectedState.mealNumber);
+  const selected = selectionValid
+    ? selectedState
+    : rows.length
+    ? { date: weekDates[0], mealNumber: rows[0].mealNumber }
+    : null;
+
+  const selectedMeal = selected ? findMeal(days, selected.date, selected.mealNumber) : undefined;
+  const selectedDayLabel = selected
+    ? `${formatDayAbbrev(selected.date)} ${formatDayNumber(selected.date)}`
+    : '';
+  const selectedLabel = selectedMeal ? `${selectedDayLabel} · ${selectedMeal.name}` : undefined;
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* Week grid */}
+        <div className="min-w-0 overflow-x-auto pb-2">
+          <div className="min-w-[900px] space-y-2">
+            {/* Day headers */}
+            <div className="grid items-end gap-2" style={GRID_TEMPLATE}>
+              {weekDates.map((date) => {
+                const active = selected?.date === date;
+                const today = isToday(date);
+                return (
+                  <div key={date} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectDay(date);
+                        setSelected((prev) => ({ date, mealNumber: prev?.mealNumber ?? rows[0]?.mealNumber ?? 1 }));
+                      }}
+                      className={clsx(
+                        'flex w-full flex-col items-center rounded-xl border px-2 py-1.5 transition',
+                        active
+                          ? 'border-brand-green bg-brand-green/10'
+                          : 'border-transparent hover:bg-app-muted'
+                      )}
+                    >
+                      <span className="text-xs font-medium text-app-text-muted">{formatDayAbbrev(date)}</span>
+                      <span className={clsx('text-base font-bold', today ? 'text-brand-green' : 'text-app-text')}>
+                        {formatDayNumber(date)}
+                      </span>
+                    </button>
+                    {active && (
+                      <CopyDayForward
+                        date={date}
+                        dayLabel={`${formatDayAbbrev(date)} ${formatDayNumber(date)}`}
+                        onCopied={onChange}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Meal rows */}
+            {rows.map((row) => (
+              <div key={row.mealNumber} className="grid items-stretch gap-2" style={GRID_TEMPLATE}>
+                {weekDates.map((date) => {
+                  const meal = findMeal(days, date, row.mealNumber);
+                  return (
+                    <MealCell
+                      key={`${date}-${row.mealNumber}`}
+                      mealName={meal?.name ?? row.label}
+                      meal={meal}
+                      future={isFuture(date)}
+                      selected={selected?.date === date && selected?.mealNumber === row.mealNumber}
+                      onSelect={() => setSelected({ date, mealNumber: row.mealNumber })}
+                      onChange={onChange}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* Per-day calorie totals */}
+            <p className="border-t border-app-border pt-2 text-xs text-app-text-muted">Day kcal (planned, with eaten below)</p>
+            <div className="grid items-center gap-2" style={GRID_TEMPLATE}>
+              {weekDates.map((date) => {
+                const meals = days.find((day) => day.date === date)?.meals ?? [];
+                const planned = Math.round(dayPlannedKcal(meals));
+                const actual = Math.round(dayActualKcal(meals));
+                return (
+                  <div key={date} className="flex flex-col items-center">
+                    <span className="text-sm font-semibold tabular-nums text-app-text">{planned.toLocaleString()}</span>
+                    <span className="text-[0.7rem] tabular-nums text-app-text-muted">
+                      {actual ? `ate ${actual.toLocaleString()}` : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: selection detail + add foods */}
+        <div className="space-y-4">
+          <SelectedMealPanel
+            meal={selectedMeal}
+            dayLabel={selectedDayLabel}
+            future={selected ? isFuture(selected.date) : false}
+            onChange={onChange}
+            onLogActual={onLogActual}
+            onAskAi={onAskAi}
+          />
+          <AddFoodsPanel selectedMeal={selectedMeal} selectedLabel={selectedLabel} onChange={onChange} />
+        </div>
+      </div>
+  );
+}

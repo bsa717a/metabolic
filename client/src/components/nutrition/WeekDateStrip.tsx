@@ -22,7 +22,7 @@ export function WeekDateStrip({
   return (
     <div className="space-y-3">
       {!hideHeader && (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <p className="text-sm font-semibold text-slate-700">{formatWeekRange(weekStart)}</p>
           <div className="flex gap-1">
             <button type="button" onClick={() => shiftWeek(-1)} className="rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-600 hover:bg-slate-50" aria-label="Previous week">◀</button>
