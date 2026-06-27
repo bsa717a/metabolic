@@ -334,49 +334,54 @@ export async function copyDayPlanForward(userId: string, sourceDate: string, day
     targetLogs.push(log);
   }
 
-  await prisma.$transaction(async (tx) => {
-    for (const log of targetLogs) {
-      for (const source of sourceMeals) {
-        let target = await tx.meal.findFirst({
-          where: { dailyLogId: log.id, mealNumber: source.mealNumber }
-        });
-        if (!target) {
-          target = await tx.meal.create({
-            data: {
-              dailyLogId: log.id,
-              userId,
-              mealNumber: source.mealNumber,
-              name: source.name,
-              plannedTime: source.plannedTime,
-              status: MealStatus.PLANNED
-            }
+  const dayTransactionTimeoutMs = Math.min(60_000, 10_000 + sourceMeals.length * 500);
+
+  for (const log of targetLogs) {
+    await prisma.$transaction(
+      async (tx) => {
+        for (const source of sourceMeals) {
+          let target = await tx.meal.findFirst({
+            where: { dailyLogId: log.id, mealNumber: source.mealNumber }
           });
+          if (!target) {
+            target = await tx.meal.create({
+              data: {
+                dailyLogId: log.id,
+                userId,
+                mealNumber: source.mealNumber,
+                name: source.name,
+                plannedTime: source.plannedTime,
+                status: MealStatus.PLANNED
+              }
+            });
+          }
+
+          await tx.mealItem.deleteMany({ where: { mealId: target.id, type: MealItemType.PLANNED } });
+          if (source.plannedItems.length) {
+            await tx.mealItem.createMany({
+              data: source.plannedItems.map((item) => ({
+                mealId: target!.id,
+                foodId: item.foodId,
+                type: MealItemType.PLANNED,
+                nameSnapshot: item.nameSnapshot,
+                quantity: item.quantity,
+                unit: item.unit,
+                calories: item.calories,
+                protein: item.protein,
+                carbs: item.carbs,
+                fat: item.fat
+              }))
+            });
+          }
+
+          await recalculateMealTotals(target.id, tx);
         }
 
-        await tx.mealItem.deleteMany({ where: { mealId: target.id, type: MealItemType.PLANNED } });
-        if (source.plannedItems.length) {
-          await tx.mealItem.createMany({
-            data: source.plannedItems.map((item) => ({
-              mealId: target!.id,
-              foodId: item.foodId,
-              type: MealItemType.PLANNED,
-              nameSnapshot: item.nameSnapshot,
-              quantity: item.quantity,
-              unit: item.unit,
-              calories: item.calories,
-              protein: item.protein,
-              carbs: item.carbs,
-              fat: item.fat
-            }))
-          });
-        }
-
-        await recalculateMealTotals(target.id, tx);
-      }
-
-      await recalculateDailyLogTotals(log.id, tx);
-    }
-  });
+        await recalculateDailyLogTotals(log.id, tx);
+      },
+      { maxWait: 10_000, timeout: dayTransactionTimeoutMs }
+    );
+  }
 
   return { copiedDays: days, targetDates: targetDateKeys };
 }
