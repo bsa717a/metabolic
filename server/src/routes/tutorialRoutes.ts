@@ -10,4 +10,12 @@ export async function tutorialRoutes(app: FastifyInstance) {
     });
     return { user };
   });
+
+  app.post('/api/tutorial/sms-reminders-intro/complete', { preHandler: requireAuth }, async (request) => {
+    const user = await prisma.user.update({
+      where: { id: request.appUser!.id },
+      data: { smsRemindersIntroCompletedAt: new Date() }
+    });
+    return { user };
+  });
 }
