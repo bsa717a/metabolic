@@ -1,8 +1,8 @@
-export const COMPLETED_MEAL_STATUSES = new Set(['EATEN_AS_PLANNED', 'SKIPPED', 'MISSED']);
+export const COMPLETED_MEAL_STATUSES = new Set(['EATEN_AS_PLANNED', 'MODIFIED', 'SKIPPED', 'MISSED']);
 
 export function parsePlannedMinutes(plannedTime: string | null): number | null {
   if (!plannedTime) return null;
-  const match = plannedTime.match(/^(\d{1,2}):(\d{2})$/);
+  const match = plannedTime.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
   if (!match) return null;
   const hour = Number(match[1]);
   const minute = Number(match[2]);

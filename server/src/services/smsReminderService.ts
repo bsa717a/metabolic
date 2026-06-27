@@ -18,6 +18,20 @@ type ReminderUser = {
   firstName: string;
 };
 
+type MealReminderCandidate = {
+  id: string;
+  name: string;
+  status: string;
+  plannedTime: string | null;
+};
+
+export function isMealReminderDue(minutesOfDay: number, plannedTime: string | null): boolean {
+  const mealMinutes = parsePlannedMinutes(plannedTime);
+  if (mealMinutes == null) return false;
+  const minutesUntil = mealMinutes - minutesOfDay;
+  return minutesUntil >= REMIND_WINDOW_MIN && minutesUntil <= REMIND_WINDOW_MAX;
+}
+
 function isUniqueViolation(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
@@ -70,8 +84,8 @@ function buildEveningRecap(
 }
 
 async function processUserReminders(user: ReminderUser, now: Date): Promise<number> {
-  const phone = user.phone;
-  const timezone = user.timezone;
+  const phone = user.phone?.trim();
+  const timezone = user.timezone?.trim();
   if (!phone || !timezone) return 0;
   if (isTwilioSenderPhone(phone)) return 0;
 
@@ -81,15 +95,13 @@ async function processUserReminders(user: ReminderUser, now: Date): Promise<numb
   const dashboard = await getTodayDashboard(user.id, dateKey);
   if (!dashboard.program) return 0;
 
+  const meals = (dashboard.allMeals ?? dashboard.meals) as MealReminderCandidate[];
+
   let sent = 0;
 
-  for (const meal of dashboard.meals) {
+  for (const meal of meals) {
     if (COMPLETED_MEAL_STATUSES.has(meal.status)) continue;
-    const mealMinutes = parsePlannedMinutes(meal.plannedTime);
-    if (mealMinutes == null) continue;
-
-    const minutesUntil = mealMinutes - minutesOfDay;
-    if (minutesUntil < REMIND_WINDOW_MIN || minutesUntil > REMIND_WINDOW_MAX) continue;
+    if (!isMealReminderDue(minutesOfDay, meal.plannedTime)) continue;
 
     const reserved = await reserveNudge(user.id, 'MEAL_REMINDER', dateKey, meal.id);
     if (!reserved) continue;
@@ -141,14 +153,18 @@ export async function runSmsReminderTick(now = new Date()) {
     select: { id: true, phone: true, timezone: true, firstName: true }
   });
 
+  const eligibleUsers = users.filter((user) => user.phone?.trim() && user.timezone?.trim());
+
   let sent = 0;
-  for (const user of users) {
+  let errors = 0;
+  for (const user of eligibleUsers) {
     try {
       sent += await processUserReminders(user, now);
-    } catch {
-      // Best-effort per user; skip on failure so one bad user does not block the batch.
+    } catch (error) {
+      errors += 1;
+      console.error('[sms-reminder] failed for user', user.id, error);
     }
   }
 
-  return { sent, considered: users.length };
+  return { sent, considered: eligibleUsers.length, errors };
 }
