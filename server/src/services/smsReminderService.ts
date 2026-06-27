@@ -95,7 +95,7 @@ async function processUserReminders(user: ReminderUser, now: Date): Promise<numb
   const dashboard = await getTodayDashboard(user.id, dateKey);
   if (!dashboard.program) return 0;
 
-  const meals = (dashboard.allMeals ?? dashboard.meals) as MealReminderCandidate[];
+  const meals = dashboard.allMeals as MealReminderCandidate[];
 
   let sent = 0;
 
