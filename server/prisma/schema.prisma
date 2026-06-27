@@ -185,6 +185,7 @@ model User {
   smsMealRemindersEnabled Boolean @default(true)
   smsEveningRecapEnabled Boolean @default(true)
   dashboardTutorialCompletedAt DateTime?
+  smsRemindersIntroCompletedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organizations UserOrganization[]

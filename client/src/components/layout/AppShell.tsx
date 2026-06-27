@@ -3,6 +3,7 @@ import { Topbar } from './Topbar';
 import type { AppUser } from '../../types';
 import { TutorialProvider } from '../tutorial/TutorialContext';
 import { DashboardTutorial } from '../tutorial/DashboardTutorial';
+import { SmsRemindersIntroModal } from '../sms/SmsRemindersIntroModal';
 
 export function AppShell({
   user,
@@ -18,6 +19,7 @@ export function AppShell({
         <main className="flex-1 w-full mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
+        <SmsRemindersIntroModal user={user} onComplete={onTutorialComplete} />
         <DashboardTutorial />
       </div>
     </TutorialProvider>
