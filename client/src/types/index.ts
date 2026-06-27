@@ -32,6 +32,8 @@ export type UserAccountDetails = UserClientProfile & {
   phone: string | null;
   timezone: string | null;
   smsRemindersEnabled: boolean;
+  smsMealRemindersEnabled: boolean;
+  smsEveningRecapEnabled: boolean;
 };
 export type UserSummary = Pick<AppUser, 'id' | 'firstName' | 'lastName' | 'email'>;
 export type AdminUser = AppUser & {

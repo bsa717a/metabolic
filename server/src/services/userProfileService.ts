@@ -70,6 +70,8 @@ function serializeProfile(
     birthDate: Date | null;
     timezone: string | null;
     smsRemindersEnabled: boolean;
+    smsMealRemindersEnabled: boolean;
+    smsEveningRecapEnabled: boolean;
     clientProfile: ClientProfileRecord | null;
   },
   options: { includeClientNotes: boolean }
@@ -81,7 +83,9 @@ function serializeProfile(
     email: user.email,
     phone: user.phone,
     timezone: user.timezone,
-    smsRemindersEnabled: user.smsRemindersEnabled,
+    smsRemindersEnabled: user.smsMealRemindersEnabled || user.smsEveningRecapEnabled,
+    smsMealRemindersEnabled: user.smsMealRemindersEnabled,
+    smsEveningRecapEnabled: user.smsEveningRecapEnabled,
     ...serializeDemographics(user),
     ...height,
     occupation: user.clientProfile?.occupation ?? null,
@@ -152,6 +156,8 @@ async function loadProfileUser(userId: string) {
       birthDate: true,
       timezone: true,
       smsRemindersEnabled: true,
+      smsMealRemindersEnabled: true,
+      smsEveningRecapEnabled: true,
       clientProfile: { select: clientProfileSelect }
     }
   });
@@ -201,6 +207,8 @@ export async function updateUserProfile(
     clientNotes?: string | null;
     timezone?: string | null;
     smsRemindersEnabled?: boolean;
+    smsMealRemindersEnabled?: boolean;
+    smsEveningRecapEnabled?: boolean;
   }
 ) {
   await assertProfileAccess(actor, userId);
@@ -213,6 +221,8 @@ export async function updateUserProfile(
     birthDate?: Date | null;
     timezone?: string | null;
     smsRemindersEnabled?: boolean;
+    smsMealRemindersEnabled?: boolean;
+    smsEveningRecapEnabled?: boolean;
   } = {};
 
   if (input.firstName !== undefined || input.lastName !== undefined) {
@@ -248,8 +258,24 @@ export async function updateUserProfile(
     const timezone = normalizeText(input.timezone);
     userData.timezone = timezone ? validateTimezone(timezone) : null;
   }
-  if (input.smsRemindersEnabled !== undefined) {
-    userData.smsRemindersEnabled = input.smsRemindersEnabled;
+  const mealReminderInput =
+    input.smsMealRemindersEnabled ??
+    (input.smsRemindersEnabled !== undefined ? input.smsRemindersEnabled : undefined);
+  const eveningRecapInput =
+    input.smsEveningRecapEnabled ??
+    (input.smsRemindersEnabled !== undefined ? input.smsRemindersEnabled : undefined);
+
+  if (mealReminderInput !== undefined) userData.smsMealRemindersEnabled = mealReminderInput;
+  if (eveningRecapInput !== undefined) userData.smsEveningRecapEnabled = eveningRecapInput;
+
+  if (mealReminderInput !== undefined || eveningRecapInput !== undefined) {
+    const current = await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { smsMealRemindersEnabled: true, smsEveningRecapEnabled: true }
+    });
+    const meal = mealReminderInput ?? current.smsMealRemindersEnabled;
+    const evening = eveningRecapInput ?? current.smsEveningRecapEnabled;
+    userData.smsRemindersEnabled = meal || evening;
   }
 
   const profileData: {

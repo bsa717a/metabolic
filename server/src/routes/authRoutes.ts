@@ -22,7 +22,9 @@ const profileBody = demographicsBody.extend({
   dietaryPreferences: z.string().max(5000).nullable().optional(),
   clientNotes: z.string().max(5000).nullable().optional(),
   timezone: z.string().max(64).nullable().optional(),
-  smsRemindersEnabled: z.boolean().optional()
+  smsRemindersEnabled: z.boolean().optional(),
+  smsMealRemindersEnabled: z.boolean().optional(),
+  smsEveningRecapEnabled: z.boolean().optional()
 });
 
 export async function authRoutes(app: FastifyInstance) {

@@ -16,6 +16,8 @@ type ReminderUser = {
   phone: string | null;
   timezone: string | null;
   firstName: string;
+  smsMealRemindersEnabled: boolean;
+  smsEveningRecapEnabled: boolean;
 };
 
 type MealReminderCandidate = {
@@ -99,23 +101,29 @@ async function processUserReminders(user: ReminderUser, now: Date): Promise<numb
 
   let sent = 0;
 
-  for (const meal of meals) {
-    if (COMPLETED_MEAL_STATUSES.has(meal.status)) continue;
-    if (!isMealReminderDue(minutesOfDay, meal.plannedTime)) continue;
+  if (user.smsMealRemindersEnabled) {
+    for (const meal of meals) {
+      if (COMPLETED_MEAL_STATUSES.has(meal.status)) continue;
+      if (!isMealReminderDue(minutesOfDay, meal.plannedTime)) continue;
 
-    const reserved = await reserveNudge(user.id, 'MEAL_REMINDER', dateKey, meal.id);
-    if (!reserved) continue;
+      const reserved = await reserveNudge(user.id, 'MEAL_REMINDER', dateKey, meal.id);
+      if (!reserved) continue;
 
-    const message = buildMealReminder(user.firstName, meal.name, meal.plannedTime);
-    if (await deliverNudge(user.id, phone, message, 'MEAL_REMINDER')) {
-      sent += 1;
-    } else {
-      // Delivery failed: release the reservation so a later tick can retry.
-      await releaseNudge(user.id, 'MEAL_REMINDER', dateKey, meal.id);
+      const message = buildMealReminder(user.firstName, meal.name, meal.plannedTime);
+      if (await deliverNudge(user.id, phone, message, 'MEAL_REMINDER')) {
+        sent += 1;
+      } else {
+        await releaseNudge(user.id, 'MEAL_REMINDER', dateKey, meal.id);
+      }
     }
   }
 
-  if (hour === RECAP_HOUR && minute < RECAP_WINDOW_MINUTES && dashboard.dailyLog) {
+  if (
+    user.smsEveningRecapEnabled &&
+    hour === RECAP_HOUR &&
+    minute < RECAP_WINDOW_MINUTES &&
+    dashboard.dailyLog
+  ) {
     const reserved = await reserveNudge(user.id, 'EVENING_RECAP', dateKey, 'day');
     if (reserved) {
       const message = buildEveningRecap(
@@ -147,10 +155,17 @@ export async function runSmsReminderTick(now = new Date()) {
       phone: { not: null },
       timezone: { not: null },
       smsOptedOut: false,
-      smsRemindersEnabled: true,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      OR: [{ smsMealRemindersEnabled: true }, { smsEveningRecapEnabled: true }]
     },
-    select: { id: true, phone: true, timezone: true, firstName: true }
+    select: {
+      id: true,
+      phone: true,
+      timezone: true,
+      firstName: true,
+      smsMealRemindersEnabled: true,
+      smsEveningRecapEnabled: true
+    }
   });
 
   const eligibleUsers = users.filter((user) => user.phone?.trim() && user.timezone?.trim());

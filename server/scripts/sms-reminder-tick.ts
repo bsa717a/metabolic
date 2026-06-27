@@ -87,8 +87,8 @@ async function printDebug() {
       phone: { not: null },
       timezone: { not: null },
       smsOptedOut: false,
-      smsRemindersEnabled: true,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      OR: [{ smsMealRemindersEnabled: true }, { smsEveningRecapEnabled: true }]
     },
     select: { id: true, phone: true, timezone: true, firstName: true }
   });
