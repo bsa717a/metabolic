@@ -158,6 +158,14 @@ export function dayKcalTargetStatus(actual: number, planned: number, date: strin
   return kcalTargetStatusFromTotals(actual, planned, zeroActualIsOver);
 }
 
+export function isPastDate(date: string): boolean {
+  return !isFuture(date) && !isToday(date);
+}
+
+export function dayKcalTargetStatusForMeals(date: string, meals: Meal[]): KcalTargetStatus {
+  return dayKcalTargetStatus(Math.round(dayActualKcal(meals)), Math.round(dayPlannedKcal(meals)), date);
+}
+
 export function kcalTargetHighlightClass(status: KcalTargetStatus): string {
   switch (status) {
     case 'at_or_under':

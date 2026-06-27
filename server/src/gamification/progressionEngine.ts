@@ -204,7 +204,6 @@ async function evaluateRequirement(
       return allPlannedMealsLogged(meals);
     }
     case 'complete_daily_food_log':
-      await reconcileCompletedFoodLogDays(userId);
       return (await getCompletedFoodLogDays(userId)) >= 1;
     case 'enter_starting_weight': {
       const pid = programId ?? (await getActiveProgramId(userId));
@@ -266,7 +265,7 @@ async function evaluateRequirement(
         }
       })) >= 1;
     case 'daily_check_in':
-      return Boolean(metadata.dailyCheckInComplete);
+      return (await getCompletedFoodLogDays(userId)) >= 1;
     case 'second_snapshot_complete':
       return (await getCompleteSnapshots(userId)) >= 2;
     case 'view_comparison':
@@ -330,7 +329,7 @@ function requirementLabel(req: LevelRequirement): string {
     save_baseline_snapshot: 'Review and save the snapshot',
     food_log_days: 'Complete food logging on separate days',
     log_different_meal: 'Log at least one meal different from the plan',
-    daily_check_in: 'Complete one end-of-day check-in',
+    daily_check_in: 'Log all planned meals in one day',
     second_snapshot_complete: 'Save your second progress snapshot',
     view_comparison: 'View the side-by-side comparison',
     weekly_snapshot_weeks: 'Complete weekly snapshots',
@@ -366,6 +365,8 @@ export async function evaluateLevelTasks(userId: string, levelId: string) {
   const program = await prisma.program.findFirst({
     where: { userId, status: ProgramStatus.ACTIVE }
   });
+
+  await reconcileCompletedFoodLogDays(userId);
 
   const results = await Promise.all(
     def.requirements.map(async (req) => ({

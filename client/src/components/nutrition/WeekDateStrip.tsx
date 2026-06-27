@@ -1,16 +1,25 @@
 import { clsx } from 'clsx';
 import { addDays, formatDayAbbrev, formatDayNumber, formatWeekRange, getWeekDates, isToday, startOfWeek } from '../../services/api';
+import {
+  dayKcalTargetStatusForMeals,
+  isPastDate,
+  kcalTargetHighlightClass,
+  type DayMeals
+} from './weekly/weeklyHelpers';
 
 export function WeekDateStrip({
   selectedDate,
   onSelectDate,
   endAction,
-  hideHeader = false
+  hideHeader = false,
+  days
 }: {
   selectedDate: string;
   onSelectDate: (date: string) => void;
   endAction?: React.ReactNode;
   hideHeader?: boolean;
+  /** When set, past days tint green/red by planned vs actual kcal. */
+  days?: DayMeals[];
 }) {
   const weekStart = startOfWeek(selectedDate);
   const weekDates = getWeekDates(weekStart);
@@ -35,6 +44,9 @@ export function WeekDateStrip({
         {weekDates.map((date) => {
           const selected = date === selectedDate;
           const today = isToday(date);
+          const meals = days?.find((day) => day.date === date)?.meals ?? [];
+          const targetStatus = days ? dayKcalTargetStatusForMeals(date, meals) : 'none';
+          const showTargetTint = Boolean(days) && isPastDate(date) && targetStatus !== 'none';
           return (
             <button
               key={date}
@@ -42,13 +54,49 @@ export function WeekDateStrip({
               onClick={() => onSelectDate(date)}
               className={clsx(
                 'flex min-w-[3.5rem] snap-start flex-col items-center rounded-2xl border px-3 py-2 transition',
-                selected ? 'border-slate-950 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
-                today && !selected && 'ring-2 ring-blue-400 ring-offset-1'
+                days
+                  ? clsx(
+                      showTargetTint
+                        ? kcalTargetHighlightClass(targetStatus)
+                        : selected
+                          ? 'border-brand-green bg-brand-green/10 text-app-text'
+                          : 'border-app-border bg-app-surface text-app-text',
+                      selected && 'ring-2 ring-brand-green/40',
+                      !selected && !showTargetTint && 'hover:bg-app-muted'
+                    )
+                  : clsx(
+                      selected
+                        ? 'border-slate-950 bg-slate-950 text-white'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                      today && !selected && 'ring-2 ring-blue-400 ring-offset-1'
+                    )
               )}
             >
               <span className="text-xs font-medium opacity-80">{formatDayAbbrev(date)}</span>
-              <span className="text-lg font-bold">{formatDayNumber(date)}</span>
-              {today && <span className={clsx('mt-0.5 h-1.5 w-1.5 rounded-full', selected ? 'bg-white' : 'bg-blue-500')} />}
+              <span
+                className={clsx(
+                  'text-lg font-bold',
+                  days &&
+                    showTargetTint &&
+                    targetStatus === 'over' &&
+                    'text-red-700 dark:text-red-300',
+                  days &&
+                    showTargetTint &&
+                    targetStatus === 'at_or_under' &&
+                    'text-brand-green',
+                  days && today && !showTargetTint && 'text-brand-green'
+                )}
+              >
+                {formatDayNumber(date)}
+              </span>
+              {today && (
+                <span
+                  className={clsx(
+                    'mt-0.5 h-1.5 w-1.5 rounded-full',
+                    days ? (selected ? 'bg-brand-green' : 'bg-brand-green') : selected ? 'bg-white' : 'bg-blue-500'
+                  )}
+                />
+              )}
             </button>
           );
         })}

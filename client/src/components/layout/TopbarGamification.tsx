@@ -1,22 +1,28 @@
 import { clsx } from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, Droplets, Flame } from 'lucide-react';
+import { Award, Droplets, Flame, TrendingUp } from 'lucide-react';
 import { badgeArtUrl } from '../gamification/badgeArt';
 import { HydrationTopbarDrawer } from '../hydration/HydrationTopbarDrawer';
 import { WaterBottle } from '../hydration/WaterBottle';
+import { LevelUpTopbarDrawer } from './LevelUpTopbarDrawer';
+import { ProgressRing } from '../gamification/ProgressRing';
 import { api, todayDateParam } from '../../services/api';
 import type { GamificationDashboard } from '../../types/gamification';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamification';
 
+const TOPBAR_RING_SIZE = 44;
+const TOPBAR_MOBILE_ICON = 20;
 const TOPBAR_BADGE_SIZE = 80;
 
 export function TopbarGamification() {
   const { demoMode, currentStepId } = useTutorial();
   const [data, setData] = useState<GamificationDashboard | null>(null);
   const [hydrationOpen, setHydrationOpen] = useState(false);
+  const [levelUpOpen, setLevelUpOpen] = useState(false);
   const hydrationButtonRef = useRef<HTMLButtonElement>(null);
+  const levelUpButtonRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(() => {
     api<GamificationDashboard>(`/api/gamification/dashboard?${todayDateParam()}`)
@@ -37,7 +43,9 @@ export function TopbarGamification() {
   const view = getTutorialGamificationData(data, demoMode);
   if (!view) return null;
 
-  const { momentum, hydration, recentBadges } = view;
+  const { currentLevel, momentum, hydration, recentBadges } = view;
+  const tasksDone = currentLevel ? currentLevel.tasks.filter((t) => t.complete).length : 0;
+  const tasksTotal = currentLevel?.tasks.length ?? 0;
   const topBadge = recentBadges[0];
   const topBadgeArt = topBadge ? badgeArtUrl(topBadge.id) : null;
   const showFoodStreak = demoMode || momentum.foodLoggingStreak > 0;
@@ -53,7 +61,10 @@ export function TopbarGamification() {
         <button
           ref={hydrationButtonRef}
           type="button"
-          onClick={() => setHydrationOpen((open) => !open)}
+          onClick={() => {
+            setLevelUpOpen(false);
+            setHydrationOpen((open) => !open);
+          }}
           className="flex h-full min-h-[52px] items-center rounded-xl px-2.5 py-1.5 transition hover:bg-app-muted/80"
           title={
             hydration.goalMet
@@ -102,6 +113,46 @@ export function TopbarGamification() {
             <Flame className="size-6 shrink-0 text-brand-gold sm:size-8" />
             <span className="text-base font-bold tabular-nums sm:text-lg">{momentum.foodLoggingStreak}d</span>
           </div>
+        </div>
+      )}
+
+      {currentLevel && (
+        <div className="relative shrink-0 self-stretch flex items-center" data-tour="topbar-level">
+          <button
+            ref={levelUpButtonRef}
+            type="button"
+            onClick={() => {
+              setHydrationOpen(false);
+              setLevelUpOpen((open) => !open);
+            }}
+            className="flex h-full min-h-[52px] items-center gap-2 rounded-xl px-2 py-2 sm:gap-3 sm:px-4 sm:py-2.5 transition hover:bg-app-muted/80"
+            title={`Level ${currentLevel.number}`}
+            aria-label="Open level up tasks"
+            aria-expanded={levelUpOpen}
+          >
+            <div className="shrink-0 hidden sm:block">
+              <ProgressRing percent={currentLevel.progressPercent} size={TOPBAR_RING_SIZE} />
+            </div>
+            <TrendingUp
+              size={TOPBAR_MOBILE_ICON}
+              className="shrink-0 text-brand-green sm:hidden"
+              aria-hidden
+            />
+            <div className="shrink-0 text-left leading-tight">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-green">
+                Level {currentLevel.number}
+              </p>
+              <p className="mt-1 text-[11px] sm:text-xs text-app-text-muted tabular-nums">
+                {tasksDone}/{tasksTotal} tasks
+              </p>
+            </div>
+          </button>
+          <LevelUpTopbarDrawer
+            open={levelUpOpen}
+            onClose={() => setLevelUpOpen(false)}
+            anchorRef={levelUpButtonRef}
+            level={currentLevel}
+          />
         </div>
       )}
 

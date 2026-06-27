@@ -210,6 +210,7 @@ export function NutritionPage() {
       <WeekDateStrip
         selectedDate={selectedDate}
         onSelectDate={selectDate}
+        days={weekDays}
         endAction={
           <div className="inline-flex rounded-xl bg-app-muted p-1">
             {(['week', 'day'] as const).map((option) => (
