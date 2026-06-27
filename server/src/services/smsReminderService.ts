@@ -6,7 +6,7 @@ import { localTimeParts } from '../utils/dates.js';
 import { COMPLETED_MEAL_STATUSES, parsePlannedMinutes } from '../utils/meals.js';
 import { n } from '../utils/numbers.js';
 
-const REMIND_WINDOW_MIN = 15;
+/** Send once while the meal is 0–30 minutes away (scheduler runs every 5 min). */
 const REMIND_WINDOW_MAX = 30;
 const RECAP_HOUR = 20;
 const RECAP_WINDOW_MINUTES = 30;
@@ -29,7 +29,7 @@ export function isMealReminderDue(minutesOfDay: number, plannedTime: string | nu
   const mealMinutes = parsePlannedMinutes(plannedTime);
   if (mealMinutes == null) return false;
   const minutesUntil = mealMinutes - minutesOfDay;
-  return minutesUntil >= REMIND_WINDOW_MIN && minutesUntil <= REMIND_WINDOW_MAX;
+  return minutesUntil >= 0 && minutesUntil <= REMIND_WINDOW_MAX;
 }
 
 function isUniqueViolation(error: unknown) {

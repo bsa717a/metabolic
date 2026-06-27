@@ -7,12 +7,27 @@ import { addMealItem, copyDayPlanForward, copyMealFromPreviousDay, createMeal, d
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
+import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
+
+const plannedTimeSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((value, ctx) => {
+    if (value == null || value === '') return null;
+    const normalized = normalizePlannedTimeStorage(value);
+    if (normalized == null) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid planned time' });
+      return z.NEVER;
+    }
+    return normalized;
+  });
 
 const mealUpdateSchema = z
   .object({
     name: z.string().min(1).optional(),
-    plannedTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+    plannedTime: plannedTimeSchema,
     plannedCalories: z.number().optional(),
     plannedProtein: z.number().optional(),
     plannedCarbs: z.number().optional(),
@@ -65,7 +80,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       .object({
         name: z.string(),
         mealNumber: z.number(),
-        plannedTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional()
+        plannedTime: plannedTimeSchema.optional()
       })
       .parse(request.body);
     return createMeal(request.appUser!.id, (request.params as { date: string }).date, body);

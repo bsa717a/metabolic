@@ -30,17 +30,20 @@ function stripChannelPrefix(address: string) {
 }
 
 function twilioFromAddress(channel: TwilioMessageChannel) {
-  const from = env.TWILIO_PHONE_NUMBER.trim();
-  const lower = from.toLowerCase();
-  const bare = normalizePhone(stripChannelPrefix(from));
-
+  const bare = normalizePhone(stripChannelPrefix(env.TWILIO_PHONE_NUMBER));
   if (channel === 'sms') {
-    if (lower.startsWith('sms:')) return from;
-    return `sms:${bare}`;
+    // Messages API expects E.164 for SMS; sms:+... is not a valid From/To pair with bare +... To.
+    return bare;
   }
 
-  if (lower.startsWith('whatsapp:')) return from;
+  const from = env.TWILIO_PHONE_NUMBER.trim();
+  if (from.toLowerCase().startsWith('whatsapp:')) return from;
   return `whatsapp:${bare}`;
+}
+
+/** @internal Exported for unit tests. */
+export function twilioMessageAddresses(phone: string, channel: TwilioMessageChannel) {
+  return { from: twilioFromAddress(channel), to: twilioToAddress(phone, channel) };
 }
 
 function twilioToAddress(phone: string, channel: TwilioMessageChannel) {
