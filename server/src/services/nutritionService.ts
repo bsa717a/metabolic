@@ -42,7 +42,7 @@ export async function getMealsForDate(userId: string, date: string) {
   return mealsForNutritionDisplay(meals);
 }
 
-export async function createMeal(userId: string, date: string, data: { name: string; mealNumber: number; plannedTime?: string }) {
+export async function createMeal(userId: string, date: string, data: { name: string; mealNumber: number; plannedTime?: string | null }) {
   const day = parseDateParam(date);
   const log = await prisma.dailyLog.findUniqueOrThrow({ where: { userId_date: { userId, date: day } } });
   const existing = await prisma.meal.findFirst({
