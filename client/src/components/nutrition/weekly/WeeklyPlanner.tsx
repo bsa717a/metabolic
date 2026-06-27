@@ -8,8 +8,11 @@ import { CopyDayForward } from './CopyDayForward';
 import {
   buildGridRows,
   dayActualKcal,
+  dayKcalTargetStatusForMeals,
   dayPlannedKcal,
   findMeal,
+  isPastDate,
+  kcalTargetHighlightClass,
   type DayMeals
 } from './weeklyHelpers';
 
@@ -58,6 +61,9 @@ export function WeeklyPlanner({
               {weekDates.map((date) => {
                 const active = selected?.date === date;
                 const today = isToday(date);
+                const meals = days.find((day) => day.date === date)?.meals ?? [];
+                const targetStatus = dayKcalTargetStatusForMeals(date, meals);
+                const showTargetTint = isPastDate(date) && targetStatus !== 'none';
                 return (
                   <div key={date} className="relative">
                     <button
@@ -68,13 +74,24 @@ export function WeeklyPlanner({
                       }}
                       className={clsx(
                         'flex w-full flex-col items-center rounded-xl border px-2 py-1.5 transition',
-                        active
-                          ? 'border-brand-green bg-brand-green/10'
-                          : 'border-transparent hover:bg-app-muted'
+                        showTargetTint
+                          ? kcalTargetHighlightClass(targetStatus)
+                          : active
+                            ? 'border-brand-green bg-brand-green/10'
+                            : 'border-transparent hover:bg-app-muted',
+                        active && 'ring-2 ring-brand-green/40'
                       )}
                     >
                       <span className="text-xs font-medium text-app-text-muted">{formatDayAbbrev(date)}</span>
-                      <span className={clsx('text-base font-bold', today ? 'text-brand-green' : 'text-app-text')}>
+                      <span
+                        className={clsx(
+                          'text-base font-bold',
+                          today && !showTargetTint && 'text-brand-green',
+                          !today && !showTargetTint && 'text-app-text',
+                          showTargetTint && targetStatus === 'over' && 'text-red-700 dark:text-red-300',
+                          showTargetTint && targetStatus === 'at_or_under' && 'text-brand-green'
+                        )}
+                      >
                         {formatDayNumber(date)}
                       </span>
                     </button>
@@ -120,10 +137,29 @@ export function WeeklyPlanner({
                 const meals = days.find((day) => day.date === date)?.meals ?? [];
                 const planned = Math.round(dayPlannedKcal(meals));
                 const actual = Math.round(dayActualKcal(meals));
+                const targetStatus = dayKcalTargetStatusForMeals(date, meals);
+                const showTargetTint = isPastDate(date) && targetStatus !== 'none';
                 return (
-                  <div key={date} className="flex flex-col items-center">
-                    <span className="text-sm font-semibold tabular-nums text-app-text">{planned.toLocaleString()}</span>
-                    <span className="text-[0.7rem] tabular-nums text-app-text-muted">
+                  <div
+                    key={date}
+                    className={clsx(
+                      'flex flex-col items-center rounded-xl border px-2 py-1.5',
+                      showTargetTint ? kcalTargetHighlightClass(targetStatus) : 'border-transparent'
+                    )}
+                  >
+                    <span className="text-sm font-semibold tabular-nums text-app-text">
+                      {planned ? planned.toLocaleString() : '—'}
+                    </span>
+                    <span
+                      className={clsx(
+                        'text-[0.7rem] tabular-nums',
+                        showTargetTint && targetStatus === 'over'
+                          ? 'text-red-700 dark:text-red-300'
+                          : showTargetTint && targetStatus === 'at_or_under'
+                            ? 'text-brand-green'
+                            : 'text-app-text-muted'
+                      )}
+                    >
                       {actual ? `ate ${actual.toLocaleString()}` : '—'}
                     </span>
                   </div>
