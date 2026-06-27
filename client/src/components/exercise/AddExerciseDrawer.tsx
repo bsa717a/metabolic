@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ExerciseCatalogItem } from '../../types';
 import { EXERCISE_BODY_PARTS, EXERCISE_CATEGORIES } from '../../types';
 import { api } from '../../services/api';
+import { coachDailyExercisesApi } from '../../utils/coachExerciseApi';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 
@@ -33,27 +34,38 @@ type ExerciseLookupResult = {
 export function AddExerciseDrawer({
   open,
   date,
+  coachClientId,
   onClose,
   onSaved
 }: {
   open: boolean;
   date: string;
+  coachClientId?: string;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
   return (
     <Drawer open={open} title="Add exercise" onClose={onClose}>
-      {open && <AddExerciseDrawerContent date={date} onClose={onClose} onSaved={onSaved} />}
+      {open && (
+        <AddExerciseDrawerContent
+          date={date}
+          coachClientId={coachClientId}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
+      )}
     </Drawer>
   );
 }
 
 function AddExerciseDrawerContent({
   date,
+  coachClientId,
   onClose,
   onSaved
 }: {
   date: string;
+  coachClientId?: string;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
@@ -126,12 +138,16 @@ function AddExerciseDrawerContent({
     selectExercise(item.exercise);
   }
 
+  const exercisesApi = coachClientId
+    ? coachDailyExercisesApi(coachClientId, date)
+    : `/api/daily-logs/${date}/exercises`;
+
   async function addFromCatalog() {
     if (!selected) return;
     setSaving(true);
     setCatalogError(undefined);
     try {
-      await api(`/api/daily-logs/${date}/exercises`, {
+      await api(exercisesApi, {
         method: 'POST',
         body: JSON.stringify({
           exerciseId: selected.id,
@@ -168,7 +184,7 @@ function AddExerciseDrawerContent({
           description: newDescription.trim() || undefined
         })
       });
-      await api(`/api/daily-logs/${date}/exercises`, {
+      await api(exercisesApi, {
         method: 'POST',
         body: JSON.stringify({ exerciseId: created.id })
       });

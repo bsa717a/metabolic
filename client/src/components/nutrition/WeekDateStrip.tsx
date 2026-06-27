@@ -1,5 +1,12 @@
 import { clsx } from 'clsx';
 import { addDays, formatDayAbbrev, formatDayNumber, formatWeekRange, getWeekDates, isToday, startOfWeek } from '../../services/api';
+import type { DayExercises } from '../../utils/planExportData';
+import {
+  dayExerciseCompletionStatus,
+  exerciseCompletionHighlightClass,
+  exercisesForDay,
+  isPastDate as isExercisePastDate
+} from '../exercise/weekly/exerciseWeeklyHelpers';
 import {
   dayKcalTargetStatusForMeals,
   isPastDate,
@@ -12,7 +19,8 @@ export function WeekDateStrip({
   onSelectDate,
   endAction,
   hideHeader = false,
-  days
+  days,
+  exerciseDays
 }: {
   selectedDate: string;
   onSelectDate: (date: string) => void;
@@ -20,6 +28,8 @@ export function WeekDateStrip({
   hideHeader?: boolean;
   /** When set, past days tint green/red by planned vs actual kcal. */
   days?: DayMeals[];
+  /** When set, past days tint green/red by exercise completion. */
+  exerciseDays?: DayExercises[];
 }) {
   const weekStart = startOfWeek(selectedDate);
   const weekDates = getWeekDates(weekStart);
@@ -46,7 +56,17 @@ export function WeekDateStrip({
           const today = isToday(date);
           const meals = days?.find((day) => day.date === date)?.meals ?? [];
           const targetStatus = days ? dayKcalTargetStatusForMeals(date, meals) : 'none';
-          const showTargetTint = Boolean(days) && isPastDate(date) && targetStatus !== 'none';
+          const showMealTint = Boolean(days) && isPastDate(date) && targetStatus !== 'none';
+          const exercises = exerciseDays ? exercisesForDay(exerciseDays, date) : [];
+          const exerciseStatus = exerciseDays ? dayExerciseCompletionStatus(exercises, date) : 'none';
+          const showExerciseTint = Boolean(exerciseDays) && isExercisePastDate(date) && exerciseStatus !== 'none';
+          const themed = Boolean(days) || Boolean(exerciseDays);
+          const showTint = showMealTint || showExerciseTint;
+          const tintClass = showMealTint
+            ? kcalTargetHighlightClass(targetStatus)
+            : showExerciseTint
+              ? exerciseCompletionHighlightClass(exerciseStatus)
+              : undefined;
           return (
             <button
               key={date}
@@ -54,15 +74,15 @@ export function WeekDateStrip({
               onClick={() => onSelectDate(date)}
               className={clsx(
                 'flex min-w-[3.5rem] snap-start flex-col items-center rounded-2xl border px-3 py-2 transition',
-                days
+                themed
                   ? clsx(
-                      showTargetTint
-                        ? kcalTargetHighlightClass(targetStatus)
+                      showTint
+                        ? tintClass
                         : selected
                           ? 'border-brand-green bg-brand-green/10 text-app-text'
                           : 'border-app-border bg-app-surface text-app-text',
                       selected && 'ring-2 ring-brand-green/40',
-                      !selected && !showTargetTint && 'hover:bg-app-muted'
+                      !selected && !showTint && 'hover:bg-app-muted'
                     )
                   : clsx(
                       selected
@@ -72,19 +92,31 @@ export function WeekDateStrip({
                     )
               )}
             >
-              <span className="text-xs font-medium opacity-80">{formatDayAbbrev(date)}</span>
               <span
                 className={clsx(
-                  'text-lg font-bold',
-                  days &&
-                    showTargetTint &&
+                  'text-xs',
+                  selected ? 'font-bold' : 'font-medium opacity-80'
+                )}
+              >
+                {formatDayAbbrev(date)}
+              </span>
+              <span
+                className={clsx(
+                  'text-lg',
+                  selected ? 'text-xl font-extrabold' : 'font-bold',
+                  showMealTint &&
                     targetStatus === 'over' &&
                     'text-red-700 dark:text-red-300',
-                  days &&
-                    showTargetTint &&
+                  showMealTint &&
                     targetStatus === 'at_or_under' &&
                     'text-brand-green',
-                  days && today && !showTargetTint && 'text-brand-green'
+                  showExerciseTint &&
+                    exerciseStatus === 'incomplete' &&
+                    'text-red-700 dark:text-red-300',
+                  showExerciseTint &&
+                    exerciseStatus === 'complete' &&
+                    'text-brand-green',
+                  themed && today && !showTint && 'text-brand-green'
                 )}
               >
                 {formatDayNumber(date)}
@@ -93,7 +125,7 @@ export function WeekDateStrip({
                 <span
                   className={clsx(
                     'mt-0.5 h-1.5 w-1.5 rounded-full',
-                    days ? (selected ? 'bg-brand-green' : 'bg-brand-green') : selected ? 'bg-white' : 'bg-blue-500'
+                    themed ? 'bg-brand-green' : selected ? 'bg-white' : 'bg-blue-500'
                   )}
                 />
               )}

@@ -57,6 +57,38 @@ export async function fetchExercisesForDates(dates: string[], signal?: AbortSign
   );
 }
 
+export async function fetchCoachExercisesForDates(clientId: string, dates: string[], signal?: AbortSignal) {
+  return Promise.all(
+    dates.map(async (date) => {
+      try {
+        const exercises = await api<ScheduledExercise[]>(
+          `/api/coach/users/${clientId}/daily-logs/${date}/exercises`,
+          { signal }
+        );
+        return { date, exercises };
+      } catch {
+        return { date, exercises: [] as ScheduledExercise[] };
+      }
+    })
+  );
+}
+
+export async function fetchCoachMealsForDates(clientId: string, dates: string[], signal?: AbortSignal) {
+  return Promise.all(
+    dates.map(async (date) => {
+      try {
+        const meals = await api<Meal[]>(
+          `/api/coach/users/${clientId}/daily-logs/${date}/meals`,
+          { signal }
+        );
+        return { date, meals };
+      } catch {
+        return { date, meals: [] as Meal[] };
+      }
+    })
+  );
+}
+
 export function weekHasMeals(days: DayMeals[]) {
   return days.some((day) => day.meals.length > 0);
 }

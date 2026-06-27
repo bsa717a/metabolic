@@ -1,70 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { api } from '../../../services/api';
+import { api, formatDayAbbrev, formatDayNumber } from '../../../services/api';
+import type { PublishPlanPayload } from '../../../utils/weekdayPattern';
 import { Button } from '../../ui/Button';
-
-function CopyDayForwardPanel({
-  dayLabel,
-  days,
-  busy,
-  error,
-  onDaysChange,
-  onCancel,
-  onCopy
-}: {
-  dayLabel: string;
-  days: number;
-  busy: boolean;
-  error: string | null;
-  onDaysChange: (days: number) => void;
-  onCancel: () => void;
-  onCopy: () => void;
-}) {
-  return (
-    <div
-      className="w-60 rounded-2xl border border-app-border bg-app-surface p-3 text-left shadow-lg"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <p className="text-sm font-semibold text-app-text">Copy {dayLabel} forward</p>
-      <p className="mt-1 text-xs text-app-text-muted">
-        Copies this day&apos;s planned foods into each of the next days, replacing what&apos;s planned there.
-      </p>
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          type="number"
-          min={1}
-          max={31}
-          value={days}
-          onChange={(event) => onDaysChange(Number(event.target.value))}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') onCopy();
-          }}
-          className="w-16 rounded-lg border border-app-border bg-app-surface px-2 py-1 text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-brand-green/40"
-          aria-label="Number of days ahead"
-        />
-        <span className="text-sm text-app-text-muted">day{days === 1 ? '' : 's'} ahead</span>
-      </div>
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      <div className="mt-3 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg px-3 py-1.5 text-sm text-app-text-muted transition hover:bg-app-muted"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCopy}
-          className="rounded-lg bg-brand-green px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-green/90 disabled:opacity-50"
-        >
-          {busy ? 'Copying…' : 'Copy'}
-        </button>
-      </div>
-    </div>
-  );
-}
+import { CopyWeekPlanPanel } from '../../plan/CopyWeekPlanPanel';
 
 export function CopyDayForward({
   date,
@@ -72,7 +11,8 @@ export function CopyDayForward({
   onCopied,
   variant = 'icon',
   disabled = false,
-  apiUrl
+  apiUrl,
+  planLabel = 'planned foods'
 }: {
   date: string;
   dayLabel: string;
@@ -80,12 +20,13 @@ export function CopyDayForward({
   variant?: 'icon' | 'button';
   disabled?: boolean;
   apiUrl?: string;
+  planLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [days, setDays] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const sourceLabel = dayLabel || `${formatDayAbbrev(date)} ${formatDayNumber(date)}`;
 
   useEffect(() => {
     function handleDocClick(event: MouseEvent) {
@@ -95,24 +36,20 @@ export function CopyDayForward({
     return () => document.removeEventListener('mousedown', handleDocClick);
   }, [open]);
 
-  async function copy() {
+  async function copy(payload: PublishPlanPayload) {
     if (busy) return;
-    const count = Math.round(days);
-    if (!Number.isFinite(count) || count < 1) {
-      setError('Enter at least 1 day.');
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
-      await api(apiUrl ?? `/api/daily-logs/${date}/copy-forward`, {
+      await api(apiUrl ?? `/api/daily-logs/${date}/copy-to-dates`, {
         method: 'POST',
-        body: JSON.stringify({ days: count })
+        body: JSON.stringify(payload)
       });
       setOpen(false);
       await onCopied();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not copy this day.');
+      setError(err instanceof Error ? err.message : 'Could not publish plan.');
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -126,8 +63,8 @@ export function CopyDayForward({
       {variant === 'icon' ? (
         <button
           type="button"
-          aria-label={`Copy ${dayLabel} to future days`}
-          title="Copy this day to future days"
+          aria-label={`Publish ${dayLabel} to other days`}
+          title="Publish this day to other days"
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -144,7 +81,7 @@ export function CopyDayForward({
           disabled={disabled}
           onClick={() => setOpen((value) => !value)}
         >
-          Copy forward
+          Publish plan…
         </Button>
       )}
 
@@ -156,14 +93,15 @@ export function CopyDayForward({
               : 'absolute right-0 top-full z-50 mt-2'
           }
         >
-          <CopyDayForwardPanel
-            dayLabel={dayLabel}
-            days={days}
+          <CopyWeekPlanPanel
+            sourceLabel={sourceLabel}
+            sourceDate={date}
+            planLabel={planLabel}
+            disabled={disabled}
             busy={busy}
             error={error}
-            onDaysChange={setDays}
             onCancel={() => setOpen(false)}
-            onCopy={() => void copy()}
+            onCopy={copy}
           />
         </div>
       )}

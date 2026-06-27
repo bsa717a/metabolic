@@ -7,7 +7,10 @@ import {
   applyCoachExerciseTemplate,
   applyCoachNutritionTemplate,
   copyCoachClientDayForward,
+  copyCoachClientDayToDates,
+  copyCoachClientExercisesToDates,
   createCoachClientGroup,
+  createCoachClientScheduledExercise,
   createCoachCheckIn,
   createCoachSession,
   listCoachSessions,
@@ -24,6 +27,8 @@ import {
   getCoachSettings,
   listCoachClientGroups,
   listCoachClients,
+  reorderCoachClientScheduledExercises,
+  restoreCoachClientExercisePlan,
   sendCoachResultsReadyEmail,
   sendCoachResultsReadySms,
   setCoachClientGroupMembers,
@@ -360,6 +365,107 @@ export async function coachRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post('/api/coach/users/:userId/daily-logs/:date/exercises', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    const optionalNumber = z.union([z.number(), z.null()]).optional();
+    const optionalString = z.union([z.string(), z.null()]).optional();
+    const parsed = z
+      .object({
+        exerciseId: z.string(),
+        sets: optionalNumber,
+        reps: optionalNumber,
+        durationMinutes: optionalNumber,
+        distance: optionalNumber,
+        weight: optionalNumber,
+        description: optionalString,
+        category: optionalString,
+        bodyPart: optionalString
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise' });
+    try {
+      return await createCoachClientScheduledExercise(request.appUser!, userId, date, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/daily-logs/:date/exercises/reorder', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    const parsed = z.object({ orderedIds: z.array(z.string()).min(1) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    try {
+      return await reorderCoachClientScheduledExercises(request.appUser!, userId, date, parsed.data.orderedIds);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to reorder exercises' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/daily-logs/:date/exercises/copy-to-dates', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    const parsed = z
+      .object({
+        targetDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default([]),
+        clearDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+        weekDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+        clearUncheckedDays: z.boolean().optional()
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    try {
+      return await copyCoachClientExercisesToDates(request.appUser!, userId, date, parsed.data.targetDates, {
+        clearDates: parsed.data.clearDates,
+        weekDates: parsed.data.weekDates,
+        clearUncheckedDays: parsed.data.clearUncheckedDays
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy exercises' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/daily-logs/exercises/restore-snapshot', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const optionalNumber = z.union([z.number(), z.null()]);
+    const parsed = z
+      .object({
+        days: z
+          .array(
+            z.object({
+              date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+              exercises: z.array(
+                z.object({
+                  exerciseId: z.string(),
+                  sets: optionalNumber,
+                  reps: optionalNumber,
+                  durationMinutes: optionalNumber,
+                  distance: optionalNumber,
+                  weight: optionalNumber,
+                  status: z.enum(['PLANNED', 'DONE', 'SKIPPED', 'MISSED']),
+                  sortOrder: z.number().int()
+                })
+              )
+            })
+          )
+          .min(1)
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid snapshot' });
+    try {
+      return await restoreCoachClientExercisePlan(request.appUser!, userId, parsed.data.days);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to restore plan' });
+    }
+  });
+
   app.get('/api/coach/users/:userId/engagement', { preHandler: coachOnly }, async (request, reply) => {
     try {
       return await getCoachClientEngagement(request.appUser!, (request.params as { userId: string }).userId);
@@ -436,6 +542,31 @@ export async function coachRoutes(app: FastifyInstance) {
       return await copyCoachClientDayForward(request.appUser!, userId, date, parsed.data.days);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day forward' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/daily-logs/:date/copy-to-dates', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    const parsed = z
+      .object({
+        targetDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default([]),
+        clearDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+        weekDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+        clearUncheckedDays: z.boolean().optional()
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    try {
+      return await copyCoachClientDayToDates(request.appUser!, userId, date, parsed.data.targetDates, {
+        clearDates: parsed.data.clearDates,
+        weekDates: parsed.data.weekDates,
+        clearUncheckedDays: parsed.data.clearUncheckedDays
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day plan' });
     }
   });
 
