@@ -9,6 +9,9 @@ function isAuthorizedCronRequest(headerValue: unknown) {
 
 export async function internalRoutes(app: FastifyInstance) {
   app.post('/api/internal/sms/tick', async (request, reply) => {
+    if (!env.CRON_SECRET) {
+      return reply.code(503).send({ error: 'CRON_SECRET is not configured' });
+    }
     if (!isAuthorizedCronRequest(request.headers['x-cron-secret'])) {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
