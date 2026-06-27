@@ -3,6 +3,7 @@ import { ChevronDown, Minus, Search } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Food, Meal, MealItem } from '../../types';
 import { Button } from '../ui/Button';
+import { plannedTimeToInputValue } from '../../utils/plannedTime';
 
 type LocalEditItem = {
   serverId?: string;
@@ -57,7 +58,7 @@ export function MealCardEditor({
 }) {
   const [baseline] = useState(() => ({
     name: meal.name,
-    plannedTime: meal.plannedTime ?? '',
+    plannedTime: plannedTimeToInputValue(meal.plannedTime),
     plannedItems: meal.items.filter((item) => item.type === 'PLANNED'),
   }));
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { Food, Meal, MealItem } from '../../types';
 import { Button } from '../ui/Button';
+import { plannedTimeToInputValue } from '../../utils/plannedTime';
 import { Drawer } from '../ui/Drawer';
 import { FoodSearch } from './FoodSearch';
 
@@ -81,7 +82,7 @@ export function EditMealPlanDrawer({
   useEffect(() => {
     if (!meal) return;
     setManual(MODE_CONFIG[mode].totals(meal));
-    setPlannedTime(meal.plannedTime ?? '');
+    setPlannedTime(plannedTimeToInputValue(meal.plannedTime));
     setTimeError(null);
     setManualOpen(false);
   }, [meal, mode]);
@@ -172,7 +173,7 @@ export function EditMealPlanDrawer({
               type="button"
               variant="secondary"
               onClick={() => void savePlannedTime()}
-              disabled={!meal || savingTime || plannedTime === (meal.plannedTime ?? '')}
+              disabled={!meal || savingTime || plannedTime === plannedTimeToInputValue(meal.plannedTime)}
             >
               {savingTime ? 'Saving...' : 'Save time'}
             </Button>
