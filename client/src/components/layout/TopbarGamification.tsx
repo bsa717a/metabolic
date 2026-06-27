@@ -1,7 +1,7 @@
 import { clsx } from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, Droplets, Flame, TrendingUp } from 'lucide-react';
+import { Award, Droplets, Flame } from 'lucide-react';
 import { badgeArtUrl } from '../gamification/badgeArt';
 import { HydrationTopbarDrawer } from '../hydration/HydrationTopbarDrawer';
 import { WaterBottle } from '../hydration/WaterBottle';
@@ -13,7 +13,6 @@ import { useTutorial } from '../tutorial/TutorialContext';
 import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamification';
 
 const TOPBAR_RING_SIZE = 44;
-const TOPBAR_MOBILE_ICON = 20;
 const TOPBAR_BADGE_SIZE = 80;
 
 export function TopbarGamification() {
@@ -125,24 +124,22 @@ export function TopbarGamification() {
               setHydrationOpen(false);
               setLevelUpOpen((open) => !open);
             }}
-            className="flex h-full min-h-[52px] items-center gap-2 rounded-xl px-2 py-2 sm:gap-3 sm:px-4 sm:py-2.5 transition hover:bg-app-muted/80"
-            title={`Level ${currentLevel.number}`}
-            aria-label="Open level up tasks"
+            className="flex h-full min-h-[52px] items-center gap-2 rounded-xl px-1 py-2 sm:gap-3 sm:px-4 sm:py-2.5 transition hover:bg-app-muted/80"
+            title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
+            aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
             aria-expanded={levelUpOpen}
           >
-            <div className="shrink-0 hidden sm:block">
+            <span className="shrink-0 text-[1.75rem] font-extrabold leading-none tabular-nums tracking-tight text-brand-green sm:hidden">
+              L{currentLevel.number}
+            </span>
+            <div className="hidden shrink-0 sm:block">
               <ProgressRing percent={currentLevel.progressPercent} size={TOPBAR_RING_SIZE} />
             </div>
-            <TrendingUp
-              size={TOPBAR_MOBILE_ICON}
-              className="shrink-0 text-brand-green sm:hidden"
-              aria-hidden
-            />
-            <div className="shrink-0 text-left leading-tight">
+            <div className="hidden shrink-0 text-left leading-tight sm:block">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-green">
                 Level {currentLevel.number}
               </p>
-              <p className="mt-1 text-[11px] sm:text-xs text-app-text-muted tabular-nums">
+              <p className="mt-1 text-xs text-app-text-muted tabular-nums">
                 {tasksDone}/{tasksTotal} tasks
               </p>
             </div>
