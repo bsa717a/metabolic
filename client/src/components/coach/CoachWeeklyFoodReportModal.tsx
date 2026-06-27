@@ -22,6 +22,9 @@ import {
   findMeal,
   formatItemLine,
   isPlannedItemLogged,
+  kcalTargetHighlightClass,
+  mealKcalTargetStatus,
+  dayKcalTargetStatus,
   plannedItemsOf,
   statusDotClass,
   statusLabel,
@@ -40,49 +43,60 @@ function dayMacroTotals(meals: Meal[]) {
   );
 }
 
-function ReportMealCell({ mealName, meal }: { mealName: string; meal?: Meal }) {
+function ReportMealCell({ mealName, meal, date }: { mealName: string; meal?: Meal; date: string }) {
   const planned = meal ? plannedItemsOf(meal) : [];
   const actuals = meal ? actualItemsOf(meal) : [];
   const extras = meal ? extraActualItemsOf(meal) : [];
   const isEmpty = planned.length === 0 && extras.length === 0;
   const plannedKcal = meal ? Math.round(Number(meal.plannedCalories)) : 0;
   const actualKcal = meal ? Math.round(Number(meal.actualCalories)) : 0;
+  const hasPlan = plannedKcal > 0 || !isEmpty;
+  const targetStatus = mealKcalTargetStatus(actualKcal, plannedKcal, date, meal?.status);
 
   return (
-    <div className="flex min-h-[5rem] flex-col rounded-2xl border border-app-border bg-app-surface p-2">
+    <div
+      className={clsx(
+        'flex min-h-[5rem] flex-col rounded-2xl border p-2',
+        kcalTargetHighlightClass(targetStatus)
+      )}
+    >
       <div className="flex items-center justify-between gap-1">
         <span className="truncate text-xs font-semibold text-app-text">{mealName}</span>
-        {!isEmpty && (
+        {hasPlan && (
           <span className="shrink-0 text-[0.7rem] tabular-nums text-app-text-muted">
             {actualKcal}/{plannedKcal}
           </span>
         )}
       </div>
 
-      {isEmpty ? (
+      {!hasPlan ? (
         <span className="mt-1 text-xs italic text-app-text-muted">No plan</span>
       ) : (
         <>
-          <div className="mt-1 flex min-w-0 items-center gap-1">
-            <span className={clsx('h-2 w-2 shrink-0 rounded-full', statusDotClass(meal!.status))} />
-            <span className="truncate text-[0.7rem] font-medium text-app-text-muted">{statusLabel(meal!.status)}</span>
-          </div>
-          <div className="mt-1.5 flex flex-col gap-0.5">
-            {planned.map((item) => {
-              const logged = isPlannedItemLogged(item, actuals);
-              return (
-                <PlannedItemLine key={item.id} item={item} logged={logged} />
-              );
-            })}
-            {extras.map((item) => (
-              <div
-                key={item.id}
-                className="truncate rounded bg-brand-gold/15 px-1 py-0.5 text-[0.7rem] ring-1 ring-brand-gold/20"
-              >
-                {formatItemLine(item)}
-              </div>
-            ))}
-          </div>
+          {meal && (
+            <div className="mt-1 flex min-w-0 items-center gap-1">
+              <span className={clsx('h-2 w-2 shrink-0 rounded-full', statusDotClass(meal.status))} />
+              <span className="truncate text-[0.7rem] font-medium text-app-text-muted">{statusLabel(meal.status)}</span>
+            </div>
+          )}
+          {!isEmpty && (
+            <div className="mt-1.5 flex flex-col gap-0.5">
+              {planned.map((item) => {
+                const logged = isPlannedItemLogged(item, actuals);
+                return (
+                  <PlannedItemLine key={item.id} item={item} logged={logged} />
+                );
+              })}
+              {extras.map((item) => (
+                <div
+                  key={item.id}
+                  className="truncate rounded bg-brand-gold/15 px-1 py-0.5 text-[0.7rem] ring-1 ring-brand-gold/20"
+                >
+                  {formatItemLine(item)}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -219,16 +233,30 @@ export function CoachWeeklyFoodReportModal({
                     {weekDates.map((date) => {
                       const today = isToday(date);
                       const selected = date === selectedDate;
+                      const meals = days.find((day) => day.date === date)?.meals ?? [];
+                      const dayTargetStatus = dayKcalTargetStatus(
+                        Math.round(dayActualKcal(meals)),
+                        Math.round(dayPlannedKcal(meals)),
+                        date
+                      );
                       return (
                         <div
                           key={date}
                           className={clsx(
                             'flex flex-col items-center rounded-xl border px-2 py-1.5',
-                            selected ? 'border-brand-green bg-brand-green/10' : 'border-transparent'
+                            kcalTargetHighlightClass(dayTargetStatus),
+                            selected && 'ring-2 ring-brand-green/40'
                           )}
                         >
                           <span className="text-xs font-medium text-app-text-muted">{formatDayAbbrev(date)}</span>
-                          <span className={clsx('text-base font-bold', today ? 'text-brand-green' : 'text-app-text')}>
+                          <span
+                            className={clsx(
+                              'text-base font-bold',
+                              today ? 'text-brand-green' : 'text-app-text',
+                              dayTargetStatus === 'over' && 'text-red-700 dark:text-red-300',
+                              dayTargetStatus === 'at_or_under' && 'text-brand-green'
+                            )}
+                          >
                             {formatDayNumber(date)}
                           </span>
                         </div>
@@ -241,7 +269,12 @@ export function CoachWeeklyFoodReportModal({
                       {weekDates.map((date) => {
                         const meal = findMeal(days, date, row.mealNumber);
                         return (
-                          <ReportMealCell key={`${date}-${row.mealNumber}`} mealName={meal?.name ?? row.label} meal={meal} />
+                          <ReportMealCell
+                            key={`${date}-${row.mealNumber}`}
+                            mealName={meal?.name ?? row.label}
+                            meal={meal}
+                            date={date}
+                          />
                         );
                       })}
                     </div>
@@ -255,12 +288,28 @@ export function CoachWeeklyFoodReportModal({
                       const meals = days.find((day) => day.date === date)?.meals ?? [];
                       const planned = Math.round(dayPlannedKcal(meals));
                       const actual = Math.round(dayActualKcal(meals));
+                      const dayTargetStatus = dayKcalTargetStatus(actual, planned, date);
                       return (
-                        <div key={date} className="flex flex-col items-center">
+                        <div
+                          key={date}
+                          className={clsx(
+                            'flex flex-col items-center rounded-xl border px-2 py-1.5',
+                            kcalTargetHighlightClass(dayTargetStatus)
+                          )}
+                        >
                           <span className="text-sm font-semibold tabular-nums text-app-text">
                             {planned ? planned.toLocaleString() : '—'}
                           </span>
-                          <span className="text-[0.7rem] tabular-nums text-app-text-muted">
+                          <span
+                            className={clsx(
+                              'text-[0.7rem] tabular-nums',
+                              dayTargetStatus === 'over'
+                                ? 'text-red-700 dark:text-red-300'
+                                : dayTargetStatus === 'at_or_under'
+                                  ? 'text-brand-green'
+                                  : 'text-app-text-muted'
+                            )}
+                          >
                             {actual ? `ate ${actual.toLocaleString()}` : '—'}
                           </span>
                         </div>

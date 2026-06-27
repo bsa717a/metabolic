@@ -1,4 +1,4 @@
-import { api } from '../../../services/api';
+import { api, isFuture, isToday } from '../../../services/api';
 import type { Food, Meal, MealItem } from '../../../types';
 
 export type DayMeals = { date: string; meals: Meal[] };
@@ -127,6 +127,46 @@ export function dayPlannedKcal(meals: Meal[]): number {
 
 export function dayActualKcal(meals: Meal[]): number {
   return meals.reduce((sum, meal) => sum + Number(meal.actualCalories), 0);
+}
+
+export type KcalTargetStatus = 'at_or_under' | 'over' | 'none';
+
+function kcalTargetStatusFromTotals(actual: number, planned: number, zeroActualIsOver: boolean): KcalTargetStatus {
+  if (planned <= 0) return 'none';
+  if (actual > 0) return actual <= planned ? 'at_or_under' : 'over';
+  return zeroActualIsOver ? 'over' : 'none';
+}
+
+/** Meal cell: green within plan, red when over or skipped; neutral for future/unlogged today meals. */
+export function mealKcalTargetStatus(
+  actual: number,
+  planned: number,
+  date: string,
+  mealStatus?: string
+): KcalTargetStatus {
+  const zeroActualIsOver =
+    !isFuture(date) &&
+    (mealStatus === 'MISSED' ||
+      mealStatus === 'SKIPPED' ||
+      (!isToday(date) && actual <= 0));
+  return kcalTargetStatusFromTotals(actual, planned, zeroActualIsOver);
+}
+
+/** Day column: green within plan, red when over or fully skipped on a past day. */
+export function dayKcalTargetStatus(actual: number, planned: number, date: string): KcalTargetStatus {
+  const zeroActualIsOver = !isFuture(date) && !isToday(date) && actual <= 0;
+  return kcalTargetStatusFromTotals(actual, planned, zeroActualIsOver);
+}
+
+export function kcalTargetHighlightClass(status: KcalTargetStatus): string {
+  switch (status) {
+    case 'at_or_under':
+      return 'border-brand-green/40 bg-brand-green/10';
+    case 'over':
+      return 'border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-900/20';
+    default:
+      return 'border-app-border bg-app-surface';
+  }
 }
 
 /** Add a food to a meal as either a PLANNED item (planning) or an ACTUAL item (logging what was eaten). */
