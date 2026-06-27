@@ -1226,7 +1226,12 @@ async function respondMediaMissing(user: SmsUser, phone: string, inboundId: stri
   return { response, deliveredViaApi: false };
 }
 
-async function respondUnknownSmsUser(phone: string, inboundMessage: string, intent: string) {
+async function respondUnknownSmsUser(
+  phone: string,
+  inboundMessage: string,
+  intent: string,
+  channel: TwilioMessageChannel = 'sms'
+) {
   const response = capSms(smsNoAccountResponseMessage(env.CLIENT_URL));
   await prisma.smsMessage.create({
     data: { phone, direction: 'INBOUND', message: inboundMessage, intent, status: 'PROCESSED', response }
@@ -1236,7 +1241,7 @@ async function respondUnknownSmsUser(phone: string, inboundMessage: string, inte
   });
   // Twilio Advanced Opt-Out may auto-reply to START/HELP before our TwiML is shown; send via API too.
   try {
-    await sendOutboundMessage(phone, response);
+    await sendOutboundMessage(phone, response, channel);
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Could not send text message.';
     await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });
@@ -1255,7 +1260,7 @@ export async function handleSms(
   const user = await findUserBySmsPhone(phone);
   if (!media && isSmsStartKeyword(message)) {
     if (!user) {
-      return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT');
+      return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT', channel);
     }
     if (twilioOptOutType === 'START') {
       await prisma.user.update({ where: { id: user.id }, data: { smsOptedOut: false } });
@@ -1285,7 +1290,7 @@ export async function handleSms(
 
   if (!media && isSmsHelpKeyword(message)) {
     if (!user) {
-      return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT');
+      return respondUnknownSmsUser(phone, message.trim(), 'NO_ACCOUNT', channel);
     }
     const response = smsHelpResponse();
     if (twilioOptOutType === 'HELP') {
@@ -1302,7 +1307,7 @@ export async function handleSms(
     });
     // A2P campaign auto-reply for HELP may only include STOP boilerplate; send full help via API too.
     try {
-      await sendOutboundMessage(phone, response);
+      await sendOutboundMessage(phone, response, channel);
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Could not send text message.';
       await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });

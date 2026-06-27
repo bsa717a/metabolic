@@ -12,8 +12,17 @@ function twimlMessage(response: string) {
 export async function smsRoutes(app: FastifyInstance) {
   app.post('/api/sms/webhook', async (request, reply) => {
     if (!isValidTwilioRequest(request)) {
+      request.log.warn(
+        {
+          url: request.url,
+          host: request.headers['x-forwarded-host'] ?? request.headers.host,
+          configuredWebhook: process.env.TWILIO_WEBHOOK_URL ?? ''
+        },
+        'twilio webhook signature rejected'
+      );
       return reply.code(403).send({ error: 'Invalid Twilio signature' });
     }
+
     const body = request.body as Record<string, unknown>;
     const rawFrom = String(body.From ?? body.from ?? '');
     const phone = normalizePhone(rawFrom);
@@ -21,17 +30,24 @@ export async function smsRoutes(app: FastifyInstance) {
     const optOutType = String(body.OptOutType ?? body.optOutType ?? '').trim().toUpperCase() || undefined;
     const channel: TwilioMessageChannel = inferTwilioChannel(rawFrom);
     const { media, mediaMissing } = extractSmsMediaFromWebhook(body);
-    const result = await handleSms(phone, message, media, optOutType, channel, mediaMissing);
 
-    reply.header('content-type', 'text/xml');
-    const twiml = result.response ? twimlMessage(result.response) : '<Response></Response>';
+    try {
+      const result = await handleSms(phone, message, media, optOutType, channel, mediaMissing);
 
-    if (result.deferredWork) {
-      reply.send(twiml);
-      await result.deferredWork();
-      return;
+      reply.header('content-type', 'text/xml');
+      const twiml = result.response ? twimlMessage(result.response) : '<Response></Response>';
+
+      if (result.deferredWork) {
+        reply.send(twiml);
+        await result.deferredWork();
+        return;
+      }
+
+      return twiml;
+    } catch (error) {
+      request.log.error({ err: error, phone }, 'sms webhook handler failed');
+      reply.header('content-type', 'text/xml');
+      return twimlMessage('Sorry, something went wrong on our end. Please try again in a moment.');
     }
-
-    return twiml;
   });
 }
