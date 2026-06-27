@@ -12,14 +12,6 @@ function headerValue(headers: WebhookRequest['headers'], name: string) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** Rebuilds the exact public URL Twilio signed (env override preferred, then forwarded headers). */
-function resolveWebhookUrl(request: WebhookRequest) {
-  if (env.TWILIO_WEBHOOK_URL) return env.TWILIO_WEBHOOK_URL;
-  const proto = headerValue(request.headers, 'x-forwarded-proto') ?? 'https';
-  const host = headerValue(request.headers, 'x-forwarded-host') ?? headerValue(request.headers, 'host') ?? '';
-  return `${proto}://${host}${request.url}`;
-}
-
 function expectedSignature(authToken: string, url: string, body: Record<string, string>) {
   const data = Object.keys(body)
     .sort()
@@ -32,6 +24,22 @@ function safeEqual(a: string, b: string) {
   const bufferB = Buffer.from(b);
   if (bufferA.length !== bufferB.length) return false;
   return crypto.timingSafeEqual(bufferA, bufferB);
+}
+
+/** URLs Twilio may have signed — request URL first, then configured override. */
+function webhookUrlCandidates(request: WebhookRequest): string[] {
+  const proto = headerValue(request.headers, 'x-forwarded-proto') ?? 'https';
+  const host =
+    headerValue(request.headers, 'x-forwarded-host') ?? headerValue(request.headers, 'host') ?? '';
+  const pathAndQuery = request.url.startsWith('/') ? request.url : `/${request.url}`;
+  const reconstructed = host ? `${proto}://${host}${pathAndQuery}` : '';
+  const pathOnly = pathAndQuery.split('?')[0];
+  const reconstructedPathOnly = host && pathOnly !== pathAndQuery ? `${proto}://${host}${pathOnly}` : '';
+
+  const candidates = [reconstructed, reconstructedPathOnly, env.TWILIO_WEBHOOK_URL.trim()]
+    .filter((url) => url.length > 0);
+
+  return [...new Set(candidates)];
 }
 
 /**
@@ -52,6 +60,16 @@ export function isValidTwilioRequest(request: WebhookRequest) {
         )
       : {};
 
-  const url = resolveWebhookUrl(request);
-  return safeEqual(expectedSignature(env.TWILIO_AUTH_TOKEN, url, body), signature);
+  for (const url of webhookUrlCandidates(request)) {
+    if (safeEqual(expectedSignature(env.TWILIO_AUTH_TOKEN, url, body), signature)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/** @internal For unit tests. */
+export function computeTwilioSignature(authToken: string, url: string, body: Record<string, string>) {
+  return expectedSignature(authToken, url, body);
 }

@@ -20,7 +20,7 @@ import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { saveProgramMetricSnapshot } from './programService.js';
 import { sendResultsReadyEmail } from './emailService.js';
 import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsReadyNotification.js';
-import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone } from './twilioOutboundService.js';
+import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, resolveOutboundChannel } from './twilioOutboundService.js';
 import { normalizePhone } from '../utils/phone.js';
 import { env } from '../config/env.js';
 
@@ -602,7 +602,7 @@ export async function sendCoachResultsReadySms(
   });
 
   try {
-    await sendOutboundMessage(phone, message);
+    await sendOutboundMessage(phone, message, resolveOutboundChannel(phone));
     if (options?.savePhone && !client.phone?.trim()) {
       await prisma.user.update({ where: { id: userId }, data: { phone } });
     }

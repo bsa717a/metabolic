@@ -16,6 +16,7 @@ export async function internalRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
     const result = await runSmsReminderTick();
+    request.log.info({ smsTick: result }, 'sms reminder tick');
     return reply.send(result);
   });
 }

@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
-import { isTwilioConfigured, isTwilioSenderPhone, sendOutboundMessage } from './twilioOutboundService.js';
+import { isTwilioConfigured, isTwilioSenderPhone, resolveOutboundChannel, sendOutboundMessage } from './twilioOutboundService.js';
 import { localTimeParts } from '../utils/dates.js';
 import { COMPLETED_MEAL_STATUSES, parsePlannedMinutes } from '../utils/meals.js';
 import { n } from '../utils/numbers.js';
@@ -59,7 +59,7 @@ async function deliverNudge(userId: string, phone: string, message: string, inte
     data: { phone, userId, direction: 'OUTBOUND', message, response: message, intent, status: 'PROCESSED' }
   });
   try {
-    await sendOutboundMessage(phone, message);
+    await sendOutboundMessage(phone, message, resolveOutboundChannel(phone));
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Could not send text message.';
     await prisma.smsMessage.update({ where: { id: outbound.id }, data: { status: 'FAILED', response: detail } });

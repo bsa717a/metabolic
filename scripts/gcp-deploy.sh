@@ -68,6 +68,11 @@ CRON_SECRET=CRON_SECRET:latest" \
 API_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
 echo "API URL: $API_URL"
 
+echo "==> Ensure Cloud Scheduler API is enabled (required for proactive SMS reminders)"
+if ! gcloud services enable cloudscheduler.googleapis.com --project="$PROJECT_ID" --quiet 2>/dev/null; then
+  echo "WARN: Could not enable cloudscheduler.googleapis.com — run as project admin if SMS reminders are silent."
+fi
+
 echo "==> Ensure Cloud Scheduler job for proactive SMS reminders (best-effort)"
 # CI often lacks permission to enable APIs or create scheduler jobs. Do not fail
 # deploy when scheduler setup fails; run ./scripts/setup-sms-scheduler.sh once as admin.

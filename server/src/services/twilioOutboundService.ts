@@ -78,6 +78,11 @@ function defaultOutboundChannel(phone: string) {
   return usesWhatsAppChannel() ? 'whatsapp' : 'sms';
 }
 
+/** Pick SMS vs WhatsApp for outbound delivery based on env and recipient. */
+export function resolveOutboundChannel(phone: string): TwilioMessageChannel {
+  return defaultOutboundChannel(phone);
+}
+
 export async function sendOutboundMessage(phone: string, message: string, channel?: TwilioMessageChannel) {
   if (!isTwilioConfigured()) {
     throw new Error('Twilio outbound messaging is not configured.');
