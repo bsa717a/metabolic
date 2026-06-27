@@ -23,7 +23,8 @@ type AccountDraft = {
   email: string;
   phone: string;
   timezone: string;
-  smsRemindersEnabled: boolean;
+  smsMealRemindersEnabled: boolean;
+  smsEveningRecapEnabled: boolean;
 };
 
 export function EditAccountDetailsDrawer({
@@ -75,7 +76,8 @@ function EditAccountDetailsDrawerContent({
     email: '',
     phone: '',
     timezone: '',
-    smsRemindersEnabled: true
+    smsMealRemindersEnabled: true,
+    smsEveningRecapEnabled: true
   });
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [canEditClientNotes, setCanEditClientNotes] = useState(false);
@@ -96,7 +98,8 @@ function EditAccountDetailsDrawerContent({
           email: details.email,
           phone: details.phone ?? '',
           timezone: details.timezone ?? '',
-          smsRemindersEnabled: details.smsRemindersEnabled ?? true
+          smsMealRemindersEnabled: details.smsMealRemindersEnabled ?? details.smsRemindersEnabled ?? true,
+          smsEveningRecapEnabled: details.smsEveningRecapEnabled ?? details.smsRemindersEnabled ?? true
         });
         setProfileDraft(profileToDraft(details));
         setCanEditClientNotes(details.canEditClientNotes);
@@ -124,7 +127,8 @@ function EditAccountDetailsDrawerContent({
         ...buildProfilePayload(profileDraft, canEditClientNotes),
         phone: accountDraft.phone.trim() ? accountDraft.phone.trim() : null,
         timezone: accountDraft.timezone.trim() ? accountDraft.timezone.trim() : null,
-        smsRemindersEnabled: accountDraft.smsRemindersEnabled
+        smsMealRemindersEnabled: accountDraft.smsMealRemindersEnabled,
+        smsEveningRecapEnabled: accountDraft.smsEveningRecapEnabled
       };
 
       if (mode === 'self') {
@@ -230,21 +234,35 @@ function EditAccountDetailsDrawerContent({
             ))}
           </select>
           <span className="mt-1 block text-xs text-app-text-muted">
-            Used to time meal reminder texts. Reminders are skipped until this is set.
+            Used to time reminder texts. Reminders are skipped until this is set.
           </span>
         </label>
 
-        <label className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
-            checked={accountDraft.smsRemindersEnabled}
-            onChange={(event) => updateAccount('smsRemindersEnabled', event.target.checked)}
-          />
-          <span className="text-sm text-slate-600 dark:text-app-text-muted">
-            Text me reminders before meals and a short evening check-in.
-          </span>
-        </label>
+        <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
+          <p className="text-sm font-semibold text-app-text">Text reminders</p>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
+              checked={accountDraft.smsMealRemindersEnabled}
+              onChange={(event) => updateAccount('smsMealRemindersEnabled', event.target.checked)}
+            />
+            <span className="text-sm text-slate-600 dark:text-app-text-muted">
+              Text me before planned meals (up to 30 minutes ahead, once per meal).
+            </span>
+          </label>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
+              checked={accountDraft.smsEveningRecapEnabled}
+              onChange={(event) => updateAccount('smsEveningRecapEnabled', event.target.checked)}
+            />
+            <span className="text-sm text-slate-600 dark:text-app-text-muted">
+              Send a short evening check-in around 8:00 PM.
+            </span>
+          </label>
+        </div>
       </div>
 
       <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />
