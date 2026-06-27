@@ -4,10 +4,17 @@ import { canAccessUser } from '../auth/requireRole.js';
 import { parseDateParam, toDateKey, addUtcDays } from '../utils/dates.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
-import { getScheduledExercises } from './exerciseService.js';
+import {
+  copyExercisesToDates,
+  createScheduledExercise,
+  getScheduledExercises,
+  reorderScheduledExercises,
+  restoreExercisePlanSnapshot,
+  type ExerciseDayPlanSnapshot
+} from './exerciseService.js';
 import { getGamificationDashboard } from './gamificationService.js';
 import { getCoachHydrationStats, setWaterGoal } from './hydrationService.js';
-import { copyDayPlanForward, getMealsForDate } from './nutritionService.js';
+import { copyDayPlanForward, copyDayPlanToDates, getMealsForDate } from './nutritionService.js';
 import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { saveProgramMetricSnapshot } from './programService.js';
@@ -251,11 +258,72 @@ export async function copyCoachClientDayForward(
   return copyDayPlanForward(userId, date, days);
 }
 
+export async function copyCoachClientDayToDates(
+  actor: { id: string; role: Role },
+  userId: string,
+  date: string,
+  targetDates: string[],
+  options: { clearDates?: string[]; clearUncheckedDays?: boolean; weekDates?: string[] } = {}
+) {
+  await requireCoachClient(actor, userId);
+  return copyDayPlanToDates(userId, date, targetDates, options);
+}
+
 export async function getCoachClientExercises(actor: { id: string; role: Role }, userId: string, date: string) {
   await requireCoachClient(actor, userId);
   const log = await ensureDailyLogByUserId(userId, date);
   if (!log) throw new Error('No active program found');
   return getScheduledExercises(userId, date);
+}
+
+export async function createCoachClientScheduledExercise(
+  actor: { id: string; role: Role },
+  userId: string,
+  date: string,
+  body: {
+    exerciseId: string;
+    sets?: number | null;
+    reps?: number | null;
+    durationMinutes?: number | null;
+    distance?: number | null;
+    weight?: number | null;
+    description?: string | null;
+    category?: string | null;
+    bodyPart?: string | null;
+  }
+) {
+  await requireCoachClient(actor, userId);
+  return createScheduledExercise(userId, date, body);
+}
+
+export async function reorderCoachClientScheduledExercises(
+  actor: { id: string; role: Role },
+  userId: string,
+  date: string,
+  orderedIds: string[]
+) {
+  await requireCoachClient(actor, userId);
+  return reorderScheduledExercises(userId, date, orderedIds);
+}
+
+export async function copyCoachClientExercisesToDates(
+  actor: { id: string; role: Role },
+  userId: string,
+  date: string,
+  targetDates: string[],
+  options: { clearDates?: string[]; clearUncheckedDays?: boolean; weekDates?: string[] } = {}
+) {
+  await requireCoachClient(actor, userId);
+  return copyExercisesToDates(userId, date, targetDates, options);
+}
+
+export async function restoreCoachClientExercisePlan(
+  actor: { id: string; role: Role },
+  userId: string,
+  days: ExerciseDayPlanSnapshot[]
+) {
+  await requireCoachClient(actor, userId);
+  return restoreExercisePlanSnapshot(userId, days);
 }
 
 function serializeCoachSession(session: {

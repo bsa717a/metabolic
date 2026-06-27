@@ -8,6 +8,7 @@ import { clientInitials, clientName, formatNextSession } from '../../utils/coach
 import { SendResultsMenu } from './SendResultsMenu';
 import { FoodPlanEditor } from './FoodPlanEditor';
 import { CoachWeeklyFoodReportModal } from './CoachWeeklyFoodReportModal';
+import { CoachWeeklyExerciseReportModal } from './CoachWeeklyExerciseReportModal';
 import { ExercisePlanEditor } from './ExercisePlanEditor';
 import { ClientMetricsPanel } from './ClientMetricsPanel';
 import { ClientMeasurementsPanel } from './ClientMeasurementsPanel';
@@ -83,7 +84,8 @@ export function ClientDetailTabs({
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [planDate, setPlanDate] = useState(() => todayKey());
-  const [weeklyReportOpen, setWeeklyReportOpen] = useState(false);
+  const [weeklyFoodReportOpen, setWeeklyFoodReportOpen] = useState(false);
+  const [weeklyExerciseReportOpen, setWeeklyExerciseReportOpen] = useState(false);
 
   const pct = client.compliancePct;
   const hydrationToday = engagement?.hydration.todayActualOz ?? 0;
@@ -157,8 +159,13 @@ export function ClientDetailTabs({
               />
             </label>
             {activeTab === 'food' && (
-              <Button type="button" variant="secondary" onClick={() => setWeeklyReportOpen(true)}>
-                Weekly report
+              <Button type="button" variant="secondary" onClick={() => setWeeklyFoodReportOpen(true)}>
+                Week analysis
+              </Button>
+            )}
+            {activeTab === 'exercise' && (
+              <Button type="button" variant="secondary" onClick={() => setWeeklyExerciseReportOpen(true)}>
+                Week analysis
               </Button>
             )}
           </div>
@@ -316,10 +323,19 @@ export function ClientDetailTabs({
       </div>
 
       <CoachWeeklyFoodReportModal
-        open={weeklyReportOpen}
+        open={weeklyFoodReportOpen}
         clientId={client.id}
+        clientName={clientName(client)}
         anchorDate={planDate}
-        onClose={() => setWeeklyReportOpen(false)}
+        onClose={() => setWeeklyFoodReportOpen(false)}
+      />
+
+      <CoachWeeklyExerciseReportModal
+        open={weeklyExerciseReportOpen}
+        clientId={client.id}
+        clientName={clientName(client)}
+        anchorDate={planDate}
+        onClose={() => setWeeklyExerciseReportOpen(false)}
       />
     </Card>
   );

@@ -172,7 +172,7 @@ export function CoachDayNutritionEditor({
               date={selectedDate}
               dayLabel={dayLabel}
               disabled={!meals.length}
-              apiUrl={`/api/coach/users/${clientId}/daily-logs/${selectedDate}/copy-forward`}
+              apiUrl={`/api/coach/users/${clientId}/daily-logs/${selectedDate}/copy-to-dates`}
               onCopied={() => void reloadMeals()}
             />
             <Button type="button" variant="secondary" onClick={() => setTemplateOpen(true)}>

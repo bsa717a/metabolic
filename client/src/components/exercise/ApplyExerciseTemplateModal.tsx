@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { api } from '../../services/api';
 import type { ExercisePlanTemplate, ExercisePlanTemplateSummary, ExerciseTemplateItem, ScheduledExercise } from '../../types';
+import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
+import { exercisePlanUndoMessage } from '../../hooks/useExercisePlanUndo';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 
@@ -20,13 +22,17 @@ export function ApplyExerciseTemplateModal({
   selectedDate,
   exercises,
   onClose,
-  onApplied
+  onApplied,
+  registerUndo,
+  applyUrl
 }: {
   open: boolean;
   selectedDate: string;
   exercises: ScheduledExercise[];
   onClose: () => void;
-  onApplied: () => void;
+  onApplied: () => void | Promise<void>;
+  registerUndo?: (message: string, snapshot: import('../../types/exercisePlanUndo').ExercisePlanUndoSnapshot | undefined) => void;
+  applyUrl?: string;
 }) {
   const [templates, setTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,11 +99,20 @@ export function ApplyExerciseTemplateModal({
     setApplyingId(templateId);
     setError('');
     try {
-      await api(`/api/daily-logs/${selectedDate}/apply-exercise-template`, {
-        method: 'POST',
-        body: JSON.stringify({ templateId, setAsDefault })
-      });
-      onApplied();
+      const result = await api<ExercisePlanUndoResponse & { exercises: ScheduledExercise[] }>(
+        applyUrl ?? `/api/daily-logs/${selectedDate}/apply-exercise-template`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ templateId, setAsDefault })
+        }
+      );
+      if (registerUndo) {
+        registerUndo(
+          exercisePlanUndoMessage(result.undoSnapshot?.days.length ?? 1, 'Template applied'),
+          result.undoSnapshot
+        );
+      }
+      await onApplied();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to apply template');

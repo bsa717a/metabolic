@@ -154,9 +154,11 @@ export async function updateScheduledExercise(
 
 export async function deleteScheduledExercise(userId: string, id: string) {
   const existing = await prisma.scheduledExercise.findFirstOrThrow({ where: { id, userId } });
+  const date = toDateKey(existing.scheduledDate);
+  const undoSnapshot = await snapshotExercisePlanForDates(userId, [date]);
   await prisma.scheduledExercise.delete({ where: { id } });
-  await recalculateForDate(userId, toDateKey(existing.scheduledDate));
-  return { ok: true };
+  await recalculateForDate(userId, date);
+  return { ok: true, undoSnapshot };
 }
 
 async function copyExercisesToDate(
@@ -191,6 +193,63 @@ async function copyExercisesToDate(
   });
 
   return getScheduledExercises(userId, toDateKey(targetDate));
+}
+
+export async function clearExercisesForDate(userId: string, date: string) {
+  const program = await getActiveProgram(userId);
+  if (!program) throw new Error('No active program found');
+
+  await prisma.scheduledExercise.deleteMany({
+    where: { userId, programId: program.id, scheduledDate: parseDateParam(date) }
+  });
+  await recalculateForDate(userId, date);
+}
+
+export async function copyExercisesToDates(
+  userId: string,
+  sourceDate: string,
+  targetDates: string[],
+  options: { clearDates?: string[]; clearUncheckedDays?: boolean; weekDates?: string[] } = {}
+) {
+  const program = await getActiveProgram(userId);
+  if (!program) throw new Error('No active program found');
+
+  const source = await getScheduledExercises(userId, sourceDate);
+  const targets = [...new Set(targetDates.filter((date) => date !== sourceDate))];
+
+  const clearDates =
+    options.clearDates ??
+    (options.clearUncheckedDays && options.weekDates?.length
+      ? options.weekDates.filter((date) => date !== sourceDate && !targets.includes(date))
+      : []);
+
+  if (!targets.length && !clearDates.length) {
+    throw new Error('Select workout weekdays to copy to, or enable clearing rest days.');
+  }
+
+  if (targets.length && !source.length) {
+    throw new Error('There is no plan on this day to copy. Add exercises first, or only clear rest days.');
+  }
+
+  const affectedDates = [...new Set([...targets, ...clearDates])];
+  const undoSnapshot = await snapshotExercisePlanForDates(userId, affectedDates);
+
+  for (const target of targets) {
+    await ensureDailyLogByUserId(userId, target);
+    await copyExercisesToDate(userId, program.id, parseDateParam(target), source, true);
+    await recalculateForDate(userId, target);
+  }
+
+  for (const date of [...new Set(clearDates)]) {
+    await clearExercisesForDate(userId, date);
+  }
+
+  return {
+    copiedDays: targets.length,
+    targetDates: targets,
+    clearedDays: clearDates.length,
+    undoSnapshot
+  };
 }
 
 export async function copyExercisesFromDate(
@@ -313,4 +372,103 @@ export async function reorderScheduledExercises(userId: string, date: string, or
   ]);
 
   return getScheduledExercises(userId, date);
+}
+
+export type ExercisePlanSnapshotItem = {
+  exerciseId: string;
+  sets: number | null;
+  reps: number | null;
+  durationMinutes: number | null;
+  distance: number | null;
+  weight: number | null;
+  status: ExerciseStatus;
+  sortOrder: number;
+};
+
+export type ExerciseDayPlanSnapshot = {
+  date: string;
+  exercises: ExercisePlanSnapshotItem[];
+};
+
+export type ExercisePlanUndoSnapshot = {
+  days: ExerciseDayPlanSnapshot[];
+};
+
+function toSnapshotItem(
+  item: Awaited<ReturnType<typeof getScheduledExercises>>[number]
+): ExercisePlanSnapshotItem {
+  return {
+    exerciseId: item.exerciseId,
+    sets: item.sets,
+    reps: item.reps,
+    durationMinutes: item.durationMinutes,
+    distance: item.distance == null ? null : Number(item.distance),
+    weight: item.weight == null ? null : Number(item.weight),
+    status: item.status,
+    sortOrder: item.sortOrder
+  };
+}
+
+export async function snapshotExercisePlanForDates(userId: string, dates: string[]): Promise<ExercisePlanUndoSnapshot> {
+  const unique = [...new Set(dates)].sort();
+  const days = await Promise.all(
+    unique.map(async (date) => ({
+      date,
+      exercises: (await getScheduledExercises(userId, date)).map(toSnapshotItem)
+    }))
+  );
+  return { days };
+}
+
+export async function restoreExercisePlanSnapshot(userId: string, days: ExerciseDayPlanSnapshot[]) {
+  const program = await getActiveProgram(userId);
+  if (!program) throw new Error('No active program found');
+  if (!days.length) throw new Error('Nothing to restore');
+
+  await prisma.$transaction(async (tx) => {
+    for (const day of days) {
+      await ensureDailyLogByUserId(userId, day.date);
+      const scheduledDate = parseDateParam(day.date);
+
+      await tx.scheduledExercise.deleteMany({
+        where: { userId, programId: program.id, scheduledDate }
+      });
+
+      for (const [index, item] of day.exercises.entries()) {
+        const scheduled = await tx.scheduledExercise.create({
+          data: {
+            programId: program.id,
+            userId,
+            exerciseId: item.exerciseId,
+            scheduledDate,
+            sets: item.sets,
+            reps: item.reps,
+            durationMinutes: item.durationMinutes,
+            distance: item.distance,
+            weight: item.weight,
+            status: item.status,
+            sortOrder: item.sortOrder ?? index
+          }
+        });
+
+        if (item.status === ExerciseStatus.DONE) {
+          await tx.exerciseLog.create({
+            data: {
+              scheduledExerciseId: scheduled.id,
+              userId,
+              completed: true,
+              completedAt: new Date()
+            }
+          });
+        }
+      }
+
+      const log = await tx.dailyLog.findUnique({
+        where: { userId_date: { userId, date: scheduledDate } }
+      });
+      if (log) await recalculateDailyLogTotals(log.id, tx);
+    }
+  });
+
+  return { restoredDays: days.length };
 }

@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { GripVertical } from 'lucide-react';
 import type { ScheduledExercise } from '../../types';
 import { api } from '../../services/api';
+import { coachDailyExercisesApi } from '../../utils/coachExerciseApi';
 import { ExerciseCard } from './ExerciseCard';
+import { ExerciseQuickRemoveButton } from './ExerciseQuickRemoveButton';
+import { PlannedRestDayCard } from './PlannedRestDayCard';
 
 function reorderIds(ids: string[], fromId: string, toId: string) {
   const fromIndex = ids.indexOf(fromId);
@@ -28,20 +31,27 @@ function ReorderableExerciseCard({
   item,
   selectedDate,
   activeId,
+  editDayMode,
+  removingId,
   onChange,
   onEdit,
+  onRemove,
   setRowRef,
   onHandlePointerDown
 }: {
   item: ScheduledExercise;
   selectedDate: string;
   activeId: string | null;
+  editDayMode: boolean;
+  removingId: string | null;
   onChange: () => void | Promise<void>;
   onEdit: () => void;
+  onRemove: (id: string) => void | Promise<void>;
   setRowRef: (id: string, node: HTMLDivElement | null) => void;
   onHandlePointerDown: (id: string, event: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   const isDragging = activeId === item.id;
+  const removing = removingId === item.id;
 
   return (
     <div
@@ -50,16 +60,24 @@ function ReorderableExerciseCard({
         isDragging ? 'z-10 border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-slate-200'
       }`}
     >
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Reorder ${item.exercise.name}`}
-        title="Drag to reorder"
-        className="flex shrink-0 touch-none cursor-grab items-center self-stretch rounded-lg px-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600 active:cursor-grabbing"
-        onPointerDown={(event) => onHandlePointerDown(item.id, event)}
-      >
-        <GripVertical size={18} />
-      </div>
+      {editDayMode ? (
+        <ExerciseQuickRemoveButton
+          name={item.exercise.name}
+          disabled={removing}
+          onClick={() => void onRemove(item.id)}
+        />
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Reorder ${item.exercise.name}`}
+          title="Drag to reorder"
+          className="flex shrink-0 touch-none cursor-grab items-center self-stretch rounded-lg px-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600 active:cursor-grabbing"
+          onPointerDown={(event) => onHandlePointerDown(item.id, event)}
+        >
+          <GripVertical size={18} />
+        </div>
+      )}
       <div className={`min-w-0 flex-1 ${activeId ? 'pointer-events-none select-none' : ''}`}>
         <ExerciseCard
           embedded
@@ -73,18 +91,67 @@ function ReorderableExerciseCard({
   );
 }
 
+function ExerciseRow({
+  item,
+  selectedDate,
+  editDayMode,
+  removingId,
+  onChange,
+  onEdit,
+  onRemove
+}: {
+  item: ScheduledExercise;
+  selectedDate: string;
+  editDayMode: boolean;
+  removingId: string | null;
+  onChange: () => void | Promise<void>;
+  onEdit: () => void;
+  onRemove: (id: string) => void | Promise<void>;
+}) {
+  if (!editDayMode) {
+    return (
+      <ExerciseCard
+        item={item}
+        selectedDate={selectedDate}
+        onChange={onChange}
+        onEdit={onEdit}
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-1 rounded-2xl border border-slate-200 bg-white py-3 pl-1 pr-4 shadow-sm">
+      <ExerciseQuickRemoveButton
+        name={item.exercise.name}
+        disabled={removingId === item.id}
+        onClick={() => void onRemove(item.id)}
+      />
+      <div className="min-w-0 flex-1">
+        <ExerciseCard embedded item={item} selectedDate={selectedDate} onChange={onChange} onEdit={onEdit} />
+      </div>
+    </div>
+  );
+}
+
 export function ExerciseChecklist({
   exercises,
   selectedDate,
+  coachClientId,
+  editDayMode = false,
   onChange,
-  onEdit
+  onEdit,
+  onRemove
 }: {
   exercises: ScheduledExercise[];
   selectedDate: string;
+  coachClientId?: string;
+  editDayMode?: boolean;
   onChange: () => void | Promise<void>;
   onEdit: (item: ScheduledExercise) => void;
+  onRemove: (id: string) => void | Promise<void>;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
   const [reorderError, setReorderError] = useState<string | null>(null);
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
@@ -130,7 +197,10 @@ export function ExerciseChecklist({
     setReordering(true);
     setReorderError(null);
     try {
-      await api(`/api/daily-logs/${selectedDate}/exercises/reorder`, {
+      const reorderUrl = coachClientId
+        ? coachDailyExercisesApi(coachClientId, selectedDate, '/reorder')
+        : `/api/daily-logs/${selectedDate}/exercises/reorder`;
+      await api(reorderUrl, {
         method: 'POST',
         body: JSON.stringify({ orderedIds: nextIds })
       });
@@ -181,6 +251,7 @@ export function ExerciseChecklist({
   }, [activeId, selectedDate]);
 
   function handleHandlePointerDown(id: string, event: React.PointerEvent<HTMLDivElement>) {
+    if (editDayMode) return;
     if (event.button !== 0) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -189,12 +260,17 @@ export function ExerciseChecklist({
     setReorderError(null);
   }
 
+  async function handleRemove(id: string) {
+    setRemovingId(id);
+    try {
+      await onRemove(id);
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
   if (!exercises.length) {
-    return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-        No exercises planned for this day. Add one or copy from another day.
-      </div>
-    );
+    return <PlannedRestDayCard />;
   }
 
   return (
@@ -213,8 +289,11 @@ export function ExerciseChecklist({
                 item={item}
                 selectedDate={selectedDate}
                 activeId={activeId}
+                editDayMode={editDayMode}
+                removingId={removingId}
                 onChange={onChange}
                 onEdit={() => onEdit(item)}
+                onRemove={handleRemove}
                 setRowRef={setRowRef}
                 onHandlePointerDown={handleHandlePointerDown}
               />
@@ -228,12 +307,15 @@ export function ExerciseChecklist({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Completed</h2>
           <div className="space-y-2">
             {done.map((item) => (
-              <ExerciseCard
+              <ExerciseRow
                 key={item.id}
                 item={item}
                 selectedDate={selectedDate}
+                editDayMode={editDayMode}
+                removingId={removingId}
                 onChange={onChange}
                 onEdit={() => onEdit(item)}
+                onRemove={handleRemove}
               />
             ))}
           </div>
@@ -245,12 +327,15 @@ export function ExerciseChecklist({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Skipped</h2>
           <div className="space-y-2">
             {skipped.map((item) => (
-              <ExerciseCard
+              <ExerciseRow
                 key={item.id}
                 item={item}
                 selectedDate={selectedDate}
+                editDayMode={editDayMode}
+                removingId={removingId}
                 onChange={onChange}
                 onEdit={() => onEdit(item)}
+                onRemove={handleRemove}
               />
             ))}
           </div>
@@ -262,12 +347,15 @@ export function ExerciseChecklist({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Other</h2>
           <div className="space-y-2">
             {otherCompleted.map((item) => (
-              <ExerciseCard
+              <ExerciseRow
                 key={item.id}
                 item={item}
                 selectedDate={selectedDate}
+                editDayMode={editDayMode}
+                removingId={removingId}
                 onChange={onChange}
                 onEdit={() => onEdit(item)}
+                onRemove={handleRemove}
               />
             ))}
           </div>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { ExercisePlanTemplateSummary, ScheduledExercise } from '../../types';
-import { CoachManualExerciseTemplateDrawer } from './CoachManualExerciseTemplateDrawer';
+import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
+import { CoachDayExerciseEditor } from './CoachDayExerciseEditor';
 import { Button } from '../ui/Button';
 
 function formatPlan(item: ScheduledExercise) {
@@ -66,14 +67,14 @@ export function ExercisePlanEditor({
     onSavingChange(true);
     onError('');
     try {
-      const updated = await api<ScheduledExercise[]>(
+      const updated = await api<ExercisePlanUndoResponse & { exercises: ScheduledExercise[] }>(
         `/api/coach/users/${clientId}/daily-logs/${planDate}/apply-exercise-template`,
         {
           method: 'POST',
           body: JSON.stringify({ templateId, setAsDefault })
         }
       );
-      setExercises(updated);
+      setExercises(updated.exercises);
       await onRefresh();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unable to apply exercise template');
@@ -102,7 +103,7 @@ export function ExercisePlanEditor({
         <Button disabled={saving || !exerciseTemplates.length} onClick={() => void applyTemplate()}>
           Apply template
         </Button>
-        <Button variant="secondary" disabled={!templateId} onClick={() => setManualOpen(true)}>
+        <Button variant="secondary" onClick={() => setManualOpen(true)}>
           Edit manually
         </Button>
       </div>
@@ -132,13 +133,16 @@ export function ExercisePlanEditor({
         </ul>
       )}
 
-      <CoachManualExerciseTemplateDrawer
+      <CoachDayExerciseEditor
         open={manualOpen}
-        templateId={templateId}
+        clientId={clientId}
+        planDate={planDate}
+        exerciseTemplates={exerciseTemplates}
         onClose={() => {
           setManualOpen(false);
           void loadExercises();
         }}
+        onRefresh={onRefresh}
       />
     </div>
   );

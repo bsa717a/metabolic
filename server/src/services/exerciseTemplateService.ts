@@ -274,6 +274,9 @@ export async function applyTemplateToDate(
     throw new Error('Template not available');
   }
 
+  const { snapshotExercisePlanForDates } = await import('./exerciseService.js');
+  const undoSnapshot = await snapshotExercisePlanForDates(userId, [date]);
+
   await prisma.$transaction(async (tx) => {
     await applyTemplateExercisesToDate(tx, templateId, program.id, userId, date);
 
@@ -302,7 +305,8 @@ export async function applyTemplateToDate(
     if (log) await recalculateDailyLogTotals(log.id, tx);
   });
 
-  return getExercisesForDateAfterApply(userId, date);
+  const exercises = await getExercisesForDateAfterApply(userId, date);
+  return { exercises, undoSnapshot };
 }
 
 async function getExercisesForDateAfterApply(userId: string, date: string) {

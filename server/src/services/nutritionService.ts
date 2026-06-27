@@ -1,4 +1,4 @@
-import { MealItemType, MealStatus } from '@prisma/client';
+import { MealItemType, MealStatus, type Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { addUtcDays, parseDateParam, toDateKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
@@ -285,16 +285,23 @@ export async function copyMealFromPreviousDay(userId: string, mealId: string) {
 
 const MAX_COPY_FORWARD_DAYS = 31;
 
-/**
- * Copies a source day's planned foods into each of the next `days` days. For every target day we
- * match meals by mealNumber, replace that meal's PLANNED items with the source day's (leaving any
- * logged ACTUAL items untouched), and recalculate totals. Target days are created/seeded as needed.
- */
-export async function copyDayPlanForward(userId: string, sourceDate: string, days: number) {
-  if (!Number.isInteger(days) || days < 1 || days > MAX_COPY_FORWARD_DAYS) {
-    throw new Error(`Number of days must be between 1 and ${MAX_COPY_FORWARD_DAYS}.`);
-  }
+type SourceMealCopy = {
+  mealNumber: number;
+  name: string;
+  plannedTime: string | null;
+  plannedItems: Array<{
+    foodId: string | null;
+    nameSnapshot: string;
+    quantity: Prisma.Decimal;
+    unit: string;
+    calories: Prisma.Decimal;
+    protein: Prisma.Decimal;
+    carbs: Prisma.Decimal;
+    fat: Prisma.Decimal;
+  }>;
+};
 
+async function getSourceMealsForCopy(userId: string, sourceDate: string): Promise<SourceMealCopy[]> {
   const sourceDay = parseDateParam(sourceDate);
   const sourceLog = await prisma.dailyLog.findUnique({
     where: { userId_date: { userId, date: sourceDay } },
@@ -305,7 +312,7 @@ export async function copyDayPlanForward(userId: string, sourceDate: string, day
     throw new Error('There is no plan on the selected day to copy.');
   }
 
-  const sourceMeals = sourceLog.meals.map((meal) => ({
+  return sourceLog.meals.map((meal) => ({
     mealNumber: meal.mealNumber,
     name: meal.name,
     plannedTime: meal.plannedTime,
@@ -322,7 +329,91 @@ export async function copyDayPlanForward(userId: string, sourceDate: string, day
         fat: item.fat
       }))
   }));
+}
 
+async function applySourceMealsToDailyLog(
+  userId: string,
+  log: NonNullable<Awaited<ReturnType<typeof ensureDailyLogByUserId>>>,
+  sourceMeals: SourceMealCopy[],
+  dayTransactionTimeoutMs: number
+) {
+  await prisma.$transaction(
+    async (tx) => {
+      for (const source of sourceMeals) {
+        let target = await tx.meal.findFirst({
+          where: { dailyLogId: log.id, mealNumber: source.mealNumber }
+        });
+        if (!target) {
+          target = await tx.meal.create({
+            data: {
+              dailyLogId: log.id,
+              userId,
+              mealNumber: source.mealNumber,
+              name: source.name,
+              plannedTime: source.plannedTime,
+              status: MealStatus.PLANNED
+            }
+          });
+        }
+
+        await tx.mealItem.deleteMany({ where: { mealId: target.id, type: MealItemType.PLANNED } });
+        if (source.plannedItems.length) {
+          await tx.mealItem.createMany({
+            data: source.plannedItems.map((item) => ({
+              mealId: target!.id,
+              foodId: item.foodId,
+              type: MealItemType.PLANNED,
+              nameSnapshot: item.nameSnapshot,
+              quantity: item.quantity,
+              unit: item.unit,
+              calories: item.calories,
+              protein: item.protein,
+              carbs: item.carbs,
+              fat: item.fat
+            }))
+          });
+        }
+
+        await recalculateMealTotals(target.id, tx);
+      }
+
+      await recalculateDailyLogTotals(log.id, tx);
+    },
+    { maxWait: 10_000, timeout: dayTransactionTimeoutMs }
+  );
+}
+
+export async function clearDayPlannedFoods(userId: string, date: string) {
+  const log = await ensureDailyLogByUserId(userId, date);
+  if (!log) throw new Error('No active program found. Visit the dashboard first or contact your coach.');
+
+  const meals = await prisma.meal.findMany({ where: { dailyLogId: log.id } });
+  const dayTransactionTimeoutMs = Math.min(60_000, 10_000 + meals.length * 500);
+
+  await prisma.$transaction(
+    async (tx) => {
+      for (const meal of meals) {
+        await tx.mealItem.deleteMany({ where: { mealId: meal.id, type: MealItemType.PLANNED } });
+        await recalculateMealTotals(meal.id, tx);
+      }
+      await recalculateDailyLogTotals(log.id, tx);
+    },
+    { maxWait: 10_000, timeout: dayTransactionTimeoutMs }
+  );
+}
+
+/**
+ * Copies a source day's planned foods into each of the next `days` days. For every target day we
+ * match meals by mealNumber, replace that meal's PLANNED items with the source day's (leaving any
+ * logged ACTUAL items untouched), and recalculate totals. Target days are created/seeded as needed.
+ */
+export async function copyDayPlanForward(userId: string, sourceDate: string, days: number) {
+  if (!Number.isInteger(days) || days < 1 || days > MAX_COPY_FORWARD_DAYS) {
+    throw new Error(`Number of days must be between 1 and ${MAX_COPY_FORWARD_DAYS}.`);
+  }
+
+  const sourceMeals = await getSourceMealsForCopy(userId, sourceDate);
+  const sourceDay = parseDateParam(sourceDate);
   const targetDateKeys = Array.from({ length: days }, (_, index) => toDateKey(addUtcDays(sourceDay, index + 1)));
 
   const targetLogs: NonNullable<Awaited<ReturnType<typeof ensureDailyLogByUserId>>>[] = [];
@@ -337,51 +428,48 @@ export async function copyDayPlanForward(userId: string, sourceDate: string, day
   const dayTransactionTimeoutMs = Math.min(60_000, 10_000 + sourceMeals.length * 500);
 
   for (const log of targetLogs) {
-    await prisma.$transaction(
-      async (tx) => {
-        for (const source of sourceMeals) {
-          let target = await tx.meal.findFirst({
-            where: { dailyLogId: log.id, mealNumber: source.mealNumber }
-          });
-          if (!target) {
-            target = await tx.meal.create({
-              data: {
-                dailyLogId: log.id,
-                userId,
-                mealNumber: source.mealNumber,
-                name: source.name,
-                plannedTime: source.plannedTime,
-                status: MealStatus.PLANNED
-              }
-            });
-          }
-
-          await tx.mealItem.deleteMany({ where: { mealId: target.id, type: MealItemType.PLANNED } });
-          if (source.plannedItems.length) {
-            await tx.mealItem.createMany({
-              data: source.plannedItems.map((item) => ({
-                mealId: target!.id,
-                foodId: item.foodId,
-                type: MealItemType.PLANNED,
-                nameSnapshot: item.nameSnapshot,
-                quantity: item.quantity,
-                unit: item.unit,
-                calories: item.calories,
-                protein: item.protein,
-                carbs: item.carbs,
-                fat: item.fat
-              }))
-            });
-          }
-
-          await recalculateMealTotals(target.id, tx);
-        }
-
-        await recalculateDailyLogTotals(log.id, tx);
-      },
-      { maxWait: 10_000, timeout: dayTransactionTimeoutMs }
-    );
+    await applySourceMealsToDailyLog(userId, log, sourceMeals, dayTransactionTimeoutMs);
   }
 
   return { copiedDays: days, targetDates: targetDateKeys };
+}
+
+export async function copyDayPlanToDates(
+  userId: string,
+  sourceDate: string,
+  targetDates: string[],
+  options: { clearDates?: string[]; clearUncheckedDays?: boolean; weekDates?: string[] } = {}
+) {
+  const targets = [...new Set(targetDates.filter((date) => date !== sourceDate))];
+
+  const clearDates =
+    options.clearDates ??
+    (options.clearUncheckedDays && options.weekDates?.length
+      ? options.weekDates.filter((date) => date !== sourceDate && !targets.includes(date))
+      : []);
+
+  if (!targets.length && !clearDates.length) {
+    throw new Error('Select days to copy to, or enable clearing rest days.');
+  }
+
+  const sourceMeals = targets.length ? await getSourceMealsForCopy(userId, sourceDate) : [];
+  if (targets.length && !sourceMeals.length) {
+    throw new Error('There is no plan on this day to copy. Add meals first, or only clear rest days.');
+  }
+
+  const dayTransactionTimeoutMs = Math.min(60_000, 10_000 + sourceMeals.length * 500);
+
+  for (const targetKey of targets) {
+    const log = await ensureDailyLogByUserId(userId, targetKey);
+    if (!log) {
+      throw new Error('No active program found. Visit the dashboard first or contact your coach.');
+    }
+    await applySourceMealsToDailyLog(userId, log, sourceMeals, dayTransactionTimeoutMs);
+  }
+
+  for (const date of [...new Set(clearDates)]) {
+    await clearDayPlannedFoods(userId, date);
+  }
+
+  return { copiedDays: targets.length, targetDates: targets, clearedDays: clearDates.length };
 }

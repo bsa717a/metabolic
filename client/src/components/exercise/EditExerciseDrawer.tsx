@@ -14,16 +14,26 @@ export function EditExerciseDrawer({
   open,
   item,
   onClose,
-  onSaved
+  onSaved,
+  onRemove
 }: {
   open: boolean;
   item?: ScheduledExercise;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  onRemove?: (id: string) => void | Promise<void>;
 }) {
   return (
     <Drawer open={open} title={item ? `Edit — ${item.exercise.name}` : 'Edit exercise'} onClose={onClose}>
-      {open && item && <EditExerciseDrawerContent key={item.id} item={item} onClose={onClose} onSaved={onSaved} />}
+      {open && item && (
+        <EditExerciseDrawerContent
+          key={item.id}
+          item={item}
+          onClose={onClose}
+          onSaved={onSaved}
+          onRemove={onRemove}
+        />
+      )}
     </Drawer>
   );
 }
@@ -31,11 +41,13 @@ export function EditExerciseDrawer({
 function EditExerciseDrawerContent({
   item,
   onClose,
-  onSaved
+  onSaved,
+  onRemove
 }: {
   item: ScheduledExercise;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  onRemove?: (id: string) => void | Promise<void>;
 }) {
   const [sets, setSets] = useState(() => toInput(item.sets));
   const [reps, setReps] = useState(() => toInput(item.reps));
@@ -73,12 +85,15 @@ function EditExerciseDrawerContent({
   }
 
   async function remove() {
-    if (!item || !confirm(`Remove ${item.exercise.name} from this day?`)) return;
     setSaving(true);
     setError(undefined);
     try {
-      await api(`/api/scheduled-exercises/${item.id}`, { method: 'DELETE' });
-      await onSaved();
+      if (onRemove) {
+        await onRemove(item.id);
+      } else {
+        await api(`/api/scheduled-exercises/${item.id}`, { method: 'DELETE' });
+        await onSaved();
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not remove exercise');

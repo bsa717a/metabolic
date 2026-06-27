@@ -3,7 +3,7 @@ import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { canAccessUser } from '../auth/requireRole.js';
-import { addMealItem, copyDayPlanForward, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
+import { addMealItem, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
@@ -110,6 +110,25 @@ export async function nutritionRoutes(app: FastifyInstance) {
       return await copyDayPlanForward(request.appUser!.id, (request.params as { date: string }).date, body.days);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day forward' });
+    }
+  });
+  app.post('/api/daily-logs/:date/copy-to-dates', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        targetDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default([]),
+        clearDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+        weekDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+        clearUncheckedDays: z.boolean().optional()
+      })
+      .parse(request.body);
+    try {
+      return await copyDayPlanToDates(request.appUser!.id, (request.params as { date: string }).date, body.targetDates, {
+        clearDates: body.clearDates,
+        weekDates: body.weekDates,
+        clearUncheckedDays: body.clearUncheckedDays
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day plan' });
     }
   });
   app.post('/api/meals/:id/items', { preHandler: requireAuth }, async (request) => {
