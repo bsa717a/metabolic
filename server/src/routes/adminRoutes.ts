@@ -412,31 +412,31 @@ export async function adminRoutes(app: FastifyInstance) {
     try {
       return await getTemplate((request.params as { id: string }).id);
     } catch {
-      return reply.code(404).send({ error: 'Template not found' });
+      return reply.code(404).send({ error: 'Plan not found' });
     }
   });
 
   app.post('/api/admin/nutrition-templates', { preHandler: adminOnly }, async (request, reply) => {
     const parsed = templateCreateBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     }
     try {
       return await createTemplate({ ...parsed.data, createdById: request.appUser!.id });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create plan' });
     }
   });
 
   app.patch('/api/admin/nutrition-templates/:id', { preHandler: adminOnly }, async (request, reply) => {
     const parsed = templateUpdateBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template update' });
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan update' });
     }
     try {
       return await updateTemplate((request.params as { id: string }).id, parsed.data);
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update plan' });
     }
   });
 
@@ -445,7 +445,7 @@ export async function adminRoutes(app: FastifyInstance) {
       await deleteTemplate((request.params as { id: string }).id);
       return reply.code(204).send();
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete plan' });
     }
   });
 
@@ -460,7 +460,7 @@ export async function adminRoutes(app: FastifyInstance) {
         createdById: request.appUser!.id
       });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone plan' });
     }
   });
 
@@ -551,31 +551,31 @@ export async function adminRoutes(app: FastifyInstance) {
     try {
       return await getExerciseTemplate((request.params as { id: string }).id);
     } catch {
-      return reply.code(404).send({ error: 'Template not found' });
+      return reply.code(404).send({ error: 'Plan not found' });
     }
   });
 
   app.post('/api/admin/exercise-templates', { preHandler: adminOnly }, async (request, reply) => {
     const parsed = exerciseTemplateCreateBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     }
     try {
       return await createExerciseTemplate({ ...parsed.data, createdById: request.appUser!.id });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create plan' });
     }
   });
 
   app.patch('/api/admin/exercise-templates/:id', { preHandler: adminOnly }, async (request, reply) => {
     const parsed = exerciseTemplateUpdateBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template update' });
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan update' });
     }
     try {
       return await updateExerciseTemplate((request.params as { id: string }).id, parsed.data);
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update plan' });
     }
   });
 
@@ -584,7 +584,7 @@ export async function adminRoutes(app: FastifyInstance) {
       await deleteExerciseTemplate((request.params as { id: string }).id);
       return reply.code(204).send();
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete plan' });
     }
   });
 
@@ -599,7 +599,7 @@ export async function adminRoutes(app: FastifyInstance) {
         createdById: request.appUser!.id
       });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone plan' });
     }
   });
 

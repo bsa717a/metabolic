@@ -56,7 +56,7 @@ function ActionsDropdown({
     { label: 'Copy from yesterday', onClick: () => action(onCopyFromYesterday) },
     { label: 'Ask AI to adjust this meal', onClick: () => action(() => {}), disabled: true },
     { label: 'Swap this meal', onClick: () => action(() => {}) , disabled: true },
-    { label: 'Save as template', onClick: () => action(() => {}), disabled: true },
+    { label: 'Save as plan', onClick: () => action(() => {}), disabled: true },
     { label: 'View macro details', onClick: () => action(() => {}) , disabled: true },
     { label: 'Delete meal', onClick: () => action(() => {}), danger: true, disabled: true },
   ];

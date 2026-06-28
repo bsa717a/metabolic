@@ -61,7 +61,7 @@ export function ExercisePlanEditor({
 
   async function applyTemplate() {
     if (!templateId) {
-      onError('Choose an exercise template first.');
+      onError('Choose an exercise plan first.');
       return;
     }
     onSavingChange(true);
@@ -77,7 +77,7 @@ export function ExercisePlanEditor({
       setExercises(updated.exercises);
       await onRefresh();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Unable to apply exercise template');
+      onError(err instanceof Error ? err.message : 'Unable to apply exercise plan');
     } finally {
       onSavingChange(false);
     }
@@ -87,7 +87,7 @@ export function ExercisePlanEditor({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-[12rem] flex-1 text-sm">
-          <span className="mb-1 block font-medium">Exercise template</span>
+          <span className="mb-1 block font-medium">Exercise plan</span>
           <select
             className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
             value={templateId}
@@ -101,7 +101,7 @@ export function ExercisePlanEditor({
           </select>
         </label>
         <Button disabled={saving || !exerciseTemplates.length} onClick={() => void applyTemplate()}>
-          Apply template
+          Apply plan
         </Button>
         <Button variant="secondary" onClick={() => setManualOpen(true)}>
           Edit manually
@@ -117,7 +117,7 @@ export function ExercisePlanEditor({
         <p className="text-sm text-app-text-muted">Loading exercises...</p>
       ) : exercises.length === 0 ? (
         <p className="rounded-xl bg-app-muted p-4 text-sm text-app-text-muted">
-          No exercises planned for this day. Apply a template to get started.
+          No exercises planned for this day. Apply a plan to get started.
         </p>
       ) : (
         <ul className="space-y-2">

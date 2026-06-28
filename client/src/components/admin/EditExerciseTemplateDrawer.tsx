@@ -67,10 +67,10 @@ export function EditExerciseTemplateDrawer({
   onClose: () => void;
   onSaved?: (template: ExercisePlanTemplateSummary) => void;
 }) {
-  const [title, setTitle] = useState('Exercise template');
+  const [title, setTitle] = useState('Exercise plan');
 
   useEffect(() => {
-    if (!open) setTitle('Exercise template');
+    if (!open) setTitle('Exercise plan');
   }, [open]);
 
   return (
@@ -145,7 +145,7 @@ function EditExerciseTemplateDrawerContent({
       return data;
     } catch (err) {
       setTemplate(null);
-      setError(err instanceof Error ? err.message : 'Unable to load template');
+      setError(err instanceof Error ? err.message : 'Unable to load plan');
       return null;
     } finally {
       setLoading(false);
@@ -226,14 +226,14 @@ function EditExerciseTemplateDrawerContent({
       onTitleChange(updated.name);
       notifySaved(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save template');
+      setError(err instanceof Error ? err.message : 'Unable to save plan');
     } finally {
       setSaving(false);
     }
   }
 
   async function removeItem(itemId: string) {
-    if (!window.confirm('Remove this exercise from the template?')) return;
+    if (!window.confirm('Remove this exercise from the plan?')) return;
     try {
       await api(`/api/admin/exercise-template-items/${itemId}`, { method: 'DELETE' });
       await reloadAndNotify();
@@ -247,14 +247,14 @@ function EditExerciseTemplateDrawerContent({
     .filter((item): item is ExerciseTemplateItem => Boolean(item));
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Loading template…</p>;
+    return <p className="text-sm text-slate-500">Loading plan…</p>;
   }
 
   if (!template) {
     return (
       <div className="space-y-4">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          <p>{error || 'Unable to load template'}</p>
+          <p>{error || 'Unable to load plan'}</p>
         </div>
         <Button type="button" variant="secondary" onClick={onClose}>
           Close
@@ -272,7 +272,7 @@ function EditExerciseTemplateDrawerContent({
       )}
 
       <section className="space-y-4">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Template details</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Plan details</h3>
         <label className="block text-sm">
           <span className={labelClassName()}>Name</span>
           <input
@@ -320,7 +320,7 @@ function EditExerciseTemplateDrawerContent({
 
         {orderedItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-            No exercises yet. Add one to build this template.
+            No exercises yet. Add one to build this plan.
           </div>
         ) : (
           <div className="space-y-2">

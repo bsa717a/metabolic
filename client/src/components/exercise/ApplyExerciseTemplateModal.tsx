@@ -58,7 +58,7 @@ export function ApplyExerciseTemplateModal({
       .then(setTemplates)
       .catch((err) => {
         setTemplates([]);
-        setError(err instanceof Error ? err.message : 'Unable to load templates');
+        setError(err instanceof Error ? err.message : 'Unable to load plans');
       })
       .finally(() => setLoading(false));
   }, [open]);
@@ -77,7 +77,7 @@ export function ApplyExerciseTemplateModal({
     } catch (err) {
       setDetailErrors((current) => ({
         ...current,
-        [templateId]: err instanceof Error ? err.message : 'Unable to load template details'
+        [templateId]: err instanceof Error ? err.message : 'Unable to load plan details'
       }));
     } finally {
       setLoadingDetailId((current) => (current === templateId ? null : current));
@@ -108,37 +108,37 @@ export function ApplyExerciseTemplateModal({
       );
       if (registerUndo) {
         registerUndo(
-          exercisePlanUndoMessage(result.undoSnapshot?.days.length ?? 1, 'Template applied'),
+          exercisePlanUndoMessage(result.undoSnapshot?.days.length ?? 1, 'Plan applied'),
           result.undoSnapshot
         );
       }
       await onApplied();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to apply template');
+      setError(err instanceof Error ? err.message : 'Unable to apply plan');
     } finally {
       setApplyingId(null);
     }
   }
 
   return (
-    <Drawer open={open} title="Use exercise template" onClose={onClose}>
+    <Drawer open={open} title="Use exercise plan" onClose={onClose}>
       <div className="space-y-4">
         <p className="text-sm text-slate-500">
-          Apply a template to <strong>{selectedDate}</strong>. This replaces all exercises planned for that day.
+          Apply a plan to <strong>{selectedDate}</strong>. This replaces all exercises planned for that day.
         </p>
 
         {hasCompleted && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            This day has completed or skipped exercises. Applying a template will remove all exercises for this day.
+            This day has completed or skipped exercises. Applying a plan will remove all exercises for this day.
           </div>
         )}
 
-        {loading && <p className="text-sm text-slate-500">Loading templates…</p>}
+        {loading && <p className="text-sm text-slate-500">Loading plans…</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         {!loading && templates.length === 0 && !error && (
-          <p className="text-sm text-slate-500">No templates available. Ask an admin to create one.</p>
+          <p className="text-sm text-slate-500">No plans available. Ask an admin to create one.</p>
         )}
 
         {!loading && templates.length > 0 && (
@@ -186,10 +186,10 @@ export function ApplyExerciseTemplateModal({
                         </ul>
                       )}
                       {!loadingDetail && detail && detail.items.length === 0 && (
-                        <p className="text-sm text-slate-500">This template has no exercises yet.</p>
+                        <p className="text-sm text-slate-500">This plan has no exercises yet.</p>
                       )}
                       {!loadingDetail && !detail && detailError && (
-                        <p className="text-sm text-amber-700">Could not load preview. You can still apply this template.</p>
+                        <p className="text-sm text-amber-700">Could not load preview. You can still apply this plan.</p>
                       )}
                       {!loadingDetail && (
                         <Button

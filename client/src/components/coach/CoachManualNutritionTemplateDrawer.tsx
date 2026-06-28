@@ -32,7 +32,7 @@ export function CoachManualNutritionTemplateDrawer({
       setTemplate(data);
     } catch (err) {
       setTemplate(null);
-      setError(err instanceof Error ? err.message : 'Unable to load template');
+      setError(err instanceof Error ? err.message : 'Unable to load plan');
     } finally {
       setLoading(false);
     }
@@ -46,15 +46,15 @@ export function CoachManualNutritionTemplateDrawer({
 
   return (
     <>
-      <Drawer open={open} title={template ? `Edit template — ${template.name}` : 'Edit nutrition template'} onClose={onClose} panelClassName="max-w-lg">
+      <Drawer open={open} title={template ? `Edit plan — ${template.name}` : 'Edit nutrition plan'} onClose={onClose} panelClassName="max-w-lg">
         {loading ? (
-          <p className="text-sm text-app-text-muted">Loading template...</p>
+          <p className="text-sm text-app-text-muted">Loading plan...</p>
         ) : error ? (
           <p className="text-sm text-red-600">{error}</p>
         ) : template ? (
           <div className="space-y-4">
             <p className="text-sm text-app-text-muted">
-              Edit the template meals below, then close and apply the template to update the client&apos;s day.
+              Edit the plan meals below, then close and apply the plan to update the client&apos;s day.
             </p>
             <ul className="space-y-2">
               {template.meals.map((meal) => (
@@ -72,7 +72,7 @@ export function CoachManualNutritionTemplateDrawer({
               ))}
             </ul>
             {!template.meals.length && (
-              <p className="text-sm text-app-text-muted">This template has no meals yet.</p>
+              <p className="text-sm text-app-text-muted">This plan has no meals yet.</p>
             )}
           </div>
         ) : null}

@@ -690,9 +690,9 @@ async function ensureTemplateAvailableToCoach(kind: 'nutrition' | 'exercise', co
     kind === 'nutrition'
       ? await prisma.nutritionPlanTemplate.findUnique({ where: { id: templateId } })
       : await prisma.exerciseTemplate.findUnique({ where: { id: templateId } });
-  if (!template) throw new Error('Template not found');
+  if (!template) throw new Error('Plan not found');
   if (template.visibility === Visibility.GLOBAL || template.createdById === coachId) return;
-  throw new Error('Template not available');
+  throw new Error('Plan not available');
 }
 
 function mapClientGroup(

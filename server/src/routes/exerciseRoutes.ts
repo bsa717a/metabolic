@@ -168,7 +168,7 @@ export async function exerciseRoutes(app: FastifyInstance) {
     try {
       return await getTemplateForActor((request.params as { id: string }).id, request.appUser!);
     } catch {
-      return reply.code(404).send({ error: 'Template not found' });
+      return reply.code(404).send({ error: 'Plan not found' });
     }
   });
 
@@ -185,7 +185,7 @@ export async function exerciseRoutes(app: FastifyInstance) {
         setAsDefault: body.setAsDefault
       });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply plan' });
     }
   });
 

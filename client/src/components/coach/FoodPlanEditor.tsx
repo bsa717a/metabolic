@@ -56,7 +56,7 @@ export function FoodPlanEditor({
 
   async function applyTemplate() {
     if (!templateId) {
-      onError('Choose a nutrition template first.');
+      onError('Choose a nutrition plan first.');
       return;
     }
     onSavingChange(true);
@@ -72,7 +72,7 @@ export function FoodPlanEditor({
       setMeals(updated);
       await onRefresh();
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Unable to apply nutrition template');
+      onError(err instanceof Error ? err.message : 'Unable to apply nutrition plan');
     } finally {
       onSavingChange(false);
     }
@@ -82,7 +82,7 @@ export function FoodPlanEditor({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-[12rem] flex-1 text-sm">
-          <span className="mb-1 block font-medium">Nutrition template</span>
+          <span className="mb-1 block font-medium">Nutrition plan</span>
           <select
             className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
             value={templateId}
@@ -96,7 +96,7 @@ export function FoodPlanEditor({
           </select>
         </label>
         <Button disabled={saving || !nutritionTemplates.length} onClick={() => void applyTemplate()}>
-          Apply template
+          Apply plan
         </Button>
         <Button variant="secondary" onClick={() => setManualOpen(true)}>
           Edit manually
@@ -117,7 +117,7 @@ export function FoodPlanEditor({
         <p className="text-sm text-app-text-muted">Loading meals...</p>
       ) : meals.length === 0 ? (
         <p className="rounded-xl bg-app-muted p-4 text-sm text-app-text-muted">
-          No meals planned for this day. Apply a template to get started.
+          No meals planned for this day. Apply a plan to get started.
         </p>
       ) : (
         <ul className="space-y-3">

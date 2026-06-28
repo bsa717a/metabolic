@@ -32,7 +32,7 @@ export function CloneDailyLogDialog({
 
   const submit = useCallback(async () => {
     if (!userId || !name.trim()) {
-      setError('User and template name are required.');
+      setError('User and plan name are required.');
       return;
     }
     setLoading(true);
@@ -55,7 +55,7 @@ export function CloneDailyLogDialog({
   return (
     <Drawer open={open} title="Clone from user day" onClose={onClose}>
       <div className="space-y-4">
-        <p className="text-sm text-slate-500">Create a template from a user&apos;s planned meals on a specific date.</p>
+        <p className="text-sm text-slate-500">Create a plan from a user&apos;s planned meals on a specific date.</p>
 
         <label className="block text-sm">
           <span className="mb-1 block font-medium text-slate-700">User</span>
@@ -83,7 +83,7 @@ export function CloneDailyLogDialog({
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Template name</span>
+          <span className="mb-1 block font-medium text-slate-700">Plan name</span>
           <input
             className="w-full rounded-xl border border-slate-200 px-3 py-2"
             value={name}
@@ -95,7 +95,7 @@ export function CloneDailyLogDialog({
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <Button type="button" className="w-full" disabled={loading} onClick={() => void submit()}>
-          {loading ? 'Creating…' : 'Create template'}
+          {loading ? 'Creating…' : 'Create plan'}
         </Button>
       </div>
     </Drawer>

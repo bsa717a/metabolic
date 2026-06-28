@@ -183,7 +183,7 @@ export function EditTemplateExerciseDrawer({
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <Button type="button" className="w-full" disabled={saving} onClick={() => void save()}>
-          {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add to template'}
+          {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add to plan'}
         </Button>
       </div>
     </Drawer>
