@@ -55,19 +55,30 @@ export function EditUserDrawer({
   onClose: () => void;
   onSaved: (user: AdminUser) => void;
 }) {
+  if (!user) {
+    return <Drawer open={false} title="Edit user" onClose={onClose} showClose={false} />;
+  }
+
   return (
-    <Drawer open={open} title={user ? `${user.firstName} ${user.lastName}` : 'Edit user'} onClose={onClose}>
-      {open && user && <EditUserDrawerContent key={user.id} user={user} coaches={coaches ?? []} onClose={onClose} onSaved={onSaved} />}
-    </Drawer>
+    <EditUserDrawerContent
+      key={user.id}
+      open={open}
+      user={user}
+      coaches={coaches ?? []}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   );
 }
 
 function EditUserDrawerContent({
+  open,
   user,
   coaches,
   onClose,
   onSaved
 }: {
+  open: boolean;
   user: AdminUser;
   coaches: UserSummary[];
   onClose: () => void;
@@ -162,6 +173,23 @@ function EditUserDrawerContent({
   }
 
   return (
+    <Drawer
+      open={open}
+      title={`${user.firstName} ${user.lastName}`}
+      onClose={onClose}
+      showClose={false}
+      panelClassName="max-w-md"
+      headerActions={
+        <>
+          <Button disabled={saving || loadingProfile} onClick={save}>
+            {saving ? 'Saving...' : 'Save changes'}
+          </Button>
+          <Button variant="secondary" disabled={saving} onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
     <div className="space-y-6">
       <p className="text-sm text-slate-500">Update account details for {user.email}.</p>
 
@@ -281,15 +309,7 @@ function EditUserDrawerContent({
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="flex gap-3 pt-2">
-        <Button disabled={saving || loadingProfile} onClick={save}>
-          {saving ? 'Saving...' : 'Save changes'}
-        </Button>
-        <Button variant="secondary" disabled={saving} onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
     </div>
+    </Drawer>
   );
 }
