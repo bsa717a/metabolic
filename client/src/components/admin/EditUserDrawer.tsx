@@ -56,7 +56,7 @@ export function EditUserDrawer({
   onSaved: (user: AdminUser) => void;
 }) {
   if (!user) {
-    return <Drawer open={false} title="Edit user" onClose={onClose} showClose={false} />;
+    return null;
   }
 
   return (
