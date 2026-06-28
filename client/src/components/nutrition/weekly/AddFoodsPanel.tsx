@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Sparkles } from 'lucide-react';
+import { clsx } from 'clsx';
 import { api } from '../../../services/api';
 import type { Food, Meal } from '../../../types';
 import { FoodSearch } from '../FoodSearch';
@@ -41,11 +42,14 @@ export function AddFoodsPanel({
   selectedMeal,
   selectedLabel,
   itemType = 'PLANNED',
+  pinWhileScrolling = true,
   onChange
 }: {
   selectedMeal?: Meal;
   selectedLabel?: string;
   itemType?: 'PLANNED' | 'ACTUAL';
+  /** Pin beside the meal list on the nutrition page; disable in nested scroll regions like the coach editor. */
+  pinWhileScrolling?: boolean;
   onChange: () => void | Promise<void>;
 }) {
   const [recent, setRecent] = useState<Food[]>([]);
@@ -71,7 +75,14 @@ export function AddFoodsPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-app-border bg-app-surface p-4 shadow-sm">
+    <div
+      className={clsx(
+        'rounded-2xl border border-app-border bg-app-surface p-4',
+        pinWhileScrolling
+          ? 'sticky bottom-4 z-10 flex max-h-[calc(100vh-2rem)] flex-col self-start lg:bottom-auto lg:top-[var(--app-sticky-offset)] lg:max-h-[calc(100vh-var(--app-sticky-offset)-1rem)] shadow-lg lg:shadow-sm'
+          : 'shadow-sm'
+      )}
+    >
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-app-text-muted">Add foods</h3>
       </div>
@@ -111,7 +122,7 @@ export function AddFoodsPanel({
         onSaved={() => void onChange()}
       />
 
-      <div className="mt-4">
+      <div className={clsx('mt-4', pinWhileScrolling && 'min-h-0 flex-1 overflow-y-auto')}>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-text-muted">Recent</p>
         {recent.length === 0 ? (
           <p className="text-sm text-app-text-muted">No recent foods yet.</p>

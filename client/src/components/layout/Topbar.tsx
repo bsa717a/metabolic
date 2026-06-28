@@ -56,6 +56,21 @@ export function Topbar({ user }: { user?: AppUser | null }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const syncTopbarHeight = () => {
+      document.documentElement.style.setProperty('--app-topbar-height', `${header.offsetHeight}px`);
+    };
+
+    syncTopbarHeight();
+    const observer = new ResizeObserver(syncTopbarHeight);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
   // Close mobile menu and profile dropdown on route change
   useEffect(() => {
@@ -105,6 +120,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
       )}
 
       <header
+        ref={headerRef}
         className={clsx(
           'sticky top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b px-4 py-3 backdrop-blur transition-colors duration-200',
           isDashboard
