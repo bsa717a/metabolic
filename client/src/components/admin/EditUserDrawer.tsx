@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { UserProfileFields } from '../user/UserProfileFields';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from '../user/userProfileForm';
+import { timezoneOptions } from '../../utils/timezoneOptions';
 
 const roles: Role[] = ['SUPER_ADMIN', 'ADMIN', 'COACH', 'USER', 'VIEWER'];
 const statuses: UserStatus[] = ['ACTIVE', 'INVITED', 'DISABLED'];
@@ -74,6 +75,9 @@ function EditUserDrawerContent({
 }) {
   const [draft, setDraft] = useState(() => toDraft(user));
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
+  const [timezone, setTimezone] = useState('');
+  const [smsMealRemindersEnabled, setSmsMealRemindersEnabled] = useState(true);
+  const [smsEveningRecapEnabled, setSmsEveningRecapEnabled] = useState(true);
   const [canEditClientNotes, setCanEditClientNotes] = useState(true);
   const [coachId, setCoachId] = useState(user.assignedCoach?.id ?? '');
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -89,6 +93,9 @@ function EditUserDrawerContent({
     api<UserAccountDetails>(`/api/users/${user.id}/profile`)
       .then((details) => {
         setProfileDraft(profileToDraft(details));
+        setTimezone(details.timezone ?? '');
+        setSmsMealRemindersEnabled(details.smsMealRemindersEnabled ?? details.smsRemindersEnabled ?? true);
+        setSmsEveningRecapEnabled(details.smsEveningRecapEnabled ?? details.smsRemindersEnabled ?? true);
         setCanEditClientNotes(details.canEditClientNotes);
         setProfileLoaded(true);
       })
@@ -137,7 +144,12 @@ function EditUserDrawerContent({
       if (profileLoaded) {
         await api<UserAccountDetails>(`/api/users/${user.id}/profile`, {
           method: 'PATCH',
-          body: JSON.stringify(buildProfilePayload(profileDraft, canEditClientNotes))
+          body: JSON.stringify({
+            ...buildProfilePayload(profileDraft, canEditClientNotes),
+            timezone: timezone.trim() ? timezone.trim() : null,
+            smsMealRemindersEnabled,
+            smsEveningRecapEnabled
+          })
         });
       }
       onSaved(nextUser);
@@ -208,6 +220,54 @@ function EditUserDrawerContent({
           </select>
           <p className="mt-1 text-xs text-slate-500">Only super admins can save coach assignment changes.</p>
         </label>
+
+        <label className="block">
+          <span className={labelClassName()}>Timezone</span>
+          <select
+            className={inputClassName()}
+            value={timezone}
+            disabled={loadingProfile || !profileLoaded}
+            onChange={(event) => setTimezone(event.target.value)}
+          >
+            <option value="">Not set</option>
+            {timezoneOptions(timezone).map((zone) => (
+              <option key={zone} value={zone}>
+                {zone}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-slate-500">
+            Used to time reminder texts. Reminders are skipped until this is set.
+          </span>
+        </label>
+
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-800">Text reminders</p>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200"
+              checked={smsMealRemindersEnabled}
+              disabled={loadingProfile || !profileLoaded}
+              onChange={(event) => setSmsMealRemindersEnabled(event.target.checked)}
+            />
+            <span className="text-sm text-slate-600">
+              Text before planned meals (up to 30 minutes ahead, once per meal).
+            </span>
+          </label>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200"
+              checked={smsEveningRecapEnabled}
+              disabled={loadingProfile || !profileLoaded}
+              onChange={(event) => setSmsEveningRecapEnabled(event.target.checked)}
+            />
+            <span className="text-sm text-slate-600">
+              Short evening check-in around 8:00 PM.
+            </span>
+          </label>
+        </div>
       </div>
 
       {loadingProfile ? (
