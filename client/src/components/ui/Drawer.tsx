@@ -6,12 +6,16 @@ export function Drawer({
   title,
   children,
   onClose,
+  headerActions,
+  showClose = true,
   panelClassName
 }: {
   open: boolean;
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  headerActions?: React.ReactNode;
+  showClose?: boolean;
   panelClassName?: string;
 }) {
   // Render in a portal on document.body so the fixed overlay isn't trapped by an
@@ -30,11 +34,16 @@ export function Drawer({
           open ? 'translate-x-0' : 'translate-x-full'
         )}
       >
-        <div className="mb-6 flex shrink-0 items-center justify-between">
-          <h2 className="text-xl font-bold text-app-text">{title}</h2>
-          <button type="button" className="text-app-text-muted transition hover:text-app-text" onClick={onClose}>
-            Close
-          </button>
+        <div className="mb-6 flex shrink-0 items-start justify-between gap-3">
+          <h2 className="min-w-0 text-xl font-bold text-app-text">{title}</h2>
+          <div className="flex shrink-0 items-center gap-2">
+            {headerActions}
+            {showClose ? (
+              <button type="button" className="text-app-text-muted transition hover:text-app-text" onClick={onClose}>
+                Close
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible">{children}</div>
       </aside>

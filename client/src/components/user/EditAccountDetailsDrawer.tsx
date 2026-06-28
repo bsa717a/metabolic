@@ -43,27 +43,28 @@ export function EditAccountDetailsDrawer({
   onSaved?: (details: UserAccountDetails) => void;
 }) {
   return (
-    <Drawer open={open} title={title} onClose={onClose}>
-      {open && (
-        <EditAccountDetailsDrawerContent
-          key={userId}
-          userId={userId}
-          mode={mode}
-          onClose={onClose}
-          onSaved={onSaved}
-        />
-      )}
-    </Drawer>
+    <EditAccountDetailsDrawerContent
+      open={open}
+      userId={userId}
+      title={title}
+      mode={mode}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   );
 }
 
 function EditAccountDetailsDrawerContent({
+  open,
   userId,
+  title,
   mode,
   onClose,
   onSaved
 }: {
+  open: boolean;
   userId: string;
+  title: string;
   mode: 'self' | 'coach';
   onClose: () => void;
   onSaved?: (details: UserAccountDetails) => void;
@@ -87,6 +88,7 @@ function EditAccountDetailsDrawerContent({
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!open) return;
     setLoading(true);
     setLoaded(false);
     setError('');
@@ -109,7 +111,7 @@ function EditAccountDetailsDrawerContent({
         setError(err instanceof Error ? err.message : 'Unable to load account details');
       })
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [userId, open]);
 
   function updateAccount<K extends keyof AccountDraft>(field: K, value: AccountDraft[K]) {
     setAccountDraft((current) => ({ ...current, [field]: value }));
@@ -154,24 +156,37 @@ function EditAccountDetailsDrawerContent({
     }
   }
 
-  if (loading) {
-    return <p className="text-sm text-app-text-muted">Loading account details…</p>;
-  }
-
-  if (!loaded) {
-    return (
-      <div className="space-y-4">
-        <p className="text-sm text-red-600">{error || 'Unable to load account details.'}</p>
-        <Button variant="secondary" onClick={onClose}>
-          Close
-        </Button>
-      </div>
-    );
-  }
-
   const readOnlyAccount = mode === 'coach';
 
   return (
+    <Drawer
+      open={open}
+      title={title}
+      onClose={onClose}
+      showClose={false}
+      panelClassName="max-w-md"
+      headerActions={
+        loaded ? (
+          <>
+            <Button disabled={saving} onClick={save}>
+              {saving ? 'Saving…' : 'Save account details'}
+            </Button>
+            <Button variant="secondary" disabled={saving} onClick={onClose}>
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        )
+      }
+    >
+    {loading ? (
+      <p className="text-sm text-app-text-muted">Loading account details…</p>
+    ) : !loaded ? (
+      <p className="text-sm text-red-600">{error || 'Unable to load account details.'}</p>
+    ) : (
     <div className="space-y-6">
       <div className="space-y-4">
         <div>
@@ -267,7 +282,7 @@ function EditAccountDetailsDrawerContent({
 
       <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && loaded && <p className="text-sm text-red-600">{error}</p>}
 
       {mode === 'self' && (
         <div className="rounded-xl border border-dashed border-app-border bg-app-muted/40 px-4 py-3">
@@ -291,14 +306,8 @@ function EditAccountDetailsDrawerContent({
         </div>
       )}
 
-      <div className="flex gap-3 pt-2">
-        <Button disabled={saving} onClick={save}>
-          {saving ? 'Saving…' : 'Save account details'}
-        </Button>
-        <Button variant="secondary" disabled={saving} onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
     </div>
+    )}
+    </Drawer>
   );
 }
