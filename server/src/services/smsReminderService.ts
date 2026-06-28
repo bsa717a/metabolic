@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
+import { capSms } from './smsIntentService.js';
 import { isTwilioConfigured, isTwilioSenderPhone, resolveOutboundChannel, sendOutboundMessage } from './twilioOutboundService.js';
 import { localTimeParts } from '../utils/dates.js';
 import { COMPLETED_MEAL_STATUSES, parsePlannedMinutes } from '../utils/meals.js';
@@ -20,11 +21,19 @@ type ReminderUser = {
   smsEveningRecapEnabled: boolean;
 };
 
+type PlannedMealItem = {
+  type: string;
+  nameSnapshot: string;
+  quantity: unknown;
+  unit: string;
+};
+
 type MealReminderCandidate = {
   id: string;
   name: string;
   status: string;
   plannedTime: string | null;
+  items: PlannedMealItem[];
 };
 
 export function isMealReminderDue(minutesOfDay: number, plannedTime: string | null): boolean {
@@ -68,9 +77,32 @@ async function deliverNudge(userId: string, phone: string, message: string, inte
   return true;
 }
 
-function buildMealReminder(firstName: string, mealName: string, plannedTime: string | null) {
+function formatPlannedItemLine(item: PlannedMealItem): string | null {
+  if (item.type !== 'PLANNED') return null;
+  const name = item.nameSnapshot.trim();
+  if (!name) return null;
+  const qty = n(item.quantity);
+  const unit = item.unit?.trim();
+  if (qty > 0 && unit) {
+    const qtyLabel = Number.isInteger(qty) ? String(Math.round(qty)) : String(qty);
+    return `${qtyLabel} ${unit} ${name}`;
+  }
+  return name;
+}
+
+export function buildMealReminder(
+  firstName: string,
+  mealName: string,
+  plannedTime: string | null,
+  items: PlannedMealItem[] = []
+) {
   const timePart = plannedTime ? ` around ${plannedTime}` : ' soon';
-  return `Hey ${firstName}, ${mealName} is coming up${timePart}. Want ideas that fit your macros? Tell me where you are or what you're thinking, or send a photo when you eat and I'll log it.`;
+  const intro = `Hey ${firstName}, ${mealName} is coming up${timePart}.`;
+  const plannedLines = items.map(formatPlannedItemLine).filter((line): line is string => Boolean(line));
+  if (!plannedLines.length) return intro;
+
+  const numbered = plannedLines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+  return `${intro}\n\nPlanned:\n${numbered}`;
 }
 
 function buildEveningRecap(
@@ -109,7 +141,7 @@ async function processUserReminders(user: ReminderUser, now: Date): Promise<numb
       const reserved = await reserveNudge(user.id, 'MEAL_REMINDER', dateKey, meal.id);
       if (!reserved) continue;
 
-      const message = buildMealReminder(user.firstName, meal.name, meal.plannedTime);
+      const message = capSms(buildMealReminder(user.firstName, meal.name, meal.plannedTime, meal.items));
       if (await deliverNudge(user.id, phone, message, 'MEAL_REMINDER')) {
         sent += 1;
       } else {
