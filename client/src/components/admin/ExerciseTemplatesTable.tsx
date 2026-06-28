@@ -140,7 +140,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
       setTemplates(await api<ExercisePlanTemplateSummary[]>('/api/admin/exercise-templates'));
     } catch (err) {
       setTemplates([]);
-      setError(err instanceof Error ? err.message : 'Unable to load templates');
+      setError(err instanceof Error ? err.message : 'Unable to load plans');
     } finally {
       setLoading(false);
     }
@@ -151,7 +151,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
   }, [load]);
 
   async function createTemplate() {
-    const name = window.prompt('Template name');
+    const name = window.prompt('Plan name');
     if (!name?.trim()) return;
     setCreating(true);
     try {
@@ -162,7 +162,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
       await load();
       openTemplate(template.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to create template');
+      setError(err instanceof Error ? err.message : 'Unable to create plan');
     } finally {
       setCreating(false);
     }
@@ -179,12 +179,12 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
       await load();
       openTemplate(template.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to clone template');
+      setError(err instanceof Error ? err.message : 'Unable to clone plan');
     }
   }
 
   async function deleteTemplate(id: string, name: string) {
-    if (!window.confirm(`Delete template "${name}"?`)) return;
+    if (!window.confirm(`Delete plan "${name}"?`)) return;
     try {
       await api(`/api/admin/exercise-templates/${id}`, { method: 'DELETE' });
       if (selectedTemplateId === id) {
@@ -193,7 +193,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
       }
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to delete template');
+      setError(err instanceof Error ? err.message : 'Unable to delete plan');
     }
   }
 
@@ -202,17 +202,17 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
       <Card>
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold">Exercise Templates</h2>
-            <p className="text-sm text-slate-500">Click a row to edit a template.</p>
+            <h2 className="text-lg font-bold">Exercise Plans</h2>
+            <p className="text-sm text-slate-500">Click a row to edit a plan.</p>
           </div>
           {!loading && !error && (
             <input
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search templates…"
+              placeholder="Search plans…"
               className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:flex-none sm:w-56"
-              aria-label="Search exercise templates"
+              aria-label="Search exercise plans"
             />
           )}
           {!loading && !error && (
@@ -222,7 +222,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
               </Button>
               <Button type="button" disabled={creating} onClick={() => void createTemplate()}>
                 <Plus className="mr-1 inline h-4 w-4" />
-                New template
+                New plan
               </Button>
             </div>
           )}
@@ -231,7 +231,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
           </span>
         </div>
 
-        {loading && <p className="text-sm text-slate-500">Loading templates…</p>}
+        {loading && <p className="text-sm text-slate-500">Loading plans…</p>}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{error}</p>
@@ -339,10 +339,10 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
               </tbody>
             </table>
             {templates.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-500">No templates yet. Create one to get started.</p>
+              <p className="py-6 text-center text-sm text-slate-500">No plans yet. Create one to get started.</p>
             )}
             {templates.length > 0 && visibleTemplates.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-500">No templates match your search.</p>
+              <p className="py-6 text-center text-sm text-slate-500">No plans match your search.</p>
             )}
           </div>
         )}

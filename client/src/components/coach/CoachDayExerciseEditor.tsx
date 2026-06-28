@@ -163,14 +163,14 @@ export function CoachDayExerciseEditor({
         }
       );
       registerUndo(
-        exercisePlanUndoMessage(result.undoSnapshot?.days.length ?? 1, 'Template applied'),
+        exercisePlanUndoMessage(result.undoSnapshot?.days.length ?? 1, 'Plan applied'),
         result.undoSnapshot
       );
       await reloadWeek();
       await onRefresh();
       setTemplateOpen(false);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Could not apply template.');
+      setLoadError(error instanceof Error ? error.message : 'Could not apply plan.');
     } finally {
       setApplyingTemplate(false);
     }
@@ -202,7 +202,7 @@ export function CoachDayExerciseEditor({
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" onClick={() => setTemplateOpen(true)}>
               <LayoutTemplate className="mr-1 inline h-4 w-4" />
-              Templates
+              Plans
             </Button>
             <button
               type="button"
@@ -338,12 +338,12 @@ export function CoachDayExerciseEditor({
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/40" onClick={() => setTemplateOpen(false)} />
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-app-text">Apply exercise template</h3>
+            <h3 className="text-lg font-bold text-app-text">Apply exercise plan</h3>
             <p className="mt-1 text-sm text-app-text-muted">
               Replace planned exercises for <strong>{selectedDate}</strong>.
             </p>
             <label className="mt-4 block text-sm">
-              <span className="mb-1 block font-medium">Template</span>
+              <span className="mb-1 block font-medium">Plan</span>
               <select
                 className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
                 value={templateId}
@@ -380,7 +380,7 @@ export function CoachDayExerciseEditor({
                 disabled={applyingTemplate || !templateId}
                 onClick={() => void handleApplyTemplate()}
               >
-                {applyingTemplate ? 'Applying…' : 'Apply template'}
+                {applyingTemplate ? 'Applying…' : 'Apply plan'}
               </Button>
             </div>
           </div>

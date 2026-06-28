@@ -72,7 +72,7 @@ export function ApplyTemplateModal({
       .then(setTemplates)
       .catch((err) => {
         setTemplates([]);
-        setError(err instanceof Error ? err.message : 'Unable to load templates');
+        setError(err instanceof Error ? err.message : 'Unable to load plans');
       })
       .finally(() => setLoading(false));
   }, [open]);
@@ -91,7 +91,7 @@ export function ApplyTemplateModal({
     } catch (err) {
       setDetailErrors((current) => ({
         ...current,
-        [templateId]: err instanceof Error ? err.message : 'Unable to load template details'
+        [templateId]: err instanceof Error ? err.message : 'Unable to load plan details'
       }));
     } finally {
       setLoadingDetailId((current) => (current === templateId ? null : current));
@@ -120,30 +120,30 @@ export function ApplyTemplateModal({
       onApplied();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to apply template');
+      setError(err instanceof Error ? err.message : 'Unable to apply plan');
     } finally {
       setApplyingId(null);
     }
   }
 
   return (
-    <Drawer open={open} title="Use nutrition template" onClose={onClose}>
+    <Drawer open={open} title="Use nutrition plan" onClose={onClose}>
       <div className="space-y-4">
         <p className="text-sm text-slate-500">
-          Apply a template to <strong>{selectedDate}</strong>. This replaces planned meals and macro targets for that day.
+          Apply a plan to <strong>{selectedDate}</strong>. This replaces planned meals and macro targets for that day.
         </p>
 
         {hasActuals && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            This day has logged meals. Applying a template will remove existing planned and logged items for this day.
+            This day has logged meals. Applying a plan will remove existing planned and logged items for this day.
           </div>
         )}
 
-        {loading && <p className="text-sm text-slate-500">Loading templates…</p>}
+        {loading && <p className="text-sm text-slate-500">Loading plans…</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         {!loading && templates.length === 0 && !error && (
-          <p className="text-sm text-slate-500">No templates available. Ask an admin to create one.</p>
+          <p className="text-sm text-slate-500">No plans available. Ask an admin to create one.</p>
         )}
 
         {!loading && templates.length > 0 && (
@@ -158,14 +158,14 @@ export function ApplyTemplateModal({
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search templates…"
-                aria-label="Search templates"
+                placeholder="Search plans…"
+                aria-label="Search plans"
                 disabled={applying}
                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
               />
             </div>
             {filteredTemplates.length === 0 && (
-              <p className="text-sm text-slate-500">No templates match your search.</p>
+              <p className="text-sm text-slate-500">No plans match your search.</p>
             )}
             <ul className="space-y-2">
               {filteredTemplates.map((template) => {
@@ -228,10 +228,10 @@ export function ApplyTemplateModal({
                           </ul>
                         )}
                         {!loadingDetail && detail && detail.meals.length === 0 && (
-                          <p className="text-sm text-slate-500">This template has no meals yet.</p>
+                          <p className="text-sm text-slate-500">This plan has no meals yet.</p>
                         )}
                         {!loadingDetail && !detail && detailError && (
-                          <p className="text-sm text-amber-700">Could not load preview. You can still apply this template.</p>
+                          <p className="text-sm text-amber-700">Could not load preview. You can still apply this plan.</p>
                         )}
                         {!loadingDetail && (
                           <Button

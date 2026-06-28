@@ -134,7 +134,7 @@ export function CoachDayNutritionEditor({
       await onRefresh();
       setTemplateOpen(false);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Could not apply template.');
+      setLoadError(error instanceof Error ? error.message : 'Could not apply plan.');
     } finally {
       setApplyingTemplate(false);
     }
@@ -177,7 +177,7 @@ export function CoachDayNutritionEditor({
             />
             <Button type="button" variant="secondary" onClick={() => setTemplateOpen(true)}>
               <LayoutTemplate className="mr-1 inline h-4 w-4" />
-              Templates
+              Plans
             </Button>
             <button
               type="button"
@@ -205,7 +205,7 @@ export function CoachDayNutritionEditor({
 
           {meals.length === 0 ? (
             <p className="rounded-2xl bg-app-muted p-4 text-sm text-app-text-muted">
-              No meals planned for this day. Apply a template first, then edit manually.
+              No meals planned for this day. Apply a plan first, then edit manually.
             </p>
           ) : (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -263,12 +263,12 @@ export function CoachDayNutritionEditor({
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/40" onClick={() => setTemplateOpen(false)} />
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-app-text">Apply nutrition template</h3>
+            <h3 className="text-lg font-bold text-app-text">Apply nutrition plan</h3>
             <p className="mt-1 text-sm text-app-text-muted">
               Replace planned meals for <strong>{selectedDate}</strong>.
             </p>
             <label className="mt-4 block text-sm">
-              <span className="mb-1 block font-medium">Template</span>
+              <span className="mb-1 block font-medium">Plan</span>
               <select
                 className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
                 value={templateId}
@@ -296,7 +296,7 @@ export function CoachDayNutritionEditor({
                 Cancel
               </Button>
               <Button type="button" disabled={applyingTemplate || !templateId} onClick={() => void handleApplyTemplate()}>
-                {applyingTemplate ? 'Applying…' : 'Apply template'}
+                {applyingTemplate ? 'Applying…' : 'Apply plan'}
               </Button>
             </div>
           </div>

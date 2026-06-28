@@ -151,7 +151,7 @@ export function SessionNotesPanel({
             <UtensilsCrossed className="h-3.5 w-3.5" />
             <Dumbbell className="h-3.5 w-3.5" />
           </span>{' '}
-          Apply nutrition and exercise templates from the Food Plan and Exercise Plan tabs.
+          Apply nutrition and exercise plans from the Food Plan and Exercise Plan tabs.
         </p>
       </div>
 

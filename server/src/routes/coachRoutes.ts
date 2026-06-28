@@ -521,13 +521,13 @@ export async function coachRoutes(app: FastifyInstance) {
   app.post('/api/coach/users/:userId/daily-logs/:date/apply-template', { preHandler: coachOnly }, async (request, reply) => {
     const { userId, date } = request.params as { userId: string; date: string };
     const parsed = applyTemplateBody.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     try {
       return await applyCoachNutritionTemplate(request.appUser!, userId, date, parsed.data.templateId, {
         setAsDefault: parsed.data.setAsDefault
       });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply plan' });
     }
   });
 
@@ -573,13 +573,13 @@ export async function coachRoutes(app: FastifyInstance) {
   app.post('/api/coach/users/:userId/daily-logs/:date/apply-exercise-template', { preHandler: coachOnly }, async (request, reply) => {
     const { userId, date } = request.params as { userId: string; date: string };
     const parsed = applyTemplateBody.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     try {
       return await applyCoachExerciseTemplate(request.appUser!, userId, date, parsed.data.templateId, {
         setAsDefault: parsed.data.setAsDefault
       });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply plan' });
     }
   });
 
@@ -590,25 +590,25 @@ export async function coachRoutes(app: FastifyInstance) {
     try {
       return await getTemplateForActor((request.params as { id: string }).id, request.appUser!);
     } catch {
-      return reply.code(404).send({ error: 'Template not found' });
+      return reply.code(404).send({ error: 'Plan not found' });
     }
   });
   app.post('/api/coach/nutrition-templates', { preHandler: coachOnly }, async (request, reply) => {
     const parsed = templateCreateBody.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     try {
       return await createTemplate({ ...parsed.data, visibility: parsed.data.visibility ?? Visibility.USER, createdById: request.appUser!.id });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create plan' });
     }
   });
   app.patch('/api/coach/nutrition-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
     const parsed = templateUpdateBody.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     try {
       return await updateTemplate((request.params as { id: string }).id, parsed.data, request.appUser!);
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update plan' });
     }
   });
   app.delete('/api/coach/nutrition-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
@@ -616,7 +616,7 @@ export async function coachRoutes(app: FastifyInstance) {
       await deleteTemplate((request.params as { id: string }).id, request.appUser!);
       return reply.code(204).send();
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete plan' });
     }
   });
   app.post('/api/coach/nutrition-templates/:id/clone', { preHandler: coachOnly }, async (request, reply) => {
@@ -628,7 +628,7 @@ export async function coachRoutes(app: FastifyInstance) {
         createdById: request.appUser!.id
       });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone plan' });
     }
   });
   app.post('/api/coach/nutrition-templates/:id/meals', { preHandler: coachOnly }, async (request, reply) => {
@@ -689,25 +689,25 @@ export async function coachRoutes(app: FastifyInstance) {
     try {
       return await getExerciseTemplateForActor((request.params as { id: string }).id, request.appUser!);
     } catch {
-      return reply.code(404).send({ error: 'Template not found' });
+      return reply.code(404).send({ error: 'Plan not found' });
     }
   });
   app.post('/api/coach/exercise-templates', { preHandler: coachOnly }, async (request, reply) => {
     const parsed = exerciseTemplateCreateBody.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     try {
       return await createExerciseTemplate({ ...parsed.data, visibility: parsed.data.visibility ?? Visibility.USER, createdById: request.appUser!.id });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create plan' });
     }
   });
   app.patch('/api/coach/exercise-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
     const parsed = exerciseTemplateUpdateBody.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid template' });
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     try {
       return await updateExerciseTemplate((request.params as { id: string }).id, parsed.data, request.appUser!);
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update plan' });
     }
   });
   app.delete('/api/coach/exercise-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
@@ -715,7 +715,7 @@ export async function coachRoutes(app: FastifyInstance) {
       await deleteExerciseTemplate((request.params as { id: string }).id, request.appUser!);
       return reply.code(204).send();
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete plan' });
     }
   });
   app.post('/api/coach/exercise-templates/:id/clone', { preHandler: coachOnly }, async (request, reply) => {
@@ -727,7 +727,7 @@ export async function coachRoutes(app: FastifyInstance) {
         createdById: request.appUser!.id
       });
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone template' });
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clone plan' });
     }
   });
   app.post('/api/coach/exercise-templates/:id/items', { preHandler: coachOnly }, async (request, reply) => {

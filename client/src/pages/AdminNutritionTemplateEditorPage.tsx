@@ -54,7 +54,7 @@ export function AdminNutritionTemplateEditorPage() {
       });
     } catch (err) {
       setTemplate(null);
-      setError(err instanceof Error ? err.message : 'Unable to load template');
+      setError(err instanceof Error ? err.message : 'Unable to load plan');
     } finally {
       setLoading(false);
     }
@@ -83,7 +83,7 @@ export function AdminNutritionTemplateEditorPage() {
       });
       setTemplate(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save template');
+      setError(err instanceof Error ? err.message : 'Unable to save plan');
     } finally {
       setSaving(false);
     }
@@ -107,13 +107,13 @@ export function AdminNutritionTemplateEditorPage() {
     <div className="space-y-6">
       <div>
         <Link to="/admin/nutrition-templates" className="text-sm text-slate-500 hover:text-slate-700">
-          ← Nutrition Templates
+          ← Nutrition Plans
         </Link>
-        <h1 className="mt-2 text-3xl font-bold">{template?.name ?? 'Template editor'}</h1>
-        <p className="text-slate-500">Edit macro targets and planned meals for this template.</p>
+        <h1 className="mt-2 text-3xl font-bold">{template?.name ?? 'Plan editor'}</h1>
+        <p className="text-slate-500">Edit macro targets and planned meals for this plan.</p>
       </div>
 
-      {loading && <p className="text-sm text-slate-500">Loading template…</p>}
+      {loading && <p className="text-sm text-slate-500">Loading plan…</p>}
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           <p>{error}</p>
@@ -123,7 +123,7 @@ export function AdminNutritionTemplateEditorPage() {
       {template && (
         <>
           <Card>
-            <h2 className="text-lg font-bold">Template details</h2>
+            <h2 className="text-lg font-bold">Plan details</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="text-sm sm:col-span-2">
                 <span className="mb-1 block font-medium text-slate-700">Name</span>

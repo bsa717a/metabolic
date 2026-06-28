@@ -213,7 +213,7 @@ export function ExercisePage() {
             <PlanPrintMenu printing={printing} onPrintDay={handlePrintDay} onPrintWeek={handlePrintWeek} />
             <Button type="button" variant="secondary" onClick={() => setTemplateModalOpen(true)}>
               <LayoutTemplate className="mr-1 inline h-4 w-4" />
-              Templates
+              Plans
             </Button>
           </div>
         }

@@ -46,7 +46,7 @@ export function CoachManualExerciseTemplateDrawer({
       setTemplate(data);
     } catch (err) {
       setTemplate(null);
-      setError(err instanceof Error ? err.message : 'Unable to load template');
+      setError(err instanceof Error ? err.message : 'Unable to load plan');
     } finally {
       setLoading(false);
     }
@@ -88,7 +88,7 @@ export function CoachManualExerciseTemplateDrawer({
   }
 
   async function removeItem(item: ExerciseTemplateItem) {
-    if (!confirm(`Remove ${item.exercise.name} from this template?`)) return;
+    if (!confirm(`Remove ${item.exercise.name} from this plan?`)) return;
     setError('');
     try {
       await api(`/api/coach/exercise-template-items/${item.id}`, { method: 'DELETE' });
@@ -101,17 +101,17 @@ export function CoachManualExerciseTemplateDrawer({
   return (
     <Drawer
       open={open}
-      title={template ? `Edit template — ${template.name}` : 'Edit exercise template'}
+      title={template ? `Edit plan — ${template.name}` : 'Edit exercise plan'}
       onClose={onClose}
       panelClassName="max-w-lg"
     >
       {loading ? (
-        <p className="text-sm text-app-text-muted">Loading template...</p>
+        <p className="text-sm text-app-text-muted">Loading plan...</p>
       ) : (
         <div className="space-y-4">
           {error && <p className="text-sm text-red-600">{error}</p>}
           <p className="text-sm text-app-text-muted">
-            Edit the template exercises below, then close and apply the template to update the client&apos;s day.
+            Edit the plan exercises below, then close and apply the plan to update the client&apos;s day.
           </p>
 
           {editItem ? (
@@ -190,7 +190,7 @@ export function CoachManualExerciseTemplateDrawer({
           )}
 
           {!template?.items.length && !editItem && (
-            <p className="text-sm text-app-text-muted">This template has no exercises yet.</p>
+            <p className="text-sm text-app-text-muted">This plan has no exercises yet.</p>
           )}
         </div>
       )}

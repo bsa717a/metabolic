@@ -116,7 +116,7 @@ export async function listTemplatesForActor(actor: { id: string; role: Role }) {
 async function ensureTemplateManageable(templateId: string, actor?: { id: string; role: Role }) {
   if (!actor || isAdmin(actor)) return;
   const template = await prisma.exerciseTemplate.findUnique({ where: { id: templateId } });
-  if (!template || template.createdById !== actor.id) throw new Error('Template not found');
+  if (!template || template.createdById !== actor.id) throw new Error('Plan not found');
 }
 
 export async function getTemplate(id: string) {
@@ -133,7 +133,7 @@ export async function getTemplateForActor(id: string, actor: { id: string; role:
     include: templateInclude
   });
   if (!isAdmin(actor) && template.visibility !== Visibility.GLOBAL && template.createdById !== actor.id) {
-    throw new Error('Template not found');
+    throw new Error('Plan not found');
   }
   return serializeTemplate(template);
 }
@@ -180,7 +180,7 @@ export async function deleteTemplate(id: string, actor?: { id: string; role: Rol
   await ensureTemplateManageable(id, actor);
   const inUse = await prisma.program.count({ where: { defaultExerciseTemplateId: id } });
   if (inUse > 0) {
-    throw new Error('Cannot delete a template that is set as a program default');
+    throw new Error('Cannot delete a plan that is set as a program default');
   }
   await prisma.exerciseTemplate.delete({ where: { id } });
 }
@@ -269,9 +269,9 @@ export async function applyTemplateToDate(
   if (!log) throw new Error('No active program found');
 
   const template = await prisma.exerciseTemplate.findUnique({ where: { id: templateId } });
-  if (!template) throw new Error('Template not found');
+  if (!template) throw new Error('Plan not found');
   if (template.visibility !== Visibility.GLOBAL && template.createdById !== options?.actorId) {
-    throw new Error('Template not available');
+    throw new Error('Plan not available');
   }
 
   const { snapshotExercisePlanForDates } = await import('./exerciseService.js');

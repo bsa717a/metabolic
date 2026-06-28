@@ -12,8 +12,8 @@ import { AdminSettingsPanel } from '../components/admin/AdminSettingsPanel';
 const cards = [
   'Users',
   'Programs',
-  'Nutrition Templates',
-  'Exercise Templates',
+  'Nutrition Plans',
+  'Exercise Plans',
   'Exercise Database',
   'Food Database',
   'AI Review Queue',
@@ -29,8 +29,8 @@ const interactiveSections = new Set<AdminSection>([
   'Food Database',
   'Exercise Database',
   'AI Review Queue',
-  'Nutrition Templates',
-  'Exercise Templates',
+  'Nutrition Plans',
+  'Exercise Plans',
   'Gamification',
   'Settings'
 ]);
@@ -61,8 +61,8 @@ export function AdminPage() {
       {activeSection === 'Food Database' && <FoodTable />}
       {activeSection === 'Exercise Database' && <ExerciseTable />}
       {activeSection === 'AI Review Queue' && <FoodReviewQueue />}
-      {activeSection === 'Nutrition Templates' && <NutritionTemplatesTable />}
-      {activeSection === 'Exercise Templates' && <ExerciseTemplatesTable />}
+      {activeSection === 'Nutrition Plans' && <NutritionTemplatesTable />}
+      {activeSection === 'Exercise Plans' && <ExerciseTemplatesTable />}
       {activeSection === 'Gamification' && <AdminGamificationPanel />}
       {activeSection === 'Settings' && <AdminSettingsPanel />}
     </div>

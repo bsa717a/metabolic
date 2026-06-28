@@ -272,7 +272,7 @@ function buildInsights(
   const insights: string[] = [];
 
   if (summary.plannedMeals === 0) {
-    insights.push('No meals were planned this week. Build a plan together or apply a template.');
+    insights.push('No meals were planned this week. Plan meals together or apply a saved plan.');
     if (summary.noPlanDays > 0) {
       insights.push(`${summary.noPlanDays} day(s) with nothing on the food plan.`);
     }
