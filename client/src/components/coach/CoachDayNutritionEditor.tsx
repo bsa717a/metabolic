@@ -250,6 +250,7 @@ export function CoachDayNutritionEditor({
                   selectedMeal={daySelectedMeal}
                   selectedLabel={daySelectedMeal?.name}
                   itemType="PLANNED"
+                  pinWhileScrolling={false}
                   onChange={() => void reloadMeals()}
                 />
               </div>
