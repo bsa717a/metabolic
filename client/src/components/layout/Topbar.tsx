@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Apple, ChevronDown, Dumbbell, Gauge, LayoutDashboard, LineChart, LogOut, Moon, Settings, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { Apple, ChevronDown, Dumbbell, Gauge, LayoutDashboard, LineChart, LogOut, Moon, Settings, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -18,6 +18,7 @@ const MOBILE_NAV_LINKS = [
   ['/exercise', 'Exercise', Dumbbell],
   ['/progress', 'Progress', LineChart],
   ['/level-up', 'Level Up', TrendingUp],
+  ['/virtual-coach', 'Virtual Coach', Sparkles],
 ] as const;
 
 function ProfileMenuItem({

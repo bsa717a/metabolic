@@ -186,6 +186,7 @@ model User {
   smsEveningRecapEnabled Boolean @default(true)
   dashboardTutorialCompletedAt DateTime?
   smsRemindersIntroCompletedAt DateTime?
+  selectedVirtualCoachId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organizations UserOrganization[]

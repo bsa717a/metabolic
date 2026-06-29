@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Target, Apple, Dumbbell, Flame, LineChart, TrendingUp, Users } from 'lucide-react';
+import { Target, Apple, Dumbbell, Flame, LineChart, TrendingUp, Users, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
 import { getIdToken } from '../services/auth';
@@ -218,6 +218,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
           <QuickLink to="/exercise" icon={Dumbbell} label="Exercise" />
           <QuickLink to="/level-up" icon={TrendingUp} label="Level Up" tourId="nav-level-up" />
           <QuickLink to="/progress" icon={LineChart} label="Progress" />
+          <QuickLink to="/virtual-coach" icon={Sparkles} label="Virtual Coach" />
           {isCoachRole(user?.role) && <QuickLink to="/coach" icon={Users} label="Coach" />}
         </div>
       </section>

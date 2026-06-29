@@ -17,6 +17,8 @@ import { AdminNutritionTemplateEditorPage } from './pages/AdminNutritionTemplate
 import { AdminExerciseTemplatesPage } from './pages/AdminExerciseTemplatesPage';
 import { AdminExerciseTemplateEditorPage } from './pages/AdminExerciseTemplateEditorPage';
 import { CoachPage } from './pages/CoachPage';
+import { VirtualCoachPage } from './pages/VirtualCoachPage';
+import { VirtualCoachDetailPage } from './pages/VirtualCoachDetailPage';
 import { LoginPage } from './pages/LoginPage';
 import { FirstTimeSetupPage } from './pages/FirstTimeSetupPage';
 import { CampaignPolicyPage } from './pages/CampaignPolicyPage';
@@ -203,6 +205,18 @@ export default function App() {
             <Route path="level-up/badges" element={<BadgesPage />} />
             <Route path="level-up/baseline" element={<BaselineSnapshotPage />} />
             <Route path="assistant" element={<AssistantPage />} />
+            <Route path="virtual-coach" element={<VirtualCoachPage user={appUser} />} />
+            <Route
+              path="virtual-coach/:coachId"
+              element={
+                <VirtualCoachDetailPage
+                  user={appUser}
+                  onSelected={(coachId) =>
+                    setAppUser((current) => (current ? { ...current, selectedVirtualCoachId: coachId } : current))
+                  }
+                />
+              }
+            />
             <Route path="coach" element={<CoachRoute appUser={appUser} />} />
             <Route path="admin" element={<AdminRoute appUser={appUser} />} />
             <Route path="admin/nutrition-templates" element={<AdminRoute appUser={appUser}><AdminNutritionTemplatesPage /></AdminRoute>} />
