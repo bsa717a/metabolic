@@ -105,7 +105,6 @@ export function Topbar({ user }: { user?: AppUser | null }) {
   const mobileNavLinks = [
     ...MOBILE_NAV_LINKS,
     ...(isCoachRole(user?.role) ? [['/coach', 'Coach', Users] as const] : []),
-    ...(isAdminRole(user?.role) ? [['/admin', 'Admin', Settings] as const] : []),
   ];
 
   return (
@@ -217,6 +216,16 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                       setAccountDetailsOpen(true);
                     }}
                   />
+                  {isAdminRole(user.role) ? (
+                    <ProfileMenuItem
+                      label="Admin"
+                      icon={Settings}
+                      onClick={() => {
+                        closeProfileMenu();
+                        navigate('/admin');
+                      }}
+                    />
+                  ) : null}
                   <ProfileMenuItem
                     label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
                     icon={theme === 'dark' ? Sun : Moon}
