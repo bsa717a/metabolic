@@ -1,7 +1,7 @@
-import { Apple, Bot, Droplets, Dumbbell, Gauge, LineChart, Settings, Target, Users } from 'lucide-react';
+import { Apple, Bot, Droplets, Dumbbell, Gauge, LineChart, Target, Users } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import type { AppUser } from '../../types';
-import { isAdminRole, isCoachRole } from '../../utils/roles';
+import { isCoachRole } from '../../utils/roles';
 import { BrandLogo } from '../brand/BrandLogo';
 
 const links = [
@@ -12,14 +12,11 @@ const links = [
   ['/progress', 'Progress', LineChart],
   ['/hydration', 'Hydration', Droplets],
   ['/assistant', 'AI Assistant', Bot],
-  ['/coach', 'Coach', Users],
-  ['/admin', 'Admin', Settings]
+  ['/coach', 'Coach', Users]
 ] as const;
 
 export function Sidebar({ user }: { user?: AppUser | null }) {
-  const visibleLinks = links.filter(
-    ([to]) => (to !== '/admin' || isAdminRole(user?.role)) && (to !== '/coach' || isCoachRole(user?.role))
-  );
+  const visibleLinks = links.filter(([to]) => to !== '/coach' || isCoachRole(user?.role));
 
   return (
     <aside className="hidden w-64 border-r border-app-border bg-app-surface p-5 lg:block">
