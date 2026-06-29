@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Sparkles, Check } from 'lucide-react';
+import { ArrowLeft, Check, Sparkles } from 'lucide-react';
 import type { AppUser } from '../types';
-import { VIRTUAL_COACHES, type VirtualCoach } from '../data/virtualCoaches';
+import { VIRTUAL_COACHES, getVirtualCoach, type VirtualCoach } from '../data/virtualCoaches';
+import { VirtualCoachProfile } from '../components/virtualCoach/VirtualCoachProfile';
 
 function CoachCard({ coach, selected }: { coach: VirtualCoach; selected: boolean }) {
   return (
@@ -14,10 +15,7 @@ function CoachCard({ coach, selected }: { coach: VirtualCoach; selected: boolean
           <Check size={12} aria-hidden /> Selected
         </span>
       )}
-      <div
-        className="h-28 w-28 overflow-hidden rounded-full border-4"
-        style={{ borderColor: coach.accent }}
-      >
+      <div className="h-28 w-28 overflow-hidden rounded-full border-4" style={{ borderColor: coach.accent }}>
         <img
           src={coach.image}
           alt={coach.name}
@@ -36,16 +34,22 @@ function CoachCard({ coach, selected }: { coach: VirtualCoach; selected: boolean
   );
 }
 
-export function VirtualCoachPage({ user }: { user?: AppUser | null }) {
-  const selectedId = user?.selectedVirtualCoachId ?? null;
-
+function CoachPicker({ selectedId }: { selectedId: string | null }) {
+  const isSwitching = Boolean(selectedId);
   return (
     <div className="space-y-8">
+      {isSwitching && (
+        <Link to="/virtual-coach" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-green">
+          <ArrowLeft size={16} aria-hidden /> Back to my coach
+        </Link>
+      )}
       <header className="space-y-2">
         <div className="inline-flex items-center gap-2 rounded-full bg-brand-green/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-green">
           <Sparkles size={14} aria-hidden /> Virtual Coach
         </div>
-        <h1 className="text-2xl font-bold text-brand-navy dark:text-brand-off-white">Choose your virtual coach</h1>
+        <h1 className="text-2xl font-bold text-brand-navy dark:text-brand-off-white">
+          {isSwitching ? 'Switch your virtual coach' : 'Choose your virtual coach'}
+        </h1>
         <p className="max-w-2xl text-sm text-app-text-muted">
           Each virtual coach has their own personality and style. Pick the one that fits you, save their contact, and
           text them anytime. You can switch whenever you like.
@@ -59,4 +63,29 @@ export function VirtualCoachPage({ user }: { user?: AppUser | null }) {
       </div>
     </div>
   );
+}
+
+function SelectedCoachSection({ coach }: { coach: VirtualCoach }) {
+  return (
+    <div className="space-y-6">
+      <header className="space-y-2">
+        <div className="inline-flex items-center gap-2 rounded-full bg-brand-green/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-green">
+          <Sparkles size={14} aria-hidden /> Virtual Coach
+        </div>
+        <h1 className="text-2xl font-bold text-brand-navy dark:text-brand-off-white">Your virtual coach</h1>
+      </header>
+
+      <VirtualCoachProfile coach={coach} selected />
+    </div>
+  );
+}
+
+export function VirtualCoachPage({ user, picker = false }: { user?: AppUser | null; picker?: boolean }) {
+  const selected = getVirtualCoach(user?.selectedVirtualCoachId);
+
+  if (selected && !picker) {
+    return <SelectedCoachSection coach={selected} />;
+  }
+
+  return <CoachPicker selectedId={selected?.id ?? null} />;
 }
