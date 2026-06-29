@@ -12,6 +12,7 @@ export type AppUser = {
   timezone?: string | null;
   dashboardTutorialCompletedAt?: string | null;
   smsRemindersIntroCompletedAt?: string | null;
+  selectedVirtualCoachId?: string | null;
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
 export type UserClientProfile = UserDemographics & {
