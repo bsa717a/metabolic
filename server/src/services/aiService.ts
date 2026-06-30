@@ -92,16 +92,71 @@ export type AgentRunInput = {
   abortSignal?: AbortSignal;
 };
 
+export type CoachCheckInStage =
+  | 'opening'
+  | 'wins'
+  | 'obstacles'
+  | 'data_reflection'
+  | 'pattern'
+  | 'focus'
+  | 'commitment'
+  | 'recap';
+
+export type CoachCheckInTranscriptEntry = {
+  role: 'coach' | 'user';
+  content: string;
+  at?: string;
+};
+
+export type CoachCheckInWeeklyReview = {
+  weekStart: string;
+  weekEnd: string;
+  adherencePct: number | null;
+  highlights: string[];
+  topMissedMeals: { name: string; count: number }[];
+  offPlanFoods: { name: string; count: number }[];
+  weakestDay: { date: string; label: string; adherencePct: number } | null;
+  strongestDay: { date: string; label: string; adherencePct: number } | null;
+  proteinGapGrams: number | null;
+  weightTrend: { date: string; weight: number }[];
+};
+
+export type CoachCheckInTurnInput = {
+  coachId: string;
+  stage: CoachCheckInStage;
+  systemPrompt: string;
+  weeklyReview: CoachCheckInWeeklyReview;
+  transcript: CoachCheckInTranscriptEntry[];
+  userMessage?: string;
+  userFirstName: string;
+};
+
+export type CoachCheckInRecap = {
+  win: string;
+  pattern: string;
+  focus: string;
+  supportAction: string;
+};
+
+export type CoachCheckInTurnResult = {
+  message: string;
+  chips: string[];
+  advance: boolean;
+  done: boolean;
+  recap?: CoachCheckInRecap;
+};
+
 export interface AiProvider {
   lookupFood(input: string): Promise<FoodEstimate[]>;
   lookupFoodFromImage(image: { data: string; mimeType: string }, input?: string): Promise<FoodEstimate[]>;
   lookupExercises(input: string): Promise<ExerciseEstimate[]>;
   suggestMealOptions(input: string, context: string): Promise<MealSuggestionResult>;
   enrichShoppingList(items: ShoppingListInputItem[], storeName?: string | null): Promise<EnrichedShoppingListResult>;
-  chat(messages: ChatMessage[], context: string, channel?: ChatChannel): Promise<string>;
+  chat(messages: ChatMessage[], context: string, channel?: ChatChannel, systemAddendum?: string): Promise<string>;
   classifyNutritionIntent(message: string): Promise<NutritionIntent>;
   /** Conversational tool-calling loop for SMS — reads context + history, calls tools, returns the reply text. */
   runAgent(input: AgentRunInput): Promise<string>;
+  coachCheckInTurn(input: CoachCheckInTurnInput): Promise<CoachCheckInTurnResult>;
 }
 
 const foodEstimateSchema = z.object({
@@ -286,6 +341,37 @@ const classifyIntentSchema = z.object({
   intent: z.enum(['LOG', 'SUGGEST', 'CHAT'])
 });
 
+const coachCheckInRecapSchema = z.object({
+  win: z.string().min(1).max(400),
+  pattern: z.string().min(1).max(400),
+  focus: z.string().min(1).max(400),
+  supportAction: z.string().min(1).max(400)
+});
+
+const coachCheckInTurnSchema = z.object({
+  message: z.string().min(1).max(1200),
+  chips: z.array(z.string().min(1).max(80)).max(6).default([]),
+  advance: z.boolean().default(true),
+  done: z.boolean().default(false),
+  recap: coachCheckInRecapSchema.optional()
+});
+
+const STAGE_GOALS: Record<CoachCheckInStage, string> = {
+  opening: 'Ask how they are feeling about the week — person first, not data.',
+  wins: 'Invite what went well this week. Reflect back something specific they share.',
+  obstacles: 'Explore what got in the way — stress, schedule, appetite, social plans, etc.',
+  data_reflection: 'Share one gentle observation from their week data (provided). Interpret it; do not list numbers.',
+  pattern: 'Name the single most important pattern you notice across the conversation and their data.',
+  focus: 'Help them choose one clear focus for the coming week.',
+  commitment: 'Agree on one simple support action they can actually do.',
+  recap: 'Summarize win, pattern, focus, and support action warmly. Set done true with recap filled in.'
+};
+
+const COACH_CHECK_IN_JSON_PROMPT = `Return JSON only:
+{ "message": string, "chips": string[], "advance": boolean, "done": boolean, "recap"?: { "win": string, "pattern": string, "focus": string, "supportAction": string } }
+Set advance true when this stage feels complete and you are ready to move on.
+Set done true only on the recap stage when you are closing the check-in; include recap then.`;
+
 const ASSISTANT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
 Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Use the user's first name occasionally when it feels natural.
 Answer using the user's live program data, macros, meals, allergies, and dietary preferences when relevant. Be practical and specific.
@@ -390,6 +476,41 @@ function jsonModelConfig(maxOutputTokens: number): JsonGenConfig {
     maxOutputTokens,
     thinkingConfig: { thinkingBudget: 0 }
   };
+}
+
+function parseCoachCheckInTurn(text: string): CoachCheckInTurnResult {
+  const parsed = parseModelJson(text);
+  const result = coachCheckInTurnSchema.safeParse(parsed);
+  if (result.success) {
+    return {
+      message: result.data.message.trim(),
+      chips: result.data.chips.map((chip) => chip.trim()).filter(Boolean).slice(0, 4),
+      advance: result.data.advance,
+      done: result.data.done,
+      recap: result.data.recap
+    };
+  }
+  throw result.error;
+}
+
+function buildCoachCheckInPrompt(input: CoachCheckInTurnInput) {
+  const history = input.transcript
+    .slice(-12)
+    .map((entry) => `${entry.role === 'coach' ? 'Coach' : 'User'}: ${entry.content}`)
+    .join('\n');
+  const reviewLines = input.weeklyReview.highlights.map((line) => `- ${line}`).join('\n');
+  const userLine = input.userMessage ? `\nUser just said: ${input.userMessage.trim()}` : '\nThis is the opening coach line — no user reply yet.';
+
+  return `${COACH_CHECK_IN_JSON_PROMPT}
+
+Current stage: ${input.stage}
+Stage goal: ${STAGE_GOALS[input.stage]}
+
+Weekly data highlights (interpret conversationally — do not quote as a list to the user):
+${reviewLines || '- Limited data logged this week.'}
+
+Conversation so far:
+${history || '(none)'}${userLine}`;
 }
 
 function parseModelJson(text: string) {
@@ -783,7 +904,7 @@ export class MockAiProvider implements AiProvider {
     };
   }
 
-  async chat(messages: ChatMessage[], context: string, channel: ChatChannel = 'web'): Promise<string> {
+  async chat(messages: ChatMessage[], context: string, channel: ChatChannel = 'web', _systemAddendum?: string): Promise<string> {
     const last = messages.at(-1)?.content.toLowerCase() ?? '';
     const suffix = channel === 'sms' ? ' (mock SMS — set AI_PROVIDER=gemini.)' : ' (mock — set AI_PROVIDER=gemini.)';
     if (last.includes('meal')) return `Based on your program data: ${context.slice(0, 180)}…${suffix}`;
@@ -832,6 +953,105 @@ export class MockAiProvider implements AiProvider {
 
     return 'Got it! (mock agent — set AI_PROVIDER=gemini for the full conversation.)';
   }
+
+  async coachCheckInTurn(input: CoachCheckInTurnInput): Promise<CoachCheckInTurnResult> {
+    const name = input.userFirstName;
+    const coach = input.coachId;
+    const stages: CoachCheckInStage[] = [
+      'opening',
+      'wins',
+      'obstacles',
+      'data_reflection',
+      'pattern',
+      'focus',
+      'commitment',
+      'recap'
+    ];
+    const stageIndex = stages.indexOf(input.stage);
+    const responseStage =
+      input.userMessage && stageIndex >= 0
+        ? stages[Math.min(stageIndex + 1, stages.length - 1)]
+        : input.stage;
+    const stage = responseStage;
+
+    const openers: Record<string, string> = {
+      kali: `Aloha, ${name}. Before we look at anything — how is your heart feeling about this week?`,
+      tess: `Hey ${name}. How are you really feeling about the week — not the numbers, just you?`,
+      finn: `${name}, good to connect. How did this week land for you overall?`,
+      nora: `Hi ${name}. Let's start simple — how are you feeling about the week?`,
+      milo: `Hey ${name}! How's the week sitting with you right now?`,
+      mets: `Kia ora, ${name}. How are you feeling about the week before we dig in?`
+    };
+
+    const byStage: Record<CoachCheckInStage, { message: string; chips: string[]; advance: boolean; done: boolean; recap?: CoachCheckInRecap }> = {
+      opening: {
+        message: openers[coach] ?? openers.tess,
+        chips: ['Pretty good', 'Mixed', 'Rough week', 'Not sure yet'],
+        advance: false,
+        done: false
+      },
+      wins: {
+        message: `I hear you. What is one thing that went well — even something small?`,
+        chips: ['Hit protein a few days', 'Logged honestly', 'Stayed active', 'Handled a tough day'],
+        advance: true,
+        done: false
+      },
+      obstacles: {
+        message: `That counts. What got in the way when things did not go as planned?`,
+        chips: ['Schedule', 'Stress', 'Social eating', 'Low energy'],
+        advance: true,
+        done: false
+      },
+      data_reflection: {
+        message:
+          input.weeklyReview.highlights[0]?.includes('on plan')
+            ? `From what I can see, you had some solid on-plan moments — and a few spots where life pulled you off. Does that match how it felt?`
+            : `It looks like logging was a bit spotty this week — no judgment. Does that match your experience?`,
+        chips: ['Yes, that fits', 'Partly', 'Not really', 'Tell me more'],
+        advance: true,
+        done: false
+      },
+      pattern: {
+        message: `The thread I notice is consistency when your days are predictable — and friction when plans shift. Does that ring true?`,
+        chips: ['Yes', 'Somewhat', 'Different pattern', 'Still figuring it out'],
+        advance: true,
+        done: false
+      },
+      focus: {
+        message: `For next week, let's pick one focus — not five. What feels most important to you?`,
+        chips: ['Protein at lunch', 'Evening routine', 'Weekend planning', 'Logging every meal'],
+        advance: true,
+        done: false
+      },
+      commitment: {
+        message: `Love it. What's one small support action — something you will actually do when the week gets messy?`,
+        chips: ['Prep one meal', 'Text you before dinner', 'Set a reminder', 'Plan weekends on Thursday'],
+        advance: true,
+        done: false
+      },
+      recap: {
+        message: `${name}, you showed up today — that matters. Here is what I am taking with us into next week.`,
+        chips: [],
+        advance: true,
+        done: true,
+        recap: {
+          win: 'You named what went well instead of skipping straight to guilt.',
+          pattern: 'Predictable days are your friend; surprises need a simpler plan.',
+          focus: input.userMessage?.trim() || 'One clear focus for the week ahead.',
+          supportAction: 'Reach out before the meal that usually goes off-plan.'
+        }
+      }
+    };
+
+    const result = byStage[stage];
+    return {
+      message: result.message,
+      chips: result.chips,
+      advance: Boolean(input.userMessage) || result.advance,
+      done: result.done,
+      recap: result.recap
+    };
+  }
 }
 
 function wrapAiError(error: unknown, action: string): Error {
@@ -879,6 +1099,19 @@ class GeminiAiProvider implements AiProvider {
     return this.client.getGenerativeModel({
       model: this.model,
       generationConfig: { temperature: 0.6, maxOutputTokens: 1024 }
+    });
+  }
+
+  private coachCheckInModel(systemPrompt: string) {
+    return this.client.getGenerativeModel({
+      model: this.model,
+      systemInstruction: { role: 'user', parts: [{ text: systemPrompt }] },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+        thinkingConfig: { thinkingBudget: 0 }
+      } as JsonGenConfig
     });
   }
 
@@ -1009,9 +1242,10 @@ ${JSON.stringify(items)}`;
     }
   }
 
-  async chat(messages: ChatMessage[], context: string, channel: ChatChannel = 'web'): Promise<string> {
+  async chat(messages: ChatMessage[], context: string, channel: ChatChannel = 'web', systemAddendum?: string): Promise<string> {
     try {
       const channelInstruction = channel === 'sms' ? `\n\n${SMS_ASSISTANT_ADDENDUM}` : '';
+      const personaInstruction = systemAddendum?.trim() ? `\n\n${systemAddendum.trim()}` : '';
       const contextTurn = [
         { role: 'user' as const, parts: [{ text: `Program data (JSON):\n${context}` }] },
         { role: 'model' as const, parts: [{ text: 'Understood. I will answer using this program data.' }] }
@@ -1030,7 +1264,7 @@ ${JSON.stringify(items)}`;
         history,
         systemInstruction: {
           role: 'user',
-          parts: [{ text: `${ASSISTANT_SYSTEM}${channelInstruction}` }]
+          parts: [{ text: `${ASSISTANT_SYSTEM}${personaInstruction}${channelInstruction}` }]
         }
       });
       const result = await chat.sendMessage(last.content);
@@ -1115,6 +1349,20 @@ ${JSON.stringify(items)}`;
       return text || 'Done!';
     } catch (error) {
       throw wrapAiError(error, 'assistant');
+    }
+  }
+
+  async coachCheckInTurn(input: CoachCheckInTurnInput): Promise<CoachCheckInTurnResult> {
+    const prompt = buildCoachCheckInPrompt(input);
+    try {
+      const result = await this.coachCheckInModel(input.systemPrompt).generateContent(prompt);
+      return parseCoachCheckInTurn(result.response.text());
+    } catch (error) {
+      try {
+        return await new MockAiProvider().coachCheckInTurn(input);
+      } catch {
+        throw wrapAiError(error, 'coach check-in');
+      }
     }
   }
 }

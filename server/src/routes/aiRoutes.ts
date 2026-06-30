@@ -4,6 +4,7 @@ import { requireAuth } from '../auth/requireAuth.js';
 import { acceptFoodLookup, acceptFoodLookups, lookupFood, lookupFoodFromImage } from '../services/foodLookupService.js';
 import { acceptExerciseLookup, lookupExercise } from '../services/exerciseLookupService.js';
 import { chatWithAssistant, suggestMealOptions } from '../services/assistantService.js';
+import { isCoachVoiceConfigured, synthesizeCoachSpeech } from '../services/coachVoiceService.js';
 
 const chatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -77,6 +78,24 @@ export async function aiRoutes(app: FastifyInstance) {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI chat failed';
       request.log.error({ err: error }, 'AI chat failed');
+      return reply.code(502).send({ error: message });
+    }
+  });
+  app.get('/api/ai/coach-voice/available', { preHandler: requireAuth }, async () => {
+    return { available: isCoachVoiceConfigured() };
+  });
+  app.post('/api/ai/coach-voice', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      const body = z
+        .object({ text: z.string().min(1).max(2000), coachId: z.string().min(1).max(40) })
+        .parse(request.body);
+      const audio = await synthesizeCoachSpeech(body.coachId, body.text);
+      reply.header('Content-Type', 'audio/mpeg');
+      reply.header('Cache-Control', 'no-store');
+      return reply.send(audio);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Voice synthesis failed';
+      request.log.error({ err: error }, 'Coach voice synthesis failed');
       return reply.code(502).send({ error: message });
     }
   });

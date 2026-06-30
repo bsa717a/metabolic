@@ -3,6 +3,7 @@ import { getAiProvider, type ChatMessage } from './aiService.js';
 import { prisma } from '../db/prisma.js';
 import { userDayKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
+import { isVirtualCoachId, VIRTUAL_COACH_PERSONA_PROMPTS } from '../data/virtualCoachPersonas.js';
 
 /** Allergies, dietary preferences, timezone, and first name for personalizing AI replies. */
 export async function loadPersonalization(userId: string) {
@@ -11,12 +12,14 @@ export async function loadPersonalization(userId: string) {
     select: {
       firstName: true,
       timezone: true,
+      selectedVirtualCoachId: true,
       clientProfile: { select: { foodConditions: true, dietNotes: true } }
     }
   });
   return {
     firstName: user?.firstName ?? null,
     timezone: user?.timezone ?? null,
+    selectedVirtualCoachId: user?.selectedVirtualCoachId ?? null,
     foodAllergies: user?.clientProfile?.foodConditions ?? null,
     dietaryPreferences: user?.clientProfile?.dietNotes ?? null
   };
@@ -165,7 +168,12 @@ export async function buildSmsAssistantContext(userId: string) {
 
 export async function chatWithAssistant(userId: string, messages: ChatMessage[]) {
   const context = await buildAssistantContext(userId);
-  const reply = await getAiProvider().chat(messages, context);
+  const personalization = await loadPersonalization(userId);
+  const personaPrefix =
+    personalization.selectedVirtualCoachId && isVirtualCoachId(personalization.selectedVirtualCoachId)
+      ? `${VIRTUAL_COACH_PERSONA_PROMPTS[personalization.selectedVirtualCoachId]}\n\nAlso serve as their in-app assistant when they ask quick questions between check-ins.\n\n`
+      : '';
+  const reply = await getAiProvider().chat(messages, context, 'web', personaPrefix);
   return { reply, contextUsed: true };
 }
 
