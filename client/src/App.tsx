@@ -206,6 +206,7 @@ export default function App() {
             <Route path="level-up/baseline" element={<BaselineSnapshotPage />} />
             <Route path="assistant" element={<AssistantPage />} />
             <Route path="virtual-coach" element={<VirtualCoachPage user={appUser} />} />
+            <Route path="virtual-coach/choose" element={<VirtualCoachPage user={appUser} picker />} />
             <Route
               path="virtual-coach/:coachId"
               element={

@@ -217,6 +217,14 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                       setAccountDetailsOpen(true);
                     }}
                   />
+                  <ProfileMenuItem
+                    label="Virtual Coaches"
+                    icon={Sparkles}
+                    onClick={() => {
+                      closeProfileMenu();
+                      navigate('/virtual-coach/choose');
+                    }}
+                  />
                   {isAdminRole(user.role) ? (
                     <ProfileMenuItem
                       label="Admin"

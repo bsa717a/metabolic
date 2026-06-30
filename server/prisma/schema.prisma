@@ -162,6 +162,10 @@ enum HydrationSource {
   AI
   SMS
 }
+enum VirtualCoachCheckInStatus {
+  IN_PROGRESS
+  COMPLETED
+}
 
 model User {
   id String @id @default(cuid())
@@ -187,6 +191,7 @@ model User {
   dashboardTutorialCompletedAt DateTime?
   smsRemindersIntroCompletedAt DateTime?
   selectedVirtualCoachId String?
+  virtualCoachCheckInDay Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organizations UserOrganization[]
@@ -224,6 +229,7 @@ model User {
   bloodPanelsEntered BloodPanel[] @relation("BloodPanelEnteredBy")
   hydrationEntries HydrationEntry[]
   smsNudgeLogs SmsNudgeLog[]
+  virtualCoachCheckIns VirtualCoachCheckIn[]
   clientProfile ClientProfile?
   defaultNutritionTemplate NutritionPlanTemplate? @relation("CoachDefaultNutritionTemplate", fields: [defaultNutritionTemplateId], references: [id], onDelete: SetNull)
   defaultExerciseTemplate ExerciseTemplate? @relation("CoachDefaultExerciseTemplate", fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
@@ -989,6 +995,25 @@ model AppSetting {
   key String @id
   value String
   updatedAt DateTime @updatedAt
+}
+
+model VirtualCoachCheckIn {
+  id String @id @default(cuid())
+  userId String
+  coachId String
+  weekStart DateTime @db.Date
+  status VirtualCoachCheckInStatus @default(IN_PROGRESS)
+  transcript Json
+  feelingNote String?
+  win String?
+  pattern String?
+  focus String?
+  supportAction String?
+  nextCheckInDate DateTime? @db.Date
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, weekStart])
 }
 
 /// The plan in effect for a program from `effectiveDate` until the next PlanPeriod.

@@ -369,3 +369,96 @@ export type ProgressSummary = {
   }[];
   bloodPanels: BloodPanelSummary[];
 };
+
+export type VirtualCoachCheckInStage =
+  | 'opening'
+  | 'wins'
+  | 'obstacles'
+  | 'data_reflection'
+  | 'pattern'
+  | 'focus'
+  | 'commitment'
+  | 'recap';
+
+export type VirtualCoachCheckInMessage = {
+  role: 'coach' | 'user';
+  content: string;
+  at: string;
+};
+
+export type VirtualCoachCheckInRecap = {
+  feelingNote?: string | null;
+  win?: string | null;
+  pattern?: string | null;
+  focus?: string | null;
+  supportAction?: string | null;
+  nextCheckInDate?: string | null;
+  completedAt?: string | null;
+};
+
+export type VirtualCoachCheckInSession = {
+  id: string;
+  coachId: string;
+  weekStart: string;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  currentStage: VirtualCoachCheckInStage;
+  transcript: VirtualCoachCheckInMessage[];
+  recap: VirtualCoachCheckInRecap;
+  createdAt: string;
+  completedAt?: string | null;
+  chips?: string[];
+  done?: boolean;
+};
+
+export type VirtualCoachCheckInState = {
+  coachId: string | null;
+  checkInDay: number;
+  checkInDayLabel: string;
+  isCheckInDay: boolean;
+  nextCheckInDate: string;
+  canStart: boolean;
+  inProgressSession: VirtualCoachCheckInSession | null;
+  latestRecap: VirtualCoachCheckInRecap | null;
+  weekStart: string;
+};
+
+export type WeeklyReviewDayKind = 'no_plan' | 'future' | 'today' | 'on_plan' | 'partial' | 'over' | 'missed';
+
+export type WeeklyReviewDay = {
+  date: string;
+  label: string;
+  plannedMeals: number;
+  onPlanMeals: number;
+  modifiedMeals: number;
+  missedMeals: number;
+  plannedKcal: number;
+  actualKcal: number;
+  adherencePct: number | null;
+  kind: WeeklyReviewDayKind;
+};
+
+export type WeeklyReview = {
+  weekStart: string;
+  weekEnd: string;
+  adherencePct: number | null;
+  pastPlannedMeals: number;
+  pastOnPlanMeals: number;
+  modifiedMeals: number;
+  missedMeals: number;
+  topMissedMeals: { name: string; count: number }[];
+  offPlanFoods: { name: string; count: number }[];
+  weakestDay: { date: string; label: string; adherencePct: number } | null;
+  strongestDay: { date: string; label: string; adherencePct: number } | null;
+  proteinGapGrams: number | null;
+  proteinActual: number;
+  proteinPlanned: number;
+  carbsActual: number;
+  carbsPlanned: number;
+  fatActual: number;
+  fatPlanned: number;
+  plannedKcal: number;
+  actualKcal: number;
+  days: WeeklyReviewDay[];
+  weightTrend: { date: string; weight: number }[];
+  highlights: string[];
+};
