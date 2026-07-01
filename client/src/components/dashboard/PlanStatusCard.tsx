@@ -61,34 +61,22 @@ export function PlanStatusCard() {
 
   if (status.state === 'on_plan') {
     const weekLine = dayOfWeekLine(status);
+    // Compact header block — sits where the dashboard clock used to be.
     return (
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-brand-green/30 bg-brand-green/5 px-5 py-4">
-        <Sprout size={22} className="shrink-0 text-brand-green" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-base font-bold text-app-text">
-            Your Metabolic Plan
-            {status.calorieTarget != null && (
-              <span className="ml-2 text-sm font-semibold text-app-text-muted">
-                {status.calorieTarget.toLocaleString()} kcal · {status.proteinTarget}g protein per day
-              </span>
-            )}
-          </p>
+      <div className="text-left sm:text-right">
+        <p className="text-sm font-semibold text-brand-navy dark:text-brand-off-white">
+          <Sprout size={16} className="mb-0.5 mr-1 inline text-brand-green" aria-hidden />
+          Your Metabolic Plan
+        </p>
+        <p className="mt-1 text-sm text-app-text-muted">{weekLine ?? 'Week 1 starts at your first check-in'}</p>
+        {status.nextCheckInDate && (
           <p className="text-sm text-app-text-muted">
-            {weekLine ?? 'Week 1 starts at your first check-in'}
-            {status.nextCheckInDate && (
-              <>
-                {' · '}
-                <CalendarCheck size={14} className="mb-0.5 inline text-brand-green" aria-hidden /> next check-in{' '}
-                {formatDate(status.nextCheckInDate)}
-              </>
-            )}
+            <CalendarCheck size={14} className="mb-0.5 mr-1 inline text-brand-green" aria-hidden />
+            Next check-in {formatDate(status.nextCheckInDate)}
           </p>
-        </div>
-        <Link
-          to="/nutrition"
-          className="shrink-0 rounded-xl bg-brand-green px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-deep"
-        >
-          Build today's meals
+        )}
+        <Link to="/nutrition" className="mt-1 inline-block text-sm font-bold text-brand-green transition hover:text-brand-deep">
+          Build today's meals →
         </Link>
       </div>
     );
@@ -96,7 +84,7 @@ export function PlanStatusCard() {
 
   // coached_no_plan and self_directed both get the "not on a plan yet" card
   return (
-    <div className="rounded-2xl border border-dashed border-app-border bg-app-surface px-5 py-4">
+    <div className="max-w-md rounded-2xl border border-dashed border-app-border bg-app-surface px-5 py-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Sprout size={22} className="shrink-0 text-app-text-muted" aria-hidden />
         <div className="min-w-0 flex-1">
