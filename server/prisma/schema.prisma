@@ -609,6 +609,7 @@ model Food {
   flavorTags String[]
   textureTags String[]
   isFreeFood Boolean @default(false)
+  imageUrl String?
   aliases FoodAlias[]
   mealItems MealItem[]
   nutritionTemplateMealItems NutritionTemplateMealItem[]

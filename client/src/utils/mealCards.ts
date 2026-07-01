@@ -1,5 +1,5 @@
 /** Contract of GET /api/daily-logs/:date/dinner-cards (see server mealCardService). */
-export type DinnerCardFood = {
+export type CardFood = {
   foodId: string;
   name: string;
   servings: number;
@@ -13,45 +13,45 @@ export type DinnerCardFood = {
   rounded: boolean;
 };
 
-export type DinnerCardOption = {
+export type CardOption = {
   id: string;
   name: string;
   description: string | null;
   icon: string | null;
   isDefault: boolean;
   sortOrder: number;
-  foods: DinnerCardFood[];
+  foods: CardFood[];
   totals: { calories: number; protein: number; carbs: number; fat: number };
 };
 
-export type DinnerCardRole = 'STYLE' | 'PROTEIN' | 'FAT' | 'CARB' | 'VEGETABLE' | 'FRUIT' | 'FREE';
+export type CardRole = 'STYLE' | 'PROTEIN' | 'FAT' | 'CARB' | 'VEGETABLE' | 'FRUIT' | 'FREE';
 
-export type DinnerCard = {
+export type BuilderCard = {
   id: string;
-  role: DinnerCardRole;
+  role: CardRole;
   name: string;
   pickRule: string | null;
   required: boolean;
   maxSelect: number;
   sortOrder: number;
-  options: DinnerCardOption[];
+  options: CardOption[];
 };
 
-export type DinnerCardsPayload = {
+export type MealCardsPayload = {
   setId: string;
   setName: string;
   mealNumber: number;
   mealName: string;
   targetCalories: number;
   referenceCalories: number;
-  cards: DinnerCard[];
+  cards: BuilderCard[];
   savedSelections: { setId: string; picks: Record<string, string | string[]> } | null;
 };
 
-export type DinnerPicks = Record<string, string[]>;
+export type BuilderPicks = Record<string, string[]>;
 
-export function defaultPicks(cards: DinnerCard[]): DinnerPicks {
-  const picks: DinnerPicks = {};
+export function defaultPicks(cards: BuilderCard[]): BuilderPicks {
+  const picks: BuilderPicks = {};
   for (const card of cards) {
     const def = card.options.find((o) => o.isDefault) ?? (card.required ? card.options[0] : undefined);
     picks[card.id] = def ? [def.id] : [];
@@ -60,7 +60,7 @@ export function defaultPicks(cards: DinnerCard[]): DinnerPicks {
 }
 
 /** Saved picks win where valid; unknown cards/options fall back to defaults. */
-export function restorePicks(cards: DinnerCard[], saved: Record<string, string | string[]>): DinnerPicks {
+export function restorePicks(cards: BuilderCard[], saved: Record<string, string | string[]>): BuilderPicks {
   const picks = defaultPicks(cards);
   for (const card of cards) {
     const raw = saved[card.id];
@@ -71,7 +71,7 @@ export function restorePicks(cards: DinnerCard[], saved: Record<string, string |
   return picks;
 }
 
-export function togglePick(card: DinnerCard, picks: DinnerPicks, optionId: string): DinnerPicks {
+export function togglePick(card: BuilderCard, picks: BuilderPicks, optionId: string): BuilderPicks {
   const current = picks[card.id] ?? [];
   if (card.maxSelect <= 1) return { ...picks, [card.id]: [optionId] };
   if (current.includes(optionId)) return { ...picks, [card.id]: current.filter((id) => id !== optionId) };
@@ -79,7 +79,7 @@ export function togglePick(card: DinnerCard, picks: DinnerPicks, optionId: strin
   return { ...picks, [card.id]: [...current, optionId] };
 }
 
-export function selectionTotals(cards: DinnerCard[], picks: DinnerPicks) {
+export function selectionTotals(cards: BuilderCard[], picks: BuilderPicks) {
   let calories = 0;
   let protein = 0;
   for (const card of cards) {
@@ -94,14 +94,14 @@ export function selectionTotals(cards: DinnerCard[], picks: DinnerPicks) {
 }
 
 /** First blood-sugar role (protein/carb/veg) present in the set but left unpicked. */
-export function missingCoverageRole(cards: DinnerCard[], picks: DinnerPicks) {
+export function missingCoverageRole(cards: BuilderCard[], picks: BuilderPicks) {
   const covered = new Set(cards.filter((card) => (picks[card.id] ?? []).length > 0).map((card) => card.role));
   return (['PROTEIN', 'CARB', 'VEGETABLE'] as const).find(
     (role) => cards.some((card) => card.role === role) && !covered.has(role)
   );
 }
 
-export function foodsLabel(option: DinnerCardOption) {
+export function foodsLabel(option: CardOption) {
   if (!option.foods.length) return option.description ?? '';
   return option.foods
     .map((f) => `${f.quantity} ${f.unit}${f.rounded ? ' (rounded)' : ''}${f.free ? ' · free' : ''}`)
@@ -109,7 +109,7 @@ export function foodsLabel(option: DinnerCardOption) {
 }
 
 /** POST body shape: single-select cards send a string, multi-select send arrays. */
-export function picksToSelections(cards: DinnerCard[], picks: DinnerPicks) {
+export function picksToSelections(cards: BuilderCard[], picks: BuilderPicks) {
   const selections: Record<string, string | string[]> = {};
   for (const card of cards) {
     const ids = picks[card.id] ?? [];

@@ -11,15 +11,15 @@ import {
   restorePicks,
   selectionTotals,
   togglePick,
-  type DinnerCard,
-  type DinnerCardOption,
-  type DinnerCardsPayload,
-  type DinnerPicks
-} from '../../utils/dinnerCards';
+  type BuilderCard,
+  type CardOption,
+  type MealCardsPayload,
+  type BuilderPicks
+} from '../../utils/mealCards';
 
-export type { DinnerCardsPayload } from '../../utils/dinnerCards';
+export type { MealCardsPayload } from '../../utils/mealCards';
 
-export function DinnerCardBuilder({
+export function MealBuilder({
   open,
   date,
   payload,
@@ -28,22 +28,22 @@ export function DinnerCardBuilder({
 }: {
   open: boolean;
   date: string;
-  payload: DinnerCardsPayload | null;
+  payload: MealCardsPayload | null;
   onClose: () => void;
-  onSaved: (updated: DinnerCardsPayload) => void | Promise<void>;
+  onSaved: (updated: MealCardsPayload) => void | Promise<void>;
 }) {
   const cards = useMemo(
     () => (payload ? [...payload.cards].sort((a, b) => a.sortOrder - b.sortOrder) : []),
     [payload]
   );
   const [step, setStep] = useState(0); // cards.length = review step
-  const [picks, setPicks] = useState<DinnerPicks>({});
+  const [picks, setPicks] = useState<BuilderPicks>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Reset the wizard whenever it (re)opens — state adjustment during render, not an effect.
   const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
-  const openKey = open && payload ? `${payload.setId}:${date}` : null;
+  const openKey = open && payload ? `${payload.setId}:${payload.mealNumber}:${date}` : null;
   if (openKey !== prevOpenKey) {
     setPrevOpenKey(openKey);
     if (openKey && payload) {
@@ -71,7 +71,7 @@ export function DinnerCardBuilder({
   const stepPicked = currentCard ? (picks[currentCard.id] ?? []).length > 0 : true;
   const canAdvance = !currentCard || !currentCard.required || stepPicked;
 
-  function toggleOption(card: DinnerCard, optionId: string) {
+  function toggleOption(card: BuilderCard, optionId: string) {
     setPicks((prev) => togglePick(card, prev, optionId));
   }
 
@@ -81,14 +81,14 @@ export function DinnerCardBuilder({
     setSaveError(null);
     try {
       const selections = picksToSelections(cards, picks);
-      const updated = await api<DinnerCardsPayload>(`/api/daily-logs/${date}/dinner-selections`, {
+      const updated = await api<MealCardsPayload>(`/api/daily-logs/${date}/meal-selections`, {
         method: 'POST',
-        body: JSON.stringify({ selections })
+        body: JSON.stringify({ mealNumber: payload.mealNumber, selections })
       });
       await onSaved(updated);
       onClose();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Could not save your dinner.');
+      setSaveError(error instanceof Error ? error.message : 'Could not save your meal.');
     } finally {
       setSaving(false);
     }
@@ -97,7 +97,7 @@ export function DinnerCardBuilder({
   const selectedLines = cards.flatMap((card) =>
     (picks[card.id] ?? [])
       .map((optionId) => card.options.find((o) => o.id === optionId))
-      .filter((option): option is DinnerCardOption => Boolean(option))
+      .filter((option): option is CardOption => Boolean(option))
       .map((option) => ({ card, option }))
   );
 
@@ -168,9 +168,18 @@ export function DinnerCardBuilder({
                       selected ? 'border-brand-green bg-brand-green/5' : 'border-app-border hover:border-brand-green-light'
                     )}
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-app-muted text-2xl">
-                      {option.icon ?? '🍽️'}
-                    </span>
+                    {option.foods[0]?.imageUrl ? (
+                      <img
+                        src={option.foods[0].imageUrl}
+                        alt=""
+                        className="h-14 w-14 shrink-0 rounded-xl bg-app-muted object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-green/15 to-brand-gold/20 text-3xl">
+                        {option.icon ?? '🍽️'}
+                      </span>
+                    )}
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-bold text-app-text">{option.name}</span>
                       <span className="block text-xs font-semibold text-brand-green">{foodsLabel(option)}</span>
@@ -259,7 +268,7 @@ export function DinnerCardBuilder({
           <div className="flex items-center gap-3">
             <div className="flex-1">
               <p className="text-sm font-bold text-app-text">{totals.calories} kcal so far</p>
-              <p className="text-xs text-app-text-muted">dinner target {target} (±10%)</p>
+              <p className="text-xs text-app-text-muted">{payload.setName} · target {target} (±10%)</p>
             </div>
             {isReview ? (
               <button

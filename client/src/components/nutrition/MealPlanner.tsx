@@ -9,8 +9,8 @@ export function MealPlanner({
   onLogActual,
   selectedMealId,
   onSelectMeal,
-  buildDinnerMealNumber,
-  onBuildDinner,
+  cardMeals = [],
+  onBuildMeal,
 }: {
   meals: Meal[];
   selectedDate: string;
@@ -18,8 +18,8 @@ export function MealPlanner({
   onLogActual: (mealId: string) => void;
   selectedMealId?: string;
   onSelectMeal?: (mealId: string) => void;
-  buildDinnerMealNumber?: number;
-  onBuildDinner?: () => void;
+  cardMeals?: Array<{ mealNumber: number; slotType: 'BREAKFAST' | 'SNACK' | 'LUNCH' | 'DINNER' }>;
+  onBuildMeal?: (mealNumber: number) => void;
 }) {
   const [editingMealId, setEditingMealId] = useState<string | undefined>();
 
@@ -38,23 +38,29 @@ export function MealPlanner({
     setEditingMealId(undefined);
   }
 
+  const slotLabels = { BREAKFAST: 'Build breakfast', SNACK: 'Build snack', LUNCH: 'Build lunch', DINNER: 'Build dinner' } as const;
+
   return (
     <div className="space-y-4">
-      {meals.map((meal) => (
-        <MealCard
-          key={meal.id}
-          meal={meal}
-          selectedDate={selectedDate}
-          onChange={onChange}
-          isEditing={meal.id === editingMealId}
-          onEnterEditMode={handleEnterEditMode}
-          onExitEditMode={handleExitEditMode}
-          onLogActual={onLogActual}
-          selected={meal.id === selectedMealId}
-          onSelect={onSelectMeal}
-          onBuildDinner={meal.mealNumber === buildDinnerMealNumber ? onBuildDinner : undefined}
-        />
-      ))}
+      {meals.map((meal) => {
+        const cardMeal = cardMeals.find((c) => c.mealNumber === meal.mealNumber);
+        return (
+          <MealCard
+            key={meal.id}
+            meal={meal}
+            selectedDate={selectedDate}
+            onChange={onChange}
+            isEditing={meal.id === editingMealId}
+            onEnterEditMode={handleEnterEditMode}
+            onExitEditMode={handleExitEditMode}
+            onLogActual={onLogActual}
+            selected={meal.id === selectedMealId}
+            onSelect={onSelectMeal}
+            buildLabel={cardMeal ? slotLabels[cardMeal.slotType] : undefined}
+            onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }

@@ -27,11 +27,13 @@ export type FoodMacros = {
   protein: unknown;
   carbs: unknown;
   fat: unknown;
+  imageUrl?: string | null;
 };
 
 export type ScaledFoodLine = {
   foodId: string;
   name: string;
+  imageUrl: string | null;
   /** servings of the Food's servingSize (the scaling unit) */
   servings: number;
   /** quantity in the Food's servingUnit = servings × servingSize (what MealItem stores) */
@@ -83,6 +85,7 @@ export function scaleOptionFood(
   return {
     foodId: optionFood.foodId,
     name: food.name,
+    imageUrl: food.imageUrl ?? null,
     servings,
     quantity: round(servings * n(food.servingSize), 2),
     unit: food.servingUnit,

@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CopyPlus, LayoutTemplate, ShoppingCart } from 'lucide-react';
-import { clsx } from 'clsx';
-import { api, getWeekDates, isFuture, isToday, startOfWeek, todayKey } from '../services/api';
+import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
 import type { NutritionPlanTemplateSummary } from '../types';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
-import { WeeklyPlanner } from '../components/nutrition/weekly/WeeklyPlanner';
 import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
 import { EditMealPlanDrawer } from '../components/nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
 import { ApplyTemplateModal } from '../components/nutrition/ApplyTemplateModal';
-import { DinnerCardBuilder, type DinnerCardsPayload } from '../components/nutrition/DinnerCardBuilder';
+import { MealBuilder, type MealCardsPayload } from '../components/nutrition/MealBuilder';
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { PlanPrintMenu } from '../components/export/PlanPrintMenu';
 import { Button } from '../components/ui/Button';
@@ -29,12 +27,9 @@ function dateFromParams(params: URLSearchParams) {
   return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey();
 }
 
-type View = 'week' | 'day';
-
 export function NutritionPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
-  const [view, setView] = useState<View>('week');
   const [weekDays, setWeekDays] = useState<DayMeals[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [logActualMealId, setLogActualMealId] = useState<string>();
@@ -46,8 +41,8 @@ export function NutritionPage() {
   const [copyingDay, setCopyingDay] = useState(false);
   const [defaultTemplate, setDefaultTemplate] = useState<NutritionPlanTemplateSummary | null>(null);
   const [selectedMealId, setSelectedMealId] = useState<string>();
-  const [dinnerCards, setDinnerCards] = useState<DinnerCardsPayload | null>(null);
-  const [dinnerBuilderOpen, setDinnerBuilderOpen] = useState(false);
+  const [cardMeals, setCardMeals] = useState<MealCardsPayload[]>([]);
+  const [builderMealNumber, setBuilderMealNumber] = useState<number | null>(null);
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
@@ -88,12 +83,12 @@ export function NutritionPage() {
       .catch(() => setDefaultTemplate(null));
   }, [selectedDate, weekDays]);
 
-  // Card-builder availability for the selected day; 404 = plan has no dinner card set.
+  // Card-builder availability for the selected day; 404 = plan has no card sets.
   useEffect(() => {
     let cancelled = false;
-    api<DinnerCardsPayload>(`/api/daily-logs/${selectedDate}/dinner-cards`)
-      .then((payload) => { if (!cancelled) setDinnerCards(payload); })
-      .catch(() => { if (!cancelled) setDinnerCards(null); });
+    api<MealCardsPayload[]>(`/api/daily-logs/${selectedDate}/meal-cards`)
+      .then((payloads) => { if (!cancelled) setCardMeals(payloads); })
+      .catch(() => { if (!cancelled) setCardMeals([]); });
     return () => { cancelled = true; };
   }, [selectedDate]);
 
@@ -219,28 +214,7 @@ export function NutritionPage() {
         </div>
       </div>
 
-      <WeekDateStrip
-        selectedDate={selectedDate}
-        onSelectDate={selectDate}
-        days={weekDays}
-        endAction={
-          <div className="inline-flex rounded-xl bg-app-muted p-1">
-            {(['week', 'day'] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setView(option)}
-                className={clsx(
-                  'rounded-lg px-4 py-1.5 text-sm font-semibold capitalize transition',
-                  view === option ? 'bg-app-surface text-app-text shadow-sm' : 'text-app-text-muted hover:text-app-text'
-                )}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        }
-      />
+      <WeekDateStrip selectedDate={selectedDate} onSelectDate={selectDate} days={weekDays} />
 
       {defaultTemplate && (
         <p className="text-sm text-app-text-muted">
@@ -251,18 +225,7 @@ export function NutritionPage() {
       {printError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError}</div>}
       {loadError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>}
 
-      {view === 'week' ? (
-        <WeeklyPlanner
-          weekDates={weekDates}
-          days={weekDays}
-          selectedDate={selectedDate}
-          onSelectDay={selectDate}
-          onChange={reloadWeek}
-          onLogActual={(mealId) => setLogActualMealId(mealId)}
-          onAskAi={(mealId) => openAiFromDrawer(mealId, isFuture(selectedDate) ? 'PLANNED' : 'ACTUAL')}
-        />
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0 space-y-4">
               <MealPlanner
                 meals={currentDayMeals}
@@ -271,8 +234,8 @@ export function NutritionPage() {
                 onLogActual={(mealId) => setLogActualMealId(mealId)}
                 selectedMealId={effectiveSelectedMealId}
                 onSelectMeal={setSelectedMealId}
-                buildDinnerMealNumber={dinnerCards?.mealNumber}
-                onBuildDinner={() => setDinnerBuilderOpen(true)}
+                cardMeals={cardMeals.map(({ mealNumber, slotType }) => ({ mealNumber, slotType }))}
+                onBuildMeal={setBuilderMealNumber}
               />
 
               {currentDayMeals.length > 0 && (
@@ -300,7 +263,6 @@ export function NutritionPage() {
               />
             </div>
           </div>
-      )}
 
       <EditMealPlanDrawer
         open={Boolean(logActualMealId)}
@@ -329,13 +291,13 @@ export function NutritionPage() {
 
       <ShoppingListDrawer open={shoppingListOpen} anchorDate={selectedDate} onClose={() => setShoppingListOpen(false)} />
 
-      <DinnerCardBuilder
-        open={dinnerBuilderOpen}
+      <MealBuilder
+        open={builderMealNumber != null}
         date={selectedDate}
-        payload={dinnerCards}
-        onClose={() => setDinnerBuilderOpen(false)}
+        payload={cardMeals.find((p) => p.mealNumber === builderMealNumber) ?? null}
+        onClose={() => setBuilderMealNumber(null)}
         onSaved={async (updated) => {
-          setDinnerCards(updated);
+          setCardMeals((prev) => prev.map((p) => (p.mealNumber === updated.mealNumber ? updated : p)));
           await reloadWeek();
         }}
       />

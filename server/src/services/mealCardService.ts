@@ -30,10 +30,10 @@ export class MealCardError extends Error {
 }
 
 /**
- * Resolve the card-set-backed meal for a user's date: active program → plan for the
- * date (PlanPeriod carry-forward) → template → the meal with a mealCardSetId.
+ * Resolve every card-set-backed meal for a user's date: active program → plan for the
+ * date (PlanPeriod carry-forward) → template → its meals with a mealCardSetId.
  */
-async function resolveCardMealForDate(userId: string, date: string) {
+async function resolveCardMealsForDate(userId: string, date: string) {
   const program = await prisma.program.findFirst({
     where: { userId, status: ProgramStatus.ACTIVE },
     select: { id: true, defaultNutritionTemplateId: true, defaultExerciseTemplateId: true }
@@ -43,18 +43,29 @@ async function resolveCardMealForDate(userId: string, date: string) {
   const plan = await resolvePlanForDate(program, parseDateParam(date));
   if (!plan.nutritionTemplateId) throw new MealCardError('No nutrition plan for this date', 404);
 
-  const templateMeal = await prisma.nutritionTemplateMeal.findFirst({
+  const templateMeals = await prisma.nutritionTemplateMeal.findMany({
     where: { templateId: plan.nutritionTemplateId, mealCardSetId: { not: null } },
+    orderBy: { mealNumber: 'asc' },
     include: { mealCardSet: { include: cardSetInclude } }
   });
-  if (!templateMeal?.mealCardSet) throw new MealCardError('No dinner card set on this plan', 404);
 
-  // The scale numerator: the meal's stored target, else scale 1:1 against the reference.
-  const targetCalories = templateMeal.calorieTarget != null
-    ? n(templateMeal.calorieTarget)
-    : n(templateMeal.mealCardSet.referenceCalories);
+  return templateMeals
+    .filter((meal) => meal.mealCardSet != null)
+    .map((templateMeal) => ({
+      templateMeal,
+      cardSet: templateMeal.mealCardSet!,
+      // The scale numerator: the meal's stored target, else scale 1:1 against the reference.
+      targetCalories: templateMeal.calorieTarget != null
+        ? n(templateMeal.calorieTarget)
+        : n(templateMeal.mealCardSet!.referenceCalories)
+    }));
+}
 
-  return { templateMeal, cardSet: templateMeal.mealCardSet, targetCalories };
+async function resolveCardMealForDate(userId: string, date: string, mealNumber: number) {
+  const cardMeals = await resolveCardMealsForDate(userId, date);
+  const match = cardMeals.find((entry) => entry.templateMeal.mealNumber === mealNumber);
+  if (!match) throw new MealCardError('No card set for this meal', 404);
+  return match;
 }
 
 function scaledOptionPayload(cardSet: LoadedCardSet, targetCalories: number) {
@@ -85,31 +96,36 @@ function scaledOptionPayload(cardSet: LoadedCardSet, targetCalories: number) {
   }));
 }
 
-/** GET payload: the whole scaled card set + any selections already saved for the date. */
-export async function getDinnerCardsForDate(userId: string, date: string) {
-  const { templateMeal, cardSet, targetCalories } = await resolveCardMealForDate(userId, date);
+/** GET payload: every card-backed meal's scaled set + any selections saved for the date. */
+export async function getMealCardsForDate(userId: string, date: string) {
+  const cardMeals = await resolveCardMealsForDate(userId, date);
+  if (!cardMeals.length) throw new MealCardError('No card sets on this plan', 404);
 
   const day = parseDateParam(date);
   const log = await prisma.dailyLog.findUnique({ where: { userId_date: { userId, date: day } } });
-  const meal = log
-    ? await prisma.meal.findFirst({ where: { dailyLogId: log.id, mealNumber: templateMeal.mealNumber } })
-    : null;
+  const dayMeals = log
+    ? await prisma.meal.findMany({ where: { dailyLogId: log.id }, select: { mealNumber: true, name: true, cardSelections: true } })
+    : [];
 
-  return {
-    setId: cardSet.id,
-    setName: cardSet.name,
-    mealNumber: templateMeal.mealNumber,
-    mealName: meal?.name ?? templateMeal.name,
-    targetCalories: round(targetCalories, 0),
-    referenceCalories: n(cardSet.referenceCalories),
-    cards: scaledOptionPayload(cardSet, targetCalories),
-    savedSelections: (meal?.cardSelections as Record<string, string | string[]> | null) ?? null
-  };
+  return cardMeals.map(({ templateMeal, cardSet, targetCalories }) => {
+    const meal = dayMeals.find((m) => m.mealNumber === templateMeal.mealNumber);
+    return {
+      setId: cardSet.id,
+      setName: cardSet.name,
+      slotType: cardSet.slotType,
+      mealNumber: templateMeal.mealNumber,
+      mealName: meal?.name ?? templateMeal.name,
+      targetCalories: round(targetCalories, 0),
+      referenceCalories: n(cardSet.referenceCalories),
+      cards: scaledOptionPayload(cardSet, targetCalories),
+      savedSelections: (meal?.cardSelections as { setId: string; picks: Record<string, string | string[]> } | null) ?? null
+    };
+  });
 }
 
-export type DinnerSelections = Record<string, string | string[]>;
+export type MealSelections = Record<string, string | string[]>;
 
-function validateSelections(cardSet: LoadedCardSet, selections: DinnerSelections) {
+function validateSelections(cardSet: LoadedCardSet, selections: MealSelections) {
   const picked = new Map<string, string[]>();
   for (const card of cardSet.cards) {
     const raw = selections[card.id];
@@ -130,12 +146,12 @@ function validateSelections(cardSet: LoadedCardSet, selections: DinnerSelections
 }
 
 /**
- * Persist the builder's picks for the date: write provenance to Meal.cardSelections and
- * materialize the scaled portions into PLANNED MealItems (macros frozen in — logs stay
- * historically accurate). Existing ACTUAL (logged) items are never touched.
+ * Persist the builder's picks for one meal of the date: write provenance to
+ * Meal.cardSelections and materialize the scaled portions into PLANNED MealItems
+ * (macros frozen in — logs stay historically accurate). ACTUAL items are never touched.
  */
-export async function saveDinnerSelections(userId: string, date: string, selections: DinnerSelections) {
-  const { templateMeal, cardSet, targetCalories } = await resolveCardMealForDate(userId, date);
+export async function saveMealSelections(userId: string, date: string, mealNumber: number, selections: MealSelections) {
+  const { templateMeal, cardSet, targetCalories } = await resolveCardMealForDate(userId, date, mealNumber);
   const picked = validateSelections(cardSet, selections);
 
   const factor = scaleFactor(targetCalories, cardSet.referenceCalories);
@@ -193,5 +209,6 @@ export async function saveDinnerSelections(userId: string, date: string, selecti
     await recalculateDailyLogTotals(log.id, tx);
   });
 
-  return getDinnerCardsForDate(userId, date);
+  const payloads = await getMealCardsForDate(userId, date);
+  return payloads.find((p) => p.mealNumber === mealNumber) ?? payloads[0];
 }

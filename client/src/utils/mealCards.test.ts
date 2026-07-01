@@ -7,11 +7,11 @@ import {
   restorePicks,
   selectionTotals,
   togglePick,
-  type DinnerCard,
-  type DinnerCardOption
-} from './dinnerCards';
+  type BuilderCard,
+  type CardOption
+} from './mealCards';
 
-function option(id: string, overrides: Partial<DinnerCardOption> = {}): DinnerCardOption {
+function option(id: string, overrides: Partial<CardOption> = {}): CardOption {
   return {
     id,
     name: id,
@@ -25,7 +25,7 @@ function option(id: string, overrides: Partial<DinnerCardOption> = {}): DinnerCa
   };
 }
 
-function card(id: string, overrides: Partial<DinnerCard> = {}): DinnerCard {
+function card(id: string, overrides: Partial<BuilderCard> = {}): BuilderCard {
   return {
     id,
     role: 'PROTEIN',
@@ -143,9 +143,9 @@ describe('foodsLabel', () => {
   it('labels scaled, rounded, and free lines', () => {
     const opt = option('beef', {
       foods: [
-        { foodId: 'f1', name: 'Beef', servings: 2.18, quantity: 4.36, unit: 'oz', calories: 229, protein: 24, carbs: 0, fat: 13, free: false, rounded: false },
-        { foodId: 'f2', name: 'Tortillas', servings: 2, quantity: 2, unit: 'tortilla', calories: 140, protein: 4, carbs: 24, fat: 4, free: false, rounded: true },
-        { foodId: 'f3', name: 'Salsa', servings: 1, quantity: 2, unit: 'tbsp', calories: 10, protein: 0, carbs: 2, fat: 0, free: true, rounded: false }
+        { foodId: 'f1', name: 'Beef', imageUrl: null, servings: 2.18, quantity: 4.36, unit: 'oz', calories: 229, protein: 24, carbs: 0, fat: 13, free: false, rounded: false },
+        { foodId: 'f2', name: 'Tortillas', imageUrl: null, servings: 2, quantity: 2, unit: 'tortilla', calories: 140, protein: 4, carbs: 24, fat: 4, free: false, rounded: true },
+        { foodId: 'f3', name: 'Salsa', imageUrl: null, servings: 1, quantity: 2, unit: 'tbsp', calories: 10, protein: 0, carbs: 2, fat: 0, free: true, rounded: false }
       ]
     });
     expect(foodsLabel(opt)).toBe('4.36 oz + 2 tortilla (rounded) + 2 tbsp · free');
