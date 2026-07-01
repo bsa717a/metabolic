@@ -38,8 +38,6 @@ export function MealPlanner({
     setEditingMealId(undefined);
   }
 
-  const slotLabels = { BREAKFAST: 'Build breakfast', SNACK: 'Build snack', LUNCH: 'Build lunch', DINNER: 'Build dinner' } as const;
-
   return (
     <div className="space-y-4">
       {meals.map((meal) => {
@@ -56,7 +54,6 @@ export function MealPlanner({
             onLogActual={onLogActual}
             selected={meal.id === selectedMealId}
             onSelect={onSelectMeal}
-            buildLabel={cardMeal ? slotLabels[cardMeal.slotType] : undefined}
             onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
           />
         );

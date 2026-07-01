@@ -924,18 +924,21 @@ model MealCardOption {
   @@unique([cardId, sortOrder])
 }
 
-/// The user's current picks for a card set — their standing weekly selection. Written on
-/// every builder save; future days materialize card-backed meals from this until changed.
+/// The user's current picks for one meal slot — their standing weekly selection. Written
+/// on every builder save; future days materialize card-backed meals from this until
+/// changed. Keyed per slot (mealNumber) so two meals sharing a card set (e.g. morning
+/// and afternoon snack) are built independently.
 model UserMealCardPicks {
   id String @id @default(cuid())
   userId String
   cardSetId String
+  mealNumber Int
   picks Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   cardSet MealCardSet @relation(fields: [cardSetId], references: [id], onDelete: Cascade)
-  @@unique([userId, cardSetId])
+  @@unique([userId, cardSetId, mealNumber])
 }
 
 /// The scalable line: servings at the set's reference target. scalable=false pins the

@@ -111,9 +111,11 @@ export async function getMealCardsForDate(userId: string, date: string) {
 
   return cardMeals.map(({ templateMeal, cardSet, targetCalories }) => {
     const meal = dayMeals.find((m) => m.mealNumber === templateMeal.mealNumber);
-    // Day-specific provenance wins; otherwise the user's standing picks for this set.
+    // Day-specific provenance wins; otherwise the user's standing picks for this slot.
     const daySaved = meal?.cardSelections as { setId: string; picks: CardPicks } | null | undefined;
-    const standing = userPicks.find((p) => p.cardSetId === cardSet.id);
+    const standing = userPicks.find(
+      (p) => p.cardSetId === cardSet.id && p.mealNumber === templateMeal.mealNumber
+    );
     return {
       setId: cardSet.id,
       setName: cardSet.name,
@@ -169,8 +171,10 @@ export async function saveMealSelections(userId: string, date: string, mealNumbe
 
   await prisma.$transaction(async (tx) => {
     await tx.userMealCardPicks.upsert({
-      where: { userId_cardSetId: { userId, cardSetId: cardSet.id } },
-      create: { userId, cardSetId: cardSet.id, picks: selections },
+      where: {
+        userId_cardSetId_mealNumber: { userId, cardSetId: cardSet.id, mealNumber: templateMeal.mealNumber }
+      },
+      create: { userId, cardSetId: cardSet.id, mealNumber: templateMeal.mealNumber, picks: selections },
       update: { picks: selections }
     });
 

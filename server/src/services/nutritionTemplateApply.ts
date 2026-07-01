@@ -41,7 +41,9 @@ export async function applyTemplateMealsToLog(
 
   for (const templateMeal of template.meals) {
     const standing = templateMeal.mealCardSetId
-      ? standingPicks.find((p) => p.cardSetId === templateMeal.mealCardSetId)
+      ? standingPicks.find(
+          (p) => p.cardSetId === templateMeal.mealCardSetId && p.mealNumber === templateMeal.mealNumber
+        )
       : undefined;
     if (templateMeal.mealCardSet && standing) {
       const meal = await tx.meal.create({

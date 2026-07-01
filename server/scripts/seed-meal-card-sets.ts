@@ -117,7 +117,8 @@ type CardSeed = {
 type SetSeed = {
   name: string;
   slotType: MealSlotType;
-  mealNumber: number;
+  /** Template meal numbers this set attaches to (the Snack set covers every snack slot). */
+  mealNumbers: number[];
   cards: CardSeed[];
 };
 
@@ -125,7 +126,7 @@ const SETS: SetSeed[] = [
   {
     name: 'Breakfast Builder',
     slotType: 'BREAKFAST',
-    mealNumber: 1,
+    mealNumbers: [1],
     cards: [
       {
         role: 'STYLE', name: 'Hot or cold?', pickRule: 'Pick 1', required: true, maxSelect: 1,
@@ -189,7 +190,7 @@ const SETS: SetSeed[] = [
   {
     name: 'Snack / Mini Meal Builder',
     slotType: 'SNACK',
-    mealNumber: 2,
+    mealNumbers: [2, 4, 6],
     cards: [
       {
         role: 'STYLE', name: 'Choose style', pickRule: 'Pick 1 — what sounds good?', required: true, maxSelect: 1,
@@ -252,7 +253,7 @@ const SETS: SetSeed[] = [
   {
     name: 'Lunch Builder',
     slotType: 'LUNCH',
-    mealNumber: 3,
+    mealNumbers: [3],
     cards: [
       {
         role: 'STYLE', name: 'Choose format', pickRule: 'Pick 1 — how do you want it?', required: true, maxSelect: 1,
@@ -418,29 +419,31 @@ async function seedSet(set: SetSeed, foodIds: Map<string, string>, apply: boolea
     }
   }
 
-  // Attach to every template's meal N + store its calorie target
+  // Attach to every template's matching meals + store each meal's calorie target
   const templates = await prisma.nutritionPlanTemplate.findMany({
     include: { meals: { include: { items: true }, orderBy: { mealNumber: 'asc' } } }
   });
   let attached = 0;
   for (const template of templates) {
-    const meal = template.meals.find((m) => m.mealNumber === set.mealNumber);
-    if (!meal) continue;
-    const itemRollup = meal.items.reduce((s, i) => s + Number(i.calories), 0);
-    const otherRollup = template.meals
-      .filter((m) => m.id !== meal.id)
-      .reduce((s, m) => s + m.items.reduce((s2, i) => s2 + Number(i.calories), 0), 0);
-    const remainder = Number(template.calorieTarget) - otherRollup;
-    const target = Math.max(itemRollup > 0 ? itemRollup : remainder, MIN_TARGET_KCAL);
-    attached += 1;
-    if (apply && setId) {
-      await prisma.nutritionTemplateMeal.update({
-        where: { id: meal.id },
-        data: { mealCardSetId: setId, calorieTarget: new Prisma.Decimal(target.toFixed(2)) }
-      });
+    for (const mealNumber of set.mealNumbers) {
+      const meal = template.meals.find((m) => m.mealNumber === mealNumber);
+      if (!meal) continue;
+      const itemRollup = meal.items.reduce((s, i) => s + Number(i.calories), 0);
+      const otherRollup = template.meals
+        .filter((m) => m.id !== meal.id)
+        .reduce((s, m) => s + m.items.reduce((s2, i) => s2 + Number(i.calories), 0), 0);
+      const remainder = Number(template.calorieTarget) - otherRollup;
+      const target = Math.max(itemRollup > 0 ? itemRollup : remainder, MIN_TARGET_KCAL);
+      attached += 1;
+      if (apply && setId) {
+        await prisma.nutritionTemplateMeal.update({
+          where: { id: meal.id },
+          data: { mealCardSetId: setId, calorieTarget: new Prisma.Decimal(target.toFixed(2)) }
+        });
+      }
     }
   }
-  console.log(`  attach ${set.name} → meal ${set.mealNumber} on ${attached} templates`);
+  console.log(`  attach ${set.name} → meals [${set.mealNumbers.join(', ')}] on ${attached} template meals`);
 }
 
 async function main() {

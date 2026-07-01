@@ -108,7 +108,6 @@ export function MealCard({
   onLogActual,
   selected = false,
   onSelect,
-  buildLabel,
   onBuildMeal,
 }: {
   meal: Meal;
@@ -120,7 +119,6 @@ export function MealCard({
   onLogActual: (mealId: string) => void;
   selected?: boolean;
   onSelect?: (mealId: string) => void;
-  buildLabel?: string;
   onBuildMeal?: () => void;
 }) {
   const future = isFuture(selectedDate);
@@ -186,7 +184,7 @@ export function MealCard({
                   className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-green px-3 text-sm font-semibold text-white transition hover:bg-brand-deep"
                   onClick={onBuildMeal}
                 >
-                  🃏 {buildLabel ?? 'Build meal'}
+                  🃏 Build
                 </button>
               )}
               <button
