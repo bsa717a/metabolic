@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
 import { getIdToken } from '../services/auth';
 import { DashboardWelcome } from '../components/dashboard/DashboardWelcome';
+import { PlanStatusCard } from '../components/dashboard/PlanStatusCard';
 import type { AppUser, Dashboard } from '../types';
 import { TodayNutrition } from '../components/dashboard/TodayNutrition';
 import { TodayExercise } from '../components/dashboard/TodayExercise';
@@ -206,6 +207,8 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
         />
         <DateTimeDisplay />
       </div>
+
+      <PlanStatusCard />
 
       <section className="hidden sm:block">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-app-text-muted mb-3">Navigation</h2>

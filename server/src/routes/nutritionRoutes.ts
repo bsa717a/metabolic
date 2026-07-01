@@ -9,6 +9,7 @@ import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
 import { getMealCardsForDate, MealCardError, saveMealSelections } from '../services/mealCardService.js';
 import { getPlanPeriodInfo } from '../services/planAdvancement.js';
+import { adoptProposedPlan, getPlanProposal, getPlanStatus, PlanAdoptError } from '../services/planStatusService.js';
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
@@ -106,6 +107,20 @@ export async function nutritionRoutes(app: FastifyInstance) {
     const mealId = (request.params as { id: string }).id;
     const ownerId = await mealOwnerForActor(request.appUser!, mealId);
     return copyMealFromPreviousDay(ownerId, mealId);
+  });
+  app.get('/api/plan-status', { preHandler: requireAuth }, async (request, reply) => {
+    const status = await getPlanStatus(request.appUser!.id);
+    if (!status) return reply.code(404).send({ error: 'No active program' });
+    return status;
+  });
+  app.get('/api/plan-proposal', { preHandler: requireAuth }, async (request) => getPlanProposal(request.appUser!.id));
+  app.post('/api/plan-adopt', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await adoptProposedPlan(request.appUser!.id);
+    } catch (error) {
+      if (error instanceof PlanAdoptError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
   });
   app.get('/api/daily-logs/:date/plan-period', { preHandler: requireAuth }, async (request, reply) => {
     const info = await getPlanPeriodInfo(request.appUser!.id, (request.params as { date: string }).date);

@@ -94,6 +94,7 @@ export type PlanPeriodInfo = {
   effectiveDate: string | null;
   endDate: string | null;
   templateName: string | null;
+  calorieTarget: number | null;
 };
 
 /**
@@ -119,16 +120,17 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
   const template = plan.nutritionTemplateId
     ? await prisma.nutritionPlanTemplate.findUnique({
         where: { id: plan.nutritionTemplateId },
-        select: { name: true }
+        select: { name: true, calorieTarget: true }
       })
     : null;
+  const calorieTarget = template ? Math.round(Number(template.calorieTarget)) : null;
 
   let activeIndex = -1;
   for (let i = 0; i < periods.length; i += 1) {
     if (periods[i].effectiveDate.getTime() <= day.getTime()) activeIndex = i;
   }
   if (activeIndex < 0) {
-    return { weekNumber: null, effectiveDate: null, endDate: null, templateName: template?.name ?? null };
+    return { weekNumber: null, effectiveDate: null, endDate: null, templateName: template?.name ?? null, calorieTarget };
   }
 
   const next = periods[activeIndex + 1];
@@ -136,6 +138,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     weekNumber: activeIndex + 1,
     effectiveDate: toDateKey(periods[activeIndex].effectiveDate),
     endDate: next ? toDateKey(new Date(next.effectiveDate.getTime() - DAY_MS)) : null,
-    templateName: template?.name ?? null
+    templateName: template?.name ?? null,
+    calorieTarget
   };
 }

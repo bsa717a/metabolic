@@ -417,7 +417,30 @@ export type PlanPeriodInfo = {
   effectiveDate: string | null;
   endDate: string | null;
   templateName: string | null;
+  calorieTarget: number | null;
 };
+
+export type PlanStatus = {
+  state: 'on_plan' | 'coached_no_plan' | 'self_directed';
+  mode: 'COACHED' | 'SELF_DIRECTED';
+  calorieTarget: number | null;
+  proteinTarget: number | null;
+  weekNumber: number | null;
+  effectiveDate: string | null;
+  endDate: string | null;
+  nextCheckInDate: string | null;
+};
+
+export type PlanProposal =
+  | { eligible: false; missing: string[]; noMatch: boolean }
+  | {
+      eligible: true;
+      calorieTarget: number;
+      proteinTarget: number;
+      carbTarget: number;
+      fatTarget: number;
+      mealsPerDay: number;
+    };
 
 export type VirtualCoachCheckInSession = {
   id: string;

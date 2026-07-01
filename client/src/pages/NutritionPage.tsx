@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CopyPlus, LayoutTemplate, ShoppingCart } from 'lucide-react';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
-import type { NutritionPlanTemplateSummary, PlanPeriodInfo } from '../types';
+import type { PlanPeriodInfo } from '../types';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
 import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
@@ -39,7 +39,6 @@ export function NutritionPage() {
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [copyingDay, setCopyingDay] = useState(false);
-  const [defaultTemplate, setDefaultTemplate] = useState<NutritionPlanTemplateSummary | null>(null);
   const [selectedMealId, setSelectedMealId] = useState<string>();
   const [cardMeals, setCardMeals] = useState<MealCardsPayload[]>([]);
   const [builderMealNumber, setBuilderMealNumber] = useState<number | null>(null);
@@ -77,12 +76,6 @@ export function NutritionPage() {
       ? selectedMealId
       : currentDayMeals[0]?.id;
   const daySelectedMeal = currentDayMeals.find((meal) => meal.id === effectiveSelectedMealId);
-
-  useEffect(() => {
-    api<NutritionPlanTemplateSummary | null>('/api/nutrition-templates/default')
-      .then(setDefaultTemplate)
-      .catch(() => setDefaultTemplate(null));
-  }, [selectedDate, weekDays]);
 
   // Card-builder availability for the selected day; 404 = plan has no card sets.
   useEffect(() => {
@@ -222,16 +215,20 @@ export function NutritionPage() {
         </div>
       </div>
 
-      {planPeriod?.weekNumber != null && (
+      {(planPeriod?.weekNumber != null || planPeriod?.calorieTarget != null) && (
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-2xl border border-brand-green/30 bg-brand-green/5 px-4 py-3">
-          <span className="text-base font-bold text-app-text">Week {planPeriod.weekNumber} plan</span>
-          {planPeriod.effectiveDate && (
+          <span className="text-base font-bold text-app-text">
+            {planPeriod.weekNumber != null ? `Week ${planPeriod.weekNumber} plan` : 'Your plan'}
+          </span>
+          {planPeriod.calorieTarget != null && (
+            <span className="text-sm text-app-text-muted">{planPeriod.calorieTarget.toLocaleString()} kcal/day</span>
+          )}
+          {planPeriod.weekNumber != null && planPeriod.effectiveDate ? (
             <span className="text-sm text-app-text-muted">
               {formatPlanDate(planPeriod.effectiveDate)} – {planPeriod.endDate ? formatPlanDate(planPeriod.endDate) : 'ongoing'}
             </span>
-          )}
-          {planPeriod.templateName && (
-            <span className="text-sm text-app-text-muted">· {planPeriod.templateName}</span>
+          ) : (
+            <span className="text-sm text-app-text-muted">Week 1 starts at your first check-in</span>
           )}
           <span className="basis-full text-xs text-app-text-muted sm:basis-auto">
             A new week starts when you complete your weekly check-in — skip it and this plan continues.
@@ -240,12 +237,6 @@ export function NutritionPage() {
       )}
 
       <WeekDateStrip selectedDate={selectedDate} onSelectDate={selectDate} days={weekDays} />
-
-      {defaultTemplate && planPeriod?.weekNumber == null && (
-        <p className="text-sm text-app-text-muted">
-          Default plan: <span className="font-medium text-app-text">{defaultTemplate.name}</span>
-        </p>
-      )}
 
       {printError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError}</div>}
       {loadError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>}
