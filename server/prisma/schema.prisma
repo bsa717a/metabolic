@@ -66,6 +66,21 @@ enum Visibility {
   GLOBAL
   USER
 }
+enum MealCardRole {
+  STYLE
+  PROTEIN
+  FAT
+  CARB
+  VEGETABLE
+  FRUIT
+  FREE
+}
+enum MealSlotType {
+  BREAKFAST
+  SNACK
+  LUNCH
+  DINNER
+}
 enum ExerciseStatus {
   PLANNED
   DONE
@@ -218,6 +233,7 @@ model User {
   nutritionPlanTemplatesCreated NutritionPlanTemplate[] @relation("NutritionPlanTemplateCreator")
   exerciseTemplatesCreated ExerciseTemplate[] @relation("ExerciseTemplateCreator")
   planPeriodsCreated PlanPeriod[] @relation("PlanPeriodCreator")
+  mealCardSetsCreated MealCardSet[] @relation("MealCardSetCreator")
   levelProgress UserLevelProgress[]
   badges UserBadge[]
   streaks UserStreak[]
@@ -534,6 +550,9 @@ model Meal {
   actualProtein Decimal @default(0) @db.Decimal(10, 2)
   actualCarbs Decimal @default(0) @db.Decimal(10, 2)
   actualFat Decimal @default(0) @db.Decimal(10, 2)
+  /// Card-builder provenance only: { setId, picks: { [cardId]: optionId | optionId[] } }.
+  /// Portions/macros live on the materialized MealItems — never duplicated here.
+  cardSelections Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   dailyLog DailyLog @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
@@ -586,10 +605,15 @@ model Food {
   updatedAt DateTime @updatedAt
   ownerUser User? @relation("FoodOwner", fields: [ownerUserId], references: [id])
   createdBy User? @relation("FoodCreator", fields: [createdById], references: [id])
+  role MealCardRole?
+  flavorTags String[]
+  textureTags String[]
+  isFreeFood Boolean @default(false)
   aliases FoodAlias[]
   mealItems MealItem[]
   nutritionTemplateMealItems NutritionTemplateMealItem[]
   lookups AiFoodLookup[]
+  cardOptionFoods MealCardOptionFood[]
 }
 
 model FoodAlias {
@@ -814,9 +838,14 @@ model NutritionTemplateMeal {
   mealNumber Int
   name String
   plannedTime String?
+  /// Stored macro target for this meal — required when the meal is card-set-backed,
+  /// since a card meal has no template items to roll up. The scaling denominator's numerator.
+  calorieTarget Decimal? @db.Decimal(10, 2)
+  mealCardSetId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   template NutritionPlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  mealCardSet MealCardSet? @relation(fields: [mealCardSetId], references: [id], onDelete: SetNull)
   items NutritionTemplateMealItem[]
   @@unique([templateId, mealNumber])
 }
@@ -836,6 +865,79 @@ model NutritionTemplateMealItem {
   updatedAt DateTime @updatedAt
   meal NutritionTemplateMeal @relation(fields: [mealId], references: [id], onDelete: Cascade)
   food Food? @relation(fields: [foodId], references: [id])
+}
+
+/// A shared card-builder library for one meal slot. References Food LIVE (no frozen
+/// macro snapshots): portions are authored as baseServings at referenceCalories, then
+/// scaled to each user's meal target at serve time. One set serves every biometric band.
+model MealCardSet {
+  id String @id @default(cuid())
+  name String
+  slotType MealSlotType @default(DINNER)
+  visibility Visibility @default(GLOBAL)
+  createdById String?
+  referenceCalories Decimal @db.Decimal(10, 2)
+  referenceProtein Decimal? @db.Decimal(10, 2)
+  referenceCarbs Decimal? @db.Decimal(10, 2)
+  referenceFat Decimal? @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy User? @relation("MealCardSetCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  cards MealCard[]
+  templateMeals NutritionTemplateMeal[]
+}
+
+/// One step of the builder flow ("Choose protein", "Add flavor & crunch").
+/// role STYLE = a presentation-only step whose options carry no foods.
+model MealCard {
+  id String @id @default(cuid())
+  cardSetId String
+  role MealCardRole
+  name String
+  pickRule String?
+  sortOrder Int @default(0)
+  required Boolean @default(true)
+  maxSelect Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cardSet MealCardSet @relation(fields: [cardSetId], references: [id], onDelete: Cascade)
+  options MealCardOption[]
+  @@unique([cardSetId, sortOrder])
+}
+
+model MealCardOption {
+  id String @id @default(cuid())
+  cardId String
+  name String
+  description String?
+  cuisine String?
+  icon String?
+  isDefault Boolean @default(false)
+  sortOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  card MealCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  foods MealCardOptionFood[]
+  @@unique([cardId, sortOrder])
+}
+
+/// The scalable line: servings at the set's reference target. scalable=false pins the
+/// amount (garnish/free foods); discrete rounds to unitStep (tortillas, eggs).
+model MealCardOptionFood {
+  id String @id @default(cuid())
+  optionId String
+  foodId String
+  baseServings Decimal @db.Decimal(10, 2)
+  scalable Boolean @default(true)
+  discrete Boolean @default(false)
+  unitStep Decimal @default(1) @db.Decimal(10, 2)
+  minServings Decimal? @db.Decimal(10, 2)
+  maxServings Decimal? @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  option MealCardOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id])
+  @@unique([optionId, foodId])
 }
 
 model LevelDefinition {

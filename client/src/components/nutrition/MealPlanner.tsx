@@ -9,6 +9,8 @@ export function MealPlanner({
   onLogActual,
   selectedMealId,
   onSelectMeal,
+  buildDinnerMealNumber,
+  onBuildDinner,
 }: {
   meals: Meal[];
   selectedDate: string;
@@ -16,6 +18,8 @@ export function MealPlanner({
   onLogActual: (mealId: string) => void;
   selectedMealId?: string;
   onSelectMeal?: (mealId: string) => void;
+  buildDinnerMealNumber?: number;
+  onBuildDinner?: () => void;
 }) {
   const [editingMealId, setEditingMealId] = useState<string | undefined>();
 
@@ -48,6 +52,7 @@ export function MealPlanner({
           onLogActual={onLogActual}
           selected={meal.id === selectedMealId}
           onSelect={onSelectMeal}
+          onBuildDinner={meal.mealNumber === buildDinnerMealNumber ? onBuildDinner : undefined}
         />
       ))}
     </div>

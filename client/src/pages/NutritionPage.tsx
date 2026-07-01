@@ -11,6 +11,7 @@ import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
 import { EditMealPlanDrawer } from '../components/nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
 import { ApplyTemplateModal } from '../components/nutrition/ApplyTemplateModal';
+import { DinnerCardBuilder, type DinnerCardsPayload } from '../components/nutrition/DinnerCardBuilder';
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { PlanPrintMenu } from '../components/export/PlanPrintMenu';
 import { Button } from '../components/ui/Button';
@@ -45,6 +46,8 @@ export function NutritionPage() {
   const [copyingDay, setCopyingDay] = useState(false);
   const [defaultTemplate, setDefaultTemplate] = useState<NutritionPlanTemplateSummary | null>(null);
   const [selectedMealId, setSelectedMealId] = useState<string>();
+  const [dinnerCards, setDinnerCards] = useState<DinnerCardsPayload | null>(null);
+  const [dinnerBuilderOpen, setDinnerBuilderOpen] = useState(false);
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
@@ -84,6 +87,15 @@ export function NutritionPage() {
       .then(setDefaultTemplate)
       .catch(() => setDefaultTemplate(null));
   }, [selectedDate, weekDays]);
+
+  // Card-builder availability for the selected day; 404 = plan has no dinner card set.
+  useEffect(() => {
+    let cancelled = false;
+    api<DinnerCardsPayload>(`/api/daily-logs/${selectedDate}/dinner-cards`)
+      .then((payload) => { if (!cancelled) setDinnerCards(payload); })
+      .catch(() => { if (!cancelled) setDinnerCards(null); });
+    return () => { cancelled = true; };
+  }, [selectedDate]);
 
   function selectDate(date: string) {
     setSelectedDate(date);
@@ -259,6 +271,8 @@ export function NutritionPage() {
                 onLogActual={(mealId) => setLogActualMealId(mealId)}
                 selectedMealId={effectiveSelectedMealId}
                 onSelectMeal={setSelectedMealId}
+                buildDinnerMealNumber={dinnerCards?.mealNumber}
+                onBuildDinner={() => setDinnerBuilderOpen(true)}
               />
 
               {currentDayMeals.length > 0 && (
@@ -314,6 +328,17 @@ export function NutritionPage() {
       />
 
       <ShoppingListDrawer open={shoppingListOpen} anchorDate={selectedDate} onClose={() => setShoppingListOpen(false)} />
+
+      <DinnerCardBuilder
+        open={dinnerBuilderOpen}
+        date={selectedDate}
+        payload={dinnerCards}
+        onClose={() => setDinnerBuilderOpen(false)}
+        onSaved={async (updated) => {
+          setDinnerCards(updated);
+          await reloadWeek();
+        }}
+      />
     </div>
   );
 }

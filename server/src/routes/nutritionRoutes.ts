@@ -7,6 +7,7 @@ import { addMealItem, copyDayPlanForward, copyDayPlanToDates, copyMealFromPrevio
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
+import { getDinnerCardsForDate, MealCardError, saveDinnerSelections } from '../services/mealCardService.js';
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
@@ -104,6 +105,25 @@ export async function nutritionRoutes(app: FastifyInstance) {
     const mealId = (request.params as { id: string }).id;
     const ownerId = await mealOwnerForActor(request.appUser!, mealId);
     return copyMealFromPreviousDay(ownerId, mealId);
+  });
+  app.get('/api/daily-logs/:date/dinner-cards', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await getDinnerCardsForDate(request.appUser!.id, (request.params as { date: string }).date);
+    } catch (error) {
+      if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
+  });
+  app.post('/api/daily-logs/:date/dinner-selections', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({ selections: z.record(z.string(), z.union([z.string(), z.array(z.string())])) })
+      .parse(request.body);
+    try {
+      return await saveDinnerSelections(request.appUser!.id, (request.params as { date: string }).date, body.selections);
+    } catch (error) {
+      if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
   });
   app.post('/api/daily-logs/:date/copy-forward', { preHandler: requireAuth }, async (request, reply) => {
     const body = z.object({ days: z.number().int().min(1).max(31) }).parse(request.body);
