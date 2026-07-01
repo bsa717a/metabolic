@@ -8,6 +8,11 @@ import { ensureTodayDailyLog } from './dailyLogService.js';
 import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
 import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
 import { notifyCoachRequest } from './coachRequestNotificationService.js';
+import {
+  buildProfileFromInput,
+  findBestMatchingTemplate,
+  isCompletePlanMatchProfile
+} from './nutritionTemplateMatch.js';
 
 const DEFAULT_PROGRAM_NAME = 'Master Your Metabolic';
 
@@ -203,6 +208,27 @@ async function findGlobalNutritionTemplate() {
   });
 }
 
+async function resolveDefaultNutritionTemplateId(
+  input: SetupInput,
+  coach: Awaited<ReturnType<typeof findCoachByCode>>
+) {
+  if (coach?.defaultNutritionTemplateId) {
+    return coach.defaultNutritionTemplateId;
+  }
+
+  const profile = buildProfileFromInput({
+    gender: input.gender,
+    heightFeet: input.heightFeet,
+    heightInches: input.heightInches,
+    weightLbs: input.weight,
+    activityLevel: input.activityLevel
+  });
+  if (!isCompletePlanMatchProfile(profile)) return null;
+
+  const best = await findBestMatchingTemplate(profile, { visibility: Visibility.GLOBAL });
+  return best?.id ?? null;
+}
+
 async function findGlobalExerciseTemplate() {
   return prisma.exerciseTemplate.findFirst({
     where: { visibility: Visibility.GLOBAL },
@@ -295,14 +321,11 @@ async function updateActiveProgramFromSetup(
   let defaultExerciseTemplateId: string | null = null;
   if (!trackingOnly) {
     coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
-    const [globalNutritionTemplate, globalExerciseTemplate] = await Promise.all([
-      findGlobalNutritionTemplate(),
-      findGlobalExerciseTemplate()
-    ]);
-    defaultNutritionTemplateId =
-      coach?.defaultNutritionTemplateId ?? globalNutritionTemplate?.id ?? null;
+    defaultNutritionTemplateId = await resolveDefaultNutritionTemplateId(input, coach);
     defaultExerciseTemplateId =
-      coach?.defaultExerciseTemplateId ?? globalExerciseTemplate?.id ?? null;
+      coach?.defaultExerciseTemplateId ??
+      (await findGlobalExerciseTemplate())?.id ??
+      null;
   }
 
   const bodyFatMetric = program.metrics.find((metric) => metric.metricType === 'BODY_FAT');
@@ -474,7 +497,9 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
   // Log-only ("just track my food"): a SELF_DIRECTED program with no coach, no templates, and no
   // exercise scaffolding — but it still captures the user's calorie/protein goals as metrics.
   const trackingOnly = input.trackingOnly === true;
-  const defaultNutritionTemplateId = trackingOnly ? null : coach?.defaultNutritionTemplateId ?? globalNutritionTemplate?.id ?? null;
+  const defaultNutritionTemplateId = trackingOnly
+    ? null
+    : await resolveDefaultNutritionTemplateId(input, coach);
   const defaultExerciseTemplateId = trackingOnly ? null : coach?.defaultExerciseTemplateId ?? globalExerciseTemplate?.id ?? null;
   const calories = input.calorieTarget ?? Number(globalNutritionTemplate?.calorieTarget ?? template?.defaultCalories ?? 2200);
   const protein = input.proteinTarget ?? Number(globalNutritionTemplate?.proteinTarget ?? template?.defaultProtein ?? 190);

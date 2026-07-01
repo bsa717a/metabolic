@@ -7,6 +7,7 @@ import { addMealItem, copyDayPlanForward, copyDayPlanToDates, copyMealFromPrevio
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
+import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
 
@@ -169,7 +170,9 @@ export async function nutritionRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/nutrition-templates', { preHandler: requireAuth }, async () => listTemplatesForUser());
+  app.get('/api/nutrition-templates', { preHandler: requireAuth }, async (request) =>
+    listTemplatesForUser(request.appUser!.id)
+  );
 
   app.get('/api/nutrition-templates/default', { preHandler: requireAuth }, async (request) =>
     getProgramDefaultTemplate(request.appUser!.id)
@@ -198,7 +201,8 @@ export async function nutritionRoutes(app: FastifyInstance) {
         { setAsDefault: body.setAsDefault }
       );
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply plan' });
+      const message = error instanceof Error ? error.message : 'Unable to apply plan';
+      return reply.code(nutritionTemplateApplyErrorStatus(message)).send({ error: message });
     }
   });
 }

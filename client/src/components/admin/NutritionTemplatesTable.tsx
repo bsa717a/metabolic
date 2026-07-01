@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, Plus, Trash2 } from 'lucide-react';
+import { Copy, FileDown, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
-import type { NutritionPlanTemplateSummary } from '../../types';
+import type { NutritionPlanTemplate, NutritionPlanTemplateSummary } from '../../types';
+import { formatPlanCriteriaSummary } from '../../utils/planCriteria';
+import { printNutritionPlanTemplates } from '../../utils/printNutritionPlanTemplates';
 import { CloneDailyLogDialog } from './CloneDailyLogDialog';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -32,6 +34,7 @@ function matchesSearch(template: NutritionPlanTemplateSummary, query: string) {
   const haystack = [
     template.name,
     template.description ?? '',
+    formatPlanCriteriaSummary(template),
     formatMacros(template),
     String(template.mealCount),
     String(template.itemCount),
@@ -83,6 +86,7 @@ export function NutritionTemplatesTable() {
   const [error, setError] = useState('');
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -158,6 +162,23 @@ export function NutritionTemplatesTable() {
     }
   }
 
+  async function exportPlansPdf() {
+    setExporting(true);
+    setError('');
+    try {
+      const plans = await api<NutritionPlanTemplate[]>('/api/admin/nutrition-templates/full');
+      if (!plans.length) {
+        setError('No plans to export.');
+        return;
+      }
+      printNutritionPlanTemplates(plans);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to export plans');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function deleteTemplate(id: string, name: string) {
     if (!window.confirm(`Delete plan "${name}"?`)) return;
     try {
@@ -188,6 +209,10 @@ export function NutritionTemplatesTable() {
           )}
           {!loading && !error && (
             <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" disabled={exporting || !templates.length} onClick={() => void exportPlansPdf()}>
+                <FileDown className="mr-1 inline h-4 w-4" />
+                {exporting ? 'Preparing…' : 'Export PDF'}
+              </Button>
               <Button type="button" variant="secondary" onClick={() => setCloneDialogOpen(true)}>
                 Clone from user day
               </Button>
@@ -213,11 +238,12 @@ export function NutritionTemplatesTable() {
           <div className="overflow-x-auto">
             <table className="w-full table-fixed text-left text-sm">
               <colgroup>
-                <col className="w-[28%]" />
-                <col className="w-[32%]" />
-                <col className="w-[16%]" />
-                <col className="w-[12%]" />
-                <col className="w-[12%]" />
+                <col className="w-[22%]" />
+                <col className="w-[22%]" />
+                <col className="w-[18%]" />
+                <col className="w-[14%]" />
+                <col className="w-[10%]" />
+                <col className="w-[14%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500">
@@ -228,6 +254,7 @@ export function NutritionTemplatesTable() {
                     sortDirection={sortDirection}
                     onSort={handleSort}
                   />
+                  <th className="py-3 pr-4 font-medium">Criteria</th>
                   <SortableHeader
                     label="Macros"
                     sortKey="macros"
@@ -272,6 +299,14 @@ export function NutritionTemplatesTable() {
                       <div className="truncate font-semibold">{template.name}</div>
                       {template.description && (
                         <div className="truncate text-slate-500">{template.description}</div>
+                      )}
+                    </td>
+                    <td className="max-w-0 py-3 pr-4">
+                      <div className="truncate text-slate-600">{formatPlanCriteriaSummary(template)}</div>
+                      {template.visibility === 'GLOBAL' && !template.criteriaComplete && (
+                        <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                          Needs criteria
+                        </span>
                       )}
                     </td>
                     <td className="max-w-0 py-3 pr-4 truncate text-slate-600">{formatMacros(template)}</td>

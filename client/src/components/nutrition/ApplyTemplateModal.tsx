@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Meal, NutritionPlanTemplate, NutritionPlanTemplateSummary } from '../../types';
+import { formatPlanCriteriaSummary } from '../../utils/planCriteria';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 
@@ -17,6 +18,7 @@ function matchesSearch(template: NutritionPlanTemplateSummary, query: string) {
   const haystack = [
     template.name,
     template.description ?? '',
+    formatPlanCriteriaSummary(template),
     formatMacros(template),
     String(template.mealCount),
     String(template.itemCount),
@@ -143,7 +145,9 @@ export function ApplyTemplateModal({
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         {!loading && templates.length === 0 && !error && (
-          <p className="text-sm text-slate-500">No plans available. Ask an admin to create one.</p>
+          <p className="text-sm text-slate-500">
+            No plans match your profile. Ask your coach or update your profile details.
+          </p>
         )}
 
         {!loading && templates.length > 0 && (
@@ -189,6 +193,7 @@ export function ApplyTemplateModal({
                       <div className="min-w-0">
                         <p className="font-semibold text-slate-900">{template.name}</p>
                         {template.description && <p className="mt-1 text-sm text-slate-500">{template.description}</p>}
+                        <p className="mt-1 text-xs text-slate-500">{formatPlanCriteriaSummary(template)}</p>
                         <p className="mt-2 text-xs text-slate-500">{formatMacros(template)}</p>
                         <p className="text-xs text-slate-400">
                           {template.mealCount} meals · {template.itemCount} food items

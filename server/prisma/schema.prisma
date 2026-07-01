@@ -787,6 +787,13 @@ model NutritionPlanTemplate {
   name String
   description String?
   visibility Visibility @default(GLOBAL)
+  gender String?
+  heightMinInches Int?
+  heightMaxInches Int?
+  weightMinLbs Decimal? @db.Decimal(10, 2)
+  weightMaxLbs Decimal? @db.Decimal(10, 2)
+  activityLevelMin Int?
+  activityLevelMax Int?
   calorieTarget Decimal @db.Decimal(10, 2)
   proteinTarget Decimal @db.Decimal(10, 2)
   carbTarget Decimal @db.Decimal(10, 2)

@@ -38,6 +38,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [engagement, setEngagement] = useState<CoachEngagement | null>(null);
   const [clientWaterGoalDraft, setClientWaterGoalDraft] = useState('64');
   const [nutritionTemplates, setNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
+  const [clientNutritionTemplates, setClientNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
   const [exerciseTemplates, setExerciseTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
   const [coachCodeDraft, setCoachCodeDraft] = useState('');
   const [defaultNutritionTemplateId, setDefaultNutritionTemplateId] = useState('');
@@ -182,6 +183,18 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       return visibleClients[0]?.id ?? '';
     });
   }, [loading, searchParams, visibleClients]);
+
+  useEffect(() => {
+    if (!selectedClientId) {
+      setClientNutritionTemplates([]);
+      return;
+    }
+    void api<NutritionPlanTemplateSummary[]>(
+      `/api/coach/nutrition-templates?clientId=${encodeURIComponent(selectedClientId)}`
+    )
+      .then(setClientNutritionTemplates)
+      .catch(() => setClientNutritionTemplates([]));
+  }, [selectedClientId]);
 
   useEffect(() => {
     if (!selectedClient) {
@@ -439,7 +452,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 client={selectedClient}
                 dashboard={dashboard}
                 engagement={engagement}
-                nutritionTemplates={nutritionTemplates}
+                nutritionTemplates={clientNutritionTemplates}
                 exerciseTemplates={exerciseTemplates}
                 saving={saving}
                 sendingEmail={sendingEmail}

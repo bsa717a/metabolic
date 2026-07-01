@@ -173,6 +173,14 @@ export type NutritionPlanTemplateSummary = {
   name: string;
   description?: string | null;
   visibility: FoodVisibility;
+  gender?: string | null;
+  heightMinInches?: number | null;
+  heightMaxInches?: number | null;
+  weightMinLbs?: number | null;
+  weightMaxLbs?: number | null;
+  activityLevelMin?: number | null;
+  activityLevelMax?: number | null;
+  criteriaComplete?: boolean;
   calorieTarget: number;
   proteinTarget: number;
   carbTarget: number;
