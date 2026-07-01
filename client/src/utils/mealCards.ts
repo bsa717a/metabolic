@@ -2,6 +2,7 @@
 export type CardFood = {
   foodId: string;
   name: string;
+  imageUrl: string | null;
   servings: number;
   quantity: number;
   unit: string;
@@ -37,9 +38,12 @@ export type BuilderCard = {
   options: CardOption[];
 };
 
+export type MealSlotType = 'BREAKFAST' | 'SNACK' | 'LUNCH' | 'DINNER';
+
 export type MealCardsPayload = {
   setId: string;
   setName: string;
+  slotType: MealSlotType;
   mealNumber: number;
   mealName: string;
   targetCalories: number;

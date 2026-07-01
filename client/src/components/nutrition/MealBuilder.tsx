@@ -254,7 +254,9 @@ export function MealBuilder({
                 </div>
               </div>
               <p className="text-center text-xs text-app-text-muted">
-                Don't like something? Go back and swap any card — portions rebalance automatically.
+                Saving makes this your {payload.setName.toLowerCase().replace(' builder', '')} for the rest of the
+                week — rebuild on any day to change it from there on. Go back to swap any card; portions rebalance
+                automatically.
               </p>
               {saveError && (
                 <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</div>

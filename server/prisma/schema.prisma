@@ -234,6 +234,7 @@ model User {
   exerciseTemplatesCreated ExerciseTemplate[] @relation("ExerciseTemplateCreator")
   planPeriodsCreated PlanPeriod[] @relation("PlanPeriodCreator")
   mealCardSetsCreated MealCardSet[] @relation("MealCardSetCreator")
+  mealCardPicks UserMealCardPicks[]
   levelProgress UserLevelProgress[]
   badges UserBadge[]
   streaks UserStreak[]
@@ -886,6 +887,7 @@ model MealCardSet {
   createdBy User? @relation("MealCardSetCreator", fields: [createdById], references: [id], onDelete: SetNull)
   cards MealCard[]
   templateMeals NutritionTemplateMeal[]
+  userPicks UserMealCardPicks[]
 }
 
 /// One step of the builder flow ("Choose protein", "Add flavor & crunch").
@@ -920,6 +922,20 @@ model MealCardOption {
   card MealCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
   foods MealCardOptionFood[]
   @@unique([cardId, sortOrder])
+}
+
+/// The user's current picks for a card set — their standing weekly selection. Written on
+/// every builder save; future days materialize card-backed meals from this until changed.
+model UserMealCardPicks {
+  id String @id @default(cuid())
+  userId String
+  cardSetId String
+  picks Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardSet MealCardSet @relation(fields: [cardSetId], references: [id], onDelete: Cascade)
+  @@unique([userId, cardSetId])
 }
 
 /// The scalable line: servings at the set's reference target. scalable=false pins the

@@ -1,11 +1,21 @@
 import { MealItemType, MealStatus, type Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { n } from '../utils/numbers.js';
+import {
+  cardMealTarget,
+  cardSetInclude,
+  materializeCardMeal,
+  scaledLinesForPicks,
+  type CardPicks
+} from './mealCardMaterialize.js';
 
 const templateInclude = {
   meals: {
     orderBy: { mealNumber: 'asc' as const },
-    include: { items: { orderBy: { createdAt: 'asc' as const } } }
+    include: {
+      items: { orderBy: { createdAt: 'asc' as const } },
+      mealCardSet: { include: cardSetInclude }
+    }
   }
 } satisfies Prisma.NutritionPlanTemplateInclude;
 
@@ -20,9 +30,35 @@ export async function applyTemplateMealsToLog(
     include: templateInclude
   });
 
+  // The user's standing card-builder picks: card-backed meals materialize from these
+  // (scaled to the meal's target) instead of the template's fixed items.
+  const cardSetIds = template.meals.map((meal) => meal.mealCardSetId).filter((id): id is string => id != null);
+  const standingPicks = cardSetIds.length
+    ? await tx.userMealCardPicks.findMany({ where: { userId, cardSetId: { in: cardSetIds } } })
+    : [];
+
   await tx.meal.deleteMany({ where: { dailyLogId } });
 
   for (const templateMeal of template.meals) {
+    const standing = templateMeal.mealCardSetId
+      ? standingPicks.find((p) => p.cardSetId === templateMeal.mealCardSetId)
+      : undefined;
+    if (templateMeal.mealCardSet && standing) {
+      const meal = await tx.meal.create({
+        data: {
+          dailyLogId,
+          userId,
+          mealNumber: templateMeal.mealNumber,
+          name: templateMeal.name,
+          plannedTime: templateMeal.plannedTime,
+          status: MealStatus.PLANNED
+        }
+      });
+      const picks = standing.picks as CardPicks;
+      const target = cardMealTarget(templateMeal, templateMeal.mealCardSet);
+      await materializeCardMeal(tx, meal.id, templateMeal.mealCardSet.id, picks, scaledLinesForPicks(templateMeal.mealCardSet, target, picks));
+      continue;
+    }
     const plannedTotals = templateMeal.items.reduce(
       (sum, item) => ({
         calories: sum.calories + n(item.calories),

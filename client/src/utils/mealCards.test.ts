@@ -99,7 +99,7 @@ describe('togglePick', () => {
   });
 
   it('toggles on/off for multi-select and enforces maxSelect', () => {
-    let picks = { free: ['salsa'] };
+    let picks: import('./mealCards').BuilderPicks = { free: ['salsa'] };
     picks = togglePick(free, picks, 'pico');
     picks = togglePick(free, picks, 'hot-sauce');
     expect(picks.free).toEqual(['salsa', 'pico', 'hot-sauce']);
