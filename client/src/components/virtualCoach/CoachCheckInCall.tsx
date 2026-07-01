@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { BarChart3, Mic, MicOff, PhoneOff, Settings2, Volume2, VolumeX } from 'lucide-react';
 import type { VirtualCoach } from '../../data/virtualCoaches';
-import type { VirtualCoachCheckInRecap, VirtualCoachCheckInSession } from '../../types';
+import type { PlanAdvance, VirtualCoachCheckInRecap, VirtualCoachCheckInSession } from '../../types';
 import { api } from '../../services/api';
 import { useSpeech } from '../../hooks/useSpeech';
 import { Button } from '../ui/Button';
@@ -25,6 +25,7 @@ export function CoachCheckInCall({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [endedRecap, setEndedRecap] = useState<VirtualCoachCheckInRecap | null>(null);
+  const [planAdvance, setPlanAdvance] = useState<PlanAdvance | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -94,6 +95,7 @@ export function CoachCheckInCall({
       setInput('');
       if (result.done && result.status === 'COMPLETED') {
         setEndedRecap(result.recap);
+        setPlanAdvance(result.planAdvance ?? null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -112,6 +114,7 @@ export function CoachCheckInCall({
         method: 'POST'
       });
       setEndedRecap(result.recap);
+      setPlanAdvance(result.planAdvance ?? null);
       onEnd(result.recap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to end check-in');
@@ -123,7 +126,7 @@ export function CoachCheckInCall({
   if (endedRecap) {
     return (
       <div className="space-y-6">
-        <CheckInRecap recap={endedRecap} coachName={coach.name} />
+        <CheckInRecap recap={endedRecap} coachName={coach.name} planAdvance={planAdvance} />
         <Button variant="secondary" onClick={() => onEnd(endedRecap)}>
           Back to {coach.name}
         </Button>

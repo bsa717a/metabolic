@@ -404,6 +404,21 @@ export type VirtualCoachCheckInRecap = {
   completedAt?: string | null;
 };
 
+export type PlanAdvance = {
+  planPeriodId: string;
+  weekNumber: number;
+  effectiveDate: string;
+  nutritionTemplateName: string | null;
+  templateChanged: boolean;
+};
+
+export type PlanPeriodInfo = {
+  weekNumber: number | null;
+  effectiveDate: string | null;
+  endDate: string | null;
+  templateName: string | null;
+};
+
 export type VirtualCoachCheckInSession = {
   id: string;
   coachId: string;
@@ -416,6 +431,7 @@ export type VirtualCoachCheckInSession = {
   completedAt?: string | null;
   chips?: string[];
   done?: boolean;
+  planAdvance?: PlanAdvance | null;
 };
 
 export type VirtualCoachCheckInState = {

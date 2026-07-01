@@ -8,6 +8,7 @@ import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
 import { getMealCardsForDate, MealCardError, saveMealSelections } from '../services/mealCardService.js';
+import { getPlanPeriodInfo } from '../services/planAdvancement.js';
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
@@ -105,6 +106,11 @@ export async function nutritionRoutes(app: FastifyInstance) {
     const mealId = (request.params as { id: string }).id;
     const ownerId = await mealOwnerForActor(request.appUser!, mealId);
     return copyMealFromPreviousDay(ownerId, mealId);
+  });
+  app.get('/api/daily-logs/:date/plan-period', { preHandler: requireAuth }, async (request, reply) => {
+    const info = await getPlanPeriodInfo(request.appUser!.id, (request.params as { date: string }).date);
+    if (!info) return reply.code(404).send({ error: 'No active program' });
+    return info;
   });
   app.get('/api/daily-logs/:date/meal-cards', { preHandler: requireAuth }, async (request, reply) => {
     try {

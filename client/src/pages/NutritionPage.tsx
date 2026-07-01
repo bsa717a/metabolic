@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CopyPlus, LayoutTemplate, ShoppingCart } from 'lucide-react';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
-import type { NutritionPlanTemplateSummary } from '../types';
+import type { NutritionPlanTemplateSummary, PlanPeriodInfo } from '../types';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
 import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
@@ -43,6 +43,7 @@ export function NutritionPage() {
   const [selectedMealId, setSelectedMealId] = useState<string>();
   const [cardMeals, setCardMeals] = useState<MealCardsPayload[]>([]);
   const [builderMealNumber, setBuilderMealNumber] = useState<number | null>(null);
+  const [planPeriod, setPlanPeriod] = useState<PlanPeriodInfo | null>(null);
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
@@ -89,8 +90,15 @@ export function NutritionPage() {
     api<MealCardsPayload[]>(`/api/daily-logs/${selectedDate}/meal-cards`)
       .then((payloads) => { if (!cancelled) setCardMeals(payloads); })
       .catch(() => { if (!cancelled) setCardMeals([]); });
+    api<PlanPeriodInfo>(`/api/daily-logs/${selectedDate}/plan-period`)
+      .then((info) => { if (!cancelled) setPlanPeriod(info); })
+      .catch(() => { if (!cancelled) setPlanPeriod(null); });
     return () => { cancelled = true; };
   }, [selectedDate]);
+
+  function formatPlanDate(dateKey: string) {
+    return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
 
   function selectDate(date: string) {
     setSelectedDate(date);
@@ -214,9 +222,26 @@ export function NutritionPage() {
         </div>
       </div>
 
+      {planPeriod?.weekNumber != null && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-2xl border border-brand-green/30 bg-brand-green/5 px-4 py-3">
+          <span className="text-base font-bold text-app-text">Week {planPeriod.weekNumber} plan</span>
+          {planPeriod.effectiveDate && (
+            <span className="text-sm text-app-text-muted">
+              {formatPlanDate(planPeriod.effectiveDate)} – {planPeriod.endDate ? formatPlanDate(planPeriod.endDate) : 'ongoing'}
+            </span>
+          )}
+          {planPeriod.templateName && (
+            <span className="text-sm text-app-text-muted">· {planPeriod.templateName}</span>
+          )}
+          <span className="basis-full text-xs text-app-text-muted sm:basis-auto">
+            A new week starts when you complete your weekly check-in — skip it and this plan continues.
+          </span>
+        </div>
+      )}
+
       <WeekDateStrip selectedDate={selectedDate} onSelectDate={selectDate} days={weekDays} />
 
-      {defaultTemplate && (
+      {defaultTemplate && planPeriod?.weekNumber == null && (
         <p className="text-sm text-app-text-muted">
           Default plan: <span className="font-medium text-app-text">{defaultTemplate.name}</span>
         </p>
