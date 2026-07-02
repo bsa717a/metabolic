@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CopyPlus, LayoutTemplate, ShoppingCart } from 'lucide-react';
+import { CopyPlus, ShoppingCart } from 'lucide-react';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
 import type { PlanPeriodInfo } from '../types';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
@@ -8,7 +8,6 @@ import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
 import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
 import { EditMealPlanDrawer } from '../components/nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
-import { ApplyTemplateModal } from '../components/nutrition/ApplyTemplateModal';
 import { MealBuilder, type MealCardsPayload } from '../components/nutrition/MealBuilder';
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { PlanPrintMenu } from '../components/export/PlanPrintMenu';
@@ -34,7 +33,6 @@ export function NutritionPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [logActualMealId, setLogActualMealId] = useState<string>();
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
-  const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
@@ -208,10 +206,6 @@ export function NutritionPage() {
             Grocery list
           </Button>
           <PlanPrintMenu printing={printing} onPrintDay={handlePrintDay} onPrintWeek={handlePrintWeek} />
-          <Button type="button" variant="secondary" onClick={() => setTemplateModalOpen(true)}>
-            <LayoutTemplate className="mr-1 inline h-4 w-4" />
-            Plans
-          </Button>
         </div>
       </div>
 
@@ -295,14 +289,6 @@ export function NutritionPage() {
         itemType={aiState?.itemType ?? 'ACTUAL'}
         onClose={() => setAiState(undefined)}
         onSaved={() => void reloadWeek()}
-      />
-
-      <ApplyTemplateModal
-        open={templateModalOpen}
-        selectedDate={selectedDate}
-        meals={currentDayMeals}
-        onClose={() => setTemplateModalOpen(false)}
-        onApplied={() => void reloadWeek()}
       />
 
       <ShoppingListDrawer open={shoppingListOpen} anchorDate={selectedDate} onClose={() => setShoppingListOpen(false)} />
