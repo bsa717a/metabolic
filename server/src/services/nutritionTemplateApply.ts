@@ -4,6 +4,7 @@ import { n } from '../utils/numbers.js';
 import {
   cardMealTarget,
   cardSetInclude,
+  defaultPicksForSet,
   materializeCardMeal,
   scaledLinesForPicks,
   type CardPicks
@@ -45,21 +46,25 @@ export async function applyTemplateMealsToLog(
           (p) => p.cardSetId === templateMeal.mealCardSetId && p.mealNumber === templateMeal.mealNumber
         )
       : undefined;
-    if (templateMeal.mealCardSet && standing) {
-      const meal = await tx.meal.create({
-        data: {
-          dailyLogId,
-          userId,
-          mealNumber: templateMeal.mealNumber,
-          name: templateMeal.name,
-          plannedTime: templateMeal.plannedTime,
-          status: MealStatus.PLANNED
-        }
-      });
-      const picks = standing.picks as CardPicks;
-      const target = cardMealTarget(templateMeal, templateMeal.mealCardSet);
-      await materializeCardMeal(tx, meal.id, templateMeal.mealCardSet.id, picks, scaledLinesForPicks(templateMeal.mealCardSet, target, picks));
-      continue;
+    // Card-backed meals materialize from the card system: the user's standing picks,
+    // else the set's authored defaults. Template items are the pre-card legacy path.
+    if (templateMeal.mealCardSet) {
+      const picks = standing ? (standing.picks as CardPicks) : defaultPicksForSet(templateMeal.mealCardSet);
+      if (Object.keys(picks).length > 0) {
+        const meal = await tx.meal.create({
+          data: {
+            dailyLogId,
+            userId,
+            mealNumber: templateMeal.mealNumber,
+            name: templateMeal.name,
+            plannedTime: templateMeal.plannedTime,
+            status: MealStatus.PLANNED
+          }
+        });
+        const target = cardMealTarget(templateMeal, templateMeal.mealCardSet);
+        await materializeCardMeal(tx, meal.id, templateMeal.mealCardSet.id, picks, scaledLinesForPicks(templateMeal.mealCardSet, target, picks));
+        continue;
+      }
     }
     const plannedTotals = templateMeal.items.reduce(
       (sum, item) => ({

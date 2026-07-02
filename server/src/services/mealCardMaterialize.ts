@@ -30,6 +30,17 @@ export function pickedOptionIds(picks: CardPicks, cardId: string): string[] {
   return raw == null ? [] : Array.isArray(raw) ? raw : [raw];
 }
 
+/** The set's authored defaults — what a no-picks user gets (the menu's "house meal"). */
+export function defaultPicksForSet(cardSet: LoadedCardSet): CardPicks {
+  const picks: CardPicks = {};
+  for (const card of cardSet.cards) {
+    const def = card.options.find((option) => option.isDefault) ?? (card.required ? card.options[0] : undefined);
+    if (!def) continue;
+    picks[card.id] = card.maxSelect > 1 ? [def.id] : def.id;
+  }
+  return picks;
+}
+
 /** Scale the picked options' foods to the meal's calorie target. Unknown ids are skipped. */
 export function scaledLinesForPicks(cardSet: LoadedCardSet, targetCalories: number, picks: CardPicks): ScaledFoodLine[] {
   const factor = scaleFactor(targetCalories, cardSet.referenceCalories);

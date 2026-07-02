@@ -2,6 +2,7 @@ import { MealItemType, MealStatus, Prisma, ProgramMode, ProgramStatus, type Prog
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, startOfUtcDay, userDayKey } from '../utils/dates.js';
 import { applyDefaultTemplateToNewLogOutsideTx } from './nutritionTemplateApply.js';
+import { applyStructureMealsToLog } from './structureMealsApply.js';
 import { applyDefaultTemplateToNewDayOutsideTx } from './exerciseTemplateApply.js';
 import { resolvePlanForDate } from './planResolution.js';
 
@@ -170,7 +171,7 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
         const planProgram = await planProgramForDay();
         if (planProgram.defaultNutritionTemplateId) {
           await applyDefaultTemplateToNewLogOutsideTx(planProgram, existing.id, userId);
-        } else {
+        } else if (!(await applyStructureMealsToLog(userId, existing.id, day))) {
           await createDefaultMeals(existing.id, userId);
         }
       }
@@ -236,7 +237,7 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
     await copyMealsFromLog(fallbackLog.id, dailyLog.id, userId);
   } else if (planProgram.defaultNutritionTemplateId) {
     await applyDefaultTemplateToNewLogOutsideTx(planProgram, dailyLog.id, userId);
-  } else {
+  } else if (!(await applyStructureMealsToLog(userId, dailyLog.id, day))) {
     await createDefaultMeals(dailyLog.id, userId);
   }
 
