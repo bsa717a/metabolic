@@ -223,10 +223,30 @@ async function resolveDefaultNutritionTemplateId(
     weightLbs: input.weight,
     activityLevel: input.activityLevel
   });
-  if (!isCompletePlanMatchProfile(profile)) return null;
+  if (!isCompletePlanMatchProfile(profile)) {
+    const missing = [
+      profile.gender !== 'm' && profile.gender !== 'f' ? 'gender' : null,
+      !profile.heightInches ? 'height' : null,
+      !profile.weightLbs ? 'weight' : null,
+      !profile.activityLevel ? 'activityLevel' : null
+    ].filter(Boolean);
+    console.warn(
+      `[onboarding] no nutrition plan assigned — incomplete profile (missing: ${missing.join(', ')}); ` +
+        'user will get hardcoded default targets (2200 kcal / 190g)'
+    );
+    return null;
+  }
 
   const best = await findBestMatchingTemplate(profile, { visibility: Visibility.GLOBAL });
-  return best?.id ?? null;
+  if (!best) {
+    console.error(
+      `[onboarding] no nutrition plan assigned — NO TEMPLATE BAND matches profile ` +
+        `${profile.gender} ${profile.heightInches}" ${profile.weightLbs}lbs activity ${profile.activityLevel}; ` +
+        'user will get hardcoded default targets (2200 kcal / 190g). Band coverage gap.'
+    );
+    return null;
+  }
+  return best.id;
 }
 
 async function findGlobalExerciseTemplate() {
