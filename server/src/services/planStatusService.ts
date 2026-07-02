@@ -1,17 +1,12 @@
-import { ProgramMode, ProgramStatus, Visibility, type Prisma } from '@prisma/client';
+import { ProgramMode, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
 import { resolvePlanForDate } from './planResolution.js';
 import { getPlanPeriodInfo } from './planAdvancement.js';
-import {
-  findBestMatchingTemplate,
-  getUserPlanMatchProfile,
-  isCompletePlanMatchProfile,
-  type PlanMatchProfile
-} from './nutritionTemplateMatch.js';
-import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
+import { getUserPlanMatchProfile, type PlanMatchProfile } from './nutritionTemplateMatch.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
+import { applyStructureMealsToLog } from './structureMealsApply.js';
 import { getMealStructure, resolveTargets } from './targetService.js';
 
 /**
@@ -117,14 +112,6 @@ function missingProfileFields(profile: Partial<PlanMatchProfile>): string[] {
   return missing;
 }
 
-async function matchTemplateForUser(userId: string) {
-  const profile = await getUserPlanMatchProfile(userId);
-  if (!isCompletePlanMatchProfile(profile)) {
-    return { missing: missingProfileFields(profile), template: null };
-  }
-  const template = await findBestMatchingTemplate(profile, { visibility: Visibility.GLOBAL });
-  return { missing: [] as string[], template };
-}
 
 /** Preview for the "get a weekly plan" flow: what would resolution assign right now? */
 export async function getPlanProposal(userId: string): Promise<PlanProposal> {
@@ -167,21 +154,12 @@ export async function adoptProposedPlan(userId: string): Promise<PlanStatus> {
     const profile = await getUserPlanMatchProfile(userId);
     throw new PlanAdoptError(`Complete your profile first: ${missingProfileFields(profile).join(', ')}`);
   }
-  // A matched template still supplies the FOOD (meals) until the card-defaults
-  // materialization lands; targets come from resolution either way.
-  const { template } = await matchTemplateForUser(userId);
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
   const todayKey = userDayKey(user?.timezone ?? null);
   const today = parseDateParam(todayKey);
 
   await prisma.$transaction(async (tx) => {
-    if (template) {
-      await tx.program.update({
-        where: { id: program.id },
-        data: { defaultNutritionTemplateId: template.id }
-      });
-    }
     const priorCount = await tx.planPeriod.count({
       where: { programId: program.id, effectiveDate: { lt: today } }
     });
@@ -198,27 +176,25 @@ export async function adoptProposedPlan(userId: string): Promise<PlanStatus> {
         programId: program.id,
         effectiveDate: today,
         weekNumber: priorCount + 1,
-        nutritionTemplateId: template?.id ?? null,
         notes: 'Self-serve plan adoption',
         createdById: userId,
         ...frozen
       },
-      update: { nutritionTemplateId: template?.id ?? undefined, ...frozen }
+      update: { ...frozen }
     });
   });
 
-  // Materialize today from the new plan unless the user already logged food today.
+  // Materialize today from the plan (meal structure + card defaults) unless the user
+  // already has meals; frozen targets stamp either way.
   const log = await ensureDailyLogByUserId(userId, todayKey);
   if (log) {
+    const mealCount = await prisma.meal.count({ where: { dailyLogId: log.id } });
     const actualItems = await prisma.mealItem.count({
       where: { meal: { dailyLogId: log.id }, type: 'ACTUAL' }
     });
-    if (actualItems === 0 && template) {
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await applyTemplateMealsToLog(tx, template.id, log.id, userId);
-      });
+    if (actualItems === 0 && mealCount === 0) {
+      await applyStructureMealsToLog(userId, log.id, today);
     }
-    // Frozen targets win over whatever stamping happened above.
     await prisma.dailyLog.update({
       where: { id: log.id },
       data: {

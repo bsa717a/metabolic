@@ -1,13 +1,7 @@
-import { ProgramStatus, Visibility } from '@prisma/client';
+import { ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { localDateKey, parseDateParam, toDateKey } from '../utils/dates.js';
 import { resolvePlanForDate } from './planResolution.js';
-import {
-  findBestMatchingTemplate,
-  getUserPlanMatchProfile,
-  isCompletePlanMatchProfile,
-  templateMatchesProfile
-} from './nutritionTemplateMatch.js';
 import { resolveTargets } from './targetService.js';
 
 const DAY_MS = 86400000;
@@ -94,23 +88,10 @@ export async function advancePlanForCheckIn(
     }
   }
 
-  let nutritionTemplateId = plan.nutritionTemplateId;
-  let templateChanged = false;
-
-  const profile = await getUserPlanMatchProfile(userId);
-  if (isCompletePlanMatchProfile(profile)) {
-    const current = nutritionTemplateId
-      ? await prisma.nutritionPlanTemplate.findUnique({ where: { id: nutritionTemplateId } })
-      : null;
-    const stillMatches = current != null && templateMatchesProfile(current, profile);
-    if (!stillMatches) {
-      const best = await findBestMatchingTemplate(profile, { visibility: Visibility.GLOBAL });
-      if (best && best.id !== nutritionTemplateId) {
-        nutritionTemplateId = best.id;
-        templateChanged = true;
-      }
-    }
-  }
+  // Formula era: new periods carry NO nutrition template — targets are frozen below
+  // and food comes from the card system (legacy periods keep theirs via carry-forward).
+  const nutritionTemplateId: string | null = null;
+  const templateChanged = false;
 
   const priorCount = await prisma.planPeriod.count({
     where: { programId: program.id, effectiveDate: { lt: effectiveDate } }
@@ -142,7 +123,8 @@ export async function advancePlanForCheckIn(
       createdById: userId,
       ...frozen
     },
-    update: { nutritionTemplateId, exerciseTemplateId: plan.exerciseTemplateId, weekNumber, ...frozen }
+    // update omits nutritionTemplateId so a same-day re-advance never wipes a legacy period's template
+    update: { exerciseTemplateId: plan.exerciseTemplateId, weekNumber, ...frozen }
   });
 
   const template = nutritionTemplateId

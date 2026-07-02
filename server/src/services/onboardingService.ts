@@ -9,11 +9,6 @@ import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
 import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
 import { freezeTargetsOnPeriod } from './targetService.js';
 import { notifyCoachRequest } from './coachRequestNotificationService.js';
-import {
-  buildProfileFromInput,
-  findBestMatchingTemplate,
-  isCompletePlanMatchProfile
-} from './nutritionTemplateMatch.js';
 
 const DEFAULT_PROGRAM_NAME = 'Master Your Metabolic';
 
@@ -209,45 +204,16 @@ async function findGlobalNutritionTemplate() {
   });
 }
 
+/**
+ * Formula era: only a coach's hand-picked default template attaches at onboarding
+ * (coach-custom plans). Everyone else is templateless — targets come from resolution
+ * (freezeTargetsOnPeriod below) and food from the card system's meal structure.
+ */
 async function resolveDefaultNutritionTemplateId(
-  input: SetupInput,
+  _input: SetupInput,
   coach: Awaited<ReturnType<typeof findCoachByCode>>
 ) {
-  if (coach?.defaultNutritionTemplateId) {
-    return coach.defaultNutritionTemplateId;
-  }
-
-  const profile = buildProfileFromInput({
-    gender: input.gender,
-    heightFeet: input.heightFeet,
-    heightInches: input.heightInches,
-    weightLbs: input.weight,
-    activityLevel: input.activityLevel
-  });
-  if (!isCompletePlanMatchProfile(profile)) {
-    const missing = [
-      profile.gender !== 'm' && profile.gender !== 'f' ? 'gender' : null,
-      !profile.heightInches ? 'height' : null,
-      !profile.weightLbs ? 'weight' : null,
-      !profile.activityLevel ? 'activityLevel' : null
-    ].filter(Boolean);
-    console.warn(
-      `[onboarding] no nutrition plan assigned — incomplete profile (missing: ${missing.join(', ')}); ` +
-        'user will get hardcoded default targets (2200 kcal / 190g)'
-    );
-    return null;
-  }
-
-  const best = await findBestMatchingTemplate(profile, { visibility: Visibility.GLOBAL });
-  if (!best) {
-    console.error(
-      `[onboarding] no nutrition plan assigned — NO TEMPLATE BAND matches profile ` +
-        `${profile.gender} ${profile.heightInches}" ${profile.weightLbs}lbs activity ${profile.activityLevel}; ` +
-        'user will get hardcoded default targets (2200 kcal / 190g). Band coverage gap.'
-    );
-    return null;
-  }
-  return best.id;
+  return coach?.defaultNutritionTemplateId ?? null;
 }
 
 async function findGlobalExerciseTemplate() {
