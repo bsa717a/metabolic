@@ -120,7 +120,15 @@ export type CoachCheckInStage =
   | 'pattern'
   | 'focus'
   | 'commitment'
+  // kickoff (first-ever check-in) stages — 'commitment' and 'recap' are shared
+  | 'welcome'
+  | 'why'
+  | 'goals'
+  | 'rhythm'
+  | 'first_focus'
   | 'recap';
+
+export type CoachCheckInFlow = 'weekly' | 'kickoff';
 
 export type CoachCheckInTranscriptEntry = {
   role: 'coach' | 'user';
@@ -144,8 +152,12 @@ export type CoachCheckInWeeklyReview = {
 export type CoachCheckInTurnInput = {
   coachId: string;
   stage: CoachCheckInStage;
+  /** 'kickoff' = first-ever check-in (orientation flow); defaults to 'weekly'. */
+  flow?: CoachCheckInFlow;
   systemPrompt: string;
   weeklyReview: CoachCheckInWeeklyReview;
+  /** Kickoff only: the user's goals on file, formatted ("Weight: 210 → goal 185 lbs"). */
+  kickoffContext?: { goalLines: string[] };
   transcript: CoachCheckInTranscriptEntry[];
   userMessage?: string;
   userFirstName: string;
@@ -156,6 +168,8 @@ export type CoachCheckInRecap = {
   pattern: string;
   focus: string;
   supportAction: string;
+  /** Kickoff only: the user's core "why" as one polished sentence. */
+  motivation?: string;
 };
 
 export type CoachCheckInTurnResult = {
@@ -378,7 +392,8 @@ const coachCheckInRecapSchema = z.object({
   win: z.string().min(1).max(400),
   pattern: z.string().min(1).max(400),
   focus: z.string().min(1).max(400),
-  supportAction: z.string().min(1).max(400)
+  supportAction: z.string().min(1).max(400),
+  motivation: z.string().min(1).max(400).optional()
 });
 
 const coachCheckInTurnSchema = z.object({
@@ -389,7 +404,7 @@ const coachCheckInTurnSchema = z.object({
   recap: coachCheckInRecapSchema.optional()
 });
 
-const STAGE_GOALS: Record<CoachCheckInStage, string> = {
+const WEEKLY_STAGE_GOALS: Partial<Record<CoachCheckInStage, string>> = {
   opening: 'Ask how they are feeling about the week — person first, not data.',
   wins: 'Invite what went well this week. Reflect back something specific they share.',
   obstacles: 'Explore what got in the way — stress, schedule, appetite, social plans, etc.',
@@ -400,10 +415,25 @@ const STAGE_GOALS: Record<CoachCheckInStage, string> = {
   recap: 'Summarize win, pattern, focus, and support action warmly. Set done true with recap filled in.'
 };
 
+const KICKOFF_STAGE_GOALS: Partial<Record<CoachCheckInStage, string>> = {
+  welcome: 'This is their first-ever call. Welcome them to the program warmly and ask how they feel about getting started.',
+  why: 'Draw out their deeper motivation — why this matters to them right now, in their own words. Go one layer past the surface answer.',
+  goals: 'Confirm the goals on file (provided below) conversationally — do they still feel right? Adjust the framing to what they say.',
+  rhythm: 'Explain how their week works: build their meals each day, check in with you weekly, and their plan adjusts to their body over time. Confirm it makes sense.',
+  first_focus: 'Help them pick one simple, confidence-building focus for their first week. Small and winnable.',
+  commitment: 'Agree on one simple support action they can actually do.',
+  recap: 'Summarize their why, goal, first-week focus, and support action warmly. Set done true; fill recap with win = their goal, pattern = their why, focus, supportAction, and motivation = their why as one polished sentence.'
+};
+
+function stageGoalsFor(flow: CoachCheckInFlow | undefined): Partial<Record<CoachCheckInStage, string>> {
+  return flow === 'kickoff' ? KICKOFF_STAGE_GOALS : WEEKLY_STAGE_GOALS;
+}
+
 const COACH_CHECK_IN_JSON_PROMPT = `Return JSON only:
-{ "message": string, "chips": string[], "advance": boolean, "done": boolean, "recap"?: { "win": string, "pattern": string, "focus": string, "supportAction": string } }
+{ "message": string, "chips": string[], "advance": boolean, "done": boolean, "recap"?: { "win": string, "pattern": string, "focus": string, "supportAction": string, "motivation"?: string } }
 Set advance true when this stage feels complete and you are ready to move on.
-Set done true only on the recap stage when you are closing the check-in; include recap then.`;
+Set done true only on the recap stage when you are closing the check-in; include recap then.
+Include recap.motivation (their core "why" as one sentence) only on a kickoff call.`;
 
 const ASSISTANT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
 Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Use the user's first name occasionally when it feels natural.
@@ -531,16 +561,22 @@ function buildCoachCheckInPrompt(input: CoachCheckInTurnInput) {
     .slice(-12)
     .map((entry) => `${entry.role === 'coach' ? 'Coach' : 'User'}: ${entry.content}`)
     .join('\n');
-  const reviewLines = input.weeklyReview.highlights.map((line) => `- ${line}`).join('\n');
   const userLine = input.userMessage ? `\nUser just said: ${input.userMessage.trim()}` : '\nThis is the opening coach line — no user reply yet.';
+
+  // Kickoff calls have no week behind them: goals on file replace the weekly data section.
+  const contextSection =
+    input.flow === 'kickoff'
+      ? `Client goals on file (confirm conversationally — do not quote as a list to the user):
+${(input.kickoffContext?.goalLines ?? []).map((line) => `- ${line}`).join('\n') || '- No goals recorded yet — help them name one.'}`
+      : `Weekly data highlights (interpret conversationally — do not quote as a list to the user):
+${input.weeklyReview.highlights.map((line) => `- ${line}`).join('\n') || '- Limited data logged this week.'}`;
 
   return `${COACH_CHECK_IN_JSON_PROMPT}
 
 Current stage: ${input.stage}
-Stage goal: ${STAGE_GOALS[input.stage]}
+Stage goal: ${stageGoalsFor(input.flow)[input.stage] ?? 'Continue the conversation naturally toward the recap.'}
 
-Weekly data highlights (interpret conversationally — do not quote as a list to the user):
-${reviewLines || '- Limited data logged this week.'}
+${contextSection}
 
 Conversation so far:
 ${history || '(none)'}${userLine}`;
@@ -1110,22 +1146,20 @@ export class MockAiProvider implements AiProvider {
   async coachCheckInTurn(input: CoachCheckInTurnInput): Promise<CoachCheckInTurnResult> {
     const name = input.userFirstName;
     const coach = input.coachId;
-    const stages: CoachCheckInStage[] = [
-      'opening',
-      'wins',
-      'obstacles',
-      'data_reflection',
-      'pattern',
-      'focus',
-      'commitment',
-      'recap'
-    ];
+    const stages: CoachCheckInStage[] =
+      input.flow === 'kickoff'
+        ? ['welcome', 'why', 'goals', 'rhythm', 'first_focus', 'commitment', 'recap']
+        : ['opening', 'wins', 'obstacles', 'data_reflection', 'pattern', 'focus', 'commitment', 'recap'];
     const stageIndex = stages.indexOf(input.stage);
     const responseStage =
       input.userMessage && stageIndex >= 0
         ? stages[Math.min(stageIndex + 1, stages.length - 1)]
         : input.stage;
     const stage = responseStage;
+
+    if (input.flow === 'kickoff') {
+      return this.mockKickoffTurn(stage, input);
+    }
 
     const openers: Record<string, string> = {
       kali: `Aloha, ${name}. Before we look at anything — how is your heart feeling about this week?`,
@@ -1136,7 +1170,7 @@ export class MockAiProvider implements AiProvider {
       mets: `Kia ora, ${name}. How are you feeling about the week before we dig in?`
     };
 
-    const byStage: Record<CoachCheckInStage, { message: string; chips: string[]; advance: boolean; done: boolean; recap?: CoachCheckInRecap }> = {
+    const byStage: Partial<Record<CoachCheckInStage, { message: string; chips: string[]; advance: boolean; done: boolean; recap?: CoachCheckInRecap }>> = {
       opening: {
         message: openers[coach] ?? openers.tess,
         chips: ['Pretty good', 'Mixed', 'Rough week', 'Not sure yet'],
@@ -1196,7 +1230,72 @@ export class MockAiProvider implements AiProvider {
       }
     };
 
-    const result = byStage[stage];
+    const result = byStage[stage] ?? byStage.opening!;
+    return {
+      message: result.message,
+      chips: result.chips,
+      advance: Boolean(input.userMessage) || result.advance,
+      done: result.done,
+      recap: result.recap
+    };
+  }
+
+  /** Deterministic kickoff (first check-in) flow for dev/test without an API key. */
+  private mockKickoffTurn(stage: CoachCheckInStage, input: CoachCheckInTurnInput): CoachCheckInTurnResult {
+    const name = input.userFirstName;
+    const goalLine = input.kickoffContext?.goalLines[0] ?? 'the goal you set at signup';
+    const byStage: Partial<Record<CoachCheckInStage, { message: string; chips: string[]; advance: boolean; done: boolean; recap?: CoachCheckInRecap }>> = {
+      welcome: {
+        message: `Welcome, ${name} — I'm so glad you're here. This first call is just about you and where we're headed. How are you feeling about getting started?`,
+        chips: ['Excited', 'A little nervous', 'Ready', 'Not sure yet'],
+        advance: false,
+        done: false
+      },
+      why: {
+        message: `That's a real answer, and I appreciate it. Tell me — why does this matter to you right now? Not the number on a scale, the real reason.`,
+        chips: ['My health scared me', 'Keeping up with my kids', 'Feeling like myself again', 'An event coming up'],
+        advance: true,
+        done: false
+      },
+      goals: {
+        message: `That's worth showing up for. Looking at what you set when you signed up — ${goalLine} — does that still feel like the right target?`,
+        chips: ['Yes, that feels right', 'Maybe adjust it', 'Not sure how realistic it is'],
+        advance: true,
+        done: false
+      },
+      rhythm: {
+        message: `Good. Here's how your week works: each day you build your meals — portions are already sized to you. Once a week, we talk like this, and your plan adjusts as your body changes. Simple as that. Make sense?`,
+        chips: ['Makes sense', 'How do I build meals?', 'What if I miss a day?'],
+        advance: true,
+        done: false
+      },
+      first_focus: {
+        message: `Then let's keep week one simple. One focus, small and winnable. What feels doable for you this week?`,
+        chips: ['Log every meal', 'Hit my protein', 'Build dinner each night', 'Just show up daily'],
+        advance: true,
+        done: false
+      },
+      commitment: {
+        message: `Perfect first focus. And one small support action for when the week gets messy — what will you actually do?`,
+        chips: ['Set a daily reminder', 'Prep one meal ahead', 'Check the app each morning'],
+        advance: true,
+        done: false
+      },
+      recap: {
+        message: `${name}, this was a great start. I know your why, we've confirmed where we're headed, and week one has one simple job. I'll see you at your first weekly check-in.`,
+        chips: [],
+        advance: true,
+        done: true,
+        recap: {
+          win: goalLine,
+          pattern: 'Starting with a clear reason, not just a target.',
+          focus: input.userMessage?.trim() || 'One simple, winnable focus for week one.',
+          supportAction: 'A small daily anchor to stay connected.',
+          motivation: 'Doing this to feel strong and present for the people who matter.'
+        }
+      }
+    };
+    const result = byStage[stage] ?? byStage.welcome!;
     return {
       message: result.message,
       chips: result.chips,

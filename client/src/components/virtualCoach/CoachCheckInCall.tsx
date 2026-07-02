@@ -126,7 +126,7 @@ export function CoachCheckInCall({
   if (endedRecap) {
     return (
       <div className="space-y-6">
-        <CheckInRecap recap={endedRecap} coachName={coach.name} planAdvance={planAdvance} />
+        <CheckInRecap recap={endedRecap} coachName={coach.name} planAdvance={planAdvance} kind={session.kind} />
         <Button variant="secondary" onClick={() => onEnd(endedRecap)}>
           Back to {coach.name}
         </Button>

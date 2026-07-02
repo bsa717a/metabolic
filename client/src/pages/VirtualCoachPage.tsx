@@ -333,7 +333,7 @@ function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: App
       </div>
 
       {latestRecap && (latestRecap.win || latestRecap.focus) && (
-        <CheckInRecap recap={latestRecap} coachName={coach.name} />
+        <CheckInRecap recap={latestRecap} coachName={coach.name} kind={latestRecap.kind ?? 'WEEKLY'} />
       )}
 
       {error && <p className="text-center text-sm text-red-600">{error}</p>}
