@@ -69,3 +69,54 @@ export async function applyStructureMealsToLog(userId: string, dailyLogId: strin
   });
   return true;
 }
+
+/** Re-scale card-backed meals on a legacy template log to the week's frozen slot targets. */
+export async function resyncCardMealsToFrozenPeriod(userId: string, dailyLogId: string, day: Date): Promise<boolean> {
+  const program = await prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    select: { id: true }
+  });
+  if (!program) return false;
+
+  const period = await prisma.planPeriod.findFirst({
+    where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
+    orderBy: { effectiveDate: 'desc' },
+    select: { calorieTarget: true }
+  });
+  if (!period) return false;
+
+  const [structure, sets] = await Promise.all([
+    getMealStructure(),
+    prisma.mealCardSet.findMany({ include: cardSetInclude })
+  ]);
+  const slotByNumber = new Map(slotTargets(n(period.calorieTarget), structure).map((slot) => [slot.mealNumber, slot]));
+
+  const meals = await prisma.meal.findMany({
+    where: { dailyLogId },
+    select: { id: true, mealNumber: true, cardSelections: true }
+  });
+
+  const cardMeals = meals.filter((meal) => {
+    const sel = meal.cardSelections as { setId?: string; picks?: CardPicks } | null;
+    return Boolean(sel?.setId && sel.picks && Object.keys(sel.picks).length);
+  });
+  if (!cardMeals.length) return false;
+
+  await prisma.$transaction(async (tx) => {
+    for (const meal of cardMeals) {
+      const sel = meal.cardSelections as { setId: string; picks: CardPicks };
+      const set = sets.find((candidate) => candidate.id === sel.setId);
+      const slot = slotByNumber.get(meal.mealNumber);
+      if (!set || !slot) continue;
+      await materializeCardMeal(
+        tx,
+        meal.id,
+        set.id,
+        sel.picks,
+        scaledLinesForPicks(set, slot.calorieTarget, sel.picks)
+      );
+    }
+    await recalculateDailyLogTotals(dailyLogId, tx);
+  });
+  return true;
+}

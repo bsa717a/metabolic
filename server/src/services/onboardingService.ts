@@ -1,12 +1,12 @@
-import { ProgramMode, ProgramStatus, Role, Visibility, type ProgramMetric, type Prisma } from '@prisma/client';
+import { ProgramMode, ProgramStatus, Role, Visibility, MealItemType, type ProgramMetric, type Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
 import { normalizeGender } from './bloodPanelMetrics.js';
 import { buildProgramMetrics, missingProgramMetrics } from '../utils/programMetrics.js';
 import { fatMassLbs, leanTissueMassLbs } from '../utils/bodyComposition.js';
 import { ensureTodayDailyLog } from './dailyLogService.js';
-import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
 import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
+import { applyStructureMealsToLog } from './structureMealsApply.js';
 import { freezeTargetsOnPeriod } from './targetService.js';
 import { notifyCoachRequest } from './coachRequestNotificationService.js';
 
@@ -384,7 +384,7 @@ async function updateActiveProgramFromSetup(
           }
     });
 
-    if (!trackingOnly && (defaultNutritionTemplateId || defaultExerciseTemplateId)) {
+    if (!trackingOnly) {
       const existingPeriod = await tx.planPeriod.findFirst({
         where: { programId: program.id, effectiveDate: today }
       });
@@ -442,26 +442,25 @@ async function updateActiveProgramFromSetup(
   });
 
   if (!trackingOnly) {
-    const dailyLog = await ensureTodayDailyLog(userId, programWithMetrics);
-    if (dailyLog && defaultNutritionTemplateId) {
-      await prisma.$transaction(async (tx) => {
-        await applyTemplateMealsToLog(tx, defaultNutritionTemplateId, dailyLog.id, userId);
-      });
+    await freezeTargetsOnPeriod(userId, program.id, today);
+  }
+
+  const dailyLog = await ensureTodayDailyLog(userId, programWithMetrics);
+  if (dailyLog && !trackingOnly && !defaultNutritionTemplateId) {
+    const plannedItems = await prisma.mealItem.count({
+      where: { meal: { dailyLogId: dailyLog.id }, type: 'PLANNED' }
+    });
+    if (plannedItems === 0) {
+      await applyStructureMealsToLog(userId, dailyLog.id, today);
     }
+  }
+  if (!trackingOnly) {
     if (defaultExerciseTemplateId) {
       await prisma.$transaction(async (tx) => {
         await applyTemplateExercisesToDate(tx, defaultExerciseTemplateId, program.id, userId, todayKey);
       });
     } else {
       await seedDefaultExercises(userId, program.id, today);
-    }
-    // Week 1's numbers come from target resolution (formula era); template stamping above is legacy.
-    const frozen = await freezeTargetsOnPeriod(userId, program.id, today);
-    if (frozen && dailyLog) {
-      await prisma.dailyLog.update({
-        where: { id: dailyLog.id },
-        data: { calorieTarget: frozen.calories, proteinTarget: frozen.protein, carbTarget: frozen.carbs, fatTarget: frozen.fat }
-      });
     }
   }
 
@@ -539,10 +538,7 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
       data: buildProgramMetrics(created.id, input, calories, protein)
     });
 
-    if (defaultNutritionTemplateId || defaultExerciseTemplateId) {
-      // Week 1 plan history: the templates this program starts on. resolvePlanForDate would
-      // otherwise just fall back to the program defaults, so this is explicit history, not new
-      // behavior — and gives the coach a real first PlanPeriod to build the weekly timeline from.
+    if (!trackingOnly) {
       await tx.planPeriod.create({
         data: {
           programId: created.id,
@@ -566,11 +562,18 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     include: { metrics: true }
   });
 
+  if (!trackingOnly) {
+    await freezeTargetsOnPeriod(userId, program.id, today);
+  }
+
   const dailyLog = await ensureTodayDailyLog(userId, programWithMetrics);
-  if (dailyLog && defaultNutritionTemplateId) {
-    await prisma.$transaction(async (tx) => {
-      await applyTemplateMealsToLog(tx, defaultNutritionTemplateId, dailyLog.id, userId);
+  if (dailyLog && !trackingOnly && !defaultNutritionTemplateId) {
+    const plannedItems = await prisma.mealItem.count({
+      where: { meal: { dailyLogId: dailyLog.id }, type: 'PLANNED' }
     });
+    if (plannedItems === 0) {
+      await applyStructureMealsToLog(userId, dailyLog.id, today);
+    }
   }
   if (defaultExerciseTemplateId) {
     await prisma.$transaction(async (tx) => {
@@ -578,17 +581,6 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     });
   } else if (!trackingOnly) {
     await seedDefaultExercises(userId, program.id, today);
-  }
-
-  if (!trackingOnly) {
-    // Week 1's numbers come from target resolution (formula era); template stamping above is legacy.
-    const frozen = await freezeTargetsOnPeriod(userId, program.id, today);
-    if (frozen && dailyLog) {
-      await prisma.dailyLog.update({
-        where: { id: dailyLog.id },
-        data: { calorieTarget: frozen.calories, proteinTarget: frozen.protein, carbTarget: frozen.carbs, fatTarget: frozen.fat }
-      });
-    }
   }
 
   if (shouldNotifyCoachRequest) {

@@ -429,6 +429,7 @@ export type PlanPeriodInfo = {
   endDate: string | null;
   templateName: string | null;
   calorieTarget: number | null;
+  proteinTarget?: number | null;
 };
 
 export type PlanStatus = {

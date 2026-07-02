@@ -52,8 +52,8 @@ export async function advancePlanForCheckIn(
   const today = parseDateParam(timezone ? localDateKey(new Date(), timezone) : localDateKey(new Date()));
 
   const plan = await resolvePlanForDate(program, today);
-  // Log-only programs have no plan to advance.
-  if (!plan.nutritionTemplateId && !plan.exerciseTemplateId) return null;
+  const targets = await resolveTargets(userId);
+  if (!plan.nutritionTemplateId && !plan.exerciseTemplateId && !targets) return null;
 
   let effectiveDate = new Date(today.getTime() + DAY_MS);
   if (mode === 'kickoff') {
@@ -147,6 +147,7 @@ export type PlanPeriodInfo = {
   endDate: string | null;
   templateName: string | null;
   calorieTarget: number | null;
+  proteinTarget: number | null;
 };
 
 /**
@@ -164,7 +165,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     prisma.planPeriod.findMany({
       where: { programId: program.id },
       orderBy: { effectiveDate: 'asc' },
-      select: { id: true, effectiveDate: true, calorieTarget: true }
+      select: { id: true, effectiveDate: true, calorieTarget: true, proteinTarget: true }
     }),
     resolvePlanForDate(program, day)
   ]);
@@ -181,14 +182,17 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     if (periods[i].effectiveDate.getTime() <= day.getTime()) activeIndex = i;
   }
 
-  // The week's frozen number wins; template targets are the legacy fallback.
   const frozenCalories = activeIndex >= 0 && periods[activeIndex].calorieTarget != null
     ? Math.round(Number(periods[activeIndex].calorieTarget))
     : null;
+  const frozenProtein = activeIndex >= 0 && periods[activeIndex].proteinTarget != null
+    ? Math.round(Number(periods[activeIndex].proteinTarget))
+    : null;
   const calorieTarget = frozenCalories ?? (template ? Math.round(Number(template.calorieTarget)) : null);
+  const proteinTarget = frozenProtein ?? (template ? Math.round(Number(template.proteinTarget)) : null);
 
   if (activeIndex < 0) {
-    return { weekNumber: null, effectiveDate: null, endDate: null, templateName: template?.name ?? null, calorieTarget };
+    return { weekNumber: null, effectiveDate: null, endDate: null, templateName: template?.name ?? null, calorieTarget, proteinTarget };
   }
 
   const next = periods[activeIndex + 1];
@@ -197,6 +201,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     effectiveDate: toDateKey(periods[activeIndex].effectiveDate),
     endDate: next ? toDateKey(new Date(next.effectiveDate.getTime() - DAY_MS)) : null,
     templateName: template?.name ?? null,
-    calorieTarget
+    calorieTarget,
+    proteinTarget
   };
 }

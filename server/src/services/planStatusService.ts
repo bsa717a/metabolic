@@ -83,7 +83,7 @@ export async function getPlanStatus(userId: string): Promise<PlanStatus | null> 
     state: 'on_plan',
     mode: program.mode,
     calorieTarget: info?.calorieTarget ?? targets?.calories ?? (template ? Math.round(n(template.calorieTarget)) : null),
-    proteinTarget: targets?.protein ?? (template ? Math.round(n(template.proteinTarget)) : null),
+    proteinTarget: info?.proteinTarget ?? targets?.protein ?? (template ? Math.round(n(template.proteinTarget)) : null),
     weekNumber: info?.weekNumber ?? null,
     effectiveDate,
     endDate: info?.endDate ?? null,
