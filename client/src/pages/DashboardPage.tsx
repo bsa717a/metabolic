@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
 import { getIdToken } from '../services/auth';
 import { DashboardWelcome } from '../components/dashboard/DashboardWelcome';
+import { PlanStatusCard } from '../components/dashboard/PlanStatusCard';
 import type { AppUser, Dashboard } from '../types';
 import { TodayNutrition } from '../components/dashboard/TodayNutrition';
 import { TodayExercise } from '../components/dashboard/TodayExercise';
@@ -53,34 +54,6 @@ function RemainingMacrosDisplay({
   );
 }
 
-function DateTimeDisplay() {
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div className="hidden text-left sm:block sm:text-right">
-      <p className="text-sm font-semibold text-brand-navy dark:text-brand-off-white">
-        {now.toLocaleDateString(undefined, {
-          weekday: 'long',
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric'
-        })}
-      </p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-app-text-muted">
-        {now.toLocaleTimeString(undefined, {
-          hour: 'numeric',
-          minute: '2-digit',
-          second: '2-digit'
-        })}
-      </p>
-    </div>
-  );
-}
 
 function QuickLink({
   to,
@@ -204,7 +177,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
           caloriesRemaining={s.caloriesRemaining}
           proteinRemaining={s.proteinRemaining}
         />
-        <DateTimeDisplay />
+        <PlanStatusCard />
       </div>
 
       <section className="hidden sm:block">

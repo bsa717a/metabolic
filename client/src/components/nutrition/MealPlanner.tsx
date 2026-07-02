@@ -9,6 +9,8 @@ export function MealPlanner({
   onLogActual,
   selectedMealId,
   onSelectMeal,
+  cardMeals = [],
+  onBuildMeal,
 }: {
   meals: Meal[];
   selectedDate: string;
@@ -16,6 +18,8 @@ export function MealPlanner({
   onLogActual: (mealId: string) => void;
   selectedMealId?: string;
   onSelectMeal?: (mealId: string) => void;
+  cardMeals?: Array<{ mealNumber: number; slotType: 'BREAKFAST' | 'SNACK' | 'LUNCH' | 'DINNER' }>;
+  onBuildMeal?: (mealNumber: number) => void;
 }) {
   const [editingMealId, setEditingMealId] = useState<string | undefined>();
 
@@ -36,20 +40,24 @@ export function MealPlanner({
 
   return (
     <div className="space-y-4">
-      {meals.map((meal) => (
-        <MealCard
-          key={meal.id}
-          meal={meal}
-          selectedDate={selectedDate}
-          onChange={onChange}
-          isEditing={meal.id === editingMealId}
-          onEnterEditMode={handleEnterEditMode}
-          onExitEditMode={handleExitEditMode}
-          onLogActual={onLogActual}
-          selected={meal.id === selectedMealId}
-          onSelect={onSelectMeal}
-        />
-      ))}
+      {meals.map((meal) => {
+        const cardMeal = cardMeals.find((c) => c.mealNumber === meal.mealNumber);
+        return (
+          <MealCard
+            key={meal.id}
+            meal={meal}
+            selectedDate={selectedDate}
+            onChange={onChange}
+            isEditing={meal.id === editingMealId}
+            onEnterEditMode={handleEnterEditMode}
+            onExitEditMode={handleExitEditMode}
+            onLogActual={onLogActual}
+            selected={meal.id === selectedMealId}
+            onSelect={onSelectMeal}
+            onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }

@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CopyPlus, LayoutTemplate, ShoppingCart } from 'lucide-react';
-import { clsx } from 'clsx';
-import { api, getWeekDates, isFuture, isToday, startOfWeek, todayKey } from '../services/api';
-import type { NutritionPlanTemplateSummary } from '../types';
+import { CopyPlus, ShoppingCart } from 'lucide-react';
+import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
+import type { PlanPeriodInfo } from '../types';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
-import { WeeklyPlanner } from '../components/nutrition/weekly/WeeklyPlanner';
 import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
 import { EditMealPlanDrawer } from '../components/nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
-import { ApplyTemplateModal } from '../components/nutrition/ApplyTemplateModal';
+import { MealBuilder, type MealCardsPayload } from '../components/nutrition/MealBuilder';
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { PlanPrintMenu } from '../components/export/PlanPrintMenu';
 import { Button } from '../components/ui/Button';
@@ -28,23 +26,21 @@ function dateFromParams(params: URLSearchParams) {
   return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey();
 }
 
-type View = 'week' | 'day';
-
 export function NutritionPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
-  const [view, setView] = useState<View>('week');
   const [weekDays, setWeekDays] = useState<DayMeals[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [logActualMealId, setLogActualMealId] = useState<string>();
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
-  const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [copyingDay, setCopyingDay] = useState(false);
-  const [defaultTemplate, setDefaultTemplate] = useState<NutritionPlanTemplateSummary | null>(null);
   const [selectedMealId, setSelectedMealId] = useState<string>();
+  const [cardMeals, setCardMeals] = useState<MealCardsPayload[]>([]);
+  const [builderMealNumber, setBuilderMealNumber] = useState<number | null>(null);
+  const [planPeriod, setPlanPeriod] = useState<PlanPeriodInfo | null>(null);
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
@@ -79,11 +75,21 @@ export function NutritionPage() {
       : currentDayMeals[0]?.id;
   const daySelectedMeal = currentDayMeals.find((meal) => meal.id === effectiveSelectedMealId);
 
+  // Card-builder availability for the selected day; 404 = plan has no card sets.
   useEffect(() => {
-    api<NutritionPlanTemplateSummary | null>('/api/nutrition-templates/default')
-      .then(setDefaultTemplate)
-      .catch(() => setDefaultTemplate(null));
-  }, [selectedDate, weekDays]);
+    let cancelled = false;
+    api<MealCardsPayload[]>(`/api/daily-logs/${selectedDate}/meal-cards`)
+      .then((payloads) => { if (!cancelled) setCardMeals(payloads); })
+      .catch(() => { if (!cancelled) setCardMeals([]); });
+    api<PlanPeriodInfo>(`/api/daily-logs/${selectedDate}/plan-period`)
+      .then((info) => { if (!cancelled) setPlanPeriod(info); })
+      .catch(() => { if (!cancelled) setPlanPeriod(null); });
+    return () => { cancelled = true; };
+  }, [selectedDate]);
+
+  function formatPlanDate(dateKey: string) {
+    return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
 
   function selectDate(date: string) {
     setSelectedDate(date);
@@ -200,57 +206,36 @@ export function NutritionPage() {
             Grocery list
           </Button>
           <PlanPrintMenu printing={printing} onPrintDay={handlePrintDay} onPrintWeek={handlePrintWeek} />
-          <Button type="button" variant="secondary" onClick={() => setTemplateModalOpen(true)}>
-            <LayoutTemplate className="mr-1 inline h-4 w-4" />
-            Plans
-          </Button>
         </div>
       </div>
 
-      <WeekDateStrip
-        selectedDate={selectedDate}
-        onSelectDate={selectDate}
-        days={weekDays}
-        endAction={
-          <div className="inline-flex rounded-xl bg-app-muted p-1">
-            {(['week', 'day'] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setView(option)}
-                className={clsx(
-                  'rounded-lg px-4 py-1.5 text-sm font-semibold capitalize transition',
-                  view === option ? 'bg-app-surface text-app-text shadow-sm' : 'text-app-text-muted hover:text-app-text'
-                )}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        }
-      />
-
-      {defaultTemplate && (
-        <p className="text-sm text-app-text-muted">
-          Default plan: <span className="font-medium text-app-text">{defaultTemplate.name}</span>
-        </p>
+      {(planPeriod?.weekNumber != null || planPeriod?.calorieTarget != null) && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-2xl border border-brand-green/30 bg-brand-green/5 px-4 py-3">
+          <span className="text-base font-bold text-app-text">
+            {planPeriod.weekNumber != null ? `Week ${planPeriod.weekNumber} plan` : 'Your plan'}
+          </span>
+          {planPeriod.calorieTarget != null && (
+            <span className="text-sm text-app-text-muted">{planPeriod.calorieTarget.toLocaleString()} kcal/day</span>
+          )}
+          {planPeriod.weekNumber != null && planPeriod.effectiveDate ? (
+            <span className="text-sm text-app-text-muted">
+              {formatPlanDate(planPeriod.effectiveDate)} – {planPeriod.endDate ? formatPlanDate(planPeriod.endDate) : 'ongoing'}
+            </span>
+          ) : (
+            <span className="text-sm text-app-text-muted">Week 1 starts at your first check-in</span>
+          )}
+          <span className="basis-full text-xs text-app-text-muted sm:basis-auto">
+            A new week starts when you complete your weekly check-in — skip it and this plan continues.
+          </span>
+        </div>
       )}
+
+      <WeekDateStrip selectedDate={selectedDate} onSelectDate={selectDate} days={weekDays} />
 
       {printError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError}</div>}
       {loadError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>}
 
-      {view === 'week' ? (
-        <WeeklyPlanner
-          weekDates={weekDates}
-          days={weekDays}
-          selectedDate={selectedDate}
-          onSelectDay={selectDate}
-          onChange={reloadWeek}
-          onLogActual={(mealId) => setLogActualMealId(mealId)}
-          onAskAi={(mealId) => openAiFromDrawer(mealId, isFuture(selectedDate) ? 'PLANNED' : 'ACTUAL')}
-        />
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0 space-y-4">
               <MealPlanner
                 meals={currentDayMeals}
@@ -259,6 +244,8 @@ export function NutritionPage() {
                 onLogActual={(mealId) => setLogActualMealId(mealId)}
                 selectedMealId={effectiveSelectedMealId}
                 onSelectMeal={setSelectedMealId}
+                cardMeals={cardMeals.map(({ mealNumber, slotType }) => ({ mealNumber, slotType }))}
+                onBuildMeal={setBuilderMealNumber}
               />
 
               {currentDayMeals.length > 0 && (
@@ -286,7 +273,6 @@ export function NutritionPage() {
               />
             </div>
           </div>
-      )}
 
       <EditMealPlanDrawer
         open={Boolean(logActualMealId)}
@@ -305,15 +291,18 @@ export function NutritionPage() {
         onSaved={() => void reloadWeek()}
       />
 
-      <ApplyTemplateModal
-        open={templateModalOpen}
-        selectedDate={selectedDate}
-        meals={currentDayMeals}
-        onClose={() => setTemplateModalOpen(false)}
-        onApplied={() => void reloadWeek()}
-      />
-
       <ShoppingListDrawer open={shoppingListOpen} anchorDate={selectedDate} onClose={() => setShoppingListOpen(false)} />
+
+      <MealBuilder
+        open={builderMealNumber != null}
+        date={selectedDate}
+        payload={cardMeals.find((p) => p.mealNumber === builderMealNumber) ?? null}
+        onClose={() => setBuilderMealNumber(null)}
+        onSaved={async (updated) => {
+          setCardMeals((prev) => prev.map((p) => (p.mealNumber === updated.mealNumber ? updated : p)));
+          await reloadWeek();
+        }}
+      />
     </div>
   );
 }

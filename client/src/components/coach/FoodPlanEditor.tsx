@@ -103,6 +103,12 @@ export function FoodPlanEditor({
         </Button>
       </div>
 
+      {!nutritionTemplates.length && (
+        <p className="text-sm text-app-text-muted">
+          No plans match this client&apos;s profile. Update their profile or add a matching plan in admin.
+        </p>
+      )}
+
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={setAsDefault} onChange={(event) => setSetAsDefault(event.target.checked)} />
         Set as the user&apos;s default going forward

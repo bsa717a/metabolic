@@ -108,6 +108,7 @@ export function MealCard({
   onLogActual,
   selected = false,
   onSelect,
+  onBuildMeal,
 }: {
   meal: Meal;
   selectedDate: string;
@@ -118,6 +119,7 @@ export function MealCard({
   onLogActual: (mealId: string) => void;
   selected?: boolean;
   onSelect?: (mealId: string) => void;
+  onBuildMeal?: () => void;
 }) {
   const future = isFuture(selectedDate);
   const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
@@ -176,6 +178,15 @@ export function MealCard({
               </h3>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-1">
+              {onBuildMeal && (
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-green px-3 text-sm font-semibold text-white transition hover:bg-brand-deep"
+                  onClick={onBuildMeal}
+                >
+                  🃏 Build
+                </button>
+              )}
               <button
                 type="button"
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"

@@ -7,6 +7,10 @@ import { addMealItem, copyDayPlanForward, copyDayPlanToDates, copyMealFromPrevio
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
+import { getMealCardsForDate, MealCardError, saveMealSelections } from '../services/mealCardService.js';
+import { getPlanPeriodInfo } from '../services/planAdvancement.js';
+import { adoptProposedPlan, getPlanProposal, getPlanStatus, PlanAdoptError } from '../services/planStatusService.js';
+import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
 
@@ -104,6 +108,47 @@ export async function nutritionRoutes(app: FastifyInstance) {
     const ownerId = await mealOwnerForActor(request.appUser!, mealId);
     return copyMealFromPreviousDay(ownerId, mealId);
   });
+  app.get('/api/plan-status', { preHandler: requireAuth }, async (request, reply) => {
+    const status = await getPlanStatus(request.appUser!.id);
+    if (!status) return reply.code(404).send({ error: 'No active program' });
+    return status;
+  });
+  app.get('/api/plan-proposal', { preHandler: requireAuth }, async (request) => getPlanProposal(request.appUser!.id));
+  app.post('/api/plan-adopt', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await adoptProposedPlan(request.appUser!.id);
+    } catch (error) {
+      if (error instanceof PlanAdoptError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
+  });
+  app.get('/api/daily-logs/:date/plan-period', { preHandler: requireAuth }, async (request, reply) => {
+    const info = await getPlanPeriodInfo(request.appUser!.id, (request.params as { date: string }).date);
+    if (!info) return reply.code(404).send({ error: 'No active program' });
+    return info;
+  });
+  app.get('/api/daily-logs/:date/meal-cards', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await getMealCardsForDate(request.appUser!.id, (request.params as { date: string }).date);
+    } catch (error) {
+      if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
+  });
+  app.post('/api/daily-logs/:date/meal-selections', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        mealNumber: z.number().int().min(1),
+        selections: z.record(z.string(), z.union([z.string(), z.array(z.string())]))
+      })
+      .parse(request.body);
+    try {
+      return await saveMealSelections(request.appUser!.id, (request.params as { date: string }).date, body.mealNumber, body.selections);
+    } catch (error) {
+      if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
+  });
   app.post('/api/daily-logs/:date/copy-forward', { preHandler: requireAuth }, async (request, reply) => {
     const body = z.object({ days: z.number().int().min(1).max(31) }).parse(request.body);
     try {
@@ -169,7 +214,9 @@ export async function nutritionRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/nutrition-templates', { preHandler: requireAuth }, async () => listTemplatesForUser());
+  app.get('/api/nutrition-templates', { preHandler: requireAuth }, async (request) =>
+    listTemplatesForUser(request.appUser!.id)
+  );
 
   app.get('/api/nutrition-templates/default', { preHandler: requireAuth }, async (request) =>
     getProgramDefaultTemplate(request.appUser!.id)
@@ -198,7 +245,8 @@ export async function nutritionRoutes(app: FastifyInstance) {
         { setAsDefault: body.setAsDefault }
       );
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to apply plan' });
+      const message = error instanceof Error ? error.message : 'Unable to apply plan';
+      return reply.code(nutritionTemplateApplyErrorStatus(message)).send({ error: message });
     }
   });
 }

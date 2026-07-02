@@ -3,6 +3,14 @@ import { Link, useParams } from 'react-router-dom';
 import { Pencil } from 'lucide-react';
 import { api } from '../services/api';
 import type { NutritionPlanTemplate, NutritionTemplateMeal } from '../types';
+import { ACTIVITY_LEVEL_OPTIONS } from '../utils/activityLevel';
+import {
+  buildPlanCriteriaPayload,
+  emptyPlanCriteriaDraft,
+  planCriteriaDraftFromTemplate,
+  type PlanCriteriaDraft,
+  validatePlanCriteriaDraft
+} from '../utils/planCriteria';
 import { EditTemplateMealDrawer } from '../components/admin/EditTemplateMealDrawer';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -35,6 +43,11 @@ export function AdminNutritionTemplateEditorPage() {
     carbTarget: 190,
     fatTarget: 70
   });
+  const [criteriaDraft, setCriteriaDraft] = useState<PlanCriteriaDraft>(emptyPlanCriteriaDraft());
+
+  function updateCriteriaDraft(patch: Partial<PlanCriteriaDraft>) {
+    setCriteriaDraft((current) => ({ ...current, ...patch }));
+  }
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -52,6 +65,7 @@ export function AdminNutritionTemplateEditorPage() {
         carbTarget: data.carbTarget,
         fatTarget: data.fatTarget
       });
+      setCriteriaDraft(planCriteriaDraftFromTemplate(data));
     } catch (err) {
       setTemplate(null);
       setError(err instanceof Error ? err.message : 'Unable to load plan');
@@ -66,6 +80,11 @@ export function AdminNutritionTemplateEditorPage() {
 
   async function saveMetadata() {
     if (!id) return;
+    const criteriaError = validatePlanCriteriaDraft(criteriaDraft, draft.visibility);
+    if (criteriaError) {
+      setError(criteriaError);
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -75,6 +94,7 @@ export function AdminNutritionTemplateEditorPage() {
           name: draft.name.trim(),
           description: draft.description.trim() || null,
           visibility: draft.visibility,
+          ...buildPlanCriteriaPayload(criteriaDraft),
           calorieTarget: draft.calorieTarget,
           proteinTarget: draft.proteinTarget,
           carbTarget: draft.carbTarget,
@@ -82,6 +102,7 @@ export function AdminNutritionTemplateEditorPage() {
         })
       });
       setTemplate(updated);
+      setCriteriaDraft(planCriteriaDraftFromTemplate(updated));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save plan');
     } finally {
@@ -172,6 +193,124 @@ export function AdminNutritionTemplateEditorPage() {
               <Button type="button" disabled={saving} onClick={() => void saveMetadata()}>
                 {saving ? 'Saving…' : 'Save details'}
               </Button>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-lg font-bold">Plan criteria</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Users only see GLOBAL plans that match their gender, height, weight, and activity level.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Gender</span>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={criteriaDraft.gender}
+                  onChange={(event) => updateCriteriaDraft({ gender: event.target.value as PlanCriteriaDraft['gender'] })}
+                >
+                  <option value="">Select gender</option>
+                  <option value="f">Female</option>
+                  <option value="m">Male</option>
+                </select>
+              </label>
+              <div className="text-sm sm:col-span-2">
+                <span className="mb-1 block font-medium text-slate-700">Height range</span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-10 text-slate-500">Min</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={8}
+                      placeholder="ft"
+                      className="w-20 rounded-xl border border-slate-200 px-3 py-2"
+                      value={criteriaDraft.heightMinFeet}
+                      onChange={(event) => updateCriteriaDraft({ heightMinFeet: event.target.value })}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={11}
+                      placeholder="in"
+                      className="w-20 rounded-xl border border-slate-200 px-3 py-2"
+                      value={criteriaDraft.heightMinInches}
+                      onChange={(event) => updateCriteriaDraft({ heightMinInches: event.target.value })}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-10 text-slate-500">Max</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={8}
+                      placeholder="ft"
+                      className="w-20 rounded-xl border border-slate-200 px-3 py-2"
+                      value={criteriaDraft.heightMaxFeet}
+                      onChange={(event) => updateCriteriaDraft({ heightMaxFeet: event.target.value })}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={11}
+                      placeholder="in"
+                      className="w-20 rounded-xl border border-slate-200 px-3 py-2"
+                      value={criteriaDraft.heightMaxInches}
+                      onChange={(event) => updateCriteriaDraft({ heightMaxInches: event.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+              <label className="text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Weight min (lbs)</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={criteriaDraft.weightMinLbs}
+                  onChange={(event) => updateCriteriaDraft({ weightMinLbs: event.target.value })}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Weight max (lbs)</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={criteriaDraft.weightMaxLbs}
+                  onChange={(event) => updateCriteriaDraft({ weightMaxLbs: event.target.value })}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Activity min</span>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={criteriaDraft.activityLevelMin}
+                  onChange={(event) => updateCriteriaDraft({ activityLevelMin: event.target.value })}
+                >
+                  <option value="">Select level</option>
+                  {ACTIVITY_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Activity max</span>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                  value={criteriaDraft.activityLevelMax}
+                  onChange={(event) => updateCriteriaDraft({ activityLevelMax: event.target.value })}
+                >
+                  <option value="">Select level</option>
+                  {ACTIVITY_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </Card>
 

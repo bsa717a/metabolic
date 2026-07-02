@@ -173,6 +173,14 @@ export type NutritionPlanTemplateSummary = {
   name: string;
   description?: string | null;
   visibility: FoodVisibility;
+  gender?: string | null;
+  heightMinInches?: number | null;
+  heightMaxInches?: number | null;
+  weightMinLbs?: number | null;
+  weightMaxLbs?: number | null;
+  activityLevelMin?: number | null;
+  activityLevelMax?: number | null;
+  criteriaComplete?: boolean;
   calorieTarget: number;
   proteinTarget: number;
   carbTarget: number;
@@ -396,6 +404,45 @@ export type VirtualCoachCheckInRecap = {
   completedAt?: string | null;
 };
 
+export type PlanAdvance = {
+  planPeriodId: string;
+  weekNumber: number;
+  effectiveDate: string;
+  nutritionTemplateName: string | null;
+  templateChanged: boolean;
+};
+
+export type PlanPeriodInfo = {
+  weekNumber: number | null;
+  effectiveDate: string | null;
+  endDate: string | null;
+  templateName: string | null;
+  calorieTarget: number | null;
+};
+
+export type PlanStatus = {
+  state: 'on_plan' | 'coached_no_plan' | 'self_directed';
+  mode: 'COACHED' | 'SELF_DIRECTED';
+  calorieTarget: number | null;
+  proteinTarget: number | null;
+  weekNumber: number | null;
+  effectiveDate: string | null;
+  endDate: string | null;
+  nextCheckInDate: string | null;
+  planDayIndex: number | null;
+};
+
+export type PlanProposal =
+  | { eligible: false; missing: string[]; noMatch: boolean }
+  | {
+      eligible: true;
+      calorieTarget: number;
+      proteinTarget: number;
+      carbTarget: number;
+      fatTarget: number;
+      mealsPerDay: number;
+    };
+
 export type VirtualCoachCheckInSession = {
   id: string;
   coachId: string;
@@ -408,6 +455,7 @@ export type VirtualCoachCheckInSession = {
   completedAt?: string | null;
   chips?: string[];
   done?: boolean;
+  planAdvance?: PlanAdvance | null;
 };
 
 export type VirtualCoachCheckInState = {

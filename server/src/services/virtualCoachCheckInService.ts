@@ -5,6 +5,7 @@ import { addUtcDays, parseDateParam, toDateKey, userDayKey } from '../utils/date
 import { getAiProvider } from './aiService.js';
 import { buildCoachCheckInSystemPrompt } from './coachPersona.js';
 import { getWeeklyReview, startOfWeekMonday } from './weeklyReviewService.js';
+import { advancePlanForCheckIn } from './planAdvancement.js';
 
 export const CHECK_IN_STAGES = [
   'opening',
@@ -419,7 +420,8 @@ export async function sendCheckInMessage(userId: string, sessionId: string, mess
   return {
     ...serializeSession(updated),
     chips: turn.chips,
-    done: turn.done
+    done: turn.done,
+    planAdvance: updateData.status === 'COMPLETED' ? await advancePlanSafely(userId, user.timezone) : null
   };
 }
 
@@ -447,7 +449,20 @@ export async function completeCheckIn(userId: string, sessionId: string) {
     }
   });
 
-  return serializeSession(updated);
+  return {
+    ...serializeSession(updated),
+    planAdvance: await advancePlanSafely(userId, user.timezone)
+  };
+}
+
+/** Plan advancement must never fail the check-in itself. */
+async function advancePlanSafely(userId: string, timezone: string | null) {
+  try {
+    return await advancePlanForCheckIn(userId, timezone);
+  } catch (error) {
+    console.error('Plan advancement after check-in failed', error);
+    return null;
+  }
 }
 
 export async function getCheckInHistory(userId: string, limit = 8) {

@@ -5,6 +5,13 @@ import { parseDateParam } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
+import {
+  assertTemplateMatchesUser,
+  buildTemplateMatchWhere,
+  getUserPlanMatchProfile,
+  hasCompleteTemplateCriteria,
+  isCompletePlanMatchProfile
+} from './nutritionTemplateMatch.js';
 import { recalculateDailyLogTotals } from './totalsService.js';
 
 const DEFAULT_MEALS: [number, string, string][] = [
@@ -22,11 +29,39 @@ const templateInclude = {
   }
 } satisfies Prisma.NutritionPlanTemplateInclude;
 
+function serializeTemplateCriteria(template: {
+  gender: string | null;
+  heightMinInches: number | null;
+  heightMaxInches: number | null;
+  weightMinLbs: unknown;
+  weightMaxLbs: unknown;
+  activityLevelMin: number | null;
+  activityLevelMax: number | null;
+}) {
+  return {
+    gender: template.gender,
+    heightMinInches: template.heightMinInches,
+    heightMaxInches: template.heightMaxInches,
+    weightMinLbs: template.weightMinLbs == null ? null : n(template.weightMinLbs),
+    weightMaxLbs: template.weightMaxLbs == null ? null : n(template.weightMaxLbs),
+    activityLevelMin: template.activityLevelMin,
+    activityLevelMax: template.activityLevelMax,
+    criteriaComplete: hasCompleteTemplateCriteria(template)
+  };
+}
+
 function serializeTemplateSummary(template: {
   id: string;
   name: string;
   description: string | null;
   visibility: Visibility;
+  gender: string | null;
+  heightMinInches: number | null;
+  heightMaxInches: number | null;
+  weightMinLbs: unknown;
+  weightMaxLbs: unknown;
+  activityLevelMin: number | null;
+  activityLevelMax: number | null;
   calorieTarget: unknown;
   proteinTarget: unknown;
   carbTarget: unknown;
@@ -41,6 +76,7 @@ function serializeTemplateSummary(template: {
     name: template.name,
     description: template.description,
     visibility: template.visibility,
+    ...serializeTemplateCriteria(template),
     calorieTarget: n(template.calorieTarget),
     proteinTarget: n(template.proteinTarget),
     carbTarget: n(template.carbTarget),
@@ -97,6 +133,13 @@ export function serializeTemplate(template: {
   name: string;
   description: string | null;
   visibility: Visibility;
+  gender: string | null;
+  heightMinInches: number | null;
+  heightMaxInches: number | null;
+  weightMinLbs: unknown;
+  weightMaxLbs: unknown;
+  activityLevelMin: number | null;
+  activityLevelMax: number | null;
   calorieTarget: unknown;
   proteinTarget: unknown;
   carbTarget: unknown;
@@ -113,10 +156,29 @@ export function serializeTemplate(template: {
   };
 }
 
-export async function listTemplatesForUser() {
+const templateListInclude = {
+  meals: { include: { items: true } }
+} satisfies Prisma.NutritionPlanTemplateInclude;
+
+function buildProfileMatchListWhere(userId: string) {
+  return getUserPlanMatchProfile(userId).then((profile) => {
+    if (!isCompletePlanMatchProfile(profile)) {
+      return null;
+    }
+    return buildTemplateMatchWhere(profile);
+  });
+}
+
+export async function listTemplatesForUser(userId: string) {
+  const matchWhere = await buildProfileMatchListWhere(userId);
+  if (!matchWhere) return [];
+
   const templates = await prisma.nutritionPlanTemplate.findMany({
-    where: { visibility: Visibility.GLOBAL },
-    include: { meals: { include: { items: true } } },
+    where: {
+      visibility: Visibility.GLOBAL,
+      ...matchWhere
+    },
+    include: templateListInclude,
     orderBy: { name: 'asc' }
   });
   return templates.map(serializeTemplateSummary);
@@ -124,17 +186,41 @@ export async function listTemplatesForUser() {
 
 export async function listTemplatesForAdmin() {
   const templates = await prisma.nutritionPlanTemplate.findMany({
-    include: { meals: { include: { items: true } } },
+    include: templateListInclude,
     orderBy: { updatedAt: 'desc' }
   });
   return templates.map(serializeTemplateSummary);
 }
 
-export async function listTemplatesForActor(actor: { id: string; role: Role }) {
+export async function listTemplatesFullForAdmin() {
+  const templates = await prisma.nutritionPlanTemplate.findMany({
+    include: templateInclude,
+    orderBy: { name: 'asc' }
+  });
+  return templates.map(serializeTemplate);
+}
+
+export async function listTemplatesForActor(actor: { id: string; role: Role }, clientId?: string) {
   if (isAdmin(actor)) return listTemplatesForAdmin();
+
+  if (clientId) {
+    const matchWhere = await buildProfileMatchListWhere(clientId);
+    if (!matchWhere) return [];
+
+    const templates = await prisma.nutritionPlanTemplate.findMany({
+      where: {
+        OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }],
+        ...matchWhere
+      },
+      include: templateListInclude,
+      orderBy: { updatedAt: 'desc' }
+    });
+    return templates.map(serializeTemplateSummary);
+  }
+
   const templates = await prisma.nutritionPlanTemplate.findMany({
     where: { OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }] },
-    include: { meals: { include: { items: true } } },
+    include: templateListInclude,
     orderBy: { updatedAt: 'desc' }
   });
   return templates.map(serializeTemplateSummary);
@@ -169,6 +255,16 @@ export async function getTemplateForActor(id: string, actor: { id: string; role:
   return serializeTemplate(template);
 }
 
+export type NutritionTemplateCriteriaData = {
+  gender?: 'm' | 'f' | null;
+  heightMinInches?: number | null;
+  heightMaxInches?: number | null;
+  weightMinLbs?: number | null;
+  weightMaxLbs?: number | null;
+  activityLevelMin?: number | null;
+  activityLevelMax?: number | null;
+};
+
 export async function createTemplate(
   data: {
     name: string;
@@ -179,7 +275,7 @@ export async function createTemplate(
     carbTarget?: number;
     fatTarget?: number;
     createdById?: string;
-  }
+  } & NutritionTemplateCriteriaData
 ) {
   const template = await prisma.$transaction(async (tx) => {
     const created = await tx.nutritionPlanTemplate.create({
@@ -187,6 +283,13 @@ export async function createTemplate(
         name: data.name,
         description: data.description ?? null,
         visibility: data.visibility ?? Visibility.GLOBAL,
+        gender: data.gender ?? null,
+        heightMinInches: data.heightMinInches ?? null,
+        heightMaxInches: data.heightMaxInches ?? null,
+        weightMinLbs: data.weightMinLbs ?? null,
+        weightMaxLbs: data.weightMaxLbs ?? null,
+        activityLevelMin: data.activityLevelMin ?? null,
+        activityLevelMax: data.activityLevelMax ?? null,
         calorieTarget: data.calorieTarget ?? 2200,
         proteinTarget: data.proteinTarget ?? 190,
         carbTarget: data.carbTarget ?? 190,
@@ -217,7 +320,7 @@ export async function updateTemplate(
     proteinTarget?: number;
     carbTarget?: number;
     fatTarget?: number;
-  },
+  } & NutritionTemplateCriteriaData,
   actor?: { id: string; role: Role }
 ) {
   await ensureTemplateManageable(id, actor);
@@ -227,6 +330,13 @@ export async function updateTemplate(
       name: data.name,
       description: data.description,
       visibility: data.visibility,
+      gender: data.gender,
+      heightMinInches: data.heightMinInches,
+      heightMaxInches: data.heightMaxInches,
+      weightMinLbs: data.weightMinLbs,
+      weightMaxLbs: data.weightMaxLbs,
+      activityLevelMin: data.activityLevelMin,
+      activityLevelMax: data.activityLevelMax,
       calorieTarget: data.calorieTarget,
       proteinTarget: data.proteinTarget,
       carbTarget: data.carbTarget,
@@ -256,6 +366,13 @@ async function deepCopyTemplate(sourceId: string, overrides: { name: string; cre
       name: overrides.name,
       description: source.description,
       visibility: source.visibility,
+      gender: source.gender,
+      heightMinInches: source.heightMinInches,
+      heightMaxInches: source.heightMaxInches,
+      weightMinLbs: source.weightMinLbs,
+      weightMaxLbs: source.weightMaxLbs,
+      activityLevelMin: source.activityLevelMin,
+      activityLevelMax: source.activityLevelMax,
       calorieTarget: source.calorieTarget,
       proteinTarget: source.proteinTarget,
       carbTarget: source.carbTarget,
@@ -359,6 +476,8 @@ export async function applyTemplateToDailyLog(
   if (template.visibility !== Visibility.GLOBAL && template.createdById !== options?.actorId) {
     throw new Error('Plan not available');
   }
+
+  await assertTemplateMatchesUser(templateId, userId);
 
   await prisma.$transaction(async (tx) => {
     await applyTemplateMealsToLog(tx, templateId, log.id, userId);

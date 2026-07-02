@@ -22,6 +22,10 @@ import {
   updateAdminFood,
   updateAdminUser
 } from '../services/adminService.js';
+import {
+  nutritionTemplateCreateBody,
+  nutritionTemplateUpdateBody
+} from '../schemas/nutritionTemplateCriteria.js';
 import { getAdminSettings, updateAdminSettings } from '../services/adminSettingsService.js';
 import {
   addTemplateMealItem,
@@ -34,6 +38,7 @@ import {
   deleteTemplateMealItem,
   getTemplate,
   listTemplatesForAdmin,
+  listTemplatesFullForAdmin,
   updateTemplate,
   updateTemplateMeal,
   updateTemplateMealItem
@@ -116,28 +121,6 @@ const exerciseUpdateBody = z
     defaultReps: z.number().int().min(0).nullable().optional(),
     defaultDurationMinutes: z.number().int().min(0).nullable().optional(),
     defaultDistance: z.number().finite().min(0).nullable().optional()
-  })
-  .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
-
-const templateCreateBody = z.object({
-  name: z.string().trim().min(1),
-  description: z.string().trim().nullable().optional(),
-  visibility: z.nativeEnum(Visibility).optional(),
-  calorieTarget: z.number().finite().min(0).optional(),
-  proteinTarget: z.number().finite().min(0).optional(),
-  carbTarget: z.number().finite().min(0).optional(),
-  fatTarget: z.number().finite().min(0).optional()
-});
-
-const templateUpdateBody = z
-  .object({
-    name: z.string().trim().min(1).optional(),
-    description: z.string().trim().nullable().optional(),
-    visibility: z.nativeEnum(Visibility).optional(),
-    calorieTarget: z.number().finite().min(0).optional(),
-    proteinTarget: z.number().finite().min(0).optional(),
-    carbTarget: z.number().finite().min(0).optional(),
-    fatTarget: z.number().finite().min(0).optional()
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
 
@@ -408,6 +391,8 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get('/api/admin/nutrition-templates', { preHandler: adminOnly }, async () => listTemplatesForAdmin());
 
+  app.get('/api/admin/nutrition-templates/full', { preHandler: adminOnly }, async () => listTemplatesFullForAdmin());
+
   app.get('/api/admin/nutrition-templates/:id', { preHandler: adminOnly }, async (request, reply) => {
     try {
       return await getTemplate((request.params as { id: string }).id);
@@ -417,19 +402,19 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/admin/nutrition-templates', { preHandler: adminOnly }, async (request, reply) => {
-    const parsed = templateCreateBody.safeParse(request.body);
+    const parsed = nutritionTemplateCreateBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
     }
     try {
-      return await createTemplate({ ...parsed.data, createdById: request.appUser!.id });
+      return await createTemplate({ ...parsed.data, name: parsed.data.name!, createdById: request.appUser!.id });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create plan' });
     }
   });
 
   app.patch('/api/admin/nutrition-templates/:id', { preHandler: adminOnly }, async (request, reply) => {
-    const parsed = templateUpdateBody.safeParse(request.body);
+    const parsed = nutritionTemplateUpdateBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan update' });
     }

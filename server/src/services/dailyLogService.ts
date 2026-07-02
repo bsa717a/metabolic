@@ -36,6 +36,8 @@ async function copyMealsFromLog(sourceLogId: string, targetLogId: string, userId
         name: meal.name,
         plannedTime: meal.plannedTime,
         status: MealStatus.PLANNED,
+        // Card-builder provenance travels with the copy so the builder reopens with the same picks.
+        cardSelections: (meal.cardSelections ?? undefined) as Prisma.InputJsonValue | undefined,
         plannedCalories: meal.plannedCalories,
         plannedProtein: meal.plannedProtein,
         plannedCarbs: meal.plannedCarbs,
