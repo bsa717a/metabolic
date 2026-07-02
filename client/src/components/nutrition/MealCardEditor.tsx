@@ -191,13 +191,16 @@ export function MealCardEditor({
       const patch: Record<string, unknown> = {};
       if (localName !== baseline.name) patch.name = localName;
       if (localTime !== baseline.plannedTime) patch.plannedTime = localTime || null;
-      if (Object.keys(patch).length > 0) {
+      const mealMetaChanged = Object.keys(patch).length > 0;
+      if (mealMetaChanged) {
         await api(`/api/meals/${meal.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
       }
 
+      let existingItemsChanged = false;
       for (const item of localItems.filter((i) => i.serverId)) {
         const orig = baseline.plannedItems.find((o) => o.id === item.serverId);
         if (orig && Number(orig.quantity) !== item.quantity) {
+          existingItemsChanged = true;
           const factor = item.quantity / Number(orig.quantity);
           await api(`/api/meal-items/${item.serverId}`, {
             method: 'PATCH',
@@ -212,7 +215,8 @@ export function MealCardEditor({
         }
       }
 
-      for (const item of localItems.filter((i) => !i.serverId)) {
+      const newItems = localItems.filter((i) => !i.serverId);
+      for (const item of newItems) {
         await api(`/api/meals/${meal.id}/items`, {
           method: 'POST',
           body: JSON.stringify({
@@ -234,6 +238,13 @@ export function MealCardEditor({
         .map((orig) => orig.id);
       for (const id of removedIds) {
         await api(`/api/meal-items/${id}`, { method: 'DELETE' });
+      }
+
+      const planChanged = mealMetaChanged || existingItemsChanged || newItems.length > 0 || removedIds.length > 0;
+      if (planChanged) {
+        // Same rule as card builds and AI meals: changing a meal sets it from this day
+        // forward. Days where this meal already has logged food are left untouched.
+        await api(`/api/meals/${meal.id}/apply-forward`, { method: 'POST' });
       }
 
       onSaved();
@@ -390,7 +401,7 @@ export function MealCardEditor({
       {/* Footer: error + save/cancel */}
       {saveError && <p className="text-sm text-red-600">{saveError}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-slate-400">Changes apply to this day only.</p>
+        <p className="text-xs text-slate-400">Saving sets this meal for the rest of the week — days you've already logged stay untouched.</p>
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
             Cancel

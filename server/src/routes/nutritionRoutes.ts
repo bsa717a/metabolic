@@ -3,7 +3,7 @@ import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { canAccessUser } from '../auth/requireRole.js';
-import { addMealItem, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
+import { addMealItem, copyDayPlanForward, copyDayPlanToDates, applyMealForward, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
@@ -108,6 +108,11 @@ export async function nutritionRoutes(app: FastifyInstance) {
     const mealId = (request.params as { id: string }).id;
     const ownerId = await mealOwnerForActor(request.appUser!, mealId);
     return copyMealFromPreviousDay(ownerId, mealId);
+  });
+  app.post('/api/meals/:id/apply-forward', { preHandler: requireAuth }, async (request) => {
+    const mealId = (request.params as { id: string }).id;
+    const ownerId = await mealOwnerForActor(request.appUser!, mealId);
+    return applyMealForward(ownerId, mealId);
   });
   app.get('/api/plan-status', { preHandler: requireAuth }, async (request, reply) => {
     const status = await getPlanStatus(request.appUser!.id);
