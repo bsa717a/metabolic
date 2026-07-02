@@ -120,6 +120,25 @@ async function seedExercisesForDate(
   await copyExercisesForDate(program.id, userId, targetDate);
 }
 
+/** The plan week's frozen targets (formula era) win over template/fallback stamping. */
+async function stampFrozenTargets(dailyLogId: string, program: Program, day: Date) {
+  const period = await prisma.planPeriod.findFirst({
+    where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
+    orderBy: { effectiveDate: 'desc' },
+    select: { calorieTarget: true, proteinTarget: true, carbTarget: true, fatTarget: true }
+  });
+  if (!period) return;
+  await prisma.dailyLog.update({
+    where: { id: dailyLogId },
+    data: {
+      calorieTarget: period.calorieTarget!,
+      proteinTarget: period.proteinTarget ?? undefined,
+      carbTarget: period.carbTarget ?? undefined,
+      fatTarget: period.fatTarget ?? undefined
+    }
+  });
+}
+
 export async function ensureDailyLog(userId: string, program: Program & { metrics: ProgramMetric[] }, targetDate: Date) {
   const day = startOfUtcDay(targetDate);
 
@@ -155,6 +174,7 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
           await createDefaultMeals(existing.id, userId);
         }
       }
+      await stampFrozenTargets(existing.id, program, day);
     }
     return existing;
   }
@@ -220,6 +240,7 @@ export async function ensureDailyLog(userId: string, program: Program & { metric
     await createDefaultMeals(dailyLog.id, userId);
   }
 
+  await stampFrozenTargets(dailyLog.id, program, day);
   await seedExercisesForDate(planProgram, userId, day);
 
   return dailyLog;

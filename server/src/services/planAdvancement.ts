@@ -8,6 +8,7 @@ import {
   isCompletePlanMatchProfile,
   templateMatchesProfile
 } from './nutritionTemplateMatch.js';
+import { resolveTargets } from './targetService.js';
 
 const DAY_MS = 86400000;
 
@@ -116,6 +117,19 @@ export async function advancePlanForCheckIn(
   });
   const weekNumber = priorCount + 1;
 
+  // Freeze this week's numbers onto the period (formula era). Resolution walks
+  // coach pin → override band → formula; null only for incomplete profiles.
+  const targets = await resolveTargets(userId);
+  const frozen = targets
+    ? {
+        calorieTarget: targets.calories,
+        proteinTarget: targets.protein,
+        carbTarget: targets.carbs,
+        fatTarget: targets.fat,
+        targetSource: targets.source
+      }
+    : {};
+
   const period = await prisma.planPeriod.upsert({
     where: { programId_effectiveDate: { programId: program.id, effectiveDate } },
     create: {
@@ -125,9 +139,10 @@ export async function advancePlanForCheckIn(
       nutritionTemplateId,
       exerciseTemplateId: plan.exerciseTemplateId,
       notes: mode === 'kickoff' ? 'Started by kickoff check-in' : 'Started by weekly check-in',
-      createdById: userId
+      createdById: userId,
+      ...frozen
     },
-    update: { nutritionTemplateId, exerciseTemplateId: plan.exerciseTemplateId, weekNumber }
+    update: { nutritionTemplateId, exerciseTemplateId: plan.exerciseTemplateId, weekNumber, ...frozen }
   });
 
   const template = nutritionTemplateId
@@ -167,7 +182,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     prisma.planPeriod.findMany({
       where: { programId: program.id },
       orderBy: { effectiveDate: 'asc' },
-      select: { id: true, effectiveDate: true }
+      select: { id: true, effectiveDate: true, calorieTarget: true }
     }),
     resolvePlanForDate(program, day)
   ]);
@@ -178,12 +193,18 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
         select: { name: true, calorieTarget: true }
       })
     : null;
-  const calorieTarget = template ? Math.round(Number(template.calorieTarget)) : null;
 
   let activeIndex = -1;
   for (let i = 0; i < periods.length; i += 1) {
     if (periods[i].effectiveDate.getTime() <= day.getTime()) activeIndex = i;
   }
+
+  // The week's frozen number wins; template targets are the legacy fallback.
+  const frozenCalories = activeIndex >= 0 && periods[activeIndex].calorieTarget != null
+    ? Math.round(Number(periods[activeIndex].calorieTarget))
+    : null;
+  const calorieTarget = frozenCalories ?? (template ? Math.round(Number(template.calorieTarget)) : null);
+
   if (activeIndex < 0) {
     return { weekNumber: null, effectiveDate: null, endDate: null, templateName: template?.name ?? null, calorieTarget };
   }

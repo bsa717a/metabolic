@@ -256,3 +256,20 @@ export async function resolveTargets(userId: string): Promise<ResolvedTargets | 
   // 3. The formula — total for everyone who reaches here.
   return { ...formula, source: TargetSource.FORMULA };
 }
+
+/** Freeze the user's resolved targets onto an existing PlanPeriod (no-op when unresolvable). */
+export async function freezeTargetsOnPeriod(userId: string, programId: string, effectiveDate: Date) {
+  const targets = await resolveTargets(userId);
+  if (!targets) return null;
+  await prisma.planPeriod.updateMany({
+    where: { programId, effectiveDate },
+    data: {
+      calorieTarget: targets.calories,
+      proteinTarget: targets.protein,
+      carbTarget: targets.carbs,
+      fatTarget: targets.fat,
+      targetSource: targets.source
+    }
+  });
+  return targets;
+}

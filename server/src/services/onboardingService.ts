@@ -7,6 +7,7 @@ import { fatMassLbs, leanTissueMassLbs } from '../utils/bodyComposition.js';
 import { ensureTodayDailyLog } from './dailyLogService.js';
 import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
 import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
+import { freezeTargetsOnPeriod } from './targetService.js';
 import { notifyCoachRequest } from './coachRequestNotificationService.js';
 import {
   buildProfileFromInput,
@@ -488,6 +489,14 @@ async function updateActiveProgramFromSetup(
     } else {
       await seedDefaultExercises(userId, program.id, today);
     }
+    // Week 1's numbers come from target resolution (formula era); template stamping above is legacy.
+    const frozen = await freezeTargetsOnPeriod(userId, program.id, today);
+    if (frozen && dailyLog) {
+      await prisma.dailyLog.update({
+        where: { id: dailyLog.id },
+        data: { calorieTarget: frozen.calories, proteinTarget: frozen.protein, carbTarget: frozen.carbs, fatTarget: frozen.fat }
+      });
+    }
   }
 
   if (shouldNotifyCoachRequest) {
@@ -603,6 +612,17 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     });
   } else if (!trackingOnly) {
     await seedDefaultExercises(userId, program.id, today);
+  }
+
+  if (!trackingOnly) {
+    // Week 1's numbers come from target resolution (formula era); template stamping above is legacy.
+    const frozen = await freezeTargetsOnPeriod(userId, program.id, today);
+    if (frozen && dailyLog) {
+      await prisma.dailyLog.update({
+        where: { id: dailyLog.id },
+        data: { calorieTarget: frozen.calories, proteinTarget: frozen.protein, carbTarget: frozen.carbs, fatTarget: frozen.fat }
+      });
+    }
   }
 
   if (shouldNotifyCoachRequest) {
