@@ -1,4 +1,4 @@
-import { MealItemType, MealStatus, type Prisma } from '@prisma/client';
+import { MealItemType, MealStatus, Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { addUtcDays, parseDateParam, toDateKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
@@ -472,4 +472,76 @@ export async function copyDayPlanToDates(
   }
 
   return { copiedDays: targets.length, targetDates: targets, clearedDays: clearDates.length };
+}
+
+const APPLY_FORWARD_DAYS = 14;
+const DAY_MS = 86400000;
+
+/**
+ * "Changing a meal sets it from that day forward" — the same rule card builds and AI
+ * meals follow, for manual edits: copy this meal's PLANNED items over the same-numbered
+ * meal on future days (14-day horizon). Days where that meal already has logged
+ * (ACTUAL) food are left alone, and card provenance is cleared on overwritten meals
+ * since their contents no longer come from card picks.
+ */
+export async function applyMealForward(userId: string, mealId: string) {
+  const source = await prisma.meal.findFirstOrThrow({
+    where: { id: mealId, userId },
+    include: { dailyLog: true, items: { where: { type: MealItemType.PLANNED } } }
+  });
+
+  const fromDay = source.dailyLog.date;
+  const horizon = new Date(fromDay.getTime() + APPLY_FORWARD_DAYS * DAY_MS);
+  const futureLogs = await prisma.dailyLog.findMany({
+    where: { userId, date: { gt: fromDay, lte: horizon } },
+    orderBy: { date: 'asc' },
+    select: { id: true }
+  });
+
+  let applied = 0;
+  for (const log of futureLogs) {
+    await prisma.$transaction(async (tx) => {
+      let target = await tx.meal.findFirst({ where: { dailyLogId: log.id, mealNumber: source.mealNumber } });
+      if (target) {
+        const actuals = await tx.mealItem.count({ where: { mealId: target.id, type: MealItemType.ACTUAL } });
+        if (actuals > 0) return;
+      } else {
+        target = await tx.meal.create({
+          data: {
+            dailyLogId: log.id,
+            userId,
+            mealNumber: source.mealNumber,
+            name: source.name,
+            plannedTime: source.plannedTime,
+            status: MealStatus.PLANNED
+          }
+        });
+      }
+      await tx.mealItem.deleteMany({ where: { mealId: target.id, type: MealItemType.PLANNED } });
+      if (source.items.length) {
+        await tx.mealItem.createMany({
+          data: source.items.map((item) => ({
+            mealId: target!.id,
+            foodId: item.foodId,
+            type: MealItemType.PLANNED,
+            nameSnapshot: item.nameSnapshot,
+            quantity: item.quantity,
+            unit: item.unit,
+            calories: item.calories,
+            protein: item.protein,
+            carbs: item.carbs,
+            fat: item.fat
+          }))
+        });
+      }
+      await tx.meal.update({
+        where: { id: target.id },
+        data: { name: source.name, cardSelections: Prisma.JsonNull }
+      });
+      await recalculateMealTotals(target.id, tx);
+      await recalculateDailyLogTotals(log.id, tx);
+      applied += 1;
+    });
+  }
+  return { appliedDays: applied };
 }

@@ -236,6 +236,10 @@ export function MealCardEditor({
         await api(`/api/meal-items/${id}`, { method: 'DELETE' });
       }
 
+      // Same rule as card builds and AI meals: changing a meal sets it from this day
+      // forward. Days where this meal already has logged food are left untouched.
+      await api(`/api/meals/${meal.id}/apply-forward`, { method: 'POST' });
+
       onSaved();
     } catch (err) {
       await onRefresh();
@@ -390,7 +394,7 @@ export function MealCardEditor({
       {/* Footer: error + save/cancel */}
       {saveError && <p className="text-sm text-red-600">{saveError}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-slate-400">Changes apply to this day only.</p>
+        <p className="text-xs text-slate-400">Saving sets this meal for the rest of the week — days you've already logged stay untouched.</p>
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
             Cancel
