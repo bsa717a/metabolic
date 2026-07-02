@@ -14,6 +14,7 @@ import { aiRoutes } from './routes/aiRoutes.js';
 import { smsRoutes } from './routes/smsRoutes.js';
 import { adminRoutes } from './routes/adminRoutes.js';
 import { mealCardAdminRoutes } from './routes/mealCardAdminRoutes.js';
+import { targetAdminRoutes } from './routes/targetAdminRoutes.js';
 import { onboardingRoutes } from './routes/onboardingRoutes.js';
 import { gamificationRoutes } from './routes/gamificationRoutes.js';
 import { coachRoutes } from './routes/coachRoutes.js';
@@ -50,6 +51,7 @@ async function main() {
   await app.register(smsRoutes);
   await app.register(adminRoutes);
   await app.register(mealCardAdminRoutes);
+  await app.register(targetAdminRoutes);
   await app.register(coachRoutes);
   await app.register(bloodPanelRoutes);
   await app.register(onboardingRoutes);
