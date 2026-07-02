@@ -1,17 +1,13 @@
-import { ProgramMode, ProgramStatus, Visibility, type Prisma } from '@prisma/client';
+import { ProgramMode, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
 import { resolvePlanForDate } from './planResolution.js';
 import { getPlanPeriodInfo } from './planAdvancement.js';
-import {
-  findBestMatchingTemplate,
-  getUserPlanMatchProfile,
-  isCompletePlanMatchProfile,
-  type PlanMatchProfile
-} from './nutritionTemplateMatch.js';
-import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
+import { getUserPlanMatchProfile, type PlanMatchProfile } from './nutritionTemplateMatch.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
+import { applyStructureMealsToLog } from './structureMealsApply.js';
+import { getMealStructure, resolveTargets } from './targetService.js';
 
 /**
  * One explicit answer to "am I on a plan?" — every surface renders from this enum
@@ -63,7 +59,11 @@ export async function getPlanStatus(userId: string): Promise<PlanStatus | null> 
   });
   const nextCheckInDate = latestCheckIn?.nextCheckInDate ? toDateKey(latestCheckIn.nextCheckInDate) : null;
 
-  if (!template) {
+  // Targets-first: the formula is total for complete profiles, so "on a plan" no
+  // longer requires a matched template (templates remain the legacy food source).
+  const targets = await resolveTargets(userId);
+
+  if (!template && !targets) {
     return {
       state: program.mode === ProgramMode.SELF_DIRECTED ? 'self_directed' : 'coached_no_plan',
       mode: program.mode,
@@ -82,8 +82,8 @@ export async function getPlanStatus(userId: string): Promise<PlanStatus | null> 
   return {
     state: 'on_plan',
     mode: program.mode,
-    calorieTarget: Math.round(n(template.calorieTarget)),
-    proteinTarget: Math.round(n(template.proteinTarget)),
+    calorieTarget: info?.calorieTarget ?? targets?.calories ?? (template ? Math.round(n(template.calorieTarget)) : null),
+    proteinTarget: info?.proteinTarget ?? targets?.protein ?? (template ? Math.round(n(template.proteinTarget)) : null),
     weekNumber: info?.weekNumber ?? null,
     effectiveDate,
     endDate: info?.endDate ?? null,
@@ -108,33 +108,26 @@ function missingProfileFields(profile: Partial<PlanMatchProfile>): string[] {
   if (profile.gender !== 'm' && profile.gender !== 'f') missing.push('gender');
   if (!profile.heightInches) missing.push('height');
   if (!profile.weightLbs) missing.push('weight');
-  if (!profile.activityLevel) missing.push('activity level');
+  // activity level is no longer required — the formula defaults it to "lightly active"
   return missing;
 }
 
-async function matchTemplateForUser(userId: string) {
-  const profile = await getUserPlanMatchProfile(userId);
-  if (!isCompletePlanMatchProfile(profile)) {
-    return { missing: missingProfileFields(profile), template: null };
-  }
-  const template = await findBestMatchingTemplate(profile, { visibility: Visibility.GLOBAL });
-  return { missing: [] as string[], template };
-}
 
-/** Preview for the "get a weekly plan" flow: what would the matcher assign right now? */
+/** Preview for the "get a weekly plan" flow: what would resolution assign right now? */
 export async function getPlanProposal(userId: string): Promise<PlanProposal> {
-  const { missing, template } = await matchTemplateForUser(userId);
-  if (missing.length || !template) {
-    return { eligible: false, missing, noMatch: !missing.length };
+  const targets = await resolveTargets(userId);
+  if (!targets) {
+    const profile = await getUserPlanMatchProfile(userId);
+    return { eligible: false, missing: missingProfileFields(profile), noMatch: false };
   }
-  const mealsPerDay = await prisma.nutritionTemplateMeal.count({ where: { templateId: template.id } });
+  const structure = await getMealStructure();
   return {
     eligible: true,
-    calorieTarget: Math.round(n(template.calorieTarget)),
-    proteinTarget: Math.round(n(template.proteinTarget)),
-    carbTarget: Math.round(n(template.carbTarget)),
-    fatTarget: Math.round(n(template.fatTarget)),
-    mealsPerDay
+    calorieTarget: targets.calories,
+    proteinTarget: targets.protein,
+    carbTarget: targets.carbs,
+    fatTarget: targets.fat,
+    mealsPerDay: structure.slots.length
   };
 }
 
@@ -156,47 +149,61 @@ export async function adoptProposedPlan(userId: string): Promise<PlanStatus> {
   const program = await prisma.program.findFirst({ where: { userId, status: ProgramStatus.ACTIVE } });
   if (!program) throw new PlanAdoptError('No active program found', 404);
 
-  const { missing, template } = await matchTemplateForUser(userId);
-  if (missing.length) throw new PlanAdoptError(`Complete your profile first: ${missing.join(', ')}`);
-  if (!template) throw new PlanAdoptError('No plan matches your profile yet — check back soon', 404);
+  const targets = await resolveTargets(userId);
+  if (!targets) {
+    const profile = await getUserPlanMatchProfile(userId);
+    throw new PlanAdoptError(`Complete your profile first: ${missingProfileFields(profile).join(', ')}`);
+  }
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
   const todayKey = userDayKey(user?.timezone ?? null);
   const today = parseDateParam(todayKey);
 
   await prisma.$transaction(async (tx) => {
-    await tx.program.update({
-      where: { id: program.id },
-      data: { defaultNutritionTemplateId: template.id }
-    });
     const priorCount = await tx.planPeriod.count({
       where: { programId: program.id, effectiveDate: { lt: today } }
     });
+    const frozen = {
+      calorieTarget: targets.calories,
+      proteinTarget: targets.protein,
+      carbTarget: targets.carbs,
+      fatTarget: targets.fat,
+      targetSource: targets.source
+    };
     await tx.planPeriod.upsert({
       where: { programId_effectiveDate: { programId: program.id, effectiveDate: today } },
       create: {
         programId: program.id,
         effectiveDate: today,
         weekNumber: priorCount + 1,
-        nutritionTemplateId: template.id,
         notes: 'Self-serve plan adoption',
-        createdById: userId
+        createdById: userId,
+        ...frozen
       },
-      update: { nutritionTemplateId: template.id }
+      update: { ...frozen }
     });
   });
 
-  // Materialize today from the new plan unless the user already logged food today.
+  // Materialize today from the plan (meal structure + card defaults) unless the user
+  // already has meals; frozen targets stamp either way.
   const log = await ensureDailyLogByUserId(userId, todayKey);
   if (log) {
+    const mealCount = await prisma.meal.count({ where: { dailyLogId: log.id } });
     const actualItems = await prisma.mealItem.count({
       where: { meal: { dailyLogId: log.id }, type: 'ACTUAL' }
     });
-    if (actualItems === 0) {
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await applyTemplateMealsToLog(tx, template.id, log.id, userId);
-      });
+    if (actualItems === 0 && mealCount === 0) {
+      await applyStructureMealsToLog(userId, log.id, today);
     }
+    await prisma.dailyLog.update({
+      where: { id: log.id },
+      data: {
+        calorieTarget: targets.calories,
+        proteinTarget: targets.protein,
+        carbTarget: targets.carbs,
+        fatTarget: targets.fat
+      }
+    });
   }
 
   const status = await getPlanStatus(userId);

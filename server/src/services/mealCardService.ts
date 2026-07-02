@@ -1,6 +1,6 @@
 import { MealStatus, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { parseDateParam } from '../utils/dates.js';
+import { parseDateParam, toDateKey } from '../utils/dates.js';
 import { n, round } from '../utils/numbers.js';
 import { resolvePlanForDate } from './planResolution.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
@@ -14,6 +14,7 @@ import {
   type CardPicks,
   type LoadedCardSet
 } from './mealCardMaterialize.js';
+import { getMealStructure, slotTargets } from './targetService.js';
 
 const DAY_MS = 86400000;
 /** How far forward a builder save propagates to already-materialized days. */
@@ -27,41 +28,78 @@ export class MealCardError extends Error {
   }
 }
 
+export type ResolvedCardSlot = {
+  mealNumber: number;
+  name: string;
+  plannedTime: string | null;
+  cardSet: LoadedCardSet;
+  targetCalories: number;
+};
+
 /**
- * Resolve every card-set-backed meal for a user's date: active program → plan for the
- * date (PlanPeriod carry-forward) → template → its meals with a mealCardSetId.
+ * Resolve every card-backed meal slot for a user's date. Two sources:
+ *  - legacy: the plan's template meals carrying a mealCardSetId;
+ *  - formula era (templateless plan): the canonical meal structure split over the
+ *    PlanPeriod's frozen day target, each slot backed by a card set of its slotType.
  */
-async function resolveCardMealsForDate(userId: string, date: string) {
+async function resolveCardMealsForDate(userId: string, date: string): Promise<ResolvedCardSlot[]> {
   const program = await prisma.program.findFirst({
     where: { userId, status: ProgramStatus.ACTIVE },
     select: { id: true, defaultNutritionTemplateId: true, defaultExerciseTemplateId: true }
   });
   if (!program) throw new MealCardError('No active program found', 404);
 
-  const plan = await resolvePlanForDate(program, parseDateParam(date));
-  if (!plan.nutritionTemplateId) throw new MealCardError('No nutrition plan for this date', 404);
+  const day = parseDateParam(date);
+  const plan = await resolvePlanForDate(program, day);
 
-  const templateMeals = await prisma.nutritionTemplateMeal.findMany({
-    where: { templateId: plan.nutritionTemplateId, mealCardSetId: { not: null } },
-    orderBy: { mealNumber: 'asc' },
-    include: { mealCardSet: { include: cardSetInclude } }
+  if (plan.nutritionTemplateId) {
+    const templateMeals = await prisma.nutritionTemplateMeal.findMany({
+      where: { templateId: plan.nutritionTemplateId, mealCardSetId: { not: null } },
+      orderBy: { mealNumber: 'asc' },
+      include: { mealCardSet: { include: cardSetInclude } }
+    });
+    return templateMeals
+      .filter((meal) => meal.mealCardSet != null)
+      .map((templateMeal) => ({
+        mealNumber: templateMeal.mealNumber,
+        name: templateMeal.name,
+        plannedTime: templateMeal.plannedTime,
+        cardSet: templateMeal.mealCardSet!,
+        // The scale numerator: the meal's stored target, else scale 1:1 against the reference.
+        targetCalories: cardMealTarget(templateMeal, templateMeal.mealCardSet!)
+      }));
+  }
+
+  const period = await prisma.planPeriod.findFirst({
+    where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
+    orderBy: { effectiveDate: 'desc' },
+    select: { calorieTarget: true }
   });
+  if (!period) throw new MealCardError('No nutrition plan for this date', 404);
 
-  return templateMeals
-    .filter((meal) => meal.mealCardSet != null)
-    .map((templateMeal) => ({
-      templateMeal,
-      cardSet: templateMeal.mealCardSet!,
-      // The scale numerator: the meal's stored target, else scale 1:1 against the reference.
-      targetCalories: templateMeal.calorieTarget != null
-        ? n(templateMeal.calorieTarget)
-        : n(templateMeal.mealCardSet!.referenceCalories)
-    }));
+  const [structure, sets] = await Promise.all([
+    getMealStructure(),
+    prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude })
+  ]);
+  const slots = slotTargets(n(period.calorieTarget), structure);
+  return slots.flatMap((slot) => {
+    const cardSet = sets.find((set) => set.slotType === slot.slotType);
+    if (!cardSet) return [];
+    return [
+      {
+        mealNumber: slot.mealNumber,
+        name: slot.name,
+        plannedTime: slot.plannedTime,
+        cardSet,
+        targetCalories: slot.calorieTarget
+      }
+    ];
+  });
 }
 
 async function resolveCardMealForDate(userId: string, date: string, mealNumber: number) {
   const cardMeals = await resolveCardMealsForDate(userId, date);
-  const match = cardMeals.find((entry) => entry.templateMeal.mealNumber === mealNumber);
+  const match = cardMeals.find((entry) => entry.mealNumber === mealNumber);
   if (!match) throw new MealCardError('No card set for this meal', 404);
   return match;
 }
@@ -109,24 +147,22 @@ export async function getMealCardsForDate(userId: string, date: string) {
     where: { userId, cardSetId: { in: cardMeals.map((c) => c.cardSet.id) } }
   });
 
-  return cardMeals.map(({ templateMeal, cardSet, targetCalories }) => {
-    const meal = dayMeals.find((m) => m.mealNumber === templateMeal.mealNumber);
+  return cardMeals.map((slot) => {
+    const meal = dayMeals.find((m) => m.mealNumber === slot.mealNumber);
     // Day-specific provenance wins; otherwise the user's standing picks for this slot.
     const daySaved = meal?.cardSelections as { setId: string; picks: CardPicks } | null | undefined;
-    const standing = userPicks.find(
-      (p) => p.cardSetId === cardSet.id && p.mealNumber === templateMeal.mealNumber
-    );
+    const standing = userPicks.find((p) => p.cardSetId === slot.cardSet.id && p.mealNumber === slot.mealNumber);
     return {
-      setId: cardSet.id,
-      setName: cardSet.name,
-      slotType: cardSet.slotType,
-      mealNumber: templateMeal.mealNumber,
-      mealName: meal?.name ?? templateMeal.name,
-      targetCalories: round(targetCalories, 0),
-      referenceCalories: n(cardSet.referenceCalories),
-      cards: scaledOptionPayload(cardSet, targetCalories),
+      setId: slot.cardSet.id,
+      setName: slot.cardSet.name,
+      slotType: slot.cardSet.slotType,
+      mealNumber: slot.mealNumber,
+      mealName: meal?.name ?? slot.name,
+      targetCalories: round(slot.targetCalories, 0),
+      referenceCalories: n(slot.cardSet.referenceCalories),
+      cards: scaledOptionPayload(slot.cardSet, slot.targetCalories),
       savedSelections:
-        daySaved ?? (standing ? { setId: cardSet.id, picks: standing.picks as CardPicks } : null)
+        daySaved ?? (standing ? { setId: slot.cardSet.id, picks: standing.picks as CardPicks } : null)
     };
   });
 }
@@ -161,10 +197,10 @@ function validateSelections(cardSet: LoadedCardSet, selections: MealSelections) 
  * into PLANNED MealItems (logs stay historically accurate); ACTUAL items untouched.
  */
 export async function saveMealSelections(userId: string, date: string, mealNumber: number, selections: MealSelections) {
-  const { templateMeal, cardSet, targetCalories } = await resolveCardMealForDate(userId, date, mealNumber);
-  validateSelections(cardSet, selections);
+  const slot = await resolveCardMealForDate(userId, date, mealNumber);
+  validateSelections(slot.cardSet, selections);
 
-  const lines = scaledLinesForPicks(cardSet, targetCalories, selections);
+  const lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, selections);
 
   const log = await ensureDailyLogByUserId(userId, date);
   if (!log) throw new MealCardError('No active program found', 404);
@@ -172,18 +208,18 @@ export async function saveMealSelections(userId: string, date: string, mealNumbe
   await prisma.$transaction(async (tx) => {
     await tx.userMealCardPicks.upsert({
       where: {
-        userId_cardSetId_mealNumber: { userId, cardSetId: cardSet.id, mealNumber: templateMeal.mealNumber }
+        userId_cardSetId_mealNumber: { userId, cardSetId: slot.cardSet.id, mealNumber: slot.mealNumber }
       },
-      create: { userId, cardSetId: cardSet.id, mealNumber: templateMeal.mealNumber, picks: selections },
+      create: { userId, cardSetId: slot.cardSet.id, mealNumber: slot.mealNumber, picks: selections },
       update: { picks: selections }
     });
 
-    const meal = await ensureMealRow(tx, log.id, userId, templateMeal);
-    await materializeCardMeal(tx, meal.id, cardSet.id, selections, lines);
+    const meal = await ensureMealRow(tx, log.id, userId, slot);
+    await materializeCardMeal(tx, meal.id, slot.cardSet.id, selections, lines);
     await recalculateDailyLogTotals(log.id, tx);
   });
 
-  const appliedDays = await applyPicksToFutureLogs(userId, parseDateParam(date), mealNumber, cardSet.id, selections);
+  const appliedDays = await applyPicksToFutureLogs(userId, parseDateParam(date), mealNumber, slot.cardSet.id, selections);
 
   const payloads = await getMealCardsForDate(userId, date);
   const payload = payloads.find((p) => p.mealNumber === mealNumber) ?? payloads[0];
@@ -220,12 +256,6 @@ async function applyPicksToFutureLogs(
   cardSetId: string,
   picks: CardPicks
 ) {
-  const program = await prisma.program.findFirst({
-    where: { userId, status: ProgramStatus.ACTIVE },
-    select: { id: true, defaultNutritionTemplateId: true, defaultExerciseTemplateId: true }
-  });
-  if (!program) return 0;
-
   const horizon = new Date(fromDay.getTime() + FORWARD_APPLY_DAYS * DAY_MS);
   const futureLogs = await prisma.dailyLog.findMany({
     where: { userId, date: { gt: fromDay, lte: horizon } },
@@ -235,18 +265,20 @@ async function applyPicksToFutureLogs(
 
   let applied = 0;
   for (const log of futureLogs) {
-    const plan = await resolvePlanForDate(program, log.date);
-    if (!plan.nutritionTemplateId) continue;
-    const templateMeal = await prisma.nutritionTemplateMeal.findFirst({
-      where: { templateId: plan.nutritionTemplateId, mealNumber, mealCardSetId: cardSetId },
-      include: { mealCardSet: { include: cardSetInclude } }
-    });
-    if (!templateMeal?.mealCardSet) continue;
+    // Re-resolve the slot for that date (template or structure source alike) and
+    // apply only while the same card set still backs this meal number.
+    let slot: ResolvedCardSlot | undefined;
+    try {
+      const slots = await resolveCardMealsForDate(userId, toDateKey(log.date));
+      slot = slots.find((s) => s.mealNumber === mealNumber && s.cardSet.id === cardSetId);
+    } catch {
+      continue;
+    }
+    if (!slot) continue;
 
-    const target = cardMealTarget(templateMeal, templateMeal.mealCardSet);
-    const lines = scaledLinesForPicks(templateMeal.mealCardSet, target, picks);
+    const lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, picks);
     await prisma.$transaction(async (tx) => {
-      const meal = await ensureMealRow(tx, log.id, userId, templateMeal);
+      const meal = await ensureMealRow(tx, log.id, userId, slot!);
       await materializeCardMeal(tx, meal.id, cardSetId, picks, lines);
       await recalculateDailyLogTotals(log.id, tx);
     });

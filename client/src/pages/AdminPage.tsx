@@ -5,6 +5,8 @@ import { ExerciseTable } from '../components/admin/ExerciseTable';
 import { ExerciseTemplatesTable } from '../components/admin/ExerciseTemplatesTable';
 import { FoodTable } from '../components/admin/FoodTable';
 import { NutritionTemplatesTable } from '../components/admin/NutritionTemplatesTable';
+import { MealCardSetsTable } from '../components/admin/MealCardSetsTable';
+import { AdminTargetsPanel } from '../components/admin/AdminTargetsPanel';
 import { UserTable } from '../components/admin/UserTable';
 import { AdminGamificationPanel } from '../components/admin/AdminGamificationPanel';
 import { AdminSettingsPanel } from '../components/admin/AdminSettingsPanel';
@@ -13,6 +15,8 @@ const cards = [
   'Users',
   'Programs',
   'Nutrition Plans',
+  'Meal Cards',
+  'Targets',
   'Exercise Plans',
   'Exercise Database',
   'Food Database',
@@ -30,6 +34,8 @@ const interactiveSections = new Set<AdminSection>([
   'Exercise Database',
   'AI Review Queue',
   'Nutrition Plans',
+  'Meal Cards',
+  'Targets',
   'Exercise Plans',
   'Gamification',
   'Settings'
@@ -62,6 +68,8 @@ export function AdminPage() {
       {activeSection === 'Exercise Database' && <ExerciseTable />}
       {activeSection === 'AI Review Queue' && <FoodReviewQueue />}
       {activeSection === 'Nutrition Plans' && <NutritionTemplatesTable />}
+      {activeSection === 'Meal Cards' && <MealCardSetsTable />}
+      {activeSection === 'Targets' && <AdminTargetsPanel />}
       {activeSection === 'Exercise Plans' && <ExerciseTemplatesTable />}
       {activeSection === 'Gamification' && <AdminGamificationPanel />}
       {activeSection === 'Settings' && <AdminSettingsPanel />}

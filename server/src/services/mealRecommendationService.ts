@@ -7,6 +7,7 @@ import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsService.js';
 import { MealCardError } from './mealCardService.js';
 import { cardMealTarget } from './mealCardMaterialize.js';
+import { getMealStructure, slotTargets } from './targetService.js';
 import {
   getAiProvider,
   itemizedMealSuggestionInput,
@@ -78,6 +79,15 @@ export function withinDrift(suggestion: ItemizedMealSuggestion, targetCalories: 
 
 /* ---------------- slot + context resolution ---------------- */
 
+type RecommendationSlot = {
+  mealNumber: number;
+  name: string;
+  plannedTime: string | null;
+  slotType: string;
+  /** null = templateless (formula-era) plan */
+  templateId: string | null;
+};
+
 async function resolveSlot(userId: string, date: string, mealNumber: number) {
   const program = await prisma.program.findFirst({
     where: { userId, status: ProgramStatus.ACTIVE },
@@ -85,28 +95,59 @@ async function resolveSlot(userId: string, date: string, mealNumber: number) {
   });
   if (!program) throw new MealCardError('No active program found', 404);
 
-  const plan = await resolvePlanForDate(program, parseDateParam(date));
-  if (!plan.nutritionTemplateId) throw new MealCardError('No nutrition plan for this date', 404);
+  const day = parseDateParam(date);
+  const plan = await resolvePlanForDate(program, day);
 
-  const templateMeal = await prisma.nutritionTemplateMeal.findFirst({
+  if (!plan.nutritionTemplateId) {
+    // Formula era: the meal structure split over the period's frozen day target.
+    const period = await prisma.planPeriod.findFirst({
+      where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
+      orderBy: { effectiveDate: 'desc' },
+      select: { calorieTarget: true, proteinTarget: true }
+    });
+    if (!period) throw new MealCardError('No nutrition plan for this date', 404);
+    const structure = await getMealStructure();
+    const slot = slotTargets(n(period.calorieTarget), structure).find((s) => s.mealNumber === mealNumber);
+    if (!slot) throw new MealCardError('No such meal on this plan', 404);
+    const templateMeal: RecommendationSlot = {
+      mealNumber,
+      name: slot.name,
+      plannedTime: slot.plannedTime,
+      slotType: slot.slotType,
+      templateId: null
+    };
+    const proteinGoal = period.proteinTarget != null
+      ? Math.round((n(period.proteinTarget) * slot.sharePct) / 100)
+      : null;
+    return { program, templateMeal, targetCalories: slot.calorieTarget, proteinGoal };
+  }
+
+  const dbMeal = await prisma.nutritionTemplateMeal.findFirst({
     where: { templateId: plan.nutritionTemplateId, mealNumber },
     include: {
       template: { select: { calorieTarget: true, proteinTarget: true, _count: { select: { meals: true } } } },
       mealCardSet: { select: { slotType: true, referenceCalories: true } }
     }
   });
-  if (!templateMeal) throw new MealCardError('No such meal on this plan', 404);
+  if (!dbMeal) throw new MealCardError('No such meal on this plan', 404);
 
-  const dayCalories = n(templateMeal.template.calorieTarget);
-  const targetCalories = templateMeal.mealCardSet
-    ? cardMealTarget(templateMeal, templateMeal.mealCardSet)
-    : templateMeal.calorieTarget != null
-      ? n(templateMeal.calorieTarget)
-      : dayCalories / Math.max(1, templateMeal.template._count.meals);
+  const dayCalories = n(dbMeal.template.calorieTarget);
+  const targetCalories = dbMeal.mealCardSet
+    ? cardMealTarget(dbMeal, dbMeal.mealCardSet)
+    : dbMeal.calorieTarget != null
+      ? n(dbMeal.calorieTarget)
+      : dayCalories / Math.max(1, dbMeal.template._count.meals);
   const proteinGoal = dayCalories > 0
-    ? Math.round(n(templateMeal.template.proteinTarget) * (targetCalories / dayCalories))
+    ? Math.round(n(dbMeal.template.proteinTarget) * (targetCalories / dayCalories))
     : null;
 
+  const templateMeal: RecommendationSlot = {
+    mealNumber: dbMeal.mealNumber,
+    name: dbMeal.name,
+    plannedTime: dbMeal.plannedTime,
+    slotType: dbMeal.mealCardSet?.slotType ?? dbMeal.name,
+    templateId: dbMeal.templateId
+  };
   return { program, templateMeal, targetCalories: Math.round(targetCalories), proteinGoal };
 }
 
@@ -133,7 +174,7 @@ export async function recommendMeals(userId: string, date: string, mealNumber: n
   });
 
   const context = JSON.stringify({
-    slotType: templateMeal.mealCardSet?.slotType ?? templateMeal.name,
+    slotType: templateMeal.slotType,
     targetCalories,
     proteinGoal,
     allergies: user?.clientProfile?.foodConditions ?? null,

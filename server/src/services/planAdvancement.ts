@@ -1,13 +1,8 @@
-import { ProgramStatus, Visibility } from '@prisma/client';
+import { ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { localDateKey, parseDateParam, toDateKey } from '../utils/dates.js';
 import { resolvePlanForDate } from './planResolution.js';
-import {
-  findBestMatchingTemplate,
-  getUserPlanMatchProfile,
-  isCompletePlanMatchProfile,
-  templateMatchesProfile
-} from './nutritionTemplateMatch.js';
+import { resolveTargets } from './targetService.js';
 
 const DAY_MS = 86400000;
 
@@ -57,8 +52,8 @@ export async function advancePlanForCheckIn(
   const today = parseDateParam(timezone ? localDateKey(new Date(), timezone) : localDateKey(new Date()));
 
   const plan = await resolvePlanForDate(program, today);
-  // Log-only programs have no plan to advance.
-  if (!plan.nutritionTemplateId && !plan.exerciseTemplateId) return null;
+  const targets = await resolveTargets(userId);
+  if (!plan.nutritionTemplateId && !plan.exerciseTemplateId && !targets) return null;
 
   let effectiveDate = new Date(today.getTime() + DAY_MS);
   if (mode === 'kickoff') {
@@ -93,28 +88,27 @@ export async function advancePlanForCheckIn(
     }
   }
 
-  let nutritionTemplateId = plan.nutritionTemplateId;
-  let templateChanged = false;
-
-  const profile = await getUserPlanMatchProfile(userId);
-  if (isCompletePlanMatchProfile(profile)) {
-    const current = nutritionTemplateId
-      ? await prisma.nutritionPlanTemplate.findUnique({ where: { id: nutritionTemplateId } })
-      : null;
-    const stillMatches = current != null && templateMatchesProfile(current, profile);
-    if (!stillMatches) {
-      const best = await findBestMatchingTemplate(profile, { visibility: Visibility.GLOBAL });
-      if (best && best.id !== nutritionTemplateId) {
-        nutritionTemplateId = best.id;
-        templateChanged = true;
-      }
-    }
-  }
+  // Formula era: new periods carry NO nutrition template — targets are frozen below
+  // and food comes from the card system (legacy periods keep theirs via carry-forward).
+  const nutritionTemplateId: string | null = null;
+  const templateChanged = false;
 
   const priorCount = await prisma.planPeriod.count({
     where: { programId: program.id, effectiveDate: { lt: effectiveDate } }
   });
   const weekNumber = priorCount + 1;
+
+  // Freeze this week's numbers onto the period (formula era). Resolution walks
+  // coach pin → override band → formula; null only for incomplete profiles.
+  const frozen = targets
+    ? {
+        calorieTarget: targets.calories,
+        proteinTarget: targets.protein,
+        carbTarget: targets.carbs,
+        fatTarget: targets.fat,
+        targetSource: targets.source
+      }
+    : {};
 
   const period = await prisma.planPeriod.upsert({
     where: { programId_effectiveDate: { programId: program.id, effectiveDate } },
@@ -125,9 +119,11 @@ export async function advancePlanForCheckIn(
       nutritionTemplateId,
       exerciseTemplateId: plan.exerciseTemplateId,
       notes: mode === 'kickoff' ? 'Started by kickoff check-in' : 'Started by weekly check-in',
-      createdById: userId
+      createdById: userId,
+      ...frozen
     },
-    update: { nutritionTemplateId, exerciseTemplateId: plan.exerciseTemplateId, weekNumber }
+    // update omits nutritionTemplateId so a same-day re-advance never wipes a legacy period's template
+    update: { exerciseTemplateId: plan.exerciseTemplateId, weekNumber, ...frozen }
   });
 
   const template = nutritionTemplateId
@@ -150,6 +146,7 @@ export type PlanPeriodInfo = {
   endDate: string | null;
   templateName: string | null;
   calorieTarget: number | null;
+  proteinTarget: number | null;
 };
 
 /**
@@ -167,7 +164,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     prisma.planPeriod.findMany({
       where: { programId: program.id },
       orderBy: { effectiveDate: 'asc' },
-      select: { id: true, effectiveDate: true }
+      select: { id: true, effectiveDate: true, calorieTarget: true, proteinTarget: true }
     }),
     resolvePlanForDate(program, day)
   ]);
@@ -175,17 +172,26 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
   const template = plan.nutritionTemplateId
     ? await prisma.nutritionPlanTemplate.findUnique({
         where: { id: plan.nutritionTemplateId },
-        select: { name: true, calorieTarget: true }
+        select: { name: true, calorieTarget: true, proteinTarget: true }
       })
     : null;
-  const calorieTarget = template ? Math.round(Number(template.calorieTarget)) : null;
 
   let activeIndex = -1;
   for (let i = 0; i < periods.length; i += 1) {
     if (periods[i].effectiveDate.getTime() <= day.getTime()) activeIndex = i;
   }
+
+  const frozenCalories = activeIndex >= 0 && periods[activeIndex].calorieTarget != null
+    ? Math.round(Number(periods[activeIndex].calorieTarget))
+    : null;
+  const frozenProtein = activeIndex >= 0 && periods[activeIndex].proteinTarget != null
+    ? Math.round(Number(periods[activeIndex].proteinTarget))
+    : null;
+  const calorieTarget = frozenCalories ?? (template ? Math.round(Number(template.calorieTarget)) : null);
+  const proteinTarget = frozenProtein ?? (template ? Math.round(Number(template.proteinTarget)) : null);
+
   if (activeIndex < 0) {
-    return { weekNumber: null, effectiveDate: null, endDate: null, templateName: template?.name ?? null, calorieTarget };
+    return { weekNumber: null, effectiveDate: null, endDate: null, templateName: template?.name ?? null, calorieTarget, proteinTarget };
   }
 
   const next = periods[activeIndex + 1];
@@ -194,6 +200,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     effectiveDate: toDateKey(periods[activeIndex].effectiveDate),
     endDate: next ? toDateKey(new Date(next.effectiveDate.getTime() - DAY_MS)) : null,
     templateName: template?.name ?? null,
-    calorieTarget
+    calorieTarget,
+    proteinTarget
   };
 }

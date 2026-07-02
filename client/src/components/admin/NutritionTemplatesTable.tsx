@@ -90,10 +90,16 @@ export function NutritionTemplatesTable() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  // Global band templates are legacy since the target formula + card system took over —
+  // they only matter for pre-formula users' plan history, so hide them by default.
+  const [showLegacy, setShowLegacy] = useState(false);
+
+  const legacyCount = useMemo(() => templates.filter((t) => t.visibility === 'GLOBAL').length, [templates]);
 
   const visibleTemplates = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const filtered = query ? templates.filter((template) => matchesSearch(template, query)) : templates;
+    const scoped = showLegacy ? templates : templates.filter((template) => template.visibility !== 'GLOBAL');
+    const filtered = query ? scoped.filter((template) => matchesSearch(template, query)) : scoped;
 
     return [...filtered].sort((a, b) => {
       if (sortKey === 'name') return compareStrings(a.name, b.name, sortDirection);
@@ -101,7 +107,7 @@ export function NutritionTemplatesTable() {
       if (sortKey === 'meals') return compareNumbers(a.mealCount, b.mealCount, sortDirection);
       return compareStrings(a.visibility, b.visibility, sortDirection);
     });
-  }, [templates, searchQuery, sortDirection, sortKey]);
+  }, [templates, searchQuery, sortDirection, sortKey, showLegacy]);
 
   function handleSort(nextKey: SortKey) {
     if (sortKey === nextKey) {
@@ -137,7 +143,9 @@ export function NutritionTemplatesTable() {
     try {
       const template = await api<{ id: string }>('/api/admin/nutrition-templates', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim(), visibility: 'GLOBAL' })
+        // New plans are coach-custom (USER): global band plans are legacy — the target
+        // formula and card system replaced them for everyone new.
+        body: JSON.stringify({ name: name.trim(), visibility: 'USER' })
       });
       navigate(`/admin/nutrition-templates/${template.id}`);
     } catch (err) {
@@ -206,6 +214,12 @@ export function NutritionTemplatesTable() {
               className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:flex-none sm:w-56"
               aria-label="Search nutrition plans"
             />
+          )}
+          {!loading && !error && legacyCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-app-text-muted">
+              <input type="checkbox" checked={showLegacy} onChange={(e) => setShowLegacy(e.target.checked)} />
+              show {legacyCount} legacy band plans (pre-formula, no longer assigned)
+            </label>
           )}
           {!loading && !error && (
             <div className="flex flex-wrap gap-2">

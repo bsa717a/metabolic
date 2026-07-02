@@ -477,7 +477,11 @@ export async function applyTemplateToDailyLog(
     throw new Error('Plan not available');
   }
 
-  await assertTemplateMatchesUser(templateId, userId);
+  // Biometric criteria gate GLOBAL (band) templates only. A coach-owned custom plan is
+  // authorized by the coach's judgment — it has no criteria bands and needs none.
+  if (template.visibility === Visibility.GLOBAL) {
+    await assertTemplateMatchesUser(templateId, userId);
+  }
 
   await prisma.$transaction(async (tx) => {
     await applyTemplateMealsToLog(tx, templateId, log.id, userId);
