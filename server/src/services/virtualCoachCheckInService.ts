@@ -51,6 +51,7 @@ export type CheckInTranscript = {
 };
 
 export type CheckInRecapFields = {
+  kind?: VirtualCoachCheckInKind;
   feelingNote?: string | null;
   win?: string | null;
   pattern?: string | null;
@@ -125,6 +126,7 @@ function nextCheckInDateKey(checkInDay: number, timeZone: string | null | undefi
 }
 
 function serializeRecap(record: {
+  kind?: VirtualCoachCheckInKind;
   feelingNote: string | null;
   win: string | null;
   pattern: string | null;
@@ -134,6 +136,7 @@ function serializeRecap(record: {
   completedAt: Date | null;
 }): CheckInRecapFields {
   return {
+    kind: record.kind,
     feelingNote: record.feelingNote,
     win: record.win,
     pattern: record.pattern,
@@ -385,9 +388,18 @@ export async function startCheckIn(userId: string) {
   }
 
   const state = await getCheckInState(userId);
+  const completedCount = await prisma.virtualCoachCheckIn.count({ where: { userId, status: 'COMPLETED' } });
+
   if (state.inProgressSession) {
     if (state.inProgressSession.coachId === user.selectedVirtualCoachId) {
-      return state.inProgressSession;
+      // Pre-kickoff users must not resume a legacy weekly in-progress session.
+      if (completedCount === 0 && state.inProgressSession.kind !== 'KICKOFF') {
+        await prisma.virtualCoachCheckIn.deleteMany({
+          where: { id: state.inProgressSession.id, userId, status: 'IN_PROGRESS' }
+        });
+      } else {
+        return state.inProgressSession;
+      }
     }
   }
   if (!state.canStart) {
@@ -395,8 +407,6 @@ export async function startCheckIn(userId: string) {
   }
 
   const coachId = user.selectedVirtualCoachId;
-  // First-ever check-in = kickoff conversation. A discarded in-progress kickoff restarts as one.
-  const completedCount = await prisma.virtualCoachCheckIn.count({ where: { userId, status: 'COMPLETED' } });
   const kind: VirtualCoachCheckInKind = completedCount === 0 ? 'KICKOFF' : 'WEEKLY';
   const transcript = emptyTranscript(kind);
   const turn = await runCoachTurn(userId, coachId, transcript.currentStage, transcript, undefined, kind);

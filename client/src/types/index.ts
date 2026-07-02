@@ -403,6 +403,7 @@ export type VirtualCoachCheckInMessage = {
 };
 
 export type VirtualCoachCheckInRecap = {
+  kind?: VirtualCoachCheckInKind;
   feelingNote?: string | null;
   win?: string | null;
   pattern?: string | null;
