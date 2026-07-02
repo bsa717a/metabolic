@@ -6,6 +6,7 @@ import { resolvePlanForDate } from './planResolution.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsService.js';
 import { MealCardError } from './mealCardService.js';
+import { cardMealTarget } from './mealCardMaterialize.js';
 import {
   getAiProvider,
   itemizedMealSuggestionInput,
@@ -43,7 +44,10 @@ export function parseAvoidTerms(foodConditions: string | null | undefined): stri
 export function violatesAvoidList(suggestion: ItemizedMealSuggestion, avoidTerms: string[]): boolean {
   if (!avoidTerms.length) return false;
   const haystacks = [suggestion.name, ...suggestion.items.map((item) => item.name)].map((s) => s.toLowerCase());
-  return avoidTerms.some((term) => haystacks.some((text) => text.includes(term)));
+  return avoidTerms.some((term) => {
+    const pattern = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    return haystacks.some((text) => pattern.test(text));
+  });
 }
 
 export function suggestionTotals(suggestion: ItemizedMealSuggestion): SuggestionTotals {
@@ -88,15 +92,17 @@ async function resolveSlot(userId: string, date: string, mealNumber: number) {
     where: { templateId: plan.nutritionTemplateId, mealNumber },
     include: {
       template: { select: { calorieTarget: true, proteinTarget: true, _count: { select: { meals: true } } } },
-      mealCardSet: { select: { slotType: true } }
+      mealCardSet: { select: { slotType: true, referenceCalories: true } }
     }
   });
   if (!templateMeal) throw new MealCardError('No such meal on this plan', 404);
 
   const dayCalories = n(templateMeal.template.calorieTarget);
-  const targetCalories = templateMeal.calorieTarget != null
-    ? n(templateMeal.calorieTarget)
-    : dayCalories / Math.max(1, templateMeal.template._count.meals);
+  const targetCalories = templateMeal.mealCardSet
+    ? cardMealTarget(templateMeal, templateMeal.mealCardSet)
+    : templateMeal.calorieTarget != null
+      ? n(templateMeal.calorieTarget)
+      : dayCalories / Math.max(1, templateMeal.template._count.meals);
   const proteinGoal = dayCalories > 0
     ? Math.round(n(templateMeal.template.proteinTarget) * (targetCalories / dayCalories))
     : null;

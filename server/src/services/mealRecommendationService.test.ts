@@ -59,6 +59,11 @@ describe('violatesAvoidList', () => {
   it('passes everything when there are no restrictions', () => {
     assert.equal(violatesAvoidList(shrimpTacos, []), false);
   });
+
+  it('does not match avoid terms as substrings inside other words', () => {
+    const vegPlate = meal([{ name: 'Roasted vegetables' }, { name: 'Quinoa' }]);
+    assert.equal(violatesAvoidList(vegPlate, ['egg']), false);
+  });
 });
 
 describe('totals, band, and drift', () => {

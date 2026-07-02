@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
 import { Check, ChevronLeft } from 'lucide-react';
@@ -48,6 +48,7 @@ export function MealBuilder({
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<RecommendedMeal | null>(null);
+  const recRequestId = useRef(0);
 
   // Reset the wizard whenever it (re)opens — state adjustment during render, not an effect.
   const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
@@ -116,6 +117,7 @@ export function MealBuilder({
 
   async function loadRecommendations() {
     if (!payload) return;
+    const requestId = ++recRequestId.current;
     setMode('recommend');
     setChosen(null);
     setRecLoading(true);
@@ -123,12 +125,15 @@ export function MealBuilder({
     try {
       const params = new URLSearchParams({ mealNumber: String(payload.mealNumber) });
       if (craving.trim()) params.set('craving', craving.trim());
-      setRecs(await api<MealRecommendationsPayload>(`/api/daily-logs/${date}/meal-recommendations?${params}`));
+      const result = await api<MealRecommendationsPayload>(`/api/daily-logs/${date}/meal-recommendations?${params}`);
+      if (requestId !== recRequestId.current) return;
+      setRecs(result);
     } catch (err) {
+      if (requestId !== recRequestId.current) return;
       setRecs(null);
       setRecError(err instanceof Error ? err.message : 'Could not get recommendations.');
     } finally {
-      setRecLoading(false);
+      if (requestId === recRequestId.current) setRecLoading(false);
     }
   }
 
