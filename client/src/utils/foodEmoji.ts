@@ -27,6 +27,7 @@ const RULES: Rule[] = [
   { keywords: ['tofu', 'tempeh', 'edamame'], emoji: '🧊' },
   { keywords: ['deli', 'lunch meat'], emoji: '🥪' },
 
+  { keywords: ['cracker', 'rice cake', 'pretzel', 'chip'], emoji: '🍘' },
   { keywords: ['rice'], emoji: '🍚' },
   { keywords: ['tortilla', 'wrap', 'burrito', 'taco'], emoji: '🌯' },
   { keywords: ['bread', 'toast', 'sourdough', 'bagel', 'bun', 'roll'], emoji: '🍞' },
@@ -34,7 +35,6 @@ const RULES: Rule[] = [
   { keywords: ['pasta', 'noodle', 'spaghetti', 'ramen'], emoji: '🍝' },
   { keywords: ['potato', 'fries', 'hash brown'], emoji: '🥔' },
   { keywords: ['quinoa', 'couscous', 'barley', 'grain'], emoji: '🌾' },
-  { keywords: ['cracker', 'rice cake', 'pretzel', 'chip'], emoji: '🍘' },
   { keywords: ['pancake', 'waffle', 'kodiak'], emoji: '🥞' },
   { keywords: ['bean', 'lentil', 'chickpea', 'hummus'], emoji: '🫘' },
   { keywords: ['corn'], emoji: '🌽' },
@@ -96,11 +96,26 @@ const ROLE_EMOJI: Record<string, string> = {
 
 const DEFAULT_EMOJI = '🍽️';
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Multi-word and padded keywords use substring match; stems like "berr" too; else whole-token match. */
+function keywordMatches(haystack: string, keyword: string): boolean {
+  if (keyword.includes(' ') || keyword.trim() !== keyword) {
+    return haystack.includes(keyword);
+  }
+  if (keyword.endsWith('berr')) {
+    return haystack.includes(keyword);
+  }
+  return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(keyword)}(?:es|s)?(?:[^a-z0-9]|$)`).test(haystack);
+}
+
 export function foodEmoji(name: string | null | undefined, role?: string | null): string {
   const haystack = (name ?? '').toLowerCase();
   if (haystack) {
     for (const rule of RULES) {
-      if (rule.keywords.some((keyword) => haystack.includes(keyword))) return rule.emoji;
+      if (rule.keywords.some((keyword) => keywordMatches(haystack, keyword))) return rule.emoji;
     }
   }
   return (role && ROLE_EMOJI[role]) || DEFAULT_EMOJI;

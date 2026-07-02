@@ -19,6 +19,12 @@ describe('foodEmoji', () => {
     expect(foodEmoji('Kodiak Cakes (Buttermilk)')).toBe('🥞');
     expect(foodEmoji('String cheese')).toBe('🧀');
     expect(foodEmoji('Cottage cheese')).toBe('🥣');
+    expect(foodEmoji('Rice cakes')).toBe('🍘');
+  });
+
+  it('does not match short keywords inside unrelated words', () => {
+    expect(foodEmoji('Eggplant, roasted')).toBe('🍽️');
+    expect(foodEmoji('Glazed donut')).toBe('🍽️');
   });
 
   it('falls back to the role, then the plate', () => {
