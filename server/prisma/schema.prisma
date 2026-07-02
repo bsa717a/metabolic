@@ -235,6 +235,7 @@ model User {
   planPeriodsCreated PlanPeriod[] @relation("PlanPeriodCreator")
   mealCardSetsCreated MealCardSet[] @relation("MealCardSetCreator")
   mealCardPicks UserMealCardPicks[]
+  targetOverrideBandsCreated TargetOverrideBand[] @relation("TargetOverrideBandCreator")
   levelProgress UserLevelProgress[]
   badges UserBadge[]
   streaks UserStreak[]
@@ -422,6 +423,12 @@ model Program {
   mode ProgramMode @default(COACHED)
   startDate DateTime
   targetEndDate DateTime?
+  /// Coach-pinned targets for this client — the top of the target resolution order
+  /// (coach pin → nutritionist override band → formula). Null = not pinned.
+  pinnedCalorieTarget Decimal? @db.Decimal(10, 2)
+  pinnedProteinTarget Decimal? @db.Decimal(10, 2)
+  pinnedCarbTarget Decimal? @db.Decimal(10, 2)
+  pinnedFatTarget Decimal? @db.Decimal(10, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user User @relation("ProgramUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -1153,6 +1160,37 @@ model VirtualCoachCheckIn {
   @@index([userId, weekStart])
 }
 
+enum TargetSource {
+  FORMULA
+  OVERRIDE_BAND
+  COACH
+  TEMPLATE
+}
+
+/// A nutritionist-pinned exception to the target formula: profiles matching the
+/// criteria get these targets instead of the computed ones. Most specific band wins.
+/// Field names intentionally mirror NutritionPlanTemplate criteria so the matching
+/// predicates in nutritionTemplateMatch are reused as-is.
+model TargetOverrideBand {
+  id String @id @default(cuid())
+  gender String
+  heightMinInches Int
+  heightMaxInches Int
+  weightMinLbs Decimal @db.Decimal(10, 2)
+  weightMaxLbs Decimal @db.Decimal(10, 2)
+  activityLevelMin Int
+  activityLevelMax Int
+  calorieTarget Decimal @db.Decimal(10, 2)
+  proteinTarget Decimal @db.Decimal(10, 2)
+  carbTarget Decimal @db.Decimal(10, 2)
+  fatTarget Decimal @db.Decimal(10, 2)
+  notes String?
+  createdById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy User? @relation("TargetOverrideBandCreator", fields: [createdById], references: [id], onDelete: SetNull)
+}
+
 /// The plan in effect for a program from `effectiveDate` until the next PlanPeriod.
 /// "Week" = period-to-period; resolveTemplateForDate reads the latest one on/before a date,
 /// falling back to the Program defaults so programs with no PlanPeriod behave exactly as before.
@@ -1161,6 +1199,13 @@ model PlanPeriod {
   programId String
   effectiveDate DateTime
   weekNumber Int?
+  /// Frozen weekly targets (formula era). Null on legacy periods, which resolve
+  /// their targets through nutritionTemplateId instead.
+  calorieTarget Decimal? @db.Decimal(10, 2)
+  proteinTarget Decimal? @db.Decimal(10, 2)
+  carbTarget Decimal? @db.Decimal(10, 2)
+  fatTarget Decimal? @db.Decimal(10, 2)
+  targetSource TargetSource?
   nutritionTemplateId String?
   exerciseTemplateId String?
   coachSessionId String? @unique
