@@ -100,7 +100,6 @@ export async function advancePlanForCheckIn(
 
   // Freeze this week's numbers onto the period (formula era). Resolution walks
   // coach pin → override band → formula; null only for incomplete profiles.
-  const targets = await resolveTargets(userId);
   const frozen = targets
     ? {
         calorieTarget: targets.calories,
@@ -173,7 +172,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
   const template = plan.nutritionTemplateId
     ? await prisma.nutritionPlanTemplate.findUnique({
         where: { id: plan.nutritionTemplateId },
-        select: { name: true, calorieTarget: true }
+        select: { name: true, calorieTarget: true, proteinTarget: true }
       })
     : null;
 
