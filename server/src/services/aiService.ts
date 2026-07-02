@@ -357,7 +357,7 @@ The meal context JSON gives the slot (breakfast/snack/lunch/dinner), a calorie t
 Compose 4 to 5 distinct, practical, home-cookable meals that each total within 10% of the calorie target and lean protein-forward.
 Every meal must break down into individual food items, each with a realistic quantity, unit, per-item macros, and a role.
 Roles: PROTEIN, CARB, VEGETABLE, FAT, FRUIT, FREE (garnishes/condiments). Cover protein + carb + vegetable in each meal unless the user's request says otherwise.
-HARD RULE: never include any food that conflicts with the listed allergies. Respect dietary preferences. Avoid repeating the recent meals.
+HARD RULE: never include any food that conflicts with the listed allergies, and never use ANY ingredient from the context's forbiddenIngredients list — it is the allergy expanded into concrete ingredients; every entry is strictly off-limits, including as a component of another dish (e.g. almond flour, peanut sauce). Respect dietary preferences. Avoid repeating the recent meals.
 If the user request expresses a craving or exclusion, honor it.
 Return JSON only: { "options": [ { "name": string, "description": string, "items": [ { "name": string, "quantity": number, "unit": string, "calories": number, "protein": grams, "carbs": grams, "fat": grams, "role": string }, ... ] }, ... ] }
 Keep names appetizing and under 40 characters, descriptions under 140 characters, 3-7 items per meal.`;

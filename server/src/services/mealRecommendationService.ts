@@ -41,12 +41,65 @@ export function parseAvoidTerms(foodConditions: string | null | undefined): stri
     .filter((term) => term.length >= 3 && term !== 'none' && term !== 'n a');
 }
 
+/**
+ * Allergies are CATEGORIES; item names are instances — "nut allergy" must block
+ * "Almonds" even though no item is literally named "nut". Each key expands to the
+ * concrete ingredients it implies. False positives are acceptable; misses are not.
+ */
+const NUT_TERMS = [
+  'nut', 'almond', 'walnut', 'cashew', 'pecan', 'pistachio', 'hazelnut', 'macadamia',
+  'brazil nut', 'peanut', 'praline', 'marzipan', 'nougat', 'nutella'
+];
+const DAIRY_TERMS = ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'whey', 'casein', 'kefir', 'ghee'];
+const FISH_TERMS = ['fish', 'salmon', 'tuna', 'cod', 'tilapia', 'halibut', 'mahi', 'anchovy', 'sardine', 'trout', 'bass'];
+const SHELLFISH_TERMS = ['shellfish', 'shrimp', 'prawn', 'crab', 'lobster', 'scallop', 'clam', 'mussel', 'oyster', 'crawfish', 'crayfish'];
+const GLUTEN_TERMS = ['wheat', 'bread', 'toast', 'pasta', 'noodle', 'flour', 'cracker', 'couscous', 'barley', 'rye', 'seitan', 'bagel', 'bun', 'pita'];
+
+const ALLERGEN_EXPANSIONS: Record<string, string[]> = {
+  nut: NUT_TERMS,
+  nuts: NUT_TERMS,
+  'tree nut': NUT_TERMS,
+  'tree nuts': NUT_TERMS,
+  peanut: ['peanut', 'nut butter', 'praline', 'nougat'],
+  peanuts: ['peanut', 'nut butter', 'praline', 'nougat'],
+  dairy: DAIRY_TERMS,
+  lactose: DAIRY_TERMS,
+  milk: DAIRY_TERMS,
+  fish: FISH_TERMS,
+  shellfish: SHELLFISH_TERMS,
+  seafood: [...FISH_TERMS, ...SHELLFISH_TERMS],
+  gluten: GLUTEN_TERMS,
+  wheat: GLUTEN_TERMS,
+  egg: ['egg', 'mayo', 'mayonnaise', 'aioli', 'meringue'],
+  eggs: ['egg', 'mayo', 'mayonnaise', 'aioli', 'meringue'],
+  soy: ['soy', 'tofu', 'edamame', 'tempeh', 'miso'],
+  sesame: ['sesame', 'tahini']
+};
+
+/** Parsed avoid terms plus everything their allergen category implies. */
+export function expandAvoidTerms(terms: string[]): string[] {
+  const expanded = new Set<string>();
+  for (const term of terms) {
+    expanded.add(term);
+    for (const synonym of ALLERGEN_EXPANSIONS[term] ?? []) expanded.add(synonym);
+    // "tree nut allergy" style phrases: expand any category word the phrase contains
+    for (const [key, synonyms] of Object.entries(ALLERGEN_EXPANSIONS)) {
+      if (key.includes(' ') ? term.includes(key) : new RegExp(`\\b${key}\\b`).test(term)) {
+        for (const synonym of synonyms) expanded.add(synonym);
+      }
+    }
+  }
+  return [...expanded];
+}
+
 /** Server-side allergen re-check — the prompt rule is not trusted alone. */
 export function violatesAvoidList(suggestion: ItemizedMealSuggestion, avoidTerms: string[]): boolean {
   if (!avoidTerms.length) return false;
-  const haystacks = [suggestion.name, ...suggestion.items.map((item) => item.name)].map((s) => s.toLowerCase());
+  const haystacks = [suggestion.name, suggestion.description, ...suggestion.items.map((item) => item.name)].map((s) =>
+    (s ?? '').toLowerCase()
+  );
   return avoidTerms.some((term) => {
-    const pattern = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    const pattern = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:es|s)?\\b`, 'i');
     return haystacks.some((text) => pattern.test(text));
   });
 }
@@ -173,17 +226,19 @@ export async function recommendMeals(userId: string, date: string, mealNumber: n
     take: 8
   });
 
+  const avoidTerms = expandAvoidTerms(parseAvoidTerms(user?.clientProfile?.foodConditions));
   const context = JSON.stringify({
     slotType: templateMeal.slotType,
     targetCalories,
     proteinGoal,
     allergies: user?.clientProfile?.foodConditions ?? null,
+    // Category-expanded so the model can't miss "nut allergy" ⇒ no almonds/cashews/…
+    forbiddenIngredients: avoidTerms.length ? avoidTerms : null,
     dietaryPreferences: user?.clientProfile?.dietNotes ?? null,
     recentMeals: recentMeals.map((meal) => meal.name)
   });
 
   const raw = await getAiProvider().suggestItemizedMeals(craving?.trim() ?? '', context);
-  const avoidTerms = parseAvoidTerms(user?.clientProfile?.foodConditions);
   const options = raw
     .filter((option) => !violatesAvoidList(option, avoidTerms))
     .filter((option) => withinDrift(option, targetCalories))
@@ -242,7 +297,7 @@ export async function saveMealRecommendation(userId: string, date: string, mealN
     where: { id: userId },
     select: { clientProfile: { select: { foodConditions: true } } }
   });
-  if (violatesAvoidList(suggestion, parseAvoidTerms(user?.clientProfile?.foodConditions))) {
+  if (violatesAvoidList(suggestion, expandAvoidTerms(parseAvoidTerms(user?.clientProfile?.foodConditions)))) {
     throw new MealCardError('That meal conflicts with your food restrictions');
   }
   if (!withinDrift(suggestion, targetCalories)) {
