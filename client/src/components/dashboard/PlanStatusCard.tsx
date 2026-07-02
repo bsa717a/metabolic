@@ -9,12 +9,13 @@ function formatDate(dateKey: string) {
 }
 
 function dayOfWeekLine(status: PlanStatus) {
-  if (status.weekNumber == null || !status.effectiveDate) return null;
-  const start = new Date(`${status.effectiveDate}T12:00:00`);
-  const today = new Date();
-  const dayIndex = Math.floor((today.getTime() - start.getTime()) / 86400000) + 1;
-  if (dayIndex < 1) return `Week ${status.weekNumber} starts ${formatDate(status.effectiveDate)}`;
-  return `Week ${status.weekNumber} · day ${Math.min(dayIndex, 7)} of 7`;
+  if (status.weekNumber == null || status.planDayIndex == null || !status.effectiveDate) return null;
+  if (status.planDayIndex < 1) return `Week ${status.weekNumber} starts ${formatDate(status.effectiveDate)}`;
+  const dayLabel =
+    status.planDayIndex <= 7
+      ? `day ${status.planDayIndex} of 7`
+      : `day ${status.planDayIndex}`;
+  return `Week ${status.weekNumber} · ${dayLabel}`;
 }
 
 /** The one place that answers "am I on a plan?" — renders all three plan states. */
@@ -22,17 +23,50 @@ export function PlanStatusCard() {
   const [status, setStatus] = useState<PlanStatus | null>(null);
   const [proposal, setProposal] = useState<PlanProposal | null>(null);
   const [adopting, setAdopting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api<PlanStatus>('/api/plan-status')
-      .then(setStatus)
-      .catch(() => setStatus(null));
+    setLoading(true);
+    setFetchError(null);
+    return api<PlanStatus>('/api/plan-status')
+      .then((data) => {
+        setStatus(data);
+        setFetchError(null);
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Could not load plan status';
+        if (message === 'No active program') {
+          setStatus(null);
+          setFetchError(null);
+        } else {
+          setFetchError(message);
+        }
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  if (loading && !status) return null;
+
+  if (fetchError && !status) {
+    return (
+      <div className="max-w-md rounded-2xl border border-dashed border-app-border bg-app-surface px-5 py-4">
+        <p className="text-sm text-app-text-muted">{fetchError}</p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-2 text-sm font-bold text-brand-green transition hover:text-brand-deep"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   if (!status) return null;
 
@@ -61,9 +95,16 @@ export function PlanStatusCard() {
 
   if (status.state === 'on_plan') {
     const weekLine = dayOfWeekLine(status);
-    // Compact header block — sits where the dashboard clock used to be.
     return (
       <div className="text-left sm:text-right">
+        {fetchError && (
+          <p className="mb-2 text-xs text-amber-700">
+            Couldn&apos;t refresh plan status.{' '}
+            <button type="button" onClick={() => void load()} className="font-semibold underline">
+              Retry
+            </button>
+          </p>
+        )}
         <p className="text-sm font-semibold text-brand-navy dark:text-brand-off-white">
           <Sprout size={16} className="mb-0.5 mr-1 inline text-brand-green" aria-hidden />
           Your Metabolic Plan
@@ -76,19 +117,26 @@ export function PlanStatusCard() {
           </p>
         )}
         <Link to="/nutrition" className="mt-1 inline-block text-sm font-bold text-brand-green transition hover:text-brand-deep">
-          Build today's meals →
+          Build today&apos;s meals →
         </Link>
       </div>
     );
   }
 
-  // coached_no_plan and self_directed both get the "not on a plan yet" card
   return (
     <div className="max-w-md rounded-2xl border border-dashed border-app-border bg-app-surface px-5 py-4">
+      {fetchError && (
+        <p className="mb-3 text-xs text-amber-700">
+          Couldn&apos;t refresh plan status.{' '}
+          <button type="button" onClick={() => void load()} className="font-semibold underline">
+            Retry
+          </button>
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Sprout size={22} className="shrink-0 text-app-text-muted" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-base font-bold text-app-text">You're tracking freely — no plan yet</p>
+          <p className="text-base font-bold text-app-text">You&apos;re tracking freely — no plan yet</p>
           <p className="text-sm text-app-text-muted">
             {status.state === 'coached_no_plan'
               ? 'Your coach hasn’t assigned a plan. You can start a matched one now.'

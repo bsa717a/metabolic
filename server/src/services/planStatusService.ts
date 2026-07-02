@@ -18,6 +18,8 @@ import { ensureDailyLogByUserId } from './dailyLogService.js';
  * instead of inferring from nulls. Display is derived from targets, never from
  * internal template names (those encode biometric bands).
  */
+const DAY_MS = 86400000;
+
 export type PlanStatus = {
   state: 'on_plan' | 'coached_no_plan' | 'self_directed';
   mode: ProgramMode;
@@ -27,7 +29,16 @@ export type PlanStatus = {
   effectiveDate: string | null;
   endDate: string | null;
   nextCheckInDate: string | null;
+  /** 1-based day within the current plan week, using the user's timezone. */
+  planDayIndex: number | null;
 };
+
+function planDayIndex(effectiveDate: string | null, todayKey: string): number | null {
+  if (!effectiveDate) return null;
+  const start = parseDateParam(effectiveDate);
+  const today = parseDateParam(todayKey);
+  return Math.floor((today.getTime() - start.getTime()) / DAY_MS) + 1;
+}
 
 export async function getPlanStatus(userId: string): Promise<PlanStatus | null> {
   const [program, user] = await Promise.all([
@@ -61,20 +72,23 @@ export async function getPlanStatus(userId: string): Promise<PlanStatus | null> 
       weekNumber: null,
       effectiveDate: null,
       endDate: null,
-      nextCheckInDate
+      nextCheckInDate,
+      planDayIndex: null
     };
   }
 
   const info = await getPlanPeriodInfo(userId, todayKey);
+  const effectiveDate = info?.effectiveDate ?? null;
   return {
     state: 'on_plan',
     mode: program.mode,
     calorieTarget: Math.round(n(template.calorieTarget)),
     proteinTarget: Math.round(n(template.proteinTarget)),
     weekNumber: info?.weekNumber ?? null,
-    effectiveDate: info?.effectiveDate ?? null,
+    effectiveDate,
     endDate: info?.endDate ?? null,
-    nextCheckInDate
+    nextCheckInDate,
+    planDayIndex: planDayIndex(effectiveDate, todayKey)
   };
 }
 

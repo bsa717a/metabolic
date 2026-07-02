@@ -429,6 +429,7 @@ export type PlanStatus = {
   effectiveDate: string | null;
   endDate: string | null;
   nextCheckInDate: string | null;
+  planDayIndex: number | null;
 };
 
 export type PlanProposal =

@@ -18,6 +18,39 @@ const prisma = new PrismaClient();
 
 const MIN_TARGET_KCAL = 150;
 
+/** Parse template plannedTime ("18:30", "6:00pm") to a 0–23 hour, or null. */
+function plannedHour(plannedTime: string | null): number | null {
+  if (!plannedTime) return null;
+  const match = plannedTime.trim().toLowerCase().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  if (match[3] === 'pm' && hour < 12) hour += 12;
+  if (match[3] === 'am' && hour === 12) hour = 0;
+  return hour;
+}
+
+function isDinnerMeal(meal: { name: string; plannedTime: string | null }): boolean {
+  if (meal.name.toLowerCase().includes('dinner')) return true;
+  const hour = plannedHour(meal.plannedTime);
+  return hour != null && hour >= 17 && hour < 21;
+}
+
+function matchesMealSlot(meal: { name: string; plannedTime: string | null }, slotType: MealSlotType): boolean {
+  const name = meal.name.toLowerCase();
+  switch (slotType) {
+    case 'BREAKFAST':
+      if (name.includes('breakfast')) return true;
+      { const hour = plannedHour(meal.plannedTime); return hour != null && hour >= 5 && hour < 11; }
+    case 'SNACK':
+      return name.includes('snack');
+    case 'LUNCH':
+      if (name.includes('lunch')) return true;
+      { const hour = plannedHour(meal.plannedTime); return hour != null && hour >= 11 && hour < 15; }
+    default:
+      return false;
+  }
+}
+
 type FoodSeed = {
   name: string;
   servingSize: number;
@@ -117,8 +150,6 @@ type CardSeed = {
 type SetSeed = {
   name: string;
   slotType: MealSlotType;
-  /** Template meal numbers this set attaches to (the Snack set covers every snack slot). */
-  mealNumbers: number[];
   cards: CardSeed[];
 };
 
@@ -126,7 +157,6 @@ const SETS: SetSeed[] = [
   {
     name: 'Breakfast Builder',
     slotType: 'BREAKFAST',
-    mealNumbers: [1],
     cards: [
       {
         role: 'STYLE', name: 'Hot or cold?', pickRule: 'Pick 1', required: true, maxSelect: 1,
@@ -190,7 +220,6 @@ const SETS: SetSeed[] = [
   {
     name: 'Snack / Mini Meal Builder',
     slotType: 'SNACK',
-    mealNumbers: [2, 4, 6],
     cards: [
       {
         role: 'STYLE', name: 'Choose style', pickRule: 'Pick 1 — what sounds good?', required: true, maxSelect: 1,
@@ -253,7 +282,6 @@ const SETS: SetSeed[] = [
   {
     name: 'Lunch Builder',
     slotType: 'LUNCH',
-    mealNumbers: [3],
     cards: [
       {
         role: 'STYLE', name: 'Choose format', pickRule: 'Pick 1 — how do you want it?', required: true, maxSelect: 1,
@@ -419,15 +447,16 @@ async function seedSet(set: SetSeed, foodIds: Map<string, string>, apply: boolea
     }
   }
 
-  // Attach to every template's matching meals + store each meal's calorie target
+  // Attach to every template's matching meals (by name/time slot, not fixed meal numbers)
   const templates = await prisma.nutritionPlanTemplate.findMany({
     include: { meals: { include: { items: true }, orderBy: { mealNumber: 'asc' } } }
   });
   let attached = 0;
   for (const template of templates) {
-    for (const mealNumber of set.mealNumbers) {
-      const meal = template.meals.find((m) => m.mealNumber === mealNumber);
-      if (!meal) continue;
+    const meals = template.meals.filter(
+      (m) => matchesMealSlot(m, set.slotType) && !isDinnerMeal(m)
+    );
+    for (const meal of meals) {
       const itemRollup = meal.items.reduce((s, i) => s + Number(i.calories), 0);
       const otherRollup = template.meals
         .filter((m) => m.id !== meal.id)
@@ -443,7 +472,7 @@ async function seedSet(set: SetSeed, foodIds: Map<string, string>, apply: boolea
       }
     }
   }
-  console.log(`  attach ${set.name} → meals [${set.mealNumbers.join(', ')}] on ${attached} template meals`);
+  console.log(`  attach ${set.name} → ${attached} ${set.slotType.toLowerCase()} meals`);
 }
 
 async function main() {
