@@ -536,7 +536,7 @@ export async function applyMealForward(userId: string, mealId: string) {
       }
       await tx.meal.update({
         where: { id: target.id },
-        data: { name: source.name, cardSelections: Prisma.JsonNull }
+        data: { name: source.name, plannedTime: source.plannedTime, cardSelections: Prisma.JsonNull }
       });
       await recalculateMealTotals(target.id, tx);
       await recalculateDailyLogTotals(log.id, tx);

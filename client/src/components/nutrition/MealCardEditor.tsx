@@ -191,13 +191,16 @@ export function MealCardEditor({
       const patch: Record<string, unknown> = {};
       if (localName !== baseline.name) patch.name = localName;
       if (localTime !== baseline.plannedTime) patch.plannedTime = localTime || null;
-      if (Object.keys(patch).length > 0) {
+      const mealMetaChanged = Object.keys(patch).length > 0;
+      if (mealMetaChanged) {
         await api(`/api/meals/${meal.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
       }
 
+      let existingItemsChanged = false;
       for (const item of localItems.filter((i) => i.serverId)) {
         const orig = baseline.plannedItems.find((o) => o.id === item.serverId);
         if (orig && Number(orig.quantity) !== item.quantity) {
+          existingItemsChanged = true;
           const factor = item.quantity / Number(orig.quantity);
           await api(`/api/meal-items/${item.serverId}`, {
             method: 'PATCH',
@@ -212,7 +215,8 @@ export function MealCardEditor({
         }
       }
 
-      for (const item of localItems.filter((i) => !i.serverId)) {
+      const newItems = localItems.filter((i) => !i.serverId);
+      for (const item of newItems) {
         await api(`/api/meals/${meal.id}/items`, {
           method: 'POST',
           body: JSON.stringify({
@@ -236,9 +240,12 @@ export function MealCardEditor({
         await api(`/api/meal-items/${id}`, { method: 'DELETE' });
       }
 
-      // Same rule as card builds and AI meals: changing a meal sets it from this day
-      // forward. Days where this meal already has logged food are left untouched.
-      await api(`/api/meals/${meal.id}/apply-forward`, { method: 'POST' });
+      const planChanged = mealMetaChanged || existingItemsChanged || newItems.length > 0 || removedIds.length > 0;
+      if (planChanged) {
+        // Same rule as card builds and AI meals: changing a meal sets it from this day
+        // forward. Days where this meal already has logged food are left untouched.
+        await api(`/api/meals/${meal.id}/apply-forward`, { method: 'POST' });
+      }
 
       onSaved();
     } catch (err) {
