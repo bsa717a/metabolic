@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import type { Food, Meal, MealItem } from '../../types';
 import { Button } from '../ui/Button';
 import { plannedTimeToInputValue } from '../../utils/plannedTime';
+import { foodEmoji } from '../../utils/foodEmoji';
 
 type LocalEditItem = {
   serverId?: string;
@@ -319,6 +320,9 @@ export function MealCardEditor({
                     />
                     <span className="text-xs text-slate-500">{item.unit}</span>
                   </div>
+                  <span className="mt-0.5 w-5 shrink-0 text-center" aria-hidden>
+                    {foodEmoji(item.nameSnapshot)}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800">{item.nameSnapshot}</p>
                     <p className="text-xs text-slate-500">{formatMacros(item)}</p>
