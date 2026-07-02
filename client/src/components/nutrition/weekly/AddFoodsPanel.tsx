@@ -6,6 +6,7 @@ import type { Food, Meal } from '../../../types';
 import { FoodSearch } from '../FoodSearch';
 import { LogDifferentFoodModal } from '../LogDifferentFoodModal';
 import { addFoodToMeal } from './weeklyHelpers';
+import { foodEmoji } from '../../../utils/foodEmoji';
 
 function RecentFoodRow({
   food,
@@ -18,6 +19,9 @@ function RecentFoodRow({
 }) {
   return (
     <div className="flex items-center gap-2">
+      <span className="w-5 shrink-0 text-center" aria-hidden>
+        {foodEmoji(food.name)}
+      </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-app-text">{food.name}</p>
         <p className="truncate text-xs text-app-text-muted">

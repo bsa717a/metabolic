@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import type { AdminFood } from '../../types';
 import { Card } from '../ui/Card';
 import { EditFoodDrawer } from './EditFoodDrawer';
+import { foodEmoji } from '../../utils/foodEmoji';
 
 type SortKey = 'name' | 'serving' | 'calories' | 'source';
 type SortDirection = 'asc' | 'desc';
@@ -237,8 +238,13 @@ export function FoodTable() {
                       }`}
                     >
                       <td className="max-w-0 py-3 pr-4">
-                        <div className="truncate font-semibold">{food.name}</div>
-                        {food.brand && <div className="truncate text-slate-500">{food.brand}</div>}
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0" aria-hidden>{foodEmoji(food.name)}</span>
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold">{food.name}</div>
+                            {food.brand && <div className="truncate text-slate-500">{food.brand}</div>}
+                          </div>
+                        </div>
                       </td>
                       <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{formatServing(food)}</td>
                       <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{Math.round(Number(food.calories))}</td>

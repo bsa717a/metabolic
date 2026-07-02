@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
 import { api } from '../../services/api';
+import { foodEmoji } from '../../utils/foodEmoji';
 
 function isPlannedItemLogged(plannedItem: MealItem, actualItems: MealItem[]) {
   return actualItems.some(
@@ -108,6 +109,9 @@ export function PlannedItemChecklist({
                   aria-label={`Log ${item.nameSnapshot} as eaten`}
                 />
               )}
+              <span className="w-5 shrink-0 text-center" aria-hidden>
+                {foodEmoji(item.nameSnapshot)}
+              </span>
               <div className={`flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 ${logged ? 'text-app-text-muted line-through' : ''}`}>
                 <span className="min-w-0">{formatItemLine(item)}</span>
                 <span className="shrink-0 text-app-text-muted">{formatMacros(item)}</span>
@@ -129,6 +133,9 @@ export function PlannedItemChecklist({
             >
               <Trash2 size={14} />
             </button>
+            <span className="w-5 shrink-0 text-center" aria-hidden>
+              {foodEmoji(item.nameSnapshot)}
+            </span>
             <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <span className="min-w-0 font-medium">{formatItemLine(item)}</span>
               <span className="shrink-0 text-app-text-muted">{formatMacros(item)}</span>
