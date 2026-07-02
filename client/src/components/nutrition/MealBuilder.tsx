@@ -14,6 +14,8 @@ import {
   type BuilderCard,
   type CardOption,
   type MealCardsPayload,
+  type MealRecommendationsPayload,
+  type RecommendedMeal,
   type BuilderPicks
 } from '../../utils/mealCards';
 
@@ -36,10 +38,16 @@ export function MealBuilder({
     () => (payload ? [...payload.cards].sort((a, b) => a.sortOrder - b.sortOrder) : []),
     [payload]
   );
+  const [mode, setMode] = useState<'choose' | 'wizard' | 'recommend'>('choose');
   const [step, setStep] = useState(0); // cards.length = review step
   const [picks, setPicks] = useState<BuilderPicks>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [craving, setCraving] = useState('');
+  const [recs, setRecs] = useState<MealRecommendationsPayload | null>(null);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<RecommendedMeal | null>(null);
 
   // Reset the wizard whenever it (re)opens — state adjustment during render, not an effect.
   const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
@@ -47,8 +55,13 @@ export function MealBuilder({
   if (openKey !== prevOpenKey) {
     setPrevOpenKey(openKey);
     if (openKey && payload) {
+      setMode('choose');
       setStep(0);
       setSaveError(null);
+      setCraving('');
+      setRecs(null);
+      setRecError(null);
+      setChosen(null);
       setPicks(
         payload.savedSelections?.setId === payload.setId
           ? restorePicks(cards, payload.savedSelections.picks)
@@ -101,6 +114,45 @@ export function MealBuilder({
       .map((option) => ({ card, option }))
   );
 
+  async function loadRecommendations() {
+    if (!payload) return;
+    setMode('recommend');
+    setChosen(null);
+    setRecLoading(true);
+    setRecError(null);
+    try {
+      const params = new URLSearchParams({ mealNumber: String(payload.mealNumber) });
+      if (craving.trim()) params.set('craving', craving.trim());
+      setRecs(await api<MealRecommendationsPayload>(`/api/daily-logs/${date}/meal-recommendations?${params}`));
+    } catch (err) {
+      setRecs(null);
+      setRecError(err instanceof Error ? err.message : 'Could not get recommendations.');
+    } finally {
+      setRecLoading(false);
+    }
+  }
+
+  async function saveRecommendation(option: RecommendedMeal) {
+    if (!payload) return;
+    setSaving(true);
+    setRecError(null);
+    try {
+      await api(`/api/daily-logs/${date}/meal-recommendation`, {
+        method: 'POST',
+        body: JSON.stringify({
+          mealNumber: payload.mealNumber,
+          suggestion: { name: option.name, description: option.description, items: option.items }
+        })
+      });
+      await onSaved(payload); // payload unchanged; the parent reloads the week
+      onClose();
+    } catch (err) {
+      setRecError(err instanceof Error ? err.message : 'Could not save that meal.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return createPortal(
     <div className={clsx('fixed inset-0 z-50', open ? 'pointer-events-auto' : 'pointer-events-none')}>
       <div
@@ -113,48 +165,202 @@ export function MealBuilder({
           open ? 'translate-y-0' : 'translate-y-full sm:translate-y-[calc(-50%+100vh)]'
         )}
       >
-        {/* Step header */}
+        {/* Header */}
         <div className="shrink-0 bg-brand-navy px-5 pb-4 pt-4 text-brand-off-white">
           <div className="flex items-center justify-between">
             <button
               type="button"
               className="inline-flex items-center gap-1 text-sm font-semibold text-brand-green-light"
-              onClick={() => (step === 0 ? onClose() : setStep((s) => s - 1))}
+              onClick={() => {
+                if (mode === 'choose') return onClose();
+                if (mode === 'recommend') {
+                  if (chosen) return setChosen(null);
+                  return setMode('choose');
+                }
+                if (step === 0) return setMode('choose');
+                setStep((s) => s - 1);
+              }}
             >
               <ChevronLeft size={16} />
-              {step === 0 ? 'Close' : 'Back'}
+              {mode === 'choose' ? 'Close' : 'Back'}
             </button>
-            <span className="text-xs font-medium text-brand-off-white/70">
-              Step {Math.min(step + 1, cards.length + 1)} of {cards.length + 1}
-            </span>
+            {mode === 'wizard' && (
+              <span className="text-xs font-medium text-brand-off-white/70">
+                Step {Math.min(step + 1, cards.length + 1)} of {cards.length + 1}
+              </span>
+            )}
           </div>
-          <div className="mt-3 flex gap-1.5">
-            {[...cards, null].map((_, index) => (
-              <span
-                key={index}
-                className={clsx(
-                  'h-1 flex-1 rounded-full',
-                  index < step ? 'bg-brand-green-light' : index === step ? 'bg-brand-gold' : 'bg-white/20'
-                )}
-              />
-            ))}
-          </div>
+          {mode === 'wizard' && (
+            <div className="mt-3 flex gap-1.5">
+              {[...cards, null].map((_, index) => (
+                <span
+                  key={index}
+                  className={clsx(
+                    'h-1 flex-1 rounded-full',
+                    index < step ? 'bg-brand-green-light' : index === step ? 'bg-brand-gold' : 'bg-white/20'
+                  )}
+                />
+              ))}
+            </div>
+          )}
           <div className="mt-3 flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-green text-xs font-bold text-white">
-              {Math.min(step + 1, cards.length + 1)}
-            </span>
+            {mode === 'wizard' && (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-green text-xs font-bold text-white">
+                {Math.min(step + 1, cards.length + 1)}
+              </span>
+            )}
             <h2 className="text-base font-bold uppercase tracking-wide">
-              {isReview ? 'Review your meal' : currentCard?.name}
+              {mode === 'choose' && `Build ${payload.mealName}`}
+              {mode === 'recommend' && (chosen ? chosen.name : '✨ Recommended for you')}
+              {mode === 'wizard' && (isReview ? 'Review your meal' : currentCard?.name)}
             </h2>
           </div>
           <p className="mt-1 text-xs font-semibold text-brand-green-light">
-            {isReview ? 'Everything is scaled to your target' : currentCard?.pickRule ?? (currentCard?.maxSelect === 1 ? 'Pick 1' : 'Pick 1 or more')}
+            {mode === 'choose' && `Target ${payload.targetCalories} kcal — pick your path`}
+            {mode === 'recommend' && `Complete meals fit to your ${payload.targetCalories} kcal target`}
+            {mode === 'wizard' &&
+              (isReview
+                ? 'Everything is scaled to your target'
+                : currentCard?.pickRule ?? (currentCard?.maxSelect === 1 ? 'Pick 1' : 'Pick 1 or more'))}
           </p>
         </div>
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          {!isReview && currentCard && (
+          {mode === 'choose' && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => void loadRecommendations()}
+                className="w-full rounded-2xl border-2 border-brand-green bg-brand-green/5 px-4 py-4 text-left transition hover:bg-brand-green/10"
+              >
+                <span className="block text-base font-bold text-app-text">✨ Recommend meals for me</span>
+                <span className="mt-1 block text-sm text-app-text-muted">
+                  Complete meals that fit your target — tap one and you're done.
+                </span>
+              </button>
+              <input
+                type="text"
+                value={craving}
+                onChange={(e) => setCraving(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void loadRecommendations()}
+                placeholder="Optional: what sounds good? (“something spicy”, “no fish tonight”)"
+                className="w-full rounded-xl border border-app-border bg-app-surface px-3.5 py-2.5 text-sm text-app-text placeholder:text-app-text-muted focus:border-brand-green focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setMode('wizard')}
+                className="w-full rounded-2xl border-2 border-app-border bg-app-surface px-4 py-4 text-left transition hover:border-brand-green-light"
+              >
+                <span className="block text-base font-bold text-app-text">🃏 Build it myself</span>
+                <span className="mt-1 block text-sm text-app-text-muted">
+                  Step through the cards: {cards.map((c) => c.name.toLowerCase().replace('choose ', '').replace('add ', '')).join(' → ')}.
+                </span>
+              </button>
+            </div>
+          )}
+
+          {mode === 'recommend' && (
+            <div className="space-y-3">
+              {recLoading && (
+                <div className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-24 animate-pulse rounded-2xl bg-app-muted" />
+                  ))}
+                  <p className="text-center text-xs text-app-text-muted">Cooking up ideas…</p>
+                </div>
+              )}
+
+              {recError && (
+                <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {recError}
+                  <button type="button" onClick={() => void loadRecommendations()} className="ml-2 font-bold underline">
+                    Try again
+                  </button>
+                </div>
+              )}
+
+              {!recLoading && !chosen && recs && (
+                <>
+                  {recs.options.map((option) => (
+                    <button
+                      key={option.name}
+                      type="button"
+                      onClick={() => setChosen(option)}
+                      className="w-full rounded-2xl border-2 border-app-border bg-app-surface px-4 py-3 text-left transition hover:border-brand-green-light"
+                    >
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="text-sm font-bold text-app-text">{option.name}</span>
+                        <span className="shrink-0 text-xs font-semibold text-app-text-muted">
+                          {option.totals.calories} kcal · {Math.round(option.totals.protein)}p
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block text-xs text-app-text-muted">{option.description}</span>
+                      <span className="mt-1.5 flex flex-wrap gap-1.5">
+                        {option.bloodSugarStable && (
+                          <span className="rounded-full bg-brand-green/15 px-2 py-0.5 text-[10px] font-bold text-brand-deep">🩸 stable</span>
+                        )}
+                        {option.withinBand ? (
+                          <span className="rounded-full bg-brand-green/15 px-2 py-0.5 text-[10px] font-bold text-brand-deep">✓ in range</span>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">near target</span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => void loadRecommendations()}
+                    className="w-full rounded-xl border border-app-border bg-app-surface px-4 py-2.5 text-sm font-semibold text-app-text transition hover:bg-app-muted"
+                  >
+                    Show me different ones
+                  </button>
+                  <p className="text-center text-xs text-app-text-muted">
+                    AI-estimated portions and macros — double-check ingredients if you have allergies.
+                  </p>
+                </>
+              )}
+
+              {chosen && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-app-border bg-app-surface p-4">
+                    <p className="text-sm text-app-text-muted">{chosen.description}</p>
+                    <ul className="mt-2 divide-y divide-app-muted">
+                      {chosen.items.map((item) => (
+                        <li key={item.name} className="flex items-baseline gap-2 py-1.5 text-sm">
+                          <Check size={14} className="shrink-0 self-center text-brand-green" strokeWidth={3} />
+                          <span className="min-w-0 flex-1 text-app-text">{item.name}</span>
+                          <span className="shrink-0 text-xs font-semibold text-brand-green">
+                            {item.quantity} {item.unit}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-lg font-bold text-app-text">
+                      {chosen.totals.calories} kcal{' '}
+                      <span className="text-xs font-semibold text-app-text-muted">
+                        target {recs?.targetCalories ?? payload.targetCalories} (±10%)
+                      </span>
+                    </p>
+                  </div>
+                  <p className="text-center text-xs text-app-text-muted">
+                    Saving makes this your {payload.setName.toLowerCase().replace(' builder', '').replace(' night', '')} for the
+                    rest of the week — rebuild any day to change it from there on.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void saveRecommendation(chosen)}
+                    className="w-full rounded-xl bg-brand-green px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-deep disabled:opacity-50"
+                  >
+                    {saving ? 'Saving…' : 'Add to plan'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === 'wizard' && !isReview && currentCard && (
             <div className="space-y-2.5">
               {currentCard.options.map((option) => {
                 const selected = (picks[currentCard.id] ?? []).includes(option.id);
@@ -204,7 +410,7 @@ export function MealBuilder({
             </div>
           )}
 
-          {isReview && (
+          {mode === 'wizard' && isReview && (
             <div className="space-y-4">
               <div className="rounded-2xl border border-app-border bg-app-surface p-4">
                 <h3 className="text-base font-bold text-app-text">{payload.setName}</h3>
@@ -265,7 +471,8 @@ export function MealBuilder({
           )}
         </div>
 
-        {/* Sticky footer */}
+        {/* Sticky footer (wizard only) */}
+        {mode === 'wizard' && (
         <div className="shrink-0 border-t border-app-border bg-app-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="flex items-center gap-3">
             <div className="flex-1">
@@ -293,6 +500,7 @@ export function MealBuilder({
             )}
           </div>
         </div>
+        )}
       </div>
     </div>,
     document.body

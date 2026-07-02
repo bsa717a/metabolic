@@ -52,6 +52,33 @@ export type MealCardsPayload = {
   savedSelections: { setId: string; picks: Record<string, string | string[]> } | null;
 };
 
+export type RecommendedMealItem = {
+  name: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  role: CardRole;
+};
+
+/** One AI-recommended complete meal (GET /api/daily-logs/:date/meal-recommendations). */
+export type RecommendedMeal = {
+  name: string;
+  description: string;
+  items: RecommendedMealItem[];
+  totals: { calories: number; protein: number; carbs: number; fat: number };
+  withinBand: boolean;
+  bloodSugarStable: boolean;
+};
+
+export type MealRecommendationsPayload = {
+  mealNumber: number;
+  targetCalories: number;
+  options: RecommendedMeal[];
+};
+
 export type BuilderPicks = Record<string, string[]>;
 
 export function defaultPicks(cards: BuilderCard[]): BuilderPicks {

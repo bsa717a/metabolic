@@ -47,6 +47,26 @@ export type MealSuggestionResult = {
   options: MealSuggestion[];
 };
 
+export type ItemizedMealRole = 'PROTEIN' | 'CARB' | 'VEGETABLE' | 'FAT' | 'FRUIT' | 'FREE';
+
+export type ItemizedMealItem = {
+  name: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  role: ItemizedMealRole;
+};
+
+/** A complete free-form meal the builder can save: every item carries its own macros. */
+export type ItemizedMealSuggestion = {
+  name: string;
+  description: string;
+  items: ItemizedMealItem[];
+};
+
 export type ShoppingListInputItem = {
   id: string;
   name: string;
@@ -151,6 +171,8 @@ export interface AiProvider {
   lookupFoodFromImage(image: { data: string; mimeType: string }, input?: string): Promise<FoodEstimate[]>;
   lookupExercises(input: string): Promise<ExerciseEstimate[]>;
   suggestMealOptions(input: string, context: string): Promise<MealSuggestionResult>;
+  /** Free-form complete meals for one meal slot, itemized so they can be saved into the plan. */
+  suggestItemizedMeals(input: string, context: string): Promise<ItemizedMealSuggestion[]>;
   enrichShoppingList(items: ShoppingListInputItem[], storeName?: string | null): Promise<EnrichedShoppingListResult>;
   chat(messages: ChatMessage[], context: string, channel?: ChatChannel, systemAddendum?: string): Promise<string>;
   classifyNutritionIntent(message: string): Promise<NutritionIntent>;
@@ -316,6 +338,16 @@ Respect the user's allergies and dietary preferences from the macro context — 
 Return JSON only: { "intro": string, "options": [ { "name": string, "description": string, "calories": number, "protein": grams, "carbs": grams, "fat": grams }, ... ] }
 Return 3 practical, distinct options. Keep intro conversational and under 220 characters. Keep each description under 160 characters.`;
 
+const ITEMIZED_MEALS_PROMPT = `You are a nutrition coach composing complete meals for one specific meal slot of a client's day.
+The meal context JSON gives the slot (breakfast/snack/lunch/dinner), a calorie target, a protein goal, the client's allergies and dietary preferences, and meals they ate recently.
+Compose 4 to 5 distinct, practical, home-cookable meals that each total within 10% of the calorie target and lean protein-forward.
+Every meal must break down into individual food items, each with a realistic quantity, unit, per-item macros, and a role.
+Roles: PROTEIN, CARB, VEGETABLE, FAT, FRUIT, FREE (garnishes/condiments). Cover protein + carb + vegetable in each meal unless the user's request says otherwise.
+HARD RULE: never include any food that conflicts with the listed allergies. Respect dietary preferences. Avoid repeating the recent meals.
+If the user request expresses a craving or exclusion, honor it.
+Return JSON only: { "options": [ { "name": string, "description": string, "items": [ { "name": string, "quantity": number, "unit": string, "calories": number, "protein": grams, "carbs": grams, "fat": grams, "role": string }, ... ] }, ... ] }
+Keep names appetizing and under 40 characters, descriptions under 140 characters, 3-7 items per meal.`;
+
 const SHOPPING_LIST_PROMPT = `Convert planned meal items into practical grocery-store shopping quantities.
 Use packages, weights, counts, bunches, bags, and other units shoppers actually buy.
 When planned unit is "serving", read the portion size from the food name (e.g. "1 cup almond milk" × 12 servings = 1 gallon almond milk).
@@ -328,6 +360,7 @@ Return JSON only: { "intro": string, "items": [ { "id": string, "groceryDescript
 Every input id must appear exactly once. Keep groceryDescription under 120 characters.`;
 
 const MEAL_SUGGESTION_TIMEOUT_MS = 7000;
+const ITEMIZED_MEALS_TIMEOUT_MS = 20000;
 const SHOPPING_LIST_TIMEOUT_MS = 12000;
 const CLASSIFY_INTENT_TIMEOUT_MS = 4000;
 
@@ -593,6 +626,65 @@ function parseMealSuggestionResponse(text: string): MealSuggestionResult {
     };
   }
 
+  throw result.error;
+}
+
+const itemizedMealItemSchema = z.object({
+  name: z.string().min(1),
+  quantity: z.number().positive(),
+  unit: z.string().min(1),
+  calories: z.number().nonnegative(),
+  protein: z.number().nonnegative(),
+  carbs: z.number().nonnegative(),
+  fat: z.number().nonnegative(),
+  role: z.enum(['PROTEIN', 'CARB', 'VEGETABLE', 'FAT', 'FRUIT', 'FREE'])
+});
+
+const itemizedMealSuggestionSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  items: z.array(itemizedMealItemSchema).min(1).max(10)
+});
+
+const itemizedMealsResponseSchema = z.object({
+  options: z.array(itemizedMealSuggestionSchema).min(1)
+});
+
+export function normalizeItemizedMealSuggestion(
+  parsed: z.infer<typeof itemizedMealSuggestionSchema>
+): ItemizedMealSuggestion {
+  return {
+    name: parsed.name.trim().slice(0, 60),
+    description: parsed.description.trim().slice(0, 200),
+    items: parsed.items.map((item) => ({
+      name: item.name.trim(),
+      quantity: Math.round(item.quantity * 100) / 100,
+      unit: item.unit.trim(),
+      calories: Math.round(item.calories),
+      protein: roundMacro(item.protein),
+      carbs: roundMacro(item.carbs),
+      fat: roundMacro(item.fat),
+      role: item.role
+    }))
+  };
+}
+
+export const itemizedMealSuggestionInput = itemizedMealSuggestionSchema;
+
+function parseItemizedMealsResponse(text: string): ItemizedMealSuggestion[] {
+  const parsed = parseModelJson(text);
+  const result = itemizedMealsResponseSchema.safeParse(parsed);
+  if (result.success) {
+    return result.data.options.slice(0, 5).map(normalizeItemizedMealSuggestion);
+  }
+  // Loose fallback: accept a bare array or salvage the valid subset of options.
+  const options = Array.isArray(parsed?.options) ? parsed.options : Array.isArray(parsed) ? parsed : [];
+  const normalized: ItemizedMealSuggestion[] = [];
+  for (const option of options) {
+    const parsedOption = itemizedMealSuggestionSchema.safeParse(option);
+    if (parsedOption.success) normalized.push(normalizeItemizedMealSuggestion(parsedOption.data));
+  }
+  if (normalized.length) return normalized.slice(0, 5);
   throw result.error;
 }
 
@@ -892,6 +984,67 @@ export class MockAiProvider implements AiProvider {
           : 'Good call planning ahead. Here is a simple option that should keep lunch close to your targets.',
       options: uniqueOptions
     };
+  }
+
+  /** Deterministic itemized meals, scaled to the context's targetCalories — powers dev/test without an API key. */
+  async suggestItemizedMeals(input: string, context: string): Promise<ItemizedMealSuggestion[]> {
+    let target = 500;
+    try {
+      const parsed = JSON.parse(context) as { targetCalories?: number };
+      if (parsed.targetCalories && parsed.targetCalories > 0) target = parsed.targetCalories;
+    } catch {
+      // keep default
+    }
+    const factor = target / 500;
+    const scale = (kcal: number) => Math.round(kcal * factor);
+    const qty = (amount: number) => Math.round(amount * factor * 100) / 100;
+    const spicy = input.toLowerCase().includes('spicy');
+
+    const base: ItemizedMealSuggestion[] = [
+      {
+        name: spicy ? 'Fiery Chicken Rice Bowl' : 'Grilled Chicken Rice Bowl',
+        description: spicy ? 'Chili-rubbed chicken over rice with charred peppers.' : 'Simple grilled chicken over rice with sautéed peppers.',
+        items: [
+          { name: 'Grilled chicken breast', quantity: qty(4), unit: 'oz', calories: scale(180), protein: 34, carbs: 0, fat: 4, role: 'PROTEIN' },
+          { name: 'White rice, cooked', quantity: qty(0.75), unit: 'cup', calories: scale(160), protein: 3, carbs: 35, fat: 0, role: 'CARB' },
+          { name: 'Sautéed peppers & onions', quantity: qty(1), unit: 'cup', calories: scale(50), protein: 1, carbs: 10, fat: 0, role: 'VEGETABLE' },
+          { name: 'Olive oil', quantity: qty(0.5), unit: 'tbsp', calories: scale(60), protein: 0, carbs: 0, fat: 7, role: 'FAT' },
+          { name: 'Salsa', quantity: 2, unit: 'tbsp', calories: scale(10), protein: 0, carbs: 2, fat: 0, role: 'FREE' }
+        ]
+      },
+      {
+        name: 'Salmon & Sweet Potato Plate',
+        description: 'Roasted salmon with sweet potato and greens.',
+        items: [
+          { name: 'Roasted salmon', quantity: qty(4), unit: 'oz', calories: scale(200), protein: 23, carbs: 0, fat: 12, role: 'PROTEIN' },
+          { name: 'Sweet potato, roasted', quantity: qty(0.75), unit: 'cup', calories: scale(135), protein: 2, carbs: 31, fat: 0, role: 'CARB' },
+          { name: 'Garlic green beans', quantity: qty(1), unit: 'cup', calories: scale(60), protein: 2, carbs: 8, fat: 2, role: 'VEGETABLE' },
+          { name: 'Lemon wedge', quantity: 1, unit: 'wedge', calories: 0, protein: 0, carbs: 0, fat: 0, role: 'FREE' }
+        ]
+      },
+      {
+        name: 'Turkey Taco Lettuce Wraps',
+        description: 'Seasoned ground turkey in crisp lettuce cups with pico.',
+        items: [
+          { name: 'Ground turkey, seasoned', quantity: qty(4), unit: 'oz', calories: scale(170), protein: 30, carbs: 1, fat: 5, role: 'PROTEIN' },
+          { name: 'Black beans', quantity: qty(0.5), unit: 'cup', calories: scale(110), protein: 7, carbs: 20, fat: 0.5, role: 'CARB' },
+          { name: 'Lettuce cups', quantity: qty(4), unit: 'leaves', calories: scale(10), protein: 1, carbs: 2, fat: 0, role: 'VEGETABLE' },
+          { name: 'Shredded cheese', quantity: qty(2), unit: 'tbsp', calories: scale(55), protein: 3.5, carbs: 0.5, fat: 4.5, role: 'FAT' },
+          { name: 'Pico de gallo', quantity: 2, unit: 'tbsp', calories: scale(10), protein: 0, carbs: 2, fat: 0, role: 'FREE' }
+        ]
+      },
+      {
+        name: 'Veggie Egg Scramble Plate',
+        description: 'Fluffy eggs scrambled with spinach and tomatoes, toast on the side.',
+        items: [
+          { name: 'Eggs, scrambled', quantity: Math.max(2, Math.round(3 * factor)), unit: 'egg', calories: scale(210), protein: 18, carbs: 0, fat: 15, role: 'PROTEIN' },
+          { name: 'Sourdough toast', quantity: Math.max(1, Math.round(1.5 * factor)), unit: 'slice', calories: scale(135), protein: 4.5, carbs: 25, fat: 1, role: 'CARB' },
+          { name: 'Spinach & tomato sauté', quantity: qty(1), unit: 'cup', calories: scale(25), protein: 2, carbs: 4, fat: 0, role: 'VEGETABLE' },
+          { name: 'Hot sauce', quantity: 1, unit: 'tsp', calories: 0, protein: 0, carbs: 0, fat: 0, role: 'FREE' }
+        ]
+      }
+    ];
+    return base;
   }
 
   async enrichShoppingList(items: ShoppingListInputItem[], storeName: string | null = null): Promise<EnrichedShoppingListResult> {
@@ -1210,6 +1363,36 @@ ${input.trim()}`;
           return await new MockAiProvider().suggestMealOptions(input, context);
         } catch {
           throw wrapAiError(error, 'meal suggestions');
+        }
+      }
+    }
+  }
+
+  async suggestItemizedMeals(input: string, context: string): Promise<ItemizedMealSuggestion[]> {
+    const prompt = `${ITEMIZED_MEALS_PROMPT}
+
+Meal context:
+${context}
+
+User request:
+${input.trim() || 'No specific request — surprise me with variety.'}`;
+
+    try {
+      const result = await withTimeout(this.foodModel().generateContent(prompt), ITEMIZED_MEALS_TIMEOUT_MS, 'Itemized meals');
+      return parseItemizedMealsResponse(result.response.text());
+    } catch (error) {
+      try {
+        const retry = await withTimeout(
+          this.foodModel().generateContent(`${prompt}\n\nImportant: respond with valid JSON only, exactly 4 options, every item must include all fields.`),
+          ITEMIZED_MEALS_TIMEOUT_MS,
+          'Itemized meals retry'
+        );
+        return parseItemizedMealsResponse(retry.response.text());
+      } catch {
+        try {
+          return await new MockAiProvider().suggestItemizedMeals(input, context);
+        } catch {
+          throw wrapAiError(error, 'meal recommendations');
         }
       }
     }

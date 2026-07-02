@@ -10,6 +10,7 @@ import { getGroceryShoppingList } from '../services/shoppingListService.js';
 import { getMealCardsForDate, MealCardError, saveMealSelections } from '../services/mealCardService.js';
 import { getPlanPeriodInfo } from '../services/planAdvancement.js';
 import { adoptProposedPlan, getPlanProposal, getPlanStatus, PlanAdoptError } from '../services/planStatusService.js';
+import { recommendMeals, saveMealRecommendation } from '../services/mealRecommendationService.js';
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
@@ -130,6 +131,28 @@ export async function nutritionRoutes(app: FastifyInstance) {
   app.get('/api/daily-logs/:date/meal-cards', { preHandler: requireAuth }, async (request, reply) => {
     try {
       return await getMealCardsForDate(request.appUser!.id, (request.params as { date: string }).date);
+    } catch (error) {
+      if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
+  });
+  app.get('/api/daily-logs/:date/meal-recommendations', { preHandler: requireAuth }, async (request, reply) => {
+    const query = z
+      .object({ mealNumber: z.coerce.number().int().min(1), craving: z.string().max(200).optional() })
+      .parse(request.query);
+    try {
+      return await recommendMeals(request.appUser!.id, (request.params as { date: string }).date, query.mealNumber, query.craving);
+    } catch (error) {
+      if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
+      throw error;
+    }
+  });
+  app.post('/api/daily-logs/:date/meal-recommendation', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({ mealNumber: z.number().int().min(1), suggestion: z.unknown() })
+      .parse(request.body);
+    try {
+      return await saveMealRecommendation(request.appUser!.id, (request.params as { date: string }).date, body.mealNumber, body.suggestion);
     } catch (error) {
       if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
       throw error;
