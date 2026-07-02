@@ -33,7 +33,7 @@ export const DASHBOARD_TUTORIAL_STEPS: DashboardTutorialStep[] = [
     target: '[data-tour="nav-tiles"]',
     quip: 'Pick your fighter.',
     title: 'Your shortcuts. One tap.',
-    body: "Blueprint, Nutrition, Exercise, Level Up, Progress — tap any tile and cosplay as someone who has their life together. Your secret's safe with us. (It's not. We literally built the logging system.)",
+    body: "Blueprint, Exercise, Level Up, Progress — tap any tile and cosplay as someone who has their life together. Your secret's safe with us. (It's not. We literally built the logging system.)",
     cta: 'Next →'
   },
   {

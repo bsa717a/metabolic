@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Camera, ChevronDown, Leaf, Plus, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Camera, ChevronDown, Leaf, Pencil, Plus, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
 import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
@@ -436,7 +437,16 @@ export function TodayNutrition({
 
   return (
     <Card>
-      <h2 className="mb-4 text-lg font-semibold text-brand-navy dark:text-brand-off-white">Today&apos;s Nutrition</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Today&apos;s Nutrition</h2>
+        <Link
+          to="/nutrition"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-app-border text-app-text-muted transition hover:border-brand-green/50 hover:text-brand-green"
+          aria-label="Edit nutrition"
+        >
+          <Pencil size={16} />
+        </Link>
+      </div>
       <div className="space-y-3">
         {meals.map((meal) => {
           const expanded = expandedMealId === meal.id;

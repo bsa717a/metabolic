@@ -267,6 +267,8 @@ model ClientProfile {
   exerciseConditions String?
   foodConditions String?
   dietNotes String?
+  /// The user's core "why", captured at their kickoff check-in; referenced by later check-ins.
+  motivation String?
   coachNotes String?
   occupation String?
   activityLevel Int?
@@ -1126,10 +1128,16 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 }
 
+enum VirtualCoachCheckInKind {
+  WEEKLY
+  KICKOFF
+}
+
 model VirtualCoachCheckIn {
   id String @id @default(cuid())
   userId String
   coachId String
+  kind VirtualCoachCheckInKind @default(WEEKLY)
   weekStart DateTime @db.Date
   status VirtualCoachCheckInStatus @default(IN_PROGRESS)
   transcript Json

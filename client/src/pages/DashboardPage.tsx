@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Target, Apple, Dumbbell, Flame, LineChart, TrendingUp, Users, Sparkles } from 'lucide-react';
+import { Target, Dumbbell, Flame, LineChart, TrendingUp, Users, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
 import { getIdToken } from '../services/auth';
@@ -187,7 +187,6 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
           className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4"
         >
           <QuickLink to="/program" icon={Target} label="Metabolic Blueprint" />
-          <QuickLink to="/nutrition" icon={Apple} label="Nutrition" />
           <QuickLink to="/exercise" icon={Dumbbell} label="Exercise" />
           <QuickLink to="/level-up" icon={TrendingUp} label="Level Up" tourId="nav-level-up" />
           <QuickLink to="/progress" icon={LineChart} label="Progress" />

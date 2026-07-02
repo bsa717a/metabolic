@@ -386,7 +386,15 @@ export type VirtualCoachCheckInStage =
   | 'pattern'
   | 'focus'
   | 'commitment'
+  // kickoff (first-ever check-in) stages
+  | 'welcome'
+  | 'why'
+  | 'goals'
+  | 'rhythm'
+  | 'first_focus'
   | 'recap';
+
+export type VirtualCoachCheckInKind = 'WEEKLY' | 'KICKOFF';
 
 export type VirtualCoachCheckInMessage = {
   role: 'coach' | 'user';
@@ -410,6 +418,8 @@ export type PlanAdvance = {
   effectiveDate: string;
   nutritionTemplateName: string | null;
   templateChanged: boolean;
+  /** false = the kickoff confirmed the current week rather than starting a new one. */
+  advanced?: boolean;
 };
 
 export type PlanPeriodInfo = {
@@ -446,6 +456,7 @@ export type PlanProposal =
 export type VirtualCoachCheckInSession = {
   id: string;
   coachId: string;
+  kind: VirtualCoachCheckInKind;
   weekStart: string;
   status: 'IN_PROGRESS' | 'COMPLETED';
   currentStage: VirtualCoachCheckInStage;

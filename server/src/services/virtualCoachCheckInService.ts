@@ -1,4 +1,4 @@
-import type { VirtualCoachCheckInStatus } from '@prisma/client';
+import { ProgramStatus, type VirtualCoachCheckInKind, type VirtualCoachCheckInStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { isVirtualCoachId, type VirtualCoachId } from '../data/virtualCoachPersonas.js';
 import { addUtcDays, parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
@@ -6,6 +6,7 @@ import { getAiProvider } from './aiService.js';
 import { buildCoachCheckInSystemPrompt } from './coachPersona.js';
 import { getWeeklyReview, startOfWeekMonday } from './weeklyReviewService.js';
 import { advancePlanForCheckIn } from './planAdvancement.js';
+import { n } from '../utils/numbers.js';
 
 export const CHECK_IN_STAGES = [
   'opening',
@@ -18,7 +19,22 @@ export const CHECK_IN_STAGES = [
   'recap'
 ] as const;
 
-export type CheckInStage = (typeof CHECK_IN_STAGES)[number];
+/** The first-ever check-in is a kickoff conversation, not a review. */
+export const KICKOFF_STAGES = [
+  'welcome',
+  'why',
+  'goals',
+  'rhythm',
+  'first_focus',
+  'commitment',
+  'recap'
+] as const;
+
+export type CheckInStage = (typeof CHECK_IN_STAGES)[number] | (typeof KICKOFF_STAGES)[number];
+
+export function stagesForKind(kind: VirtualCoachCheckInKind): readonly CheckInStage[] {
+  return kind === 'KICKOFF' ? KICKOFF_STAGES : CHECK_IN_STAGES;
+}
 
 export type TranscriptMessage = {
   role: 'coach' | 'user';
@@ -30,6 +46,8 @@ export type CheckInTranscript = {
   currentStage: CheckInStage;
   messages: TranscriptMessage[];
   chips?: string[];
+  /** Kickoff only: the user's verbatim answer at the "why" stage. */
+  whyAnswer?: string;
 };
 
 export type CheckInRecapFields = {
@@ -67,10 +85,11 @@ function deterministicCheckInDay(userId: string) {
   return hash % 7;
 }
 
-function parseTranscript(value: unknown): CheckInTranscript {
+export function parseTranscript(value: unknown, kind: VirtualCoachCheckInKind = 'WEEKLY'): CheckInTranscript {
   const raw = value as Partial<CheckInTranscript> | null;
+  const stages = stagesForKind(kind);
   const stage = raw?.currentStage;
-  const currentStage = CHECK_IN_STAGES.includes(stage as CheckInStage) ? (stage as CheckInStage) : 'opening';
+  const currentStage = stages.includes(stage as CheckInStage) ? (stage as CheckInStage) : stages[0];
   const messages = Array.isArray(raw?.messages)
     ? raw.messages.filter(
         (entry): entry is TranscriptMessage =>
@@ -83,16 +102,18 @@ function parseTranscript(value: unknown): CheckInTranscript {
   const chips = Array.isArray(raw?.chips)
     ? raw.chips.filter((chip): chip is string => typeof chip === 'string' && chip.trim().length > 0)
     : undefined;
-  return { currentStage, messages, chips };
+  const whyAnswer = typeof raw?.whyAnswer === 'string' && raw.whyAnswer.trim() ? raw.whyAnswer : undefined;
+  return { currentStage, messages, chips, whyAnswer };
 }
 
-function emptyTranscript(): CheckInTranscript {
-  return { currentStage: 'opening', messages: [] };
+function emptyTranscript(kind: VirtualCoachCheckInKind): CheckInTranscript {
+  return { currentStage: stagesForKind(kind)[0], messages: [] };
 }
 
-function nextStage(stage: CheckInStage): CheckInStage {
-  const index = CHECK_IN_STAGES.indexOf(stage);
-  return CHECK_IN_STAGES[Math.min(index + 1, CHECK_IN_STAGES.length - 1)];
+export function nextStage(stage: CheckInStage, kind: VirtualCoachCheckInKind = 'WEEKLY'): CheckInStage {
+  const stages = stagesForKind(kind);
+  const index = stages.indexOf(stage);
+  return stages[Math.min(index + 1, stages.length - 1)];
 }
 
 function nextCheckInDateKey(checkInDay: number, timeZone: string | null | undefined, from = new Date()) {
@@ -126,6 +147,7 @@ function serializeRecap(record: {
 function serializeSession(record: {
   id: string;
   coachId: string;
+  kind: VirtualCoachCheckInKind;
   weekStart: Date;
   status: VirtualCoachCheckInStatus;
   transcript: unknown;
@@ -138,10 +160,11 @@ function serializeSession(record: {
   createdAt: Date;
   completedAt: Date | null;
 }) {
-  const transcript = parseTranscript(record.transcript);
+  const transcript = parseTranscript(record.transcript, record.kind);
   return {
     id: record.id,
     coachId: record.coachId,
+    kind: record.kind,
     weekStart: toDateKey(record.weekStart),
     status: record.status,
     currentStage: transcript.currentStage,
@@ -279,33 +302,80 @@ export function softenCoachName(message: string, firstName?: string | null): str
   return out || message;
 }
 
+const GOAL_METRIC_LABELS: Record<string, string> = {
+  WEIGHT: 'Weight',
+  BODY_FAT: 'Body fat',
+  WAIST: 'Waist',
+  LEAN_TISSUE_MASS: 'Lean tissue',
+  FAT_MASS: 'Fat mass'
+};
+
+/** "Weight: 210 → goal 185 lbs" lines for the kickoff goals stage. */
+async function kickoffGoalLines(userId: string): Promise<string[]> {
+  const program = await prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    include: { metrics: true }
+  });
+  if (!program) return [];
+  return program.metrics
+    .filter((metric) => GOAL_METRIC_LABELS[metric.metricType] && metric.goalValue != null)
+    .map((metric) => {
+      const label = GOAL_METRIC_LABELS[metric.metricType];
+      const unit = metric.unit ? ` ${metric.unit}` : '';
+      return `${label}: ${n(metric.currentValue)} → goal ${n(metric.goalValue)}${unit}`;
+    });
+}
+
 async function runCoachTurn(
   userId: string,
   coachId: VirtualCoachId,
   stage: CheckInStage,
   transcript: CheckInTranscript,
-  userMessage?: string
+  userMessage?: string,
+  kind: VirtualCoachCheckInKind = 'WEEKLY'
 ) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { firstName: true, timezone: true }
+    select: { firstName: true, timezone: true, clientProfile: { select: { motivation: true } } }
   });
   if (!user) throw new Error('User not found');
 
+  const flow = kind === 'KICKOFF' ? ('kickoff' as const) : ('weekly' as const);
   const weeklyReview = await getWeeklyReview(userId, user.timezone);
-  const systemPrompt = buildCoachCheckInSystemPrompt(coachId, user.firstName);
+  const systemPrompt = buildCoachCheckInSystemPrompt(coachId, user.firstName, {
+    flow,
+    motivation: user.clientProfile?.motivation ?? null
+  });
+  const kickoffContext = flow === 'kickoff' ? { goalLines: await kickoffGoalLines(userId) } : undefined;
 
   const turn = await getAiProvider().coachCheckInTurn({
     coachId,
     stage,
+    flow,
     systemPrompt,
     weeklyReview,
+    kickoffContext,
     transcript: transcript.messages,
     userMessage,
     userFirstName: user.firstName
   });
 
   return { ...turn, message: softenCoachName(turn.message, user.firstName) };
+}
+
+/** Persisting the kickoff "why" must never fail the check-in itself. */
+async function persistMotivationSafely(userId: string, motivation: string | null | undefined) {
+  const trimmed = motivation?.trim();
+  if (!trimmed) return;
+  try {
+    await prisma.clientProfile.upsert({
+      where: { userId },
+      create: { userId, motivation: trimmed.slice(0, 500) },
+      update: { motivation: trimmed.slice(0, 500) }
+    });
+  } catch (error) {
+    console.error('Failed to persist kickoff motivation', error);
+  }
 }
 
 export async function startCheckIn(userId: string) {
@@ -325,8 +395,11 @@ export async function startCheckIn(userId: string) {
   }
 
   const coachId = user.selectedVirtualCoachId;
-  const transcript = emptyTranscript();
-  const turn = await runCoachTurn(userId, coachId, transcript.currentStage, transcript);
+  // First-ever check-in = kickoff conversation. A discarded in-progress kickoff restarts as one.
+  const completedCount = await prisma.virtualCoachCheckIn.count({ where: { userId, status: 'COMPLETED' } });
+  const kind: VirtualCoachCheckInKind = completedCount === 0 ? 'KICKOFF' : 'WEEKLY';
+  const transcript = emptyTranscript(kind);
+  const turn = await runCoachTurn(userId, coachId, transcript.currentStage, transcript, undefined, kind);
 
   transcript.messages.push({
     role: 'coach',
@@ -334,7 +407,7 @@ export async function startCheckIn(userId: string) {
     at: new Date().toISOString()
   });
   if (turn.advance && transcript.currentStage !== 'recap') {
-    transcript.currentStage = nextStage(transcript.currentStage);
+    transcript.currentStage = nextStage(transcript.currentStage, kind);
   }
   transcript.chips = turn.chips;
 
@@ -342,6 +415,7 @@ export async function startCheckIn(userId: string) {
     data: {
       userId,
       coachId,
+      kind,
       weekStart: parseDateParam(state.weekStart),
       status: 'IN_PROGRESS',
       transcript
@@ -365,11 +439,11 @@ export async function sendCheckInMessage(userId: string, sessionId: string, mess
   if (!record) throw new Error('Check-in session not found');
   if (!isVirtualCoachId(record.coachId)) throw new Error('Invalid coach on session');
 
-  const transcript = parseTranscript(record.transcript);
+  const transcript = parseTranscript(record.transcript, record.kind);
   const stageBeforeReply = transcript.currentStage;
   transcript.messages.push({ role: 'user', content: trimmed, at: new Date().toISOString() });
 
-  const turn = await runCoachTurn(userId, record.coachId, transcript.currentStage, transcript, trimmed);
+  const turn = await runCoachTurn(userId, record.coachId, transcript.currentStage, transcript, trimmed, record.kind);
 
   transcript.messages.push({
     role: 'coach',
@@ -378,7 +452,7 @@ export async function sendCheckInMessage(userId: string, sessionId: string, mess
   });
 
   if (turn.advance && transcript.currentStage !== 'recap') {
-    transcript.currentStage = nextStage(transcript.currentStage);
+    transcript.currentStage = nextStage(transcript.currentStage, record.kind);
   }
   transcript.chips = turn.chips;
 
@@ -397,8 +471,11 @@ export async function sendCheckInMessage(userId: string, sessionId: string, mess
     completedAt?: Date;
   } = { transcript };
 
-  if (stageBeforeReply === 'opening' && trimmed) {
+  if ((stageBeforeReply === 'opening' || stageBeforeReply === 'welcome') && trimmed) {
     updateData.feelingNote = trimmed.slice(0, 500);
+  }
+  if (record.kind === 'KICKOFF' && stageBeforeReply === 'why' && trimmed) {
+    transcript.whyAnswer = trimmed.slice(0, 500);
   }
 
   if (turn.done && turn.recap) {
@@ -417,11 +494,18 @@ export async function sendCheckInMessage(userId: string, sessionId: string, mess
     data: updateData
   });
 
+  if (updateData.status === 'COMPLETED' && record.kind === 'KICKOFF') {
+    await persistMotivationSafely(userId, turn.recap?.motivation ?? transcript.whyAnswer);
+  }
+
   return {
     ...serializeSession(updated),
     chips: turn.chips,
     done: turn.done,
-    planAdvance: updateData.status === 'COMPLETED' ? await advancePlanSafely(userId, user.timezone) : null
+    planAdvance:
+      updateData.status === 'COMPLETED'
+        ? await advancePlanSafely(userId, user.timezone, record.kind === 'KICKOFF' ? 'kickoff' : 'weekly')
+        : null
   };
 }
 
@@ -437,7 +521,7 @@ export async function completeCheckIn(userId: string, sessionId: string) {
 
   const user = await ensureCheckInDay(userId);
   const nextDate = parseDateParam(nextCheckInDateKey(user.virtualCoachCheckInDay!, user.timezone));
-  const transcript = parseTranscript(record.transcript);
+  const transcript = parseTranscript(record.transcript, record.kind);
 
   const updated = await prisma.virtualCoachCheckIn.update({
     where: { id: sessionId },
@@ -449,16 +533,21 @@ export async function completeCheckIn(userId: string, sessionId: string) {
     }
   });
 
+  // Early completion has no model recap — the verbatim why answer is the best we have.
+  if (record.kind === 'KICKOFF') {
+    await persistMotivationSafely(userId, transcript.whyAnswer);
+  }
+
   return {
     ...serializeSession(updated),
-    planAdvance: await advancePlanSafely(userId, user.timezone)
+    planAdvance: await advancePlanSafely(userId, user.timezone, record.kind === 'KICKOFF' ? 'kickoff' : 'weekly')
   };
 }
 
 /** Plan advancement must never fail the check-in itself. */
-async function advancePlanSafely(userId: string, timezone: string | null) {
+async function advancePlanSafely(userId: string, timezone: string | null, mode: 'weekly' | 'kickoff' = 'weekly') {
   try {
-    return await advancePlanForCheckIn(userId, timezone);
+    return await advancePlanForCheckIn(userId, timezone, mode);
   } catch (error) {
     console.error('Plan advancement after check-in failed', error);
     return null;
