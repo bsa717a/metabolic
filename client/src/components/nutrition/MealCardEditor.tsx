@@ -161,8 +161,9 @@ export function MealCardEditor({
     setLocalItems((prev) => [...prev, newItem]);
     setSearchQuery('');
     setSearchResults([]);
-    setSearchFocused(false);
     setSelectedIndex(-1);
+    // Input stays focused after mousedown+preventDefault; keep searchFocused true so the dropdown reopens on the next query.
+    setSearchFocused(true);
   }
 
   function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
