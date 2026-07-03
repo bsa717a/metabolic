@@ -10,6 +10,11 @@ function splitName(firebaseUser: DecodedIdToken) {
   return { firstName, lastName: lastNameParts.join(" ") || "User" };
 }
 
+/** Placeholder UIDs from seed data or legacy imports — replaced on first Firebase sign-in. */
+export function isPlaceholderFirebaseUid(firebaseUid: string) {
+  return firebaseUid.startsWith("seed-") || firebaseUid.startsWith("legacy-");
+}
+
 export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User | null> {
   const byUid = await prisma.user.findUnique({ where: { firebaseUid: firebaseUser.uid } });
   if (byUid) return byUid;
@@ -19,7 +24,7 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
       where: { email: { equals: firebaseUser.email, mode: 'insensitive' } }
     });
     if (byEmail) {
-      if (byEmail.firebaseUid.startsWith("seed-")) {
+      if (isPlaceholderFirebaseUid(byEmail.firebaseUid)) {
         return prisma.user.update({
           where: { id: byEmail.id },
           data: { firebaseUid: firebaseUser.uid }
@@ -50,7 +55,9 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
       const existing = await prisma.user.findUnique({ where: { firebaseUid: firebaseUser.uid } });
       if (existing) return existing;
       if (firebaseUser.email) {
-        return prisma.user.findUnique({ where: { email: firebaseUser.email } });
+        return prisma.user.findFirst({
+          where: { email: { equals: firebaseUser.email, mode: "insensitive" } }
+        });
       }
     }
     throw error;
