@@ -11,5 +11,6 @@ describe('isPlaceholderFirebaseUid', () => {
   it('does not treat real Firebase UIDs as placeholders', () => {
     assert.equal(isPlaceholderFirebaseUid('abc123FirebaseUid'), false);
     assert.equal(isPlaceholderFirebaseUid('legacy'), false);
+    assert.equal(isPlaceholderFirebaseUid('merged-cuid123'), false);
   });
 });
