@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ExerciseCatalogItem, ExercisePlanTemplate, ExerciseTemplateItem } from '../../types';
 import { api } from '../../services/api';
+import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 
@@ -21,14 +22,17 @@ function formatPlan(item: ExerciseTemplateItem) {
 export function EditWorkoutDrawer({
   open,
   workoutId,
+  clientId,
   onClose,
   onChanged
 }: {
   open: boolean;
   workoutId: string | null;
+  clientId?: string;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
 }) {
+  const endpoints = exercisePlanApi(clientId);
   return (
     <Drawer
       open={open}
@@ -38,7 +42,12 @@ export function EditWorkoutDrawer({
       zIndexClass="z-[60]"
     >
       {open && workoutId && (
-        <EditWorkoutDrawerContent workoutId={workoutId} onClose={onClose} onChanged={onChanged} />
+        <EditWorkoutDrawerContent
+          workoutId={workoutId}
+          endpoints={endpoints}
+          onClose={onClose}
+          onChanged={onChanged}
+        />
       )}
     </Drawer>
   );
@@ -46,10 +55,12 @@ export function EditWorkoutDrawer({
 
 function EditWorkoutDrawerContent({
   workoutId,
+  endpoints,
   onClose,
   onChanged
 }: {
   workoutId: string;
+  endpoints: ReturnType<typeof exercisePlanApi>;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
 }) {
@@ -85,7 +96,7 @@ function EditWorkoutDrawerContent({
     setLoading(true);
     setError('');
     try {
-      const data = await api<ExercisePlanTemplate>(`/api/exercise-templates/${workoutId}`);
+      const data = await api<ExercisePlanTemplate>(endpoints.template(workoutId));
       setWorkout(data);
       setName(data.name);
     } catch (err) {
@@ -94,7 +105,7 @@ function EditWorkoutDrawerContent({
     } finally {
       setLoading(false);
     }
-  }, [workoutId]);
+  }, [workoutId, endpoints]);
 
   useEffect(() => {
     void load();
@@ -122,7 +133,7 @@ function EditWorkoutDrawerContent({
     setSavingName(true);
     setError('');
     try {
-      const updated = await api<ExercisePlanTemplate>(`/api/exercise-templates/${workoutId}`, {
+      const updated = await api<ExercisePlanTemplate>(endpoints.template(workoutId), {
         method: 'PATCH',
         body: JSON.stringify({ name: trimmed })
       });
@@ -144,7 +155,7 @@ function EditWorkoutDrawerContent({
     setAddingExercise(true);
     setError('');
     try {
-      const updated = await api<ExercisePlanTemplate>(`/api/exercise-templates/${workoutId}/items`, {
+      const updated = await api<ExercisePlanTemplate>(endpoints.templateItems(workoutId), {
         method: 'POST',
         body: JSON.stringify({
           exerciseId: selectedExercise.id,
@@ -174,7 +185,7 @@ function EditWorkoutDrawerContent({
     setSavingItem(true);
     setError('');
     try {
-      const updated = await api<ExercisePlanTemplate>(`/api/exercise-template-items/${editItem.id}`, {
+      const updated = await api<ExercisePlanTemplate>(endpoints.templateItem(editItem.id), {
         method: 'PATCH',
         body: JSON.stringify({
           sets: editSets ? Number(editSets) : null,
@@ -197,7 +208,7 @@ function EditWorkoutDrawerContent({
     if (!window.confirm(`Remove ${item.exercise.name} from this workout?`)) return;
     setError('');
     try {
-      await api(`/api/exercise-template-items/${item.id}`, { method: 'DELETE' });
+      await api(endpoints.templateItem(item.id), { method: 'DELETE' });
       await load();
       await onChanged();
     } catch (err) {
@@ -210,7 +221,7 @@ function EditWorkoutDrawerContent({
     setDeleting(true);
     setError('');
     try {
-      await api(`/api/exercise-templates/${workoutId}`, { method: 'DELETE' });
+      await api(endpoints.template(workoutId), { method: 'DELETE' });
       await onChanged();
       onClose();
     } catch (err) {

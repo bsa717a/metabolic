@@ -258,6 +258,7 @@ export type CoachClient = {
     completionStatus: string;
   } | null;
   nextCheckInAt: string | null;
+  nextCheckInId: string | null;
   nextSessionAt: string | null;
   compliancePct: number | null;
   lastActivityAt: string | null;

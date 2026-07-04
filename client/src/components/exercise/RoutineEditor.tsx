@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { api } from '../../services/api';
 import type { ExercisePlanTemplateSummary, ExerciseRoutine } from '../../types';
 import type { ExercisePlanUndoSnapshot } from '../../types/exercisePlanUndo';
+import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import { WEEKDAY_LABELS, type WeekdayIndex } from '../../utils/weekdayPattern';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
@@ -53,12 +54,14 @@ function routineSummary(days: DayAssignment[], workouts: ExercisePlanTemplateSum
 export function RoutineEditor({
   open,
   selectedDate,
+  clientId,
   onClose,
   onSaved,
   registerUndo
 }: {
   open: boolean;
   selectedDate: string;
+  clientId?: string;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
   registerUndo?: (message: string, snapshot: ExercisePlanUndoSnapshot | undefined) => void;
@@ -80,8 +83,11 @@ export function RoutineEditor({
     [workouts]
   );
 
+  const endpoints = useMemo(() => exercisePlanApi(clientId), [clientId]);
+  const workoutsLabel = clientId ? 'Client workouts' : 'My workouts';
+
   async function reloadWorkouts() {
-    const templates = await api<ExercisePlanTemplateSummary[]>('/api/exercise-templates');
+    const templates = await api<ExercisePlanTemplateSummary[]>(endpoints.templates);
     setWorkouts(templates);
   }
 
@@ -90,8 +96,8 @@ export function RoutineEditor({
     setLoading(true);
     setError('');
     Promise.all([
-      api<ExerciseRoutine | null>('/api/exercise-routine'),
-      api<ExercisePlanTemplateSummary[]>('/api/exercise-templates')
+      api<ExerciseRoutine | null>(endpoints.routine),
+      api<ExercisePlanTemplateSummary[]>(endpoints.templates)
     ])
       .then(([routine, templates]) => {
         setWorkouts(templates);
@@ -101,7 +107,7 @@ export function RoutineEditor({
         setError(err instanceof Error ? err.message : 'Unable to load routine');
       })
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, endpoints.routine, endpoints.templates]);
 
   function setDayTemplate(weekday: WeekdayIndex, value: string) {
     setAssignments((current) =>
@@ -116,7 +122,7 @@ export function RoutineEditor({
     setError('');
     try {
       const result = await api<{ routine: ExerciseRoutine; undoSnapshot?: ExercisePlanUndoSnapshot }>(
-        '/api/exercise-routine',
+        endpoints.routine,
         {
           method: 'PUT',
           body: JSON.stringify({
@@ -145,7 +151,7 @@ export function RoutineEditor({
     setCreatingWorkout(true);
     setError('');
     try {
-      const created = await api<{ id: string; name: string; items: unknown[] }>('/api/exercise-templates', {
+      const created = await api<{ id: string; name: string; items: unknown[] }>(endpoints.createTemplate, {
         method: 'POST',
         body: JSON.stringify({ name })
       });
@@ -165,7 +171,7 @@ export function RoutineEditor({
     setCreatingWorkout(true);
     setError('');
     try {
-      const created = await api<{ id: string; name: string }>('/api/exercise-templates/from-day', {
+      const created = await api<{ id: string; name: string }>(endpoints.fromDay, {
         method: 'POST',
         body: JSON.stringify({ name, date: selectedDate })
       });
@@ -222,7 +228,7 @@ export function RoutineEditor({
         )}
 
         <div className="space-y-3 rounded-2xl border border-app-border bg-app-muted/40 p-4">
-          <h3 className="text-sm font-semibold text-app-text">My workouts</h3>
+          <h3 className="text-sm font-semibold text-app-text">{workoutsLabel}</h3>
           <p className="text-xs text-app-text-muted">
             Workouts are reusable exercise lists. Add exercises on any day, then save that day as a workout
             to reuse it in your routine.
@@ -298,9 +304,10 @@ export function RoutineEditor({
       <EditWorkoutDrawer
         open={Boolean(editingWorkoutId)}
         workoutId={editingWorkoutId}
+        clientId={clientId}
         onClose={() => setEditingWorkoutId(null)}
         onChanged={async () => {
-          const templates = await api<ExercisePlanTemplateSummary[]>('/api/exercise-templates');
+          const templates = await api<ExercisePlanTemplateSummary[]>(endpoints.templates);
           setWorkouts(templates);
           const removedId = editingWorkoutId;
           if (removedId && !templates.some((w) => w.id === removedId)) {

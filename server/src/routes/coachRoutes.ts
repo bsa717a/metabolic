@@ -56,16 +56,24 @@ import {
 } from '../services/nutritionTemplateService.js';
 import {
   addTemplateItem,
+  addClientTemplateItem,
+  cloneDailyLogToTemplate,
   cloneTemplate as cloneExerciseTemplate,
   createTemplate as createExerciseTemplate,
+  deleteClientTemplate,
+  deleteClientTemplateItem,
   deleteTemplate as deleteExerciseTemplate,
   deleteTemplateItem,
+  getClientTemplate,
   getTemplateForActor as getExerciseTemplateForActor,
   listTemplatesForActor as listExerciseTemplatesForActor,
   reorderTemplateItems,
+  updateClientTemplate,
+  updateClientTemplateItem,
   updateTemplate as updateExerciseTemplate,
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
+import { getRoutineForUser, upsertRoutine } from '../services/exerciseRoutineService.js';
 import {
   nutritionTemplateCreateBody,
   nutritionTemplateUpdateBody
@@ -77,6 +85,22 @@ const coachOnly = [requireAuth, requireRole(['COACH'])];
 
 const coachNutritionTemplatesQuery = z.object({
   clientId: z.string().trim().min(1).optional()
+});
+
+const coachExerciseTemplatesQuery = z.object({
+  clientId: z.string().trim().min(1).optional()
+});
+
+const exerciseRoutineBody = z.object({
+  days: z
+    .array(
+      z.object({
+        weekday: z.number().int().min(0).max(6),
+        templateId: z.string().nullable()
+      })
+    )
+    .length(7),
+  applyForward: z.boolean().optional()
 });
 
 const exerciseTemplateCreateBody = z.object({
@@ -732,9 +756,20 @@ export async function coachRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/coach/exercise-templates', { preHandler: coachOnly }, async (request) =>
-    listExerciseTemplatesForActor(request.appUser!)
-  );
+  app.get('/api/coach/exercise-templates', { preHandler: coachOnly }, async (request, reply) => {
+    const parsed = coachExerciseTemplatesQuery.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid query' });
+    }
+    if (parsed.data.clientId) {
+      try {
+        await requireCoachClient(request.appUser!, parsed.data.clientId);
+      } catch (error) {
+        return reply.code(403).send({ error: error instanceof Error ? error.message : 'Forbidden' });
+      }
+    }
+    return listExerciseTemplatesForActor(request.appUser!, parsed.data.clientId);
+  });
   app.get('/api/coach/exercise-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
     try {
       return await getExerciseTemplateForActor((request.params as { id: string }).id, request.appUser!);
@@ -812,6 +847,143 @@ export async function coachRoutes(app: FastifyInstance) {
       return await reorderTemplateItems((request.params as { id: string }).id, parsed.data.orderedIds, request.appUser!);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to reorder exercises' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/exercise-routine', { preHandler: coachOnly }, async (request, reply) => {
+    const userId = (request.params as { userId: string }).userId;
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await getRoutineForUser(userId);
+    } catch (error) {
+      return reply.code(403).send({ error: error instanceof Error ? error.message : 'Forbidden' });
+    }
+  });
+
+  app.put('/api/coach/users/:userId/exercise-routine', { preHandler: coachOnly }, async (request, reply) => {
+    const userId = (request.params as { userId: string }).userId;
+    const parsed = exerciseRoutineBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid routine' });
+    }
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await upsertRoutine(userId, parsed.data.days, { applyForward: parsed.data.applyForward });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/exercise-templates', { preHandler: coachOnly }, async (request, reply) => {
+    const userId = (request.params as { userId: string }).userId;
+    const parsed = exerciseTemplateCreateBody.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await createExerciseTemplate({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        visibility: Visibility.USER,
+        createdById: userId
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create plan' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/exercise-templates/from-day', { preHandler: coachOnly }, async (request, reply) => {
+    const userId = (request.params as { userId: string }).userId;
+    const parsed = z
+      .object({
+        name: z.string().trim().min(1),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+      })
+      .safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    }
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await cloneDailyLogToTemplate(userId, parsed.data.date, {
+        name: parsed.data.name,
+        createdById: userId,
+        visibility: Visibility.USER
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save workout' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/exercise-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, id } = request.params as { userId: string; id: string };
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await getClientTemplate(userId, id);
+    } catch (error) {
+      return reply.code(404).send({ error: error instanceof Error ? error.message : 'Plan not found' });
+    }
+  });
+
+  app.patch('/api/coach/users/:userId/exercise-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, id } = request.params as { userId: string; id: string };
+    const parsed = exerciseTemplateUpdateBody.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid plan' });
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await updateClientTemplate(userId, id, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update plan' });
+    }
+  });
+
+  app.delete('/api/coach/users/:userId/exercise-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, id } = request.params as { userId: string; id: string };
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      await deleteClientTemplate(userId, id);
+      return reply.code(204).send();
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete plan' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/exercise-templates/:id/items', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, id } = request.params as { userId: string; id: string };
+    const parsed = templateExerciseItemBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise' });
+    }
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await addClientTemplateItem(userId, id, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+    }
+  });
+
+  app.patch('/api/coach/users/:userId/exercise-template-items/:id', { preHandler: coachOnly }, async (request, reply) => {
+    const userId = (request.params as { userId: string; id: string }).userId;
+    const itemId = (request.params as { userId: string; id: string }).id;
+    const parsed = templateExerciseItemUpdateBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise' });
+    }
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await updateClientTemplateItem(userId, itemId, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update exercise' });
+    }
+  });
+
+  app.delete('/api/coach/users/:userId/exercise-template-items/:id', { preHandler: coachOnly }, async (request, reply) => {
+    const userId = (request.params as { userId: string; id: string }).userId;
+    const itemId = (request.params as { userId: string; id: string }).id;
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await deleteClientTemplateItem(userId, itemId);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete exercise' });
     }
   });
 

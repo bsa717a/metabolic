@@ -110,7 +110,10 @@ export function CoachCalendar({
   onGroupChange,
   onManageGroups,
   onSelectClient,
-  onCheckInsChanged
+  onCheckInsChanged,
+  deepLinkDate = null,
+  deepLinkCheckInId = null,
+  onDeepLinkConsumed
 }: {
   coachUserId: string;
   clients: CoachClient[];
@@ -121,10 +124,13 @@ export function CoachCalendar({
   onManageGroups: () => void;
   onSelectClient: (userId: string) => void;
   onCheckInsChanged?: () => void | Promise<void>;
+  deepLinkDate?: string | null;
+  deepLinkCheckInId?: string | null;
+  onDeepLinkConsumed?: () => void;
 }) {
   const [rangeMode, setRangeMode] = useState<'week' | 'month'>('month');
-  const [anchorDate, setAnchorDate] = useState(() => todayKey());
-  const [selectedDate, setSelectedDate] = useState(() => todayKey());
+  const [anchorDate, setAnchorDate] = useState(() => deepLinkDate ?? todayKey());
+  const [selectedDate, setSelectedDate] = useState(() => deepLinkDate ?? todayKey());
   const [filterUserId, setFilterUserId] = useState('');
   const [filterActivityTypes, setFilterActivityTypes] = useState<CoachCalendarEventType[]>(() =>
     readCoachCalendarActivityFilter(coachUserId)
@@ -170,6 +176,12 @@ export function CoachCalendar({
       setLoading(false);
     }
   }, [groupId, range.end, range.start]);
+
+  useEffect(() => {
+    if (!deepLinkDate) return;
+    setSelectedDate(deepLinkDate);
+    setAnchorDate(deepLinkDate);
+  }, [deepLinkDate]);
 
   useEffect(() => {
     void loadCalendar();
@@ -241,6 +253,18 @@ export function CoachCalendar({
     setEditingCheckIn(event ?? null);
     setCheckInOpen(true);
   }
+
+  useEffect(() => {
+    if (!deepLinkCheckInId || loading) return;
+    const event = events.find((entry) => entry.checkInId === deepLinkCheckInId);
+    if (!event) return;
+    if (deepLinkDate) {
+      setSelectedDate(deepLinkDate);
+      setAnchorDate(deepLinkDate);
+    }
+    openScheduleCheckIn(event);
+    onDeepLinkConsumed?.();
+  }, [deepLinkCheckInId, deepLinkDate, events, loading, onDeepLinkConsumed]);
 
   function handleEventClick(event: CoachCalendarEvent) {
     if (event.type === 'check_in' && event.checkInId) {

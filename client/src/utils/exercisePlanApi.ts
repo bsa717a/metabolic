@@ -1,0 +1,24 @@
+export function exercisePlanApi(clientId?: string) {
+  if (!clientId) {
+    return {
+      routine: '/api/exercise-routine',
+      templates: '/api/exercise-templates',
+      createTemplate: '/api/exercise-templates',
+      fromDay: '/api/exercise-templates/from-day',
+      template: (id: string) => `/api/exercise-templates/${id}`,
+      templateItems: (id: string) => `/api/exercise-templates/${id}/items`,
+      templateItem: (id: string) => `/api/exercise-template-items/${id}`
+    };
+  }
+
+  const base = `/api/coach/users/${encodeURIComponent(clientId)}`;
+  return {
+    routine: `${base}/exercise-routine`,
+    templates: `/api/coach/exercise-templates?clientId=${encodeURIComponent(clientId)}`,
+    createTemplate: `${base}/exercise-templates`,
+    fromDay: `${base}/exercise-templates/from-day`,
+    template: (id: string) => `${base}/exercise-templates/${id}`,
+    templateItems: (id: string) => `${base}/exercise-templates/${id}/items`,
+    templateItem: (id: string) => `${base}/exercise-template-items/${id}`
+  };
+}
