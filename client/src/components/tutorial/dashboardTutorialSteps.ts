@@ -29,22 +29,6 @@ export const DASHBOARD_TUTORIAL_STEPS: DashboardTutorialStep[] = [
     cta: 'Next →'
   },
   {
-    id: 'nav-tiles',
-    target: '[data-tour="nav-tiles"]',
-    quip: 'Pick your fighter.',
-    title: 'Your shortcuts. One tap.',
-    body: "Blueprint, Exercise, Level Up, Progress — tap any tile and cosplay as someone who has their life together. Your secret's safe with us. (It's not. We literally built the logging system.)",
-    cta: 'Next →'
-  },
-  {
-    id: 'nav-level-up',
-    target: '[data-tour="nav-level-up"]',
-    quip: 'Achievement unlocked: reading this.',
-    title: 'Side quest central',
-    body: 'Where metabolism meets video-game brain. Tasks, badges, streaks, journey map. Show up consistently and this page starts flexing for you — like a gym buddy who actually remembers leg day.',
-    cta: 'Next →'
-  },
-  {
     id: 'topbar-hydration',
     target: '[data-tour="topbar-hydration"]',
     quip: 'Hydrate or diedrate. (Kidding. Mostly.)',
@@ -101,9 +85,9 @@ export const DASHBOARD_TUTORIAL_STEPS: DashboardTutorialStep[] = [
   {
     id: 'macro-progress',
     target: '[data-tour="macro-progress"]',
-    quip: 'Bar charts for the bar chart curious.',
-    title: 'Bar charts for people who eat',
-    body: "Calories, protein, carbs, fat — vs your targets. Green bar = chef's kiss. Red bar = tweak the next meal, not your entire personality or your five-year plan.",
+    quip: 'The big picture, in three rings.',
+    title: 'Your blueprint at a glance',
+    body: 'Start, current, and goal — weight and body fat in three tidy rings. Tap it to open the full Metabolic Blueprint. This is the long game; the needle moves in weeks, not hours.',
     cta: 'Next →',
     placement: 'side'
   },
@@ -112,7 +96,7 @@ export const DASHBOARD_TUTORIAL_STEPS: DashboardTutorialStep[] = [
     target: '[data-tour="weight-trend"]',
     quip: 'The scale is a liar on Tuesdays.',
     title: 'Zoom out. Breathe.',
-    body: "30 days of weight. Daily spikes are drama queens. Trends tell the truth. This chart is for patience — not panic-scrolling naked on the scale at 11pm. (We've all been there. No comment.)",
+    body: "Your current weight, plus how far you've moved since you started. Green arrow down = trending your way. Daily blips are drama queens; the direction tells the truth. (No panic-scrolling on the scale at 11pm. We've all been there.)",
     cta: 'Next →',
     placement: 'side'
   },
