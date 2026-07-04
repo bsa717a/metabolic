@@ -17,44 +17,62 @@ export function ProgressRing({
   const offset = circumference - (percent / 100) * circumference;
   const labelText = label ?? `${percent}%`;
   const labelSize = label ? Math.round(size * 0.38) : size < 48 ? 9 : 11;
+  const useHtmlLabel = Boolean(label);
 
   return (
-    <svg width={size} height={size} className="shrink-0 -rotate-90" aria-hidden={!showLabel}>
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        className="text-app-border"
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        className="text-brand-green transition-all duration-500"
-      />
-      {showLabel && (
-        <text
-          x={size / 2}
-          y={size / 2}
-          dominantBaseline="central"
-          textAnchor="middle"
+    <span
+      className="relative inline-flex shrink-0 items-center justify-center"
+      style={{ width: size, height: size }}
+      aria-hidden={!showLabel}
+    >
+      <svg width={size} height={size} className="shrink-0 -rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          className="text-app-border"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="text-brand-green transition-all duration-500"
+        />
+        {showLabel && !useHtmlLabel && (
+          <text
+            x={size / 2}
+            y={size / 2}
+            dominantBaseline="central"
+            textAnchor="middle"
+            className={
+              labelClassName ?? 'fill-brand-navy dark:fill-brand-off-white font-semibold rotate-90'
+            }
+            style={{ fontSize: labelSize, transformOrigin: 'center' }}
+          >
+            {labelText}
+          </text>
+        )}
+      </svg>
+      {showLabel && useHtmlLabel && (
+        <span
           className={
-            labelClassName ?? 'fill-brand-navy dark:fill-brand-off-white font-semibold rotate-90'
+            labelClassName ??
+            'absolute inset-0 flex items-center justify-center font-semibold text-brand-navy dark:text-brand-off-white'
           }
-          style={{ fontSize: labelSize, transformOrigin: 'center' }}
+          style={{ fontSize: labelSize, lineHeight: 1 }}
         >
           {labelText}
-        </text>
+        </span>
       )}
-    </svg>
+    </span>
   );
 }
