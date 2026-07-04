@@ -136,7 +136,7 @@ export function TopbarGamification() {
                   percent={currentLevel.progressPercent}
                   size={MOBILE_RING_SIZE}
                   label={`L${currentLevel.number}`}
-                  labelClassName="fill-brand-green font-bold rotate-90"
+                  labelClassName="absolute inset-0 flex items-center justify-center font-bold text-brand-green"
                 />
               </button>
             </>
