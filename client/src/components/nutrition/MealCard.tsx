@@ -6,6 +6,7 @@ import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
 import { MealCardEditor } from './MealCardEditor';
+import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
 
 function formatPlannedTime(plannedTime?: string | null) {
@@ -24,11 +25,21 @@ function ActionsDropdown({
   onLogActual,
   onMarkEaten,
   onCopyFromYesterday,
+  onAiSuggestions,
+  onSwapMeal,
+  onSaveAsPlan,
+  onViewMacroDetails,
+  onDeleteMeal,
 }: {
   future: boolean;
   onLogActual: () => void;
   onMarkEaten: () => void;
   onCopyFromYesterday: () => void;
+  onAiSuggestions: () => void;
+  onSwapMeal: () => void;
+  onSaveAsPlan: () => void;
+  onViewMacroDetails: () => void;
+  onDeleteMeal: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -46,7 +57,7 @@ function ActionsDropdown({
     fn();
   }
 
-  const items: { label: string; onClick: () => void; danger?: boolean; disabled?: boolean }[] = [
+  const items: { label: string; onClick: () => void; danger?: boolean }[] = [
     ...(!future
       ? [
           { label: 'Log actual intake', onClick: () => action(onLogActual) },
@@ -54,11 +65,11 @@ function ActionsDropdown({
         ]
       : []),
     { label: 'Copy from yesterday', onClick: () => action(onCopyFromYesterday) },
-    { label: 'Ask AI to adjust this meal', onClick: () => action(() => {}), disabled: true },
-    { label: 'Swap this meal', onClick: () => action(() => {}) , disabled: true },
-    { label: 'Save as plan', onClick: () => action(() => {}), disabled: true },
-    { label: 'View macro details', onClick: () => action(() => {}) , disabled: true },
-    { label: 'Delete meal', onClick: () => action(() => {}), danger: true, disabled: true },
+    { label: 'AI Suggestions', onClick: () => action(onAiSuggestions) },
+    { label: 'Swap this meal', onClick: () => action(onSwapMeal) },
+    { label: 'Save as plan', onClick: () => action(onSaveAsPlan) },
+    { label: 'View macro details', onClick: () => action(onViewMacroDetails) },
+    { label: 'Delete meal', onClick: () => action(onDeleteMeal), danger: true },
   ];
 
   return (
@@ -78,13 +89,8 @@ function ActionsDropdown({
             <li key={item.label}>
               <button
                 type="button"
-                disabled={item.disabled}
                 className={`w-full px-4 py-2 text-left text-sm transition ${
-                  item.disabled
-                    ? 'cursor-default text-slate-300'
-                    : item.danger
-                    ? 'text-red-600 hover:bg-red-50'
-                    : 'text-app-text hover:bg-app-muted'
+                  item.danger ? 'text-red-600 hover:bg-red-50' : 'text-app-text hover:bg-app-muted'
                 }`}
                 onClick={item.onClick}
               >
@@ -106,6 +112,8 @@ export function MealCard({
   onEnterEditMode,
   onExitEditMode,
   onLogActual,
+  onAiSuggestions,
+  onSwapMeal,
   selected = false,
   onSelect,
   onBuildMeal,
@@ -117,6 +125,8 @@ export function MealCard({
   onEnterEditMode: (mealId: string) => void;
   onExitEditMode: () => void;
   onLogActual: (mealId: string) => void;
+  onAiSuggestions: (meal: Meal) => void;
+  onSwapMeal: (meal: Meal) => void;
   selected?: boolean;
   onSelect?: (mealId: string) => void;
   onBuildMeal?: () => void;
@@ -124,6 +134,8 @@ export function MealCard({
   const future = isFuture(selectedDate);
   const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [macroDetailsOpen, setMacroDetailsOpen] = useState(false);
   const plannedTime = formatPlannedTime(meal.plannedTime);
 
   async function markPlannedAsEaten() {
@@ -137,8 +149,41 @@ export function MealCard({
   }
 
   async function copyFromYesterday() {
-    await api(`/api/meals/${meal.id}/copy-from-previous-day`, { method: 'POST' });
-    await onChange();
+    setActionError(null);
+    try {
+      await api(`/api/meals/${meal.id}/copy-from-previous-day`, { method: 'POST' });
+      await onChange();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not copy from yesterday.');
+    }
+  }
+
+  async function saveAsPlan() {
+    setActionError(null);
+    if (!window.confirm("Apply this meal's plan to the next 14 days? Days where you've already logged food are left alone.")) {
+      return;
+    }
+    try {
+      await api(`/api/meals/${meal.id}/apply-forward`, { method: 'POST' });
+      await onChange();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not save plan forward.');
+    }
+  }
+
+  async function deleteMealPlan() {
+    setActionError(null);
+    if (!plannedItems.length) {
+      setActionError('This meal has no planned foods to delete.');
+      return;
+    }
+    if (!window.confirm(`Clear all planned foods from ${meal.name}? Logged intake is kept.`)) return;
+    try {
+      await api(`/api/meals/${meal.id}/clear-planned`, { method: 'POST' });
+      await onChange();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not delete meal plan.');
+    }
   }
 
   const [editorKey, setEditorKey] = useState(0);
@@ -169,7 +214,6 @@ export function MealCard({
         />
       ) : (
         <>
-          {/* Normal mode header */}
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm text-app-text-muted">Meal {meal.mealNumber}</p>
@@ -199,6 +243,11 @@ export function MealCard({
                 onLogActual={() => onLogActual(meal.id)}
                 onMarkEaten={() => void markPlannedAsEaten()}
                 onCopyFromYesterday={() => void copyFromYesterday()}
+                onAiSuggestions={() => onAiSuggestions(meal)}
+                onSwapMeal={() => onSwapMeal(meal)}
+                onSaveAsPlan={() => void saveAsPlan()}
+                onViewMacroDetails={() => setMacroDetailsOpen(true)}
+                onDeleteMeal={() => void deleteMealPlan()}
               />
               {(() => {
                 const displayStatus = meal.status === 'SKIPPED' ? 'PLANNED' : meal.status;
@@ -212,8 +261,8 @@ export function MealCard({
           </div>
 
           {toggleError && <p className="mt-2 text-sm text-red-600">{toggleError}</p>}
+          {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
 
-          {/* Merged planned + actual (matches dashboard) */}
           <p className="mt-2 text-sm text-app-text-muted">
             {Math.round(Number(meal.actualCalories))} / {Math.round(Number(meal.plannedCalories))} kcal
             {plannedItems.length > 0 && ` · ${plannedItems.length} item${plannedItems.length === 1 ? '' : 's'}`}
@@ -224,6 +273,8 @@ export function MealCard({
         </>
       )}
       </Card>
+
+      <MealMacroDetailsDrawer open={macroDetailsOpen} meal={meal} onClose={() => setMacroDetailsOpen(false)} />
     </div>
   );
 }

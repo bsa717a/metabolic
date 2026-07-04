@@ -283,6 +283,65 @@ export async function copyMealFromPreviousDay(userId: string, mealId: string) {
   });
 }
 
+export async function clearMealPlannedFoods(userId: string, mealId: string) {
+  return prisma.$transaction(async (tx) => {
+    const meal = await tx.meal.findFirstOrThrow({ where: { id: mealId, userId }, include: { dailyLog: true } });
+    await tx.mealItem.deleteMany({ where: { mealId, type: MealItemType.PLANNED } });
+    await recalculateMealTotals(mealId, tx);
+    await recalculateDailyLogTotals(meal.dailyLogId, tx);
+    return meal;
+  });
+}
+
+export async function swapMeals(userId: string, mealIdA: string, mealIdB: string) {
+  return prisma.$transaction(async (tx) => {
+    const mealA = await tx.meal.findFirstOrThrow({
+      where: { id: mealIdA, userId },
+      include: { items: true, dailyLog: true }
+    });
+    const mealB = await tx.meal.findFirstOrThrow({
+      where: { id: mealIdB, userId },
+      include: { items: true }
+    });
+
+    if (mealA.dailyLogId !== mealB.dailyLogId) throw new Error('Meals must be on the same day.');
+    if (mealA.id === mealB.id) throw new Error('Choose a different meal to swap with.');
+
+    const aMeta = {
+      name: mealA.name,
+      plannedTime: mealA.plannedTime,
+      status: mealA.status,
+      cardSelections: mealA.cardSelections ?? Prisma.JsonNull
+    };
+    const bMeta = {
+      name: mealB.name,
+      plannedTime: mealB.plannedTime,
+      status: mealB.status,
+      cardSelections: mealB.cardSelections ?? Prisma.JsonNull
+    };
+
+    await tx.meal.update({ where: { id: mealA.id }, data: bMeta });
+    await tx.meal.update({ where: { id: mealB.id }, data: aMeta });
+
+    for (const item of mealA.items) {
+      await tx.mealItem.update({ where: { id: item.id }, data: { mealId: mealB.id } });
+    }
+    for (const item of mealB.items) {
+      await tx.mealItem.update({ where: { id: item.id }, data: { mealId: mealA.id } });
+    }
+
+    await recalculateMealTotals(mealA.id, tx);
+    await recalculateMealTotals(mealB.id, tx);
+    await recalculateDailyLogTotals(mealA.dailyLogId, tx);
+
+    return tx.meal.findMany({
+      where: { id: { in: [mealA.id, mealB.id] } },
+      include: { items: true },
+      orderBy: { mealNumber: 'asc' }
+    });
+  });
+}
+
 const MAX_COPY_FORWARD_DAYS = 31;
 
 type SourceMealCopy = {

@@ -7,7 +7,7 @@ import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsService.js';
 import { MealCardError } from './mealCardService.js';
 import { cardMealTarget } from './mealCardMaterialize.js';
-import { getMealStructure, slotTargets } from './targetService.js';
+import { getMealStructure, resolveTargets, slotTargets } from './targetService.js';
 import {
   getAiProvider,
   itemizedMealSuggestionInput,
@@ -141,6 +141,60 @@ type RecommendationSlot = {
   templateId: string | null;
 };
 
+type ResolvedRecommendationSlot = {
+  templateMeal: RecommendationSlot;
+  targetCalories: number;
+  proteinGoal: number | null;
+};
+
+/** When no template/period is on file, derive targets from the day's meal or formula targets. */
+async function resolveSlotFallback(
+  userId: string,
+  day: Date,
+  mealNumber: number
+): Promise<ResolvedRecommendationSlot | null> {
+  const log = await prisma.dailyLog.findUnique({
+    where: { userId_date: { userId, date: day } },
+    include: { meals: { where: { mealNumber } } }
+  });
+  const existingMeal = log?.meals[0];
+  if (existingMeal && n(existingMeal.plannedCalories) > 0) {
+    return {
+      templateMeal: {
+        mealNumber,
+        name: existingMeal.name,
+        plannedTime: existingMeal.plannedTime,
+        slotType: existingMeal.name,
+        templateId: null
+      },
+      targetCalories: Math.round(n(existingMeal.plannedCalories)),
+      proteinGoal: n(existingMeal.plannedProtein) > 0 ? Math.round(n(existingMeal.plannedProtein)) : null
+    };
+  }
+
+  const resolved = await resolveTargets(userId);
+  if (!resolved?.calories) return null;
+
+  const structure = await getMealStructure();
+  const slot = slotTargets(resolved.calories, structure).find((entry) => entry.mealNumber === mealNumber);
+  if (!slot) return null;
+
+  const totalShare = structure.slots.reduce((sum, entry) => sum + entry.sharePct, 0) || 100;
+  const proteinGoal = resolved.protein > 0 ? Math.round((resolved.protein * slot.sharePct) / totalShare) : null;
+
+  return {
+    templateMeal: {
+      mealNumber: slot.mealNumber,
+      name: slot.name,
+      plannedTime: slot.plannedTime,
+      slotType: slot.slotType,
+      templateId: null
+    },
+    targetCalories: slot.calorieTarget,
+    proteinGoal
+  };
+}
+
 async function resolveSlot(userId: string, date: string, mealNumber: number) {
   const program = await prisma.program.findFirst({
     where: { userId, status: ProgramStatus.ACTIVE },
@@ -158,7 +212,11 @@ async function resolveSlot(userId: string, date: string, mealNumber: number) {
       orderBy: { effectiveDate: 'desc' },
       select: { calorieTarget: true, proteinTarget: true }
     });
-    if (!period) throw new MealCardError('No nutrition plan for this date', 404);
+    if (!period) {
+      const fallback = await resolveSlotFallback(userId, day, mealNumber);
+      if (fallback) return { program, ...fallback };
+      throw new MealCardError('No nutrition plan for this date', 404);
+    }
     const structure = await getMealStructure();
     const slot = slotTargets(n(period.calorieTarget), structure).find((s) => s.mealNumber === mealNumber);
     if (!slot) throw new MealCardError('No such meal on this plan', 404);
@@ -182,7 +240,11 @@ async function resolveSlot(userId: string, date: string, mealNumber: number) {
       mealCardSet: { select: { slotType: true, referenceCalories: true } }
     }
   });
-  if (!dbMeal) throw new MealCardError('No such meal on this plan', 404);
+  if (!dbMeal) {
+    const fallback = await resolveSlotFallback(userId, day, mealNumber);
+    if (fallback) return { program, ...fallback };
+    throw new MealCardError('No such meal on this plan', 404);
+  }
 
   const dayCalories = n(dbMeal.template.calorieTarget);
   const targetCalories = dbMeal.mealCardSet
