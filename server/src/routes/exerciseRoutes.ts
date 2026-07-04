@@ -19,13 +19,21 @@ import {
   updateScheduledExercise
 } from '../services/exerciseService.js';
 import {
+  addTemplateItem,
   applyTemplateToDate,
+  cloneDailyLogToTemplate,
+  createTemplate,
+  deleteTemplate,
+  deleteTemplateItem,
   getProgramDefaultTemplate,
   getTemplateForActor,
-  listTemplatesForUser
+  listTemplatesForUser,
+  updateTemplate,
+  updateTemplateItem
 } from '../services/exerciseTemplateService.js';
+import { getRoutineForUser, upsertRoutine } from '../services/exerciseRoutineService.js';
 import { prisma } from '../db/prisma.js';
-import { ExerciseStatus } from '@prisma/client';
+import { ExerciseStatus, Visibility } from '@prisma/client';
 
 const optionalNumber = z.union([z.number(), z.null()]).optional();
 const optionalString = z.union([z.string(), z.null()]).optional();
@@ -74,6 +82,20 @@ const restoreExercisePlanBodySchema = z.object({
     )
     .min(1)
 });
+
+const templateExerciseItemBody = z.object({
+  exerciseId: z.string().trim().min(1),
+  sets: z.number().int().min(0).nullable().optional(),
+  reps: z.number().int().min(0).nullable().optional(),
+  durationMinutes: z.number().int().min(0).nullable().optional(),
+  distance: z.number().finite().min(0).nullable().optional(),
+  weight: z.number().finite().min(0).nullable().optional()
+});
+
+const templateExerciseItemUpdateBody = templateExerciseItemBody.omit({ exerciseId: true }).partial().refine(
+  (body) => Object.keys(body).length > 0,
+  { message: 'At least one field is required' }
+);
 
 async function scheduledExerciseOwnerForActor(actor: { id: string; role: Role }, id: string) {
   const item = await prisma.scheduledExercise.findFirst({ where: { id }, select: { userId: true } });
@@ -158,7 +180,129 @@ export async function exerciseRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/exercise-templates', { preHandler: requireAuth }, async () => listTemplatesForUser());
+  app.get('/api/exercise-templates', { preHandler: requireAuth }, async (request) =>
+    listTemplatesForUser(request.appUser!.id)
+  );
+
+  app.post('/api/exercise-templates', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        name: z.string().trim().min(1),
+        description: z.string().nullable().optional()
+      })
+      .parse(request.body);
+    try {
+      return await createTemplate({
+        name: body.name,
+        description: body.description ?? null,
+        visibility: Visibility.USER,
+        createdById: request.appUser!.id
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create workout' });
+    }
+  });
+
+  app.post('/api/exercise-templates/from-day', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        name: z.string().trim().min(1),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+      })
+      .parse(request.body);
+    try {
+      return await cloneDailyLogToTemplate(request.appUser!.id, body.date, {
+        name: body.name,
+        createdById: request.appUser!.id,
+        visibility: Visibility.USER
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save workout' });
+    }
+  });
+
+  app.patch('/api/exercise-templates/:id', { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const body = z
+      .object({
+        name: z.string().trim().min(1).optional(),
+        description: z.string().nullable().optional()
+      })
+      .parse(request.body);
+    try {
+      return await updateTemplate(id, body, request.appUser!);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update workout' });
+    }
+  });
+
+  app.delete('/api/exercise-templates/:id', { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    try {
+      await deleteTemplate(id, request.appUser!);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete workout' });
+    }
+  });
+
+  app.post('/api/exercise-templates/:id/items', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = templateExerciseItemBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise' });
+    }
+    try {
+      return await addTemplateItem((request.params as { id: string }).id, parsed.data, request.appUser!);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+    }
+  });
+
+  app.patch('/api/exercise-template-items/:id', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = templateExerciseItemUpdateBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise' });
+    }
+    try {
+      return await updateTemplateItem((request.params as { id: string }).id, parsed.data, request.appUser!);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update exercise' });
+    }
+  });
+
+  app.delete('/api/exercise-template-items/:id', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      await deleteTemplateItem((request.params as { id: string }).id, request.appUser!);
+      return reply.code(204).send();
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete exercise' });
+    }
+  });
+
+  app.get('/api/exercise-routine', { preHandler: requireAuth }, async (request) =>
+    getRoutineForUser(request.appUser!.id)
+  );
+
+  app.put('/api/exercise-routine', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        days: z
+          .array(
+            z.object({
+              weekday: z.number().int().min(0).max(6),
+              templateId: z.string().nullable()
+            })
+          )
+          .length(7),
+        applyForward: z.boolean().optional()
+      })
+      .parse(request.body);
+    try {
+      return await upsertRoutine(request.appUser!.id, body.days, { applyForward: body.applyForward });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
+    }
+  });
 
   app.get('/api/exercise-templates/default', { preHandler: requireAuth }, async (request) =>
     getProgramDefaultTemplate(request.appUser!.id)

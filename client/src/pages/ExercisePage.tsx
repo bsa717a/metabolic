@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { LayoutTemplate } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
-import type { ExercisePlanTemplateSummary, ScheduledExercise } from '../types';
+import type { ExerciseRoutine, ScheduledExercise } from '../types';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
 import { ExerciseChecklist } from '../components/exercise/ExerciseChecklist';
-import { CopyWeekPlanMenu } from '../components/plan/CopyWeekPlanMenu';
 import { AddExerciseDrawer } from '../components/exercise/AddExerciseDrawer';
 import { EditExerciseDrawer } from '../components/exercise/EditExerciseDrawer';
-import { ApplyExerciseTemplateModal } from '../components/exercise/ApplyExerciseTemplateModal';
+import { RoutineEditor } from '../components/exercise/RoutineEditor';
 import { WeeklyExercisePlanner } from '../components/exercise/weekly/WeeklyExercisePlanner';
 import { PlanPrintMenu } from '../components/export/PlanPrintMenu';
 import { Button } from '../components/ui/Button';
@@ -21,10 +20,39 @@ import {
   weekHasExercises
 } from '../utils/planExportData';
 import { printExercisePlan, printExerciseWeekPlan } from '../utils/printExercisePlan';
-import type { PublishPlanPayload } from '../utils/weekdayPattern';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../components/exercise/ExercisePlanUndoToast';
 import type { ExercisePlanUndoResponse } from '../types/exercisePlanUndo';
+import { weekdayIndex } from '../utils/weekdayPattern';
+
+function routineRestDatesForWeek(routine: ExerciseRoutine | null, weekDates: string[]) {
+  if (!routine?.days.length) return new Set<string>();
+  const byWeekday = new Map(routine.days.map((day) => [day.weekday, day.templateId]));
+  const restDates = new Set<string>();
+  for (const date of weekDates) {
+    if (byWeekday.get(weekdayIndex(date)) === null) restDates.add(date);
+  }
+  return restDates;
+}
+
+function routineSummaryLabel(routine: ExerciseRoutine | null) {
+  if (!routine?.days.length) return null;
+  const parts: string[] = [];
+  const counts = new Map<string, number>();
+  for (const day of routine.days) {
+    const key = day.templateId ?? 'rest';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of counts) {
+    if (key === 'rest') {
+      parts.push(`${count} rest`);
+    } else {
+      const name = routine.days.find((day) => day.templateId === key)?.template?.name ?? 'Workout';
+      parts.push(`${count}× ${name}`);
+    }
+  }
+  return parts.join(' · ');
+}
 
 function dateFromParams(params: URLSearchParams) {
   const date = params.get('date');
@@ -44,13 +72,14 @@ export function ExercisePage() {
   const [editItem, setEditItem] = useState<ScheduledExercise>();
   const [editDayMode, setEditDayMode] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
-  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [routineEditorOpen, setRoutineEditorOpen] = useState(false);
+  const [routine, setRoutine] = useState<ExerciseRoutine | null>(null);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
-  const [defaultTemplate, setDefaultTemplate] = useState<ExercisePlanTemplateSummary | null>(null);
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
+  const routineRestDates = useMemo(() => routineRestDatesForWeek(routine, weekDates), [routine, weekDates]);
 
   const reloadWeek = useCallback(async () => {
     try {
@@ -82,9 +111,9 @@ export function ExercisePage() {
   );
 
   useEffect(() => {
-    api<ExercisePlanTemplateSummary | null>('/api/exercise-templates/default')
-      .then(setDefaultTemplate)
-      .catch(() => setDefaultTemplate(null));
+    api<ExerciseRoutine | null>('/api/exercise-routine')
+      .then(setRoutine)
+      .catch(() => setRoutine(null));
   }, [selectedDate, weekDays]);
 
   function selectDate(date: string) {
@@ -115,37 +144,6 @@ export function ExercisePage() {
     } finally {
       setRemovingId(null);
     }
-  }
-
-  async function publishPlan(payload: PublishPlanPayload) {
-    setActionError(null);
-
-    if (payload.targetDates.length === 0 && payload.clearDates.length > 0) {
-      if (!window.confirm(`Clear exercises on ${payload.clearDates.length} day(s)?`)) return false;
-    } else if (payload.targetDates.length > 0) {
-      const loggedTargets = payload.targetDates.filter((date) => {
-        const day = weekDays.find((entry) => entry.date === date);
-        return day?.exercises.some((item) => item.status !== 'PLANNED');
-      });
-
-      const replaceMessage =
-        loggedTargets.length > 0
-          ? `Some target days already have logged exercises. Replace ${payload.targetDates.length} day(s) anyway?`
-          : `Replace exercises on ${payload.targetDates.length} day(s)?`;
-
-      if (!window.confirm(replaceMessage)) return false;
-    }
-
-    const result = await api<ExercisePlanUndoResponse & { copiedDays?: number; clearedDays?: number }>(
-      `/api/daily-logs/${selectedDate}/exercises/copy-to-dates`,
-      {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      }
-    );
-    const dayCount = result.undoSnapshot?.days.length ?? 0;
-    registerUndo(exercisePlanUndoMessage(dayCount, 'Plan updated'), result.undoSnapshot);
-    await reloadWeek();
   }
 
   const doneCount = exercises.filter((item) => item.status === 'DONE').length;
@@ -211,29 +209,30 @@ export function ExercisePage() {
               ))}
             </div>
             <PlanPrintMenu printing={printing} onPrintDay={handlePrintDay} onPrintWeek={handlePrintWeek} />
-            <Button type="button" variant="secondary" onClick={() => setTemplateModalOpen(true)}>
-              <LayoutTemplate className="mr-1 inline h-4 w-4" />
-              Plans
+            <Button type="button" variant="secondary" onClick={() => setRoutineEditorOpen(true)}>
+              <CalendarDays className="mr-1 inline h-4 w-4" />
+              Routine
             </Button>
           </div>
         }
       />
 
-      {defaultTemplate && (
+      {routine && routineSummaryLabel(routine) && (
         <p className="text-sm text-slate-500">
-          Default plan: <span className="font-medium text-slate-700">{defaultTemplate.name}</span>
+          Weekly routine:{' '}
+          <span className="font-medium text-slate-700">{routineSummaryLabel(routine)}</span>
         </p>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={() => setAddOpen(true)}>Add exercise</Button>
-        <CopyWeekPlanMenu
-          sourceDate={selectedDate}
-          planLabel="exercises"
-          hasSourcePlan={exercises.length > 0}
-          disabled={editDayMode}
-          onCopy={publishPlan}
-        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setRoutineEditorOpen(true)}
+        >
+          Edit routine
+        </Button>
         <Button
           type="button"
           variant="secondary"
@@ -282,6 +281,7 @@ export function ExercisePage() {
           onChange={reloadWeek}
           onEdit={setEditItem}
           onRemove={removeExercise}
+          routineRestDates={routineRestDates}
         />
       ) : (
         <ExerciseChecklist
@@ -309,12 +309,15 @@ export function ExercisePage() {
         onRemove={removeExercise}
       />
 
-      <ApplyExerciseTemplateModal
-        open={templateModalOpen}
+      <RoutineEditor
+        open={routineEditorOpen}
         selectedDate={selectedDate}
-        exercises={exercises}
-        onClose={() => setTemplateModalOpen(false)}
-        onApplied={reloadWeek}
+        onClose={() => setRoutineEditorOpen(false)}
+        onSaved={async () => {
+          const nextRoutine = await api<ExerciseRoutine | null>('/api/exercise-routine');
+          setRoutine(nextRoutine);
+          await reloadWeek();
+        }}
         registerUndo={registerUndo}
       />
 

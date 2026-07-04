@@ -2,9 +2,11 @@ import { clsx } from 'clsx';
 
 export function PlannedRestDayCard({
   compact = false,
+  fromRoutine = false,
   className
 }: {
   compact?: boolean;
+  fromRoutine?: boolean;
   className?: string;
 }) {
   return (
@@ -15,8 +17,12 @@ export function PlannedRestDayCard({
         className
       )}
     >
-      <span className="text-sm font-semibold text-slate-600">Planned Rest Day</span>
-      {!compact && <span className="mt-1 text-xs text-slate-400">No exercises scheduled</span>}
+      <span className="text-sm font-semibold text-slate-600">Rest day</span>
+      {!compact && (
+        <span className="mt-1 text-xs text-slate-400">
+          {fromRoutine ? 'From your weekly routine' : 'No exercises scheduled'}
+        </span>
+      )}
     </div>
   );
 }

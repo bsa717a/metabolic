@@ -232,6 +232,7 @@ model User {
   mealTemplates MealTemplate[]
   nutritionPlanTemplatesCreated NutritionPlanTemplate[] @relation("NutritionPlanTemplateCreator")
   exerciseTemplatesCreated ExerciseTemplate[] @relation("ExerciseTemplateCreator")
+  exerciseRoutines ExerciseRoutine[]
   planPeriodsCreated PlanPeriod[] @relation("PlanPeriodCreator")
   mealCardSetsCreated MealCardSet[] @relation("MealCardSetCreator")
   mealCardPicks UserMealCardPicks[]
@@ -444,6 +445,7 @@ model Program {
   defaultExerciseTemplateId String?
   defaultExerciseTemplate ExerciseTemplate? @relation(fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
   planPeriods PlanPeriod[]
+  exerciseRoutine ExerciseRoutine?
 }
 
 model ProgramMetric {
@@ -516,6 +518,10 @@ model DailyLog {
   mealsCompleted Int @default(0)
   exercisesPlanned Int @default(0)
   exercisesCompleted Int @default(0)
+  /// Set when this day's exercise plan was first materialized (including intentional rest).
+  exercisesInitializedAt DateTime?
+  /// When true, routine forward-apply skips this day so ad-hoc edits are preserved.
+  exercisesManuallyEdited Boolean @default(false)
   complianceScore Decimal? @db.Decimal(5, 2)
   waterTargetOz Int @default(64)
   waterActualOz Int @default(0)
@@ -799,6 +805,7 @@ model ExerciseTemplate {
   programs Program[]
   planPeriods PlanPeriod[]
   defaultForCoaches User[] @relation("CoachDefaultExerciseTemplate")
+  routineDays ExerciseRoutineDay[]
 }
 
 model ExerciseTemplateItem {
@@ -815,6 +822,32 @@ model ExerciseTemplateItem {
   updatedAt DateTime @updatedAt
   template ExerciseTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id])
+}
+
+/// One weekly exercise routine per program — maps each weekday to a workout template or rest.
+model ExerciseRoutine {
+  id String @id @default(cuid())
+  programId String @unique
+  userId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  days ExerciseRoutineDay[]
+}
+
+model ExerciseRoutineDay {
+  id String @id @default(cuid())
+  routineId String
+  /// Monday = 0 … Sunday = 6
+  weekday Int
+  /// Null means an explicit rest day.
+  templateId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  routine ExerciseRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  template ExerciseTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  @@unique([routineId, weekday])
 }
 
 model NutritionPlanTemplate {

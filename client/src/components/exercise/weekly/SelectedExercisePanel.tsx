@@ -12,7 +12,8 @@ export function SelectedExercisePanel({
   onChange,
   onEdit,
   onRemove,
-  isRestDay = false
+  isRestDay = false,
+  routineRestDay = false
 }: {
   exercise?: ScheduledExercise;
   dayLabel: string;
@@ -23,6 +24,7 @@ export function SelectedExercisePanel({
   onEdit: () => void;
   onRemove?: (id: string) => void | Promise<void>;
   isRestDay?: boolean;
+  routineRestDay?: boolean;
 }) {
   if (!exercise) {
     if (isRestDay) {
@@ -31,7 +33,7 @@ export function SelectedExercisePanel({
           <h3 className="text-sm font-semibold uppercase tracking-wide text-app-text-muted">Selected day</h3>
           <p className="mt-1 text-sm text-app-text-muted">{dayLabel}</p>
           <div className="mt-3">
-            <PlannedRestDayCard compact />
+            <PlannedRestDayCard compact fromRoutine={routineRestDay} />
           </div>
         </div>
       );
