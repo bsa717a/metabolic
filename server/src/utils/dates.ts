@@ -93,3 +93,14 @@ export function addUtcDays(date: Date, days: number) {
   next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
+
+/** Monday = 0 … Sunday = 6 (matches client weekdayIndex). */
+export function weekdayIndexFromDate(date: Date) {
+  return (date.getUTCDay() + 6) % 7;
+}
+
+/** Start of the ISO week (Monday) in UTC. */
+export function startOfUtcWeek(date: Date) {
+  const day = startOfUtcDay(date);
+  return addUtcDays(day, -weekdayIndexFromDate(day));
+}

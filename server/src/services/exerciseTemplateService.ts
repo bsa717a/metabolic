@@ -49,7 +49,7 @@ function serializeTemplateItem(item: {
   };
 }
 
-function serializeTemplateSummary(template: {
+export function serializeTemplateSummary(template: {
   id: string;
   name: string;
   description: string | null;
@@ -86,9 +86,9 @@ export function serializeTemplate(template: {
   };
 }
 
-export async function listTemplatesForUser() {
+export async function listTemplatesForUser(userId: string) {
   const templates = await prisma.exerciseTemplate.findMany({
-    where: { visibility: Visibility.GLOBAL },
+    where: { OR: [{ visibility: Visibility.GLOBAL }, { createdById: userId }] },
     include: { items: true },
     orderBy: { name: 'asc' }
   });
@@ -182,6 +182,10 @@ export async function deleteTemplate(id: string, actor?: { id: string; role: Rol
   if (inUse > 0) {
     throw new Error('Cannot delete a plan that is set as a program default');
   }
+  await prisma.exerciseRoutineDay.updateMany({
+    where: { templateId: id },
+    data: { templateId: null }
+  });
   await prisma.exerciseTemplate.delete({ where: { id } });
 }
 
@@ -220,7 +224,11 @@ export async function cloneTemplate(id: string, data?: { name?: string; createdB
   return deepCopyTemplate(id, { name, createdById: data?.createdById });
 }
 
-export async function cloneDailyLogToTemplate(userId: string, date: string, data: { name: string; createdById?: string }) {
+export async function cloneDailyLogToTemplate(
+  userId: string,
+  date: string,
+  data: { name: string; createdById?: string; visibility?: Visibility }
+) {
   const day = parseDateParam(date);
   const program = await getActiveProgram(userId);
   if (!program) throw new Error('No active program found for that user');
@@ -237,7 +245,7 @@ export async function cloneDailyLogToTemplate(userId: string, date: string, data
   const created = await prisma.exerciseTemplate.create({
     data: {
       name: data.name,
-      visibility: Visibility.GLOBAL,
+      visibility: data.visibility ?? Visibility.GLOBAL,
       createdById: data.createdById ?? null,
       items: {
         create: exercises.map((item, index) => ({
@@ -306,6 +314,8 @@ export async function applyTemplateToDate(
   });
 
   const exercises = await getExercisesForDateAfterApply(userId, date);
+  const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
+  await markExercisesManuallyEdited(userId, date);
   return { exercises, undoSnapshot };
 }
 

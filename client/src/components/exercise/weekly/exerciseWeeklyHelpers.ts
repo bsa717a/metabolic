@@ -4,11 +4,6 @@ import type { DayExercises } from '../../../utils/planExportData';
 
 export type ExerciseCompletionStatus = 'complete' | 'incomplete' | 'none';
 
-export type ExerciseGridRow = {
-  slotIndex: number;
-  label: string;
-};
-
 export function exercisesForDay(days: DayExercises[], date: string): ScheduledExercise[] {
   return days.find((day) => day.date === date)?.exercises ?? [];
 }
@@ -34,25 +29,6 @@ export function exerciseCompletionHighlightClass(status: ExerciseCompletionStatu
     default:
       return 'border-app-border bg-app-surface';
   }
-}
-
-export function buildExerciseGridRows(days: DayExercises[]): ExerciseGridRow[] {
-  let maxSlots = 0;
-  for (const day of days) {
-    maxSlots = Math.max(maxSlots, day.exercises.length);
-  }
-  return Array.from({ length: maxSlots }, (_, slotIndex) => ({
-    slotIndex,
-    label: `Exercise ${slotIndex + 1}`
-  }));
-}
-
-export function findExerciseAtSlot(
-  days: DayExercises[],
-  date: string,
-  slotIndex: number
-): ScheduledExercise | undefined {
-  return exercisesForDay(days, date)[slotIndex];
 }
 
 export function formatPlanShort(item: ScheduledExercise): string {

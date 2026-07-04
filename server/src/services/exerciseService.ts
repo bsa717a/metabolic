@@ -110,6 +110,8 @@ export async function createScheduledExercise(
   });
 
   await recalculateForDate(userId, date);
+  const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
+  await markExercisesManuallyEdited(userId, date);
   return scheduled;
 }
 
@@ -158,6 +160,8 @@ export async function deleteScheduledExercise(userId: string, id: string) {
   const undoSnapshot = await snapshotExercisePlanForDates(userId, [date]);
   await prisma.scheduledExercise.delete({ where: { id } });
   await recalculateForDate(userId, date);
+  const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
+  await markExercisesManuallyEdited(userId, date);
   return { ok: true, undoSnapshot };
 }
 
@@ -310,6 +314,8 @@ export async function markScheduledExercise(userId: string, id: string, status: 
     include: { exercise: true, log: true }
   });
   await recalculateForDate(userId, toDateKey(existing.scheduledDate));
+  const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
+  await markExercisesManuallyEdited(userId, toDateKey(existing.scheduledDate));
   return scheduled;
 }
 
@@ -330,6 +336,8 @@ export async function markDone(userId: string, id: string) {
       where: { userId_date: { userId, date: existing.scheduledDate } }
     });
     if (log) await recalculateDailyLogTotals(log.id, tx);
+    const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
+    await markExercisesManuallyEdited(userId, toDateKey(existing.scheduledDate));
     return scheduled;
   });
 }
@@ -370,6 +378,9 @@ export async function reorderScheduledExercises(userId: string, date: string, or
       })
     )
   ]);
+
+  const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
+  await markExercisesManuallyEdited(userId, date);
 
   return getScheduledExercises(userId, date);
 }

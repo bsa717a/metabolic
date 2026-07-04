@@ -8,7 +8,8 @@ export function Drawer({
   onClose,
   headerActions,
   showClose = true,
-  panelClassName
+  panelClassName,
+  zIndexClass = 'z-50'
 }: {
   open: boolean;
   title: string;
@@ -17,12 +18,13 @@ export function Drawer({
   headerActions?: React.ReactNode;
   showClose?: boolean;
   panelClassName?: string;
+  zIndexClass?: string;
 }) {
   // Render in a portal on document.body so the fixed overlay isn't trapped by an
   // ancestor that establishes a containing block for fixed descendants (e.g. the
   // header's backdrop-filter / transform).
   return createPortal(
-    <div className={clsx('fixed inset-0 z-50 transition', open ? 'pointer-events-auto' : 'pointer-events-none')}>
+    <div className={clsx('fixed inset-0 transition', zIndexClass, open ? 'pointer-events-auto' : 'pointer-events-none')}>
       <div
         className={clsx('absolute inset-0 bg-slate-950/30 transition-opacity', open ? 'opacity-100' : 'opacity-0')}
         onClick={onClose}

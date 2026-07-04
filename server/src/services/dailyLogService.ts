@@ -1,6 +1,6 @@
 import { MealItemType, MealStatus, Prisma, ProgramMode, ProgramStatus, type Program, type ProgramMetric } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { parseDateParam, startOfUtcDay, userDayKey } from '../utils/dates.js';
+import { parseDateParam, startOfUtcDay, toDateKey, userDayKey } from '../utils/dates.js';
 import { applyDefaultTemplateToNewLogOutsideTx } from './nutritionTemplateApply.js';
 import { applyStructureMealsToLog, resyncCardMealsToFrozenPeriod } from './structureMealsApply.js';
 import { applyDefaultTemplateToNewDayOutsideTx } from './exerciseTemplateApply.js';
@@ -108,8 +108,26 @@ async function seedExercisesForDate(
   userId: string,
   targetDate: Date
 ) {
+  const day = startOfUtcDay(targetDate);
+  const dateKey = toDateKey(day);
+
+  const log = await prisma.dailyLog.findUnique({
+    where: { userId_date: { userId, date: day } },
+    select: { exercisesInitializedAt: true }
+  });
+  if (log?.exercisesInitializedAt) return;
+
+  const { getRoutineDaysForProgram, applyRoutineToDateIfNeeded } = await import('./exerciseRoutineService.js');
+  const routineDays = await getRoutineDaysForProgram(program.id);
+  if (routineDays?.length) {
+    await prisma.$transaction(async (tx) => {
+      await applyRoutineToDateIfNeeded(tx, program.id, userId, dateKey, routineDays);
+    });
+    return;
+  }
+
   const existing = await prisma.scheduledExercise.count({
-    where: { userId, programId: program.id, scheduledDate: targetDate }
+    where: { userId, programId: program.id, scheduledDate: day }
   });
   if (existing) return;
 
