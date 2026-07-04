@@ -25,6 +25,7 @@
   --app-chart-line: #7da35d;
   --app-progress-track: #dce3e8;
   --app-topbar-height: 4.5rem;
+  --app-mobile-home-bar-height: 0px;
   --app-sticky-offset: calc(var(--app-topbar-height) + 0.75rem);
 
   color: var(--app-text);

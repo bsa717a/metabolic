@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CopyPlus, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
 import type { PlanPeriodInfo } from '../types';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
@@ -11,8 +10,8 @@ import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
 import { MealBuilder, type MealCardsPayload } from '../components/nutrition/MealBuilder';
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { NutritionTargetsDrawer } from '../components/nutrition/NutritionTargetsDrawer';
-import { PlanPrintMenu } from '../components/export/PlanPrintMenu';
-import { Button } from '../components/ui/Button';
+import { PlanActionsMenu } from '../components/nutrition/PlanActionsMenu';
+import { PlanPeriodBanner } from '../components/nutrition/PlanPeriodBanner';
 import {
   type DayMeals,
   fetchMealsForDates,
@@ -96,10 +95,6 @@ export function NutritionPage() {
       setPlanPeriod(null);
     }
   }, [selectedDate]);
-
-  function formatPlanDate(dateKey: string) {
-    return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
 
   function selectDate(date: string) {
     setSelectedDate(date);
@@ -190,63 +185,22 @@ export function NutritionPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Nutrition</h1>
-          <p className="text-app-text-muted">Plan your week and track what you actually ate.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void handleCopyDay()}
-            disabled={copyingDay || !currentDayMeals.length}
-          >
-            <CopyPlus className="mr-1 inline h-4 w-4" />
-            Copy day
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            aria-label="Shopping list"
-            title="Grocery list"
-            onClick={() => setShoppingListOpen(true)}
-          >
-            <ShoppingCart className="mr-1 inline h-4 w-4" />
-            Grocery list
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            title="Adjust my calorie and macro targets"
-            onClick={() => setTargetsOpen(true)}
-          >
-            <SlidersHorizontal className="mr-1 inline h-4 w-4" />
-            Adjust targets
-          </Button>
-          <PlanPrintMenu printing={printing} onPrintDay={handlePrintDay} onPrintWeek={handlePrintWeek} />
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold">Nutrition</h1>
+        <PlanActionsMenu
+          onCopyDay={() => void handleCopyDay()}
+          copyDayDisabled={!currentDayMeals.length}
+          copyingDay={copyingDay}
+          onGroceryList={() => setShoppingListOpen(true)}
+          onAdjustTargets={() => setTargetsOpen(true)}
+          printing={printing}
+          onPrintDay={handlePrintDay}
+          onPrintWeek={handlePrintWeek}
+        />
       </div>
 
       {(planPeriod?.weekNumber != null || planPeriod?.calorieTarget != null) && (
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-2xl border border-brand-green/30 bg-brand-green/5 px-4 py-3">
-          <span className="text-base font-bold text-app-text">
-            {planPeriod.weekNumber != null ? `Week ${planPeriod.weekNumber} plan` : 'Your plan'}
-          </span>
-          {planPeriod.calorieTarget != null && (
-            <span className="text-sm text-app-text-muted">{planPeriod.calorieTarget.toLocaleString()} kcal/day</span>
-          )}
-          {planPeriod.weekNumber != null && planPeriod.effectiveDate ? (
-            <span className="text-sm text-app-text-muted">
-              {formatPlanDate(planPeriod.effectiveDate)} – {planPeriod.endDate ? formatPlanDate(planPeriod.endDate) : 'ongoing'}
-            </span>
-          ) : (
-            <span className="text-sm text-app-text-muted">Week 1 starts at your first check-in</span>
-          )}
-          <span className="basis-full text-xs text-app-text-muted sm:basis-auto">
-            A new week starts when you complete your weekly check-in — skip it and this plan continues.
-          </span>
-        </div>
+        <PlanPeriodBanner planPeriod={planPeriod} />
       )}
 
       <WeekDateStrip selectedDate={selectedDate} onSelectDate={selectDate} days={weekDays} />
