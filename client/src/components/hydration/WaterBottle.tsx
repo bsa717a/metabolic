@@ -2,13 +2,14 @@ import { useId } from 'react';
 
 type WaterBottleProps = {
   fillFraction: number;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   goalMet?: boolean;
   targetOz?: number;
   className?: string;
 };
 
 const SIZE_MAP = {
+  xs: { width: 14, height: 26 },
   sm: { width: 30, height: 54 },
   md: { width: 56, height: 88 },
   lg: { width: 96, height: 152 }
@@ -51,8 +52,8 @@ export function WaterBottle({
   const waterHeight = innerBottom - waterY;
 
   const strokeWidth = Math.max(1.25, width * 0.04);
-  const showTicks = size !== 'sm';
-  const showLogo = size !== 'sm';
+  const showTicks = size !== 'sm' && size !== 'xs';
+  const showLogo = size !== 'sm' && size !== 'xs';
   const showLogoLabel = size === 'lg';
   const logoSize = size === 'md' ? width * 0.38 : width * 0.42;
   const logoX = width * 0.5 - logoSize / 2;

@@ -12,9 +12,13 @@ import type { GamificationDashboard } from '../../types/gamification';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamification';
 
-const TOPBAR_RING_SIZE = 44;
-const TOPBAR_BADGE_SIZE = 80;
+const TOPBAR_RING_SIZE = 28;
+const TOPBAR_BADGE_SIZE = 28;
 const MOBILE_RING_SIZE = 26;
+
+function CapsuleDivider() {
+  return <span className="mx-0.5 h-5 w-px shrink-0 bg-app-border" aria-hidden />;
+}
 
 function useIsMobileViewport() {
   const [isMobile, setIsMobile] = useState(() =>
@@ -161,19 +165,22 @@ export function TopbarGamification() {
   }
 
   return (
-    <div className="flex items-center justify-center gap-2 sm:gap-4 min-w-0 w-full max-w-2xl">
+    <div className="flex items-center justify-center min-w-0 w-full">
       <div
-        className="relative shrink-0 self-stretch flex items-center gap-1 sm:gap-1.5"
-        data-tour="topbar-hydration"
+        className={clsx(
+          'flex items-center rounded-full border border-app-border bg-app-muted p-1',
+          pulseStreaks && 'animate-pulse'
+        )}
       >
         <button
           ref={hydrationButtonRef}
           type="button"
+          data-tour="topbar-hydration"
           onClick={() => {
             setLevelUpOpen(false);
             setHydrationOpen((open) => !open);
           }}
-          className="flex h-full min-h-[52px] items-center rounded-xl px-2.5 py-1.5 transition hover:bg-app-muted/80"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 transition hover:bg-app-border/50"
           title={
             hydration.goalMet
               ? 'Daily hydration goal reached'
@@ -186,98 +193,98 @@ export function TopbarGamification() {
             fillFraction={hydration.fillFraction}
             goalMet={hydration.goalMet}
             targetOz={hydration.targetOz}
-            size="sm"
+            size="xs"
           />
+          {showWaterStreak && (
+            <>
+              <Droplets className="size-[18px] shrink-0 text-sky-500" />
+              <span className="text-[13px] font-semibold tabular-nums text-app-text">
+                {hydration.currentStreak}d
+              </span>
+            </>
+          )}
         </button>
-        {showWaterStreak && (
-          <div
-            className={clsx(
-              'flex shrink-0 items-center gap-1.5 text-app-text-muted',
-              pulseStreaks && 'animate-pulse'
-            )}
-            title="Hydration goal streak"
-          >
-            <Droplets className="size-6 shrink-0 text-sky-500 sm:size-8" />
-            <span className="text-base font-bold tabular-nums sm:text-lg">{hydration.currentStreak}d</span>
-          </div>
+
+        {showFoodStreak && (
+          <>
+            <CapsuleDivider />
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5"
+              data-tour="topbar-streaks"
+              title="Food logging streak"
+            >
+              <Flame className="size-[18px] shrink-0 text-brand-gold" />
+              <span className="text-[13px] font-semibold tabular-nums text-app-text">
+                {momentum.foodLoggingStreak}d
+              </span>
+            </div>
+          </>
         )}
-        <HydrationTopbarDrawer
-          open={hydrationOpen}
-          onClose={() => setHydrationOpen(false)}
-          anchorRef={hydrationButtonRef}
-        />
+
+        {currentLevel && (
+          <>
+            <CapsuleDivider />
+            <button
+              ref={levelUpButtonRef}
+              type="button"
+              data-tour="topbar-level"
+              onClick={() => {
+                setHydrationOpen(false);
+                setLevelUpOpen((open) => !open);
+              }}
+              className="flex items-center gap-1.5 rounded-full px-2 py-1 transition hover:bg-app-border/50"
+              title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
+              aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
+              aria-expanded={levelUpOpen}
+            >
+              <ProgressRing
+                percent={currentLevel.progressPercent}
+                size={TOPBAR_RING_SIZE}
+                label={`L${currentLevel.number}`}
+                labelClassName="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-brand-green"
+              />
+              <span className="text-[13px] tabular-nums text-app-text-muted">
+                {tasksDone}/{tasksTotal}
+              </span>
+            </button>
+          </>
+        )}
+
+        <CapsuleDivider />
+        <Link
+          to="/level-up/badges"
+          data-tour="topbar-badge"
+          className="flex items-center rounded-full px-2 py-1 transition hover:bg-app-border/50 hover:opacity-90"
+          title={topBadge?.name ?? 'View badges'}
+          aria-label="View badges"
+        >
+          {topBadgeArt && topBadge ? (
+            <img
+              src={topBadgeArt}
+              alt=""
+              className="size-7 object-contain"
+              width={TOPBAR_BADGE_SIZE}
+              height={TOPBAR_BADGE_SIZE}
+            />
+          ) : (
+            <Award className="size-7 text-app-text-muted" />
+          )}
+        </Link>
       </div>
 
-      {showFoodStreak && (
-        <div
-          data-tour="topbar-streaks"
-          className={clsx(
-            'flex shrink-0 items-center gap-1.5 self-center text-app-text-muted',
-            demoMode ? 'flex' : 'hidden sm:flex',
-            pulseStreaks && 'animate-pulse'
-          )}
-        >
-          <div className="flex items-center gap-1.5" title="Food logging streak">
-            <Flame className="size-6 shrink-0 text-brand-gold sm:size-8" />
-            <span className="text-base font-bold tabular-nums sm:text-lg">{momentum.foodLoggingStreak}d</span>
-          </div>
-        </div>
-      )}
-
+      <HydrationTopbarDrawer
+        open={hydrationOpen}
+        onClose={() => setHydrationOpen(false)}
+        anchorRef={hydrationButtonRef}
+      />
       {currentLevel && (
-        <div className="relative shrink-0 self-stretch flex items-center" data-tour="topbar-level">
-          <button
-            ref={levelUpButtonRef}
-            type="button"
-            onClick={() => {
-              setHydrationOpen(false);
-              setLevelUpOpen((open) => !open);
-            }}
-            className="flex h-full min-h-[52px] items-center gap-2 rounded-xl px-1 py-2 sm:gap-3 sm:px-4 sm:py-2.5 transition hover:bg-app-muted/80"
-            title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
-            aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
-            aria-expanded={levelUpOpen}
-          >
-            <div className="shrink-0">
-              <ProgressRing percent={currentLevel.progressPercent} size={TOPBAR_RING_SIZE} />
-            </div>
-            <div className="shrink-0 text-left leading-tight">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-green">
-                Level {currentLevel.number}
-              </p>
-              <p className="mt-1 text-xs text-app-text-muted tabular-nums">
-                {tasksDone}/{tasksTotal} tasks
-              </p>
-            </div>
-          </button>
-          <LevelUpTopbarDrawer
-            open={levelUpOpen}
-            onClose={() => setLevelUpOpen(false)}
-            anchorRef={levelUpButtonRef}
-            level={currentLevel}
-          />
-        </div>
+        <LevelUpTopbarDrawer
+          open={levelUpOpen}
+          onClose={() => setLevelUpOpen(false)}
+          anchorRef={levelUpButtonRef}
+          level={currentLevel}
+        />
       )}
-
-      <Link
-        to="/level-up/badges"
-        data-tour="topbar-badge"
-        className="shrink-0 transition hover:opacity-90"
-        title={topBadge?.name ?? 'View badges'}
-        aria-label="View badges"
-      >
-        {topBadgeArt && topBadge ? (
-          <img
-            src={topBadgeArt}
-            alt=""
-            className="size-20 object-contain"
-            width={TOPBAR_BADGE_SIZE}
-            height={TOPBAR_BADGE_SIZE}
-          />
-        ) : (
-          <Award className="size-20 text-app-text-muted" />
-        )}
-      </Link>
     </div>
   );
 }

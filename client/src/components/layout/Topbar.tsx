@@ -129,7 +129,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
       <header
         ref={headerRef}
         className={clsx(
-          'sticky top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b px-4 py-2 backdrop-blur transition-colors duration-200 sm:py-3',
+          'sticky top-0 z-20 border-b py-2 backdrop-blur transition-colors duration-200 sm:py-3',
           isDashboard
             ? 'border-app-border bg-app-surface/90'
             : 'cursor-pointer border-brand-green/25 bg-app-muted/95 hover:bg-brand-green/10 dark:hover:bg-brand-green/15'
@@ -137,6 +137,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
         onClick={isDashboard ? undefined : () => navigate('/')}
         aria-label={isDashboard ? undefined : 'Return to dashboard'}
       >
+        <div className="mx-auto grid w-full max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-5 sm:gap-9 justify-self-start">
           {/* Mobile: M logo as nav trigger */}
           <button
@@ -286,6 +287,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
               </button>
             </>
           )}
+        </div>
         </div>
 
         {/* Mobile nav dropdown */}
