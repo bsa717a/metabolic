@@ -1,10 +1,12 @@
 import { MealItemType, ProgramStatus, Role, Visibility, type Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { isAdmin } from '../auth/requireRole.js';
-import { parseDateParam } from '../utils/dates.js';
+import { parseDateParam, userDayKey } from '../utils/dates.js';
+import { resolvePlanForDate } from './planResolution.js';
 import { n } from '../utils/numbers.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { applyTemplateMealsToLog } from './nutritionTemplateApply.js';
+import { resolveTargets } from './targetService.js';
 import {
   assertTemplateMatchesUser,
   buildTemplateMatchWhere,
@@ -169,6 +171,29 @@ function buildProfileMatchListWhere(userId: string) {
   });
 }
 
+/** Templates already on the client's active program — always show these to coaches even if weight/profile drifted out of band. */
+async function getClientAssignedNutritionTemplateIds(userId: string) {
+  const program = await prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    select: {
+      id: true,
+      defaultNutritionTemplateId: true,
+      defaultExerciseTemplateId: true,
+      user: { select: { timezone: true } }
+    }
+  });
+  if (!program) return [];
+
+  const ids = new Set<string>();
+  if (program.defaultNutritionTemplateId) ids.add(program.defaultNutritionTemplateId);
+
+  const todayKey = userDayKey(program.user.timezone);
+  const resolved = await resolvePlanForDate(program, parseDateParam(todayKey));
+  if (resolved.nutritionTemplateId) ids.add(resolved.nutritionTemplateId);
+
+  return [...ids];
+}
+
 export async function listTemplatesForUser(userId: string) {
   const matchWhere = await buildProfileMatchListWhere(userId);
   if (!matchWhere) return [];
@@ -204,14 +229,23 @@ export async function listTemplatesForActor(actor: { id: string; role: Role }, c
   if (isAdmin(actor)) return listTemplatesForAdmin();
 
   if (clientId) {
-    const matchWhere = await buildProfileMatchListWhere(clientId);
-    if (!matchWhere) return [];
+    const [matchWhere, assignedIds] = await Promise.all([
+      buildProfileMatchListWhere(clientId),
+      getClientAssignedNutritionTemplateIds(clientId)
+    ]);
+
+    const visibilityWhere = { OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }] };
+    const matchFilters: Prisma.NutritionPlanTemplateWhereInput[] = [];
+    if (matchWhere) {
+      matchFilters.push({ AND: [visibilityWhere, matchWhere] });
+    }
+    if (assignedIds.length) {
+      matchFilters.push({ id: { in: assignedIds } });
+    }
+    if (!matchFilters.length) return [];
 
     const templates = await prisma.nutritionPlanTemplate.findMany({
-      where: {
-        OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }],
-        ...matchWhere
-      },
+      where: { OR: matchFilters },
       include: templateListInclude,
       orderBy: { updatedAt: 'desc' }
     });
@@ -483,8 +517,15 @@ export async function applyTemplateToDailyLog(
     await assertTemplateMatchesUser(templateId, userId);
   }
 
+  // Scale the template to the client's resolved/override target so meal amounts and the
+  // day's targets reflect the formula (or a coach override), not the template's static band.
+  const resolved = await resolveTargets(userId);
+  const scaleTo = resolved
+    ? { calories: resolved.calories, protein: resolved.protein, carbs: resolved.carbs, fat: resolved.fat }
+    : null;
+
   await prisma.$transaction(async (tx) => {
-    await applyTemplateMealsToLog(tx, templateId, log.id, userId);
+    await applyTemplateMealsToLog(tx, templateId, log.id, userId, scaleTo);
 
     if (options?.setAsDefault) {
       const program = await tx.program.findFirst({
@@ -499,15 +540,26 @@ export async function applyTemplateToDailyLog(
       // resolvePlanForDate reads the latest PlanPeriod on/before a date (falling back to the program
       // default), so this drives future days and builds per-week plan history. One PlanPeriod per
       // (program, date): a same-day exercise apply updates this row rather than creating a second.
+      // Freeze the resolved targets onto the period so display/meal generation stay in sync.
+      const frozen = resolved
+        ? {
+            calorieTarget: resolved.calories,
+            proteinTarget: resolved.protein,
+            carbTarget: resolved.carbs,
+            fatTarget: resolved.fat,
+            targetSource: resolved.source
+          }
+        : {};
       await tx.planPeriod.upsert({
         where: { programId_effectiveDate: { programId: program.id, effectiveDate: log.date } },
         create: {
           programId: program.id,
           effectiveDate: log.date,
           nutritionTemplateId: templateId,
-          createdById: options?.actorId ?? null
+          createdById: options?.actorId ?? null,
+          ...frozen
         },
-        update: { nutritionTemplateId: templateId }
+        update: { nutritionTemplateId: templateId, ...frozen }
       });
     }
 

@@ -10,6 +10,7 @@ import { getGroceryShoppingList } from '../services/shoppingListService.js';
 import { getMealCardsForDate, MealCardError, saveMealSelections } from '../services/mealCardService.js';
 import { getPlanPeriodInfo } from '../services/planAdvancement.js';
 import { adoptProposedPlan, getPlanProposal, getPlanStatus, PlanAdoptError } from '../services/planStatusService.js';
+import { getUserNutritionTargets, setUserNutritionTargets } from '../services/nutritionTargetService.js';
 import { recommendMeals, saveMealRecommendation } from '../services/mealRecommendationService.js';
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
@@ -120,6 +121,28 @@ export async function nutritionRoutes(app: FastifyInstance) {
     return status;
   });
   app.get('/api/plan-proposal', { preHandler: requireAuth }, async (request) => getPlanProposal(request.appUser!.id));
+  app.get('/api/nutrition-targets', { preHandler: requireAuth }, async (request) =>
+    getUserNutritionTargets(request.appUser!.id)
+  );
+  app.put('/api/nutrition-targets', { preHandler: requireAuth }, async (request, reply) => {
+    const macro = z.number().int().positive().max(20000).nullable();
+    const parsed = z
+      .object({
+        calories: macro,
+        protein: macro,
+        carbs: macro,
+        fat: macro,
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid targets' });
+    try {
+      const { date, ...targets } = parsed.data;
+      return await setUserNutritionTargets(request.appUser!.id, targets, { rescaleDate: date });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save targets' });
+    }
+  });
   app.post('/api/plan-adopt', { preHandler: requireAuth }, async (request, reply) => {
     try {
       return await adoptProposedPlan(request.appUser!.id);

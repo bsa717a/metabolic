@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import type { Meal, NutritionPlanTemplateSummary } from '../../types';
+import type { CoachClientPlanStatus, Meal, NutritionPlanTemplateSummary } from '../../types';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
+import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
 
 function mealCalories(meal: Meal) {
@@ -12,18 +13,22 @@ export function FoodPlanEditor({
   clientId,
   planDate,
   nutritionTemplates,
+  planStatus,
   saving,
   onSavingChange,
   onError,
-  onRefresh
+  onRefresh,
+  onRefreshPlanStatus
 }: {
   clientId: string;
   planDate: string;
   nutritionTemplates: NutritionPlanTemplateSummary[];
+  planStatus: CoachClientPlanStatus | null;
   saving: boolean;
   onSavingChange: (saving: boolean) => void;
   onError: (message: string) => void;
   onRefresh: () => Promise<void>;
+  onRefreshPlanStatus: () => Promise<void>;
 }) {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,8 +83,31 @@ export function FoodPlanEditor({
     }
   }
 
+  const handleOverrideSaved = useCallback(async () => {
+    await Promise.all([loadMeals(), onRefreshPlanStatus(), onRefresh()]);
+  }, [loadMeals, onRefresh, onRefreshPlanStatus]);
+
   return (
     <div className="space-y-4">
+      {planStatus ? (
+        <MacroOverridePanel
+          key={`${planStatus.overrideTargets.calories}|${planStatus.overrideTargets.protein}|${planStatus.overrideTargets.carbs}|${planStatus.overrideTargets.fat}`}
+          source={planStatus.targetSource}
+          resolvedTargets={planStatus.resolvedTargets}
+          overrideTargets={planStatus.overrideTargets}
+          saving={saving}
+          onSavingChange={onSavingChange}
+          onError={onError}
+          onSubmit={async (payload) => {
+            await api<CoachClientPlanStatus>(`/api/coach/users/${clientId}/nutrition-targets`, {
+              method: 'PUT',
+              body: JSON.stringify({ ...payload, date: planDate })
+            });
+            await handleOverrideSaved();
+          }}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-[12rem] flex-1 text-sm">
           <span className="mb-1 block font-medium">Nutrition plan</span>
@@ -105,7 +133,8 @@ export function FoodPlanEditor({
 
       {!nutritionTemplates.length && (
         <p className="text-sm text-app-text-muted">
-          No plans match this client&apos;s profile. Update their profile or add a matching plan in admin.
+          No plans match this client&apos;s current profile for a new assignment. If they already have a plan, it
+          should appear above once synced. Otherwise update their profile or add a matching plan in admin.
         </p>
       )}
 

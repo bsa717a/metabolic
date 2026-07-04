@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CopyPlus, ShoppingCart } from 'lucide-react';
+import { CopyPlus, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
 import type { PlanPeriodInfo } from '../types';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
@@ -10,6 +10,7 @@ import { EditMealPlanDrawer } from '../components/nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
 import { MealBuilder, type MealCardsPayload } from '../components/nutrition/MealBuilder';
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
+import { NutritionTargetsDrawer } from '../components/nutrition/NutritionTargetsDrawer';
 import { PlanPrintMenu } from '../components/export/PlanPrintMenu';
 import { Button } from '../components/ui/Button';
 import {
@@ -34,6 +35,7 @@ export function NutritionPage() {
   const [logActualMealId, setLogActualMealId] = useState<string>();
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
+  const [targetsOpen, setTargetsOpen] = useState(false);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [copyingDay, setCopyingDay] = useState(false);
@@ -85,6 +87,14 @@ export function NutritionPage() {
       .then((info) => { if (!cancelled) setPlanPeriod(info); })
       .catch(() => { if (!cancelled) setPlanPeriod(null); });
     return () => { cancelled = true; };
+  }, [selectedDate]);
+
+  const reloadPlanPeriod = useCallback(async () => {
+    try {
+      setPlanPeriod(await api<PlanPeriodInfo>(`/api/daily-logs/${selectedDate}/plan-period`));
+    } catch {
+      setPlanPeriod(null);
+    }
   }, [selectedDate]);
 
   function formatPlanDate(dateKey: string) {
@@ -205,6 +215,15 @@ export function NutritionPage() {
             <ShoppingCart className="mr-1 inline h-4 w-4" />
             Grocery list
           </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            title="Adjust my calorie and macro targets"
+            onClick={() => setTargetsOpen(true)}
+          >
+            <SlidersHorizontal className="mr-1 inline h-4 w-4" />
+            Adjust targets
+          </Button>
           <PlanPrintMenu printing={printing} onPrintDay={handlePrintDay} onPrintWeek={handlePrintWeek} />
         </div>
       </div>
@@ -292,6 +311,15 @@ export function NutritionPage() {
       />
 
       <ShoppingListDrawer open={shoppingListOpen} anchorDate={selectedDate} onClose={() => setShoppingListOpen(false)} />
+
+      <NutritionTargetsDrawer
+        open={targetsOpen}
+        planDate={selectedDate}
+        onClose={() => setTargetsOpen(false)}
+        onSaved={async () => {
+          await Promise.all([reloadWeek(), reloadPlanPeriod()]);
+        }}
+      />
 
       <MealBuilder
         open={builderMealNumber != null}

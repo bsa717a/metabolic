@@ -1,8 +1,8 @@
-import { MealStatus, ProgramStatus } from '@prisma/client';
+import { MealItemType, MealStatus, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { n } from '../utils/numbers.js';
 import { getMealStructure, slotTargets } from './targetService.js';
-import { recalculateDailyLogTotals } from './totalsService.js';
+import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsService.js';
 import {
   cardSetInclude,
   defaultPicksForSet,
@@ -115,6 +115,49 @@ export async function resyncCardMealsToFrozenPeriod(userId: string, dailyLogId: 
         sel.picks,
         scaledLinesForPicks(set, slot.calorieTarget, sel.picks)
       );
+    }
+    await recalculateDailyLogTotals(dailyLogId, tx);
+  });
+  return true;
+}
+
+/**
+ * Scale a day's PLANNED meal items in place to hit a calorie target, preserving the
+ * existing per-item distribution. ACTUAL (logged) items are never touched, so this is
+ * safe to run on a day the user has already logged food to. Intended for fixed-item
+ * template days where card re-scaling (resyncCardMealsToFrozenPeriod) doesn't apply.
+ * Returns false when there are no scalable planned calories to work from.
+ */
+export async function rescalePlannedMealsToCalories(dailyLogId: string, targetCalories: number): Promise<boolean> {
+  if (targetCalories <= 0) return false;
+
+  const meals = await prisma.meal.findMany({
+    where: { dailyLogId },
+    include: { items: true }
+  });
+
+  const plannedItems = meals.flatMap((meal) => meal.items.filter((item) => item.type === MealItemType.PLANNED));
+  const currentCalories = plannedItems.reduce((sum, item) => sum + n(item.calories), 0);
+  if (currentCalories <= 0) return false;
+
+  const factor = targetCalories / currentCalories;
+  if (!Number.isFinite(factor) || factor <= 0) return false;
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of plannedItems) {
+      await tx.mealItem.update({
+        where: { id: item.id },
+        data: {
+          quantity: n(item.quantity) * factor,
+          calories: n(item.calories) * factor,
+          protein: n(item.protein) * factor,
+          carbs: n(item.carbs) * factor,
+          fat: n(item.fat) * factor
+        }
+      });
+    }
+    for (const meal of meals) {
+      await recalculateMealTotals(meal.id, tx);
     }
     await recalculateDailyLogTotals(dailyLogId, tx);
   });
