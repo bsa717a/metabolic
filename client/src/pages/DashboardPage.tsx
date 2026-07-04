@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Target, Users } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
@@ -11,6 +10,7 @@ import { TodayNutrition } from '../components/dashboard/TodayNutrition';
 import { TodayExercise } from '../components/dashboard/TodayExercise';
 import { MiniBlueprint } from '../components/dashboard/MiniBlueprint';
 import { WeightTrendChart } from '../components/dashboard/WeightTrendChart';
+import { UpcomingCheckInsCard } from '../components/dashboard/UpcomingCheckInsCard';
 import { isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
 import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
@@ -78,29 +78,6 @@ function RemainingMacrosDisplay({
   );
 }
 
-
-function QuickLink({
-  to,
-  icon: Icon,
-  label,
-  tourId
-}: {
-  to: string;
-  icon: typeof Target;
-  label: string;
-  tourId?: string;
-}) {
-  return (
-    <Link
-      to={to}
-      data-tour={tourId}
-      className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-app-surface border border-app-border p-4 transition-all hover:-translate-y-1 hover:shadow-md hover:border-brand-green/50 text-app-text"
-    >
-      <Icon size={28} className="text-brand-green dark:text-brand-green-light mb-1" />
-      <span className="text-sm font-semibold">{label}</span>
-    </Link>
-  );
-}
 
 export function DashboardPage({ user }: { user?: AppUser | null }) {
   const { startTour, hasAutoStarted, isActive } = useTutorial();
@@ -219,13 +196,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
 
       {isCoachRole(user?.role) && (
         <section className="hidden sm:block">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-app-text-muted mb-3">Navigation</h2>
-          <div
-            data-tour="nav-tiles"
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4"
-          >
-            <QuickLink to="/coach" icon={Users} label="Coach" />
-          </div>
+          <UpcomingCheckInsCard />
         </section>
       )}
 

@@ -50,12 +50,44 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [sendingSms, setSendingSms] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState('');
-  const [workspaceView, setWorkspaceView] = useState<'list' | 'calendar'>('list');
+  const [workspaceView, setWorkspaceView] = useState<'list' | 'calendar'>(() =>
+    searchParams.get('view') === 'calendar' ? 'calendar' : 'list'
+  );
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+
+  const clearDeepLinkParams = useCallback(() => {
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        next.delete('view');
+        next.delete('date');
+        next.delete('checkIn');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (searchParams.get('view') === 'calendar') {
+      setWorkspaceView('calendar');
+    }
+  }, [searchParams]);
+
+  const deepLinkDate = searchParams.get('date');
+  const deepLinkCheckInId = searchParams.get('checkIn');
+  const deepLinkClientId = searchParams.get('client');
+
+  useEffect(() => {
+    if (!deepLinkCheckInId || !deepLinkClientId) return;
+    if (!clients.some((client) => client.id === deepLinkClientId)) return;
+    setSelectedGroupId('');
+    setSelectedClientId(deepLinkClientId);
+  }, [clients, deepLinkCheckInId, deepLinkClientId]);
 
   const selectedGroup = useMemo(
     () => clientGroups.find((group) => group.id === selectedGroupId) ?? null,
@@ -69,9 +101,9 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   }, [clients, selectedGroup]);
 
   const selectedClient = useMemo(() => {
-    if (!selectedClientId) return visibleClients[0] ?? null;
-    return visibleClients.find((client) => client.id === selectedClientId) ?? null;
-  }, [visibleClients, selectedClientId]);
+    if (!selectedClientId) return visibleClients[0] ?? clients[0] ?? null;
+    return clients.find((client) => client.id === selectedClientId) ?? null;
+  }, [clients, visibleClients, selectedClientId]);
 
   const handleSelectClient = useCallback(
     (userId: string) => {
@@ -195,7 +227,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
     if (loading || !clients.length) return;
 
     const fromUrl = searchParams.get('client');
-    if (fromUrl && visibleClients.some((client) => client.id === fromUrl)) {
+    if (fromUrl && clients.some((client) => client.id === fromUrl)) {
       setSelectedClientId(fromUrl);
       return;
     }
@@ -462,11 +494,14 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 clients={visibleClients}
                 scheduleClients={clients}
                 clientGroups={clientGroups}
-                groupId={selectedGroupId}
+                groupId={deepLinkCheckInId ? '' : selectedGroupId}
                 onGroupChange={setSelectedGroupId}
                 onManageGroups={() => setGroupsOpen(true)}
                 onSelectClient={handleCalendarSelectClient}
                 onCheckInsChanged={loadClients}
+                deepLinkDate={deepLinkDate}
+                deepLinkCheckInId={deepLinkCheckInId}
+                onDeepLinkConsumed={clearDeepLinkParams}
               />
             ) : selectedClient ? (
               <ClientDetailTabs

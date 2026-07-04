@@ -102,15 +102,22 @@ export async function listCoachClients(coachId: string) {
           startsAt: { gte: new Date(nowMs - maxCheckInDurationMs) }
         },
         orderBy: { startsAt: 'asc' },
-        select: { userId: true, startsAt: true, durationMinutes: true }
+        select: { id: true, userId: true, startsAt: true, durationMinutes: true }
       })
     : [];
-  const nextCheckInByUserId = new Map<string, string>();
+  const nextCheckInByUserId = new Map<
+    string,
+    { id: string; startsAt: string; durationMinutes: number }
+  >();
   for (const checkIn of relevantCheckIns) {
     const endsAtMs = checkIn.startsAt.getTime() + checkIn.durationMinutes * 60_000;
     if (endsAtMs <= nowMs) continue;
     if (!nextCheckInByUserId.has(checkIn.userId)) {
-      nextCheckInByUserId.set(checkIn.userId, checkIn.startsAt.toISOString());
+      nextCheckInByUserId.set(checkIn.userId, {
+        id: checkIn.id,
+        startsAt: checkIn.startsAt.toISOString(),
+        durationMinutes: checkIn.durationMinutes
+      });
     }
   }
 
@@ -127,7 +134,8 @@ export async function listCoachClients(coachId: string) {
       latestDailyLog?.date.toISOString().slice(0, 10) ??
       latestProgressSnapshot?.snapshotDate.toISOString().slice(0, 10) ??
       null;
-    const nextSessionAt = nextCheckInByUserId.get(user.id) ?? null;
+    const nextCheckIn = nextCheckInByUserId.get(user.id) ?? null;
+    const nextSessionAt = nextCheckIn?.startsAt ?? null;
     const needsAttention = computeNeedsAttention(compliancePct, lastActivityAt, nowMs);
 
     return {
@@ -165,6 +173,7 @@ export async function listCoachClients(coachId: string) {
           }
         : null,
       nextCheckInAt: nextSessionAt,
+      nextCheckInId: nextCheckIn?.id ?? null,
       nextSessionAt,
       compliancePct,
       lastActivityAt,

@@ -88,9 +88,11 @@ export function serializeTemplate(template: {
 
 export async function listTemplatesForUser(userId: string) {
   const templates = await prisma.exerciseTemplate.findMany({
-    where: { OR: [{ visibility: Visibility.GLOBAL }, { createdById: userId }] },
+    where: {
+      OR: [{ visibility: Visibility.GLOBAL }, { visibility: Visibility.USER, createdById: userId }]
+    },
     include: { items: true },
-    orderBy: { name: 'asc' }
+    orderBy: { updatedAt: 'desc' }
   });
   return templates.map(serializeTemplateSummary);
 }
@@ -103,8 +105,9 @@ export async function listTemplatesForAdmin() {
   return templates.map(serializeTemplateSummary);
 }
 
-export async function listTemplatesForActor(actor: { id: string; role: Role }) {
+export async function listTemplatesForActor(actor: { id: string; role: Role }, clientId?: string) {
   if (isAdmin(actor)) return listTemplatesForAdmin();
+  if (clientId) return listTemplatesForUser(clientId);
   const templates = await prisma.exerciseTemplate.findMany({
     where: { OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }] },
     include: { items: true },
@@ -416,4 +419,63 @@ export async function reorderTemplateItems(templateId: string, orderedIds: strin
   );
 
   return getTemplate(templateId);
+}
+
+async function ensureClientOwnedUserTemplate(templateId: string, clientId: string) {
+  const template = await prisma.exerciseTemplate.findUnique({ where: { id: templateId } });
+  if (!template || template.visibility !== Visibility.USER || template.createdById !== clientId) {
+    throw new Error('Plan not found');
+  }
+  return template;
+}
+
+export async function getClientTemplate(clientId: string, templateId: string) {
+  await ensureClientOwnedUserTemplate(templateId, clientId);
+  return getTemplate(templateId);
+}
+
+export async function updateClientTemplate(
+  clientId: string,
+  templateId: string,
+  data: { name?: string; description?: string | null }
+) {
+  await ensureClientOwnedUserTemplate(templateId, clientId);
+  await prisma.exerciseTemplate.update({
+    where: { id: templateId },
+    data: {
+      name: data.name,
+      description: data.description
+    }
+  });
+  return getTemplate(templateId);
+}
+
+export async function deleteClientTemplate(clientId: string, templateId: string) {
+  await ensureClientOwnedUserTemplate(templateId, clientId);
+  const inUse = await prisma.program.count({ where: { defaultExerciseTemplateId: templateId } });
+  if (inUse > 0) {
+    throw new Error('Cannot delete a plan that is set as a program default');
+  }
+  await prisma.exerciseRoutineDay.updateMany({
+    where: { templateId },
+    data: { templateId: null }
+  });
+  await prisma.exerciseTemplate.delete({ where: { id: templateId } });
+}
+
+export async function addClientTemplateItem(clientId: string, templateId: string, data: Record<string, unknown>) {
+  await ensureClientOwnedUserTemplate(templateId, clientId);
+  return addTemplateItem(templateId, data);
+}
+
+export async function updateClientTemplateItem(clientId: string, itemId: string, data: Record<string, unknown>) {
+  const existing = await prisma.exerciseTemplateItem.findUniqueOrThrow({ where: { id: itemId } });
+  await ensureClientOwnedUserTemplate(existing.templateId, clientId);
+  return updateTemplateItem(itemId, data);
+}
+
+export async function deleteClientTemplateItem(clientId: string, itemId: string) {
+  const item = await prisma.exerciseTemplateItem.findUniqueOrThrow({ where: { id: itemId } });
+  await ensureClientOwnedUserTemplate(item.templateId, clientId);
+  return deleteTemplateItem(itemId);
 }

@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { LayoutTemplate, X } from 'lucide-react';
+import { CalendarDays, LayoutTemplate, X } from 'lucide-react';
 import { api, getWeekDates, isToday, startOfWeek } from '../../services/api';
-import type { ExercisePlanTemplateSummary, ScheduledExercise } from '../../types';
+import type { ExercisePlanTemplateSummary, ExerciseRoutine, ScheduledExercise } from '../../types';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
 import { ExerciseChecklist } from '../exercise/ExerciseChecklist';
 import { CopyWeekPlanMenu } from '../plan/CopyWeekPlanMenu';
 import { AddExerciseDrawer } from '../exercise/AddExerciseDrawer';
 import { EditExerciseDrawer } from '../exercise/EditExerciseDrawer';
+import { RoutineEditor } from '../exercise/RoutineEditor';
 import { WeeklyExercisePlanner } from '../exercise/weekly/WeeklyExercisePlanner';
 import { Button } from '../ui/Button';
 import { coachDailyExercisesApi, coachRestoreExercisePlanApi } from '../../utils/coachExerciseApi';
@@ -17,11 +18,41 @@ import {
   fetchCoachExercisesForDates
 } from '../../utils/planExportData';
 import type { PublishPlanPayload } from '../../utils/weekdayPattern';
+import { weekdayIndex } from '../../utils/weekdayPattern';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../exercise/ExercisePlanUndoToast';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
 
 type View = 'week' | 'day';
+
+function routineRestDatesForWeek(routine: ExerciseRoutine | null, weekDates: string[]) {
+  if (!routine?.days.length) return new Set<string>();
+  const byWeekday = new Map(routine.days.map((day) => [day.weekday, day.templateId]));
+  const restDates = new Set<string>();
+  for (const date of weekDates) {
+    if (byWeekday.get(weekdayIndex(date)) === null) restDates.add(date);
+  }
+  return restDates;
+}
+
+function routineSummaryLabel(routine: ExerciseRoutine | null) {
+  if (!routine?.days.length) return null;
+  const parts: string[] = [];
+  const counts = new Map<string, number>();
+  for (const day of routine.days) {
+    const key = day.templateId ?? 'rest';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of counts) {
+    if (key === 'rest') {
+      parts.push(`${count} rest`);
+    } else {
+      const name = routine.days.find((day) => day.templateId === key)?.template?.name ?? 'Workout';
+      parts.push(`${count}× ${name}`);
+    }
+  }
+  return parts.join(' · ');
+}
 
 export function CoachDayExerciseEditor({
   open,
@@ -51,9 +82,12 @@ export function CoachDayExerciseEditor({
   const [templateId, setTemplateId] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
+  const [routineEditorOpen, setRoutineEditorOpen] = useState(false);
+  const [routine, setRoutine] = useState<ExerciseRoutine | null>(null);
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
+  const routineRestDates = useMemo(() => routineRestDatesForWeek(routine, weekDates), [routine, weekDates]);
 
   const reloadWeek = useCallback(async () => {
     try {
@@ -81,7 +115,15 @@ export function CoachDayExerciseEditor({
     setAddOpen(false);
     setEditDayMode(false);
     setTemplateOpen(false);
+    setRoutineEditorOpen(false);
   }, [open, reloadWeek]);
+
+  useEffect(() => {
+    if (!open) return;
+    api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`)
+      .then(setRoutine)
+      .catch(() => setRoutine(null));
+  }, [clientId, open, weekDays]);
 
   useEffect(() => {
     setTemplateId((current) => current || exerciseTemplates[0]?.id || '');
@@ -200,6 +242,10 @@ export function CoachDayExerciseEditor({
             <p className="text-sm text-app-text-muted">Plan workouts for this client.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" onClick={() => setRoutineEditorOpen(true)}>
+              <CalendarDays className="mr-1 inline h-4 w-4" />
+              Routine
+            </Button>
             <Button type="button" variant="secondary" onClick={() => setTemplateOpen(true)}>
               <LayoutTemplate className="mr-1 inline h-4 w-4" />
               Plans
@@ -247,8 +293,18 @@ export function CoachDayExerciseEditor({
             </p>
           )}
 
+          {routine && routineSummaryLabel(routine) && (
+            <p className="text-sm text-app-text-muted">
+              Weekly routine:{' '}
+              <span className="font-medium text-app-text">{routineSummaryLabel(routine)}</span>
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => setAddOpen(true)}>Add exercise</Button>
+            <Button type="button" variant="secondary" onClick={() => setRoutineEditorOpen(true)}>
+              Edit routine
+            </Button>
             <CopyWeekPlanMenu
               sourceDate={selectedDate}
               planLabel="exercises"
@@ -303,6 +359,7 @@ export function CoachDayExerciseEditor({
               onChange={reloadWeek}
               onEdit={setEditItem}
               onRemove={removeExercise}
+              routineRestDates={routineRestDates}
             />
           ) : (
             <ExerciseChecklist
@@ -386,6 +443,19 @@ export function CoachDayExerciseEditor({
           </div>
         </div>
       )}
+
+      <RoutineEditor
+        open={routineEditorOpen}
+        selectedDate={selectedDate}
+        clientId={clientId}
+        onClose={() => setRoutineEditorOpen(false)}
+        onSaved={async () => {
+          const nextRoutine = await api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`);
+          setRoutine(nextRoutine);
+          await reloadWeek();
+        }}
+        registerUndo={registerUndo}
+      />
 
       <ExercisePlanUndoToast
         message={undo?.message ?? null}
