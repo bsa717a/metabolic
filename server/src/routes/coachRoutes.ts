@@ -19,6 +19,7 @@ import {
   deleteCoachClientGroup,
   deleteCoachCheckIn,
   getCoachClientDashboard,
+  getCoachClientPlanStatus,
   getCoachClientEngagement,
   getCoachClientExercises,
   getCoachClientHydration,
@@ -33,6 +34,7 @@ import {
   sendCoachResultsReadyEmail,
   sendCoachResultsReadySms,
   setCoachClientGroupMembers,
+  setCoachClientNutritionTargets,
   setCoachClientWaterGoal,
   updateCoachCheckIn,
   updateCoachClientGroup,
@@ -334,6 +336,41 @@ export async function coachRoutes(app: FastifyInstance) {
       return await getCoachClientDashboard(request.appUser!, (request.params as { userId: string }).userId);
     } catch (error) {
       return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load client' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/plan-status', { preHandler: coachOnly }, async (request, reply) => {
+    try {
+      const status = await getCoachClientPlanStatus(request.appUser!, (request.params as { userId: string }).userId);
+      return status ?? reply.code(404).send({ error: 'No active program' });
+    } catch (error) {
+      return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load plan status' });
+    }
+  });
+
+  app.put('/api/coach/users/:userId/nutrition-targets', { preHandler: coachOnly }, async (request, reply) => {
+    const macro = z.number().int().positive().max(20000).nullable();
+    const parsed = z
+      .object({
+        calories: macro,
+        protein: macro,
+        carbs: macro,
+        fat: macro,
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid targets' });
+    try {
+      const { date, ...targets } = parsed.data;
+      const status = await setCoachClientNutritionTargets(
+        request.appUser!,
+        (request.params as { userId: string }).userId,
+        targets,
+        { date }
+      );
+      return status ?? reply.code(404).send({ error: 'No active program' });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save targets' });
     }
   });
 

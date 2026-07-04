@@ -444,6 +444,29 @@ export type PlanStatus = {
   planDayIndex: number | null;
 };
 
+export type NutritionMacroTargets = {
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+};
+
+export type NutritionTargetSource = 'FORMULA' | 'OVERRIDE_BAND' | 'COACH' | 'TEMPLATE';
+
+export type UserNutritionTargets = {
+  source: NutritionTargetSource | null;
+  resolvedTargets: NutritionMacroTargets | null;
+  overrideTargets: NutritionMacroTargets;
+};
+
+export type CoachClientPlanStatus = PlanStatus & {
+  nutritionTemplateName: string | null;
+  exerciseTemplateName: string | null;
+  targetSource: NutritionTargetSource | null;
+  resolvedTargets: NutritionMacroTargets | null;
+  overrideTargets: NutritionMacroTargets;
+};
+
 export type PlanProposal =
   | { eligible: false; missing: string[]; noMatch: boolean }
   | {

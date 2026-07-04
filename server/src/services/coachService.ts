@@ -1,8 +1,10 @@
 import { ProgramStatus, Visibility, type Role } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { canAccessUser } from '../auth/requireRole.js';
-import { parseDateParam, toDateKey, addUtcDays } from '../utils/dates.js';
+import { parseDateParam, toDateKey, addUtcDays, userDayKey } from '../utils/dates.js';
 import { getTodayDashboard } from './dashboardService.js';
+import { getPlanStatus } from './planStatusService.js';
+import { resolvePlanForDate } from './planResolution.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import {
   copyExercisesToDates,
@@ -16,6 +18,7 @@ import { getGamificationDashboard } from './gamificationService.js';
 import { getCoachHydrationStats, setWaterGoal } from './hydrationService.js';
 import { copyDayPlanForward, copyDayPlanToDates, getMealsForDate } from './nutritionService.js';
 import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
+import { getUserNutritionTargets, setUserNutritionTargets } from './nutritionTargetService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { saveProgramMetricSnapshot } from './programService.js';
 import { sendResultsReadyEmail } from './emailService.js';
@@ -239,6 +242,58 @@ export async function updateCoachSettings(
 export async function getCoachClientDashboard(actor: { id: string; role: Role }, userId: string) {
   await requireCoachClient(actor, userId);
   return getTodayDashboard(userId);
+}
+
+export async function getCoachClientPlanStatus(actor: { id: string; role: Role }, userId: string) {
+  await requireCoachClient(actor, userId);
+  const [status, program, user] = await Promise.all([
+    getPlanStatus(userId),
+    prisma.program.findFirst({
+      where: { userId, status: ProgramStatus.ACTIVE },
+      select: { id: true, defaultNutritionTemplateId: true, defaultExerciseTemplateId: true }
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })
+  ]);
+  if (!status || !program) return null;
+
+  const todayKey = userDayKey(user?.timezone ?? null);
+  const [resolved, nutritionTargets] = await Promise.all([
+    resolvePlanForDate(program, parseDateParam(todayKey)),
+    getUserNutritionTargets(userId)
+  ]);
+  const [nutritionTemplate, exerciseTemplate] = await Promise.all([
+    resolved.nutritionTemplateId
+      ? prisma.nutritionPlanTemplate.findUnique({ where: { id: resolved.nutritionTemplateId }, select: { name: true } })
+      : null,
+    resolved.exerciseTemplateId
+      ? prisma.exerciseTemplate.findUnique({ where: { id: resolved.exerciseTemplateId }, select: { name: true } })
+      : null
+  ]);
+
+  return {
+    ...status,
+    nutritionTemplateName: nutritionTemplate?.name ?? null,
+    exerciseTemplateName: exerciseTemplate?.name ?? null,
+    // Resolved macros, provenance, and raw override so the food tab can prefill + label.
+    targetSource: nutritionTargets.source,
+    resolvedTargets: nutritionTargets.resolvedTargets,
+    overrideTargets: nutritionTargets.overrideTargets
+  };
+}
+
+/**
+ * Coach macro override: delegates to the shared user-scoped setter (pin → freeze active
+ * period → re-scale today), then returns the refreshed coach plan-status payload.
+ */
+export async function setCoachClientNutritionTargets(
+  actor: { id: string; role: Role },
+  userId: string,
+  targets: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null },
+  options?: { date?: string }
+) {
+  await requireCoachClient(actor, userId);
+  await setUserNutritionTargets(userId, targets, { createdById: actor.id, rescaleDate: options?.date });
+  return getCoachClientPlanStatus(actor, userId);
 }
 
 export async function getCoachClientMeals(actor: { id: string; role: Role }, userId: string, date: string) {

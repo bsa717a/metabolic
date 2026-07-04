@@ -79,11 +79,16 @@ export async function getPlanStatus(userId: string): Promise<PlanStatus | null> 
 
   const info = await getPlanPeriodInfo(userId, todayKey);
   const effectiveDate = info?.effectiveDate ?? null;
+  // Precedence: the week's frozen numbers → the live resolved target (formula/override)
+  // → the template's static band value. Resolved beats the stale template so legacy
+  // users whose periods were never frozen still see the correct current target.
   return {
     state: 'on_plan',
     mode: program.mode,
-    calorieTarget: info?.calorieTarget ?? targets?.calories ?? (template ? Math.round(n(template.calorieTarget)) : null),
-    proteinTarget: info?.proteinTarget ?? targets?.protein ?? (template ? Math.round(n(template.proteinTarget)) : null),
+    calorieTarget:
+      info?.frozenCalorieTarget ?? targets?.calories ?? (template ? Math.round(n(template.calorieTarget)) : null),
+    proteinTarget:
+      info?.frozenProteinTarget ?? targets?.protein ?? (template ? Math.round(n(template.proteinTarget)) : null),
     weekNumber: info?.weekNumber ?? null,
     effectiveDate,
     endDate: info?.endDate ?? null,

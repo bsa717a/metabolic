@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import { todayKey } from '../../services/api';
-import type { CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
+import type { CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
 import { clientInitials, clientName, formatNextSession } from '../../utils/coachClientUtils';
@@ -41,9 +41,25 @@ function TabButton({
   );
 }
 
+function formatPlanStatusLine(planStatus: CoachClientPlanStatus | null) {
+  if (!planStatus) return null;
+  if (planStatus.state === 'on_plan') {
+    const parts = [
+      planStatus.nutritionTemplateName ?? 'Weekly plan',
+      planStatus.weekNumber != null ? `Week ${planStatus.weekNumber}` : null,
+      planStatus.planDayIndex != null ? `day ${planStatus.planDayIndex}` : null,
+      planStatus.calorieTarget != null ? `${planStatus.calorieTarget} kcal` : null
+    ].filter(Boolean);
+    return parts.join(' · ');
+  }
+  if (planStatus.state === 'coached_no_plan') return 'Tracking freely — no weekly plan assigned yet';
+  return 'Self-directed tracking';
+}
+
 export function ClientDetailTabs({
   client,
   dashboard,
+  planStatus,
   engagement,
   nutritionTemplates,
   exerciseTemplates,
@@ -58,12 +74,14 @@ export function ClientDetailTabs({
   onSavingChange,
   onError,
   onRefresh,
+  onRefreshPlanStatus,
   selectedSnapshotId,
   onSelectSnapshotId,
   snapshots
 }: {
   client: CoachClient;
   dashboard: Dashboard | null;
+  planStatus: CoachClientPlanStatus | null;
   engagement: CoachEngagement | null;
   nutritionTemplates: NutritionPlanTemplateSummary[];
   exerciseTemplates: ExercisePlanTemplateSummary[];
@@ -78,6 +96,7 @@ export function ClientDetailTabs({
   onSavingChange: (saving: boolean) => void;
   onError: (message: string) => void;
   onRefresh: () => Promise<void>;
+  onRefreshPlanStatus: () => Promise<void>;
   selectedSnapshotId: string | null;
   onSelectSnapshotId: (id: string | null) => void;
   snapshots: ProgramMetricSnapshot[];
@@ -103,6 +122,12 @@ export function ClientDetailTabs({
             <p className="text-sm text-app-text-muted">
               {client.activeProgram?.name ?? 'No active program'} · {formatNextSession(client.nextCheckInAt)}
             </p>
+            {formatPlanStatusLine(planStatus) ? (
+              <p className="mt-1 text-sm text-app-text">{formatPlanStatusLine(planStatus)}</p>
+            ) : null}
+            {planStatus?.exerciseTemplateName ? (
+              <p className="text-sm text-app-text-muted">Exercise: {planStatus.exerciseTemplateName}</p>
+            ) : null}
           </div>
         </div>
         <SendResultsMenu
@@ -282,10 +307,12 @@ export function ClientDetailTabs({
             clientId={client.id}
             planDate={planDate}
             nutritionTemplates={nutritionTemplates}
+            planStatus={planStatus}
             saving={saving}
             onSavingChange={onSavingChange}
             onError={onError}
             onRefresh={onRefresh}
+            onRefreshPlanStatus={onRefreshPlanStatus}
           />
         )}
 

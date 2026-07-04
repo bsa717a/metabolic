@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Settings } from 'lucide-react';
 import { api, todayKey } from '../services/api';
-import type { ClientGroup, CoachClient, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../types';
+import type { ClientGroup, CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../types';
 import type { GamificationDashboard } from '../types/gamification';
 import type { CoachHydrationStats } from '../types/hydration';
 import { CoachCalendar } from '../components/coach/CoachCalendar';
@@ -35,6 +35,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [planStatus, setPlanStatus] = useState<CoachClientPlanStatus | null>(null);
   const [engagement, setEngagement] = useState<CoachEngagement | null>(null);
   const [clientWaterGoalDraft, setClientWaterGoalDraft] = useState('64');
   const [nutritionTemplates, setNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
@@ -145,25 +146,46 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
     }
   }, []);
 
+  // "No active program" is an expected empty state (client not enrolled) → null, no error.
+  // Any other failure (network, 403, 500) is surfaced instead of silently hiding the panel.
+  const fetchClientPlanStatus = useCallback(async (clientId: string) => {
+    try {
+      return await api<CoachClientPlanStatus>(`/api/coach/users/${clientId}/plan-status`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to load plan status';
+      if (message !== 'No active program') setError(message);
+      return null;
+    }
+  }, []);
+
   const loadDashboard = useCallback(async (clientId: string) => {
     if (!clientId) {
       setDashboard(null);
+      setPlanStatus(null);
       setEngagement(null);
       return;
     }
     try {
-      const [dashboardData, engagementData] = await Promise.all([
+      const [dashboardData, engagementData, planStatusData] = await Promise.all([
         api<Dashboard>(`/api/coach/users/${clientId}/dashboard`),
-        api<CoachEngagement>(`/api/coach/users/${clientId}/engagement`)
+        api<CoachEngagement>(`/api/coach/users/${clientId}/engagement`),
+        fetchClientPlanStatus(clientId)
       ]);
       setDashboard(dashboardData);
       setEngagement(engagementData);
+      setPlanStatus(planStatusData);
       setClientWaterGoalDraft(String(engagementData.hydration.waterGoalOz));
     } catch {
       setDashboard(null);
+      setPlanStatus(null);
       setEngagement(null);
     }
-  }, []);
+  }, [fetchClientPlanStatus]);
+
+  const refreshPlanStatus = useCallback(async () => {
+    if (!selectedClientId) return;
+    setPlanStatus(await fetchClientPlanStatus(selectedClientId));
+  }, [selectedClientId, fetchClientPlanStatus]);
 
   useEffect(() => {
     void load();
@@ -451,6 +473,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 key={selectedClient.id}
                 client={selectedClient}
                 dashboard={dashboard}
+                planStatus={planStatus}
                 engagement={engagement}
                 nutritionTemplates={clientNutritionTemplates}
                 exerciseTemplates={exerciseTemplates}
@@ -465,6 +488,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 onSavingChange={setSaving}
                 onError={setError}
                 onRefresh={refreshClientData}
+                onRefreshPlanStatus={refreshPlanStatus}
                 selectedSnapshotId={selectedSnapshotId}
                 onSelectSnapshotId={setSelectedSnapshotId}
                 snapshots={snapshots}
