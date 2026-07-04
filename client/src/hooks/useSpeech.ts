@@ -136,24 +136,34 @@ export function useSpeech(coachId: VirtualCoachId) {
   const [naturalVoice, setNaturalVoice] = useState(true);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const availabilityRef = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => {
     setVoiceURIState(readStoredVoiceURI(coachId));
   }, [coachId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    api<{ available: boolean }>('/api/ai/coach-voice/available')
-      .then((result) => {
-        if (!cancelled) setNaturalAvailable(result.available);
-      })
-      .catch(() => {
-        if (!cancelled) setNaturalAvailable(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  // Resolves whether the server-side natural TTS is configured. The result is
+  // cached only on success — a transient failure (auth token not ready, network
+  // blip) retries on the next call instead of silently downgrading the whole
+  // session to the robotic browser voice.
+  const checkNaturalAvailable = useCallback((): Promise<boolean> => {
+    if (!availabilityRef.current) {
+      availabilityRef.current = api<{ available: boolean }>('/api/ai/coach-voice/available')
+        .then((result) => {
+          setNaturalAvailable(result.available);
+          return result.available;
+        })
+        .catch(() => {
+          availabilityRef.current = null;
+          return false;
+        });
+    }
+    return availabilityRef.current;
   }, []);
+
+  useEffect(() => {
+    void checkNaturalAvailable();
+  }, [checkNaturalAvailable]);
 
   useEffect(() => {
     const synthesisSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
@@ -261,18 +271,22 @@ export function useSpeech(coachId: VirtualCoachId) {
     (text: string) => {
       if (muted || typeof window === 'undefined') return;
       stopSpeaking();
-      if (naturalVoice && naturalAvailable) {
+      if (naturalVoice) {
+        // Wait for the availability check instead of assuming "not yet known"
+        // means unavailable — otherwise the first coach line (spoken on mount,
+        // before the check resolves) always lands on the robotic browser voice.
         // Fall back to the browser voice for THIS line only if the natural audio
         // fails to play (e.g. a transient autoplay block). Do not permanently
         // disable the natural voice — the next line (after a user gesture) retries.
-        void playNatural(text).then((ok) => {
+        void checkNaturalAvailable().then(async (available) => {
+          const ok = available ? await playNatural(text) : false;
           if (!ok) browserSpeak(text);
         });
         return;
       }
       browserSpeak(text);
     },
-    [muted, stopSpeaking, naturalVoice, naturalAvailable, playNatural, browserSpeak]
+    [muted, stopSpeaking, naturalVoice, checkNaturalAvailable, playNatural, browserSpeak]
   );
 
   const startListening = useCallback(

@@ -55,11 +55,25 @@ export async function buildAssistantContext(userId: string) {
   const personalization = await loadPersonalization(userId);
   const dashboard = await getTodayDashboard(userId, userDayKey(personalization.timezone), personalization.timezone);
   if (!dashboard.program) {
-    return JSON.stringify({ hasProgram: false, message: 'User has no active program.' });
+    return JSON.stringify({
+      hasProgram: false,
+      message: 'User has no active program.',
+      profile: {
+        firstName: personalization.firstName,
+        foodAllergies: personalization.foodAllergies,
+        dietaryPreferences: personalization.dietaryPreferences
+      }
+    });
   }
 
   return JSON.stringify({
     hasProgram: true,
+    profile: {
+      firstName: personalization.firstName,
+      foodAllergies: personalization.foodAllergies,
+      dietaryPreferences: personalization.dietaryPreferences,
+      timezone: personalization.timezone
+    },
     program: {
       name: dashboard.program.name,
       status: dashboard.program.status
@@ -169,11 +183,16 @@ export async function buildSmsAssistantContext(userId: string) {
 export async function chatWithAssistant(userId: string, messages: ChatMessage[]) {
   const context = await buildAssistantContext(userId);
   const personalization = await loadPersonalization(userId);
+  const isFirstTurn = !messages.some((message) => message.role === 'assistant');
+  const nameInstruction =
+    personalization.firstName && isFirstTurn
+      ? `The user's first name is ${personalization.firstName}. This is your first reply in the conversation — greet them by name.\n\n`
+      : '';
   const personaPrefix =
     personalization.selectedVirtualCoachId && isVirtualCoachId(personalization.selectedVirtualCoachId)
       ? `${VIRTUAL_COACH_PERSONA_PROMPTS[personalization.selectedVirtualCoachId]}\n\nAlso serve as their in-app assistant when they ask quick questions between check-ins.\n\n`
       : '';
-  const reply = await getAiProvider().chat(messages, context, 'web', personaPrefix);
+  const reply = await getAiProvider().chat(messages, context, 'web', `${nameInstruction}${personaPrefix}`);
   return { reply, contextUsed: true };
 }
 
