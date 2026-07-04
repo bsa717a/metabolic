@@ -21,6 +21,13 @@ const MOBILE_NAV_LINKS = [
   ['/virtual-coach', 'Virtual Coach', Sparkles],
 ] as const;
 
+function getInitials(user: Pick<AppUser, 'firstName' | 'lastName'>) {
+  const first = user.firstName?.trim()?.[0] ?? '';
+  const last = user.lastName?.trim()?.[0] ?? '';
+  const initials = `${first}${last}`.toUpperCase();
+  return initials || 'U';
+}
+
 function ProfileMenuItem({
   label,
   onClick,
@@ -122,7 +129,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
       <header
         ref={headerRef}
         className={clsx(
-          'sticky top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b px-4 py-3 backdrop-blur transition-colors duration-200',
+          'sticky top-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b px-4 py-2 backdrop-blur transition-colors duration-200 sm:py-3',
           isDashboard
             ? 'border-app-border bg-app-surface/90'
             : 'cursor-pointer border-brand-green/25 bg-app-muted/95 hover:bg-brand-green/10 dark:hover:bg-brand-green/15'
@@ -137,7 +144,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
             aria-label="Open navigation menu"
             aria-haspopup="menu"
             aria-expanded={mobileMenuOpen}
-            className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg transition-opacity hover:opacity-80 sm:hidden"
+            className="flex shrink-0 items-center gap-1 rounded-lg transition-opacity hover:opacity-80 sm:hidden"
             onClick={(e) => {
               e.stopPropagation();
               setMobileMenuOpen((v) => !v);
@@ -147,12 +154,12 @@ export function Topbar({ user }: { user?: AppUser | null }) {
               src="/logo.png"
               alt=""
               aria-hidden
-              width={36}
-              height={36}
+              width={28}
+              height={28}
               className="shrink-0 object-contain [image-rendering:pixelated]"
             />
             <ChevronDown
-              size={14}
+              size={16}
               aria-hidden
               className={clsx(
                 'shrink-0 text-app-text-muted transition-transform',
@@ -197,18 +204,29 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                 aria-label="Profile menu"
                 aria-expanded={profileOpen}
                 aria-haspopup="menu"
-                className="flex items-center gap-2 rounded-xl bg-app-muted px-3 py-2 text-sm font-medium text-app-text transition hover:bg-app-border/60"
+                className="flex items-center gap-2 rounded-full text-sm font-medium text-app-text transition sm:rounded-xl sm:bg-app-muted sm:px-3 sm:py-2 sm:hover:bg-app-border/60"
                 onClick={() => setProfileOpen((open) => !open)}
               >
-                <UserRound size={16} aria-hidden />
+                <span className="flex size-8 items-center justify-center rounded-full bg-brand-green text-xs font-bold text-white transition hover:opacity-90 sm:hidden">
+                  {getInitials(user)}
+                </span>
+                <UserRound size={16} aria-hidden className="hidden sm:block" />
                 <span className="hidden md:inline">Hi, {user.firstName}</span>
-                <span className="md:hidden">{user.firstName}</span>
+                <span className="hidden sm:inline md:hidden">{user.firstName}</span>
               </button>
               {profileOpen && (
                 <ul
                   className="absolute right-0 z-50 mt-1 min-w-[200px] rounded-xl border border-app-border bg-app-surface py-1 shadow-lg"
                   role="menu"
                 >
+                  <li className="border-b border-app-border px-4 py-2">
+                    <p className="text-sm font-semibold text-app-text">
+                      {user.firstName} {user.lastName}
+                    </p>
+                    {user.email ? (
+                      <p className="mt-0.5 truncate text-xs text-app-text-muted">{user.email}</p>
+                    ) : null}
+                  </li>
                   <ProfileMenuItem
                     label="Account details"
                     icon={UserRound}

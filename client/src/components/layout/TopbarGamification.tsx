@@ -14,6 +14,22 @@ import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamificatio
 
 const TOPBAR_RING_SIZE = 44;
 const TOPBAR_BADGE_SIZE = 80;
+const MOBILE_RING_SIZE = 26;
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return isMobile;
+}
 
 export function TopbarGamification() {
   const { demoMode, currentStepId } = useTutorial();
@@ -22,6 +38,7 @@ export function TopbarGamification() {
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const hydrationButtonRef = useRef<HTMLButtonElement>(null);
   const levelUpButtonRef = useRef<HTMLButtonElement>(null);
+  const isMobile = useIsMobileViewport();
 
   const load = useCallback(() => {
     api<GamificationDashboard>(`/api/gamification/dashboard?${todayDateParam()}`)
@@ -50,6 +67,98 @@ export function TopbarGamification() {
   const showFoodStreak = demoMode || momentum.foodLoggingStreak > 0;
   const showWaterStreak = demoMode || hydration.currentStreak > 0;
   const pulseStreaks = demoMode && currentStepId === 'topbar-streaks';
+
+  if (isMobile) {
+    return (
+      <div className="flex items-center justify-center min-w-0 w-full">
+        <div
+          className={clsx(
+            'flex items-center rounded-full border border-app-border bg-app-muted p-1',
+            pulseStreaks && 'animate-pulse'
+          )}
+        >
+          <button
+            ref={hydrationButtonRef}
+            type="button"
+            data-tour="topbar-hydration"
+            onClick={() => {
+              setLevelUpOpen(false);
+              setHydrationOpen((open) => !open);
+            }}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 transition hover:bg-app-border/50"
+            title={
+              hydration.goalMet
+                ? 'Daily hydration goal reached'
+                : `${hydration.actualOz}/${hydration.targetOz} oz logged today`
+            }
+            aria-label="Open hydration"
+            aria-expanded={hydrationOpen}
+          >
+            <Droplets className="size-[18px] shrink-0 text-sky-500" />
+            <span className="text-[13px] font-semibold tabular-nums text-app-text">
+              {hydration.currentStreak}
+            </span>
+          </button>
+
+          {showFoodStreak && (
+            <>
+              <span className="mx-0.5 h-5 w-px shrink-0 bg-app-border" aria-hidden />
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5"
+                data-tour="topbar-streaks"
+                title="Food logging streak"
+              >
+                <Flame className="size-[18px] shrink-0 text-brand-gold" />
+                <span className="text-[13px] font-semibold tabular-nums text-app-text">
+                  {momentum.foodLoggingStreak}
+                </span>
+              </div>
+            </>
+          )}
+
+          {currentLevel && (
+            <>
+              <span className="mx-0.5 h-5 w-px shrink-0 bg-app-border" aria-hidden />
+              <button
+                ref={levelUpButtonRef}
+                type="button"
+                data-tour="topbar-level"
+                onClick={() => {
+                  setHydrationOpen(false);
+                  setLevelUpOpen((open) => !open);
+                }}
+                className="flex items-center rounded-full px-2 py-1 transition hover:bg-app-border/50"
+                title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
+                aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
+                aria-expanded={levelUpOpen}
+              >
+                <ProgressRing
+                  percent={currentLevel.progressPercent}
+                  size={MOBILE_RING_SIZE}
+                  label={`L${currentLevel.number}`}
+                  labelClassName="fill-brand-green font-bold rotate-90"
+                />
+              </button>
+            </>
+          )}
+        </div>
+
+        <HydrationTopbarDrawer
+          open={hydrationOpen}
+          onClose={() => setHydrationOpen(false)}
+          anchorRef={hydrationButtonRef}
+        />
+        {currentLevel && (
+          <LevelUpTopbarDrawer
+            open={levelUpOpen}
+            onClose={() => setLevelUpOpen(false)}
+            anchorRef={levelUpButtonRef}
+            level={currentLevel}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center gap-2 sm:gap-4 min-w-0 w-full max-w-2xl">
@@ -129,13 +238,10 @@ export function TopbarGamification() {
             aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
             aria-expanded={levelUpOpen}
           >
-            <span className="shrink-0 text-[1.75rem] font-extrabold leading-none tabular-nums tracking-tight text-brand-green sm:hidden">
-              L{currentLevel.number}
-            </span>
-            <div className="hidden shrink-0 sm:block">
+            <div className="shrink-0">
               <ProgressRing percent={currentLevel.progressPercent} size={TOPBAR_RING_SIZE} />
             </div>
-            <div className="hidden shrink-0 text-left leading-tight sm:block">
+            <div className="shrink-0 text-left leading-tight">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-green">
                 Level {currentLevel.number}
               </p>
@@ -164,12 +270,12 @@ export function TopbarGamification() {
           <img
             src={topBadgeArt}
             alt=""
-            className="size-[45px] object-contain sm:size-20"
+            className="size-20 object-contain"
             width={TOPBAR_BADGE_SIZE}
             height={TOPBAR_BADGE_SIZE}
           />
         ) : (
-          <Award className="size-[45px] text-app-text-muted sm:size-20" />
+          <Award className="size-20 text-app-text-muted" />
         )}
       </Link>
     </div>
