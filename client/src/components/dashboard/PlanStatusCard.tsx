@@ -96,7 +96,7 @@ export function PlanStatusCard() {
   if (status.state === 'on_plan') {
     const weekLine = dayOfWeekLine(status);
     return (
-      <div className="text-left sm:text-right">
+      <div className="flex items-center justify-between gap-3 text-left sm:block sm:text-right">
         {fetchError && (
           <p className="mb-2 text-xs text-amber-700">
             Couldn&apos;t refresh plan status.{' '}
@@ -105,19 +105,19 @@ export function PlanStatusCard() {
             </button>
           </p>
         )}
-        <p className="text-sm font-semibold text-brand-navy dark:text-brand-off-white">
+        <p className="hidden text-sm font-semibold text-brand-navy dark:text-brand-off-white sm:block">
           <Sprout size={16} className="mb-0.5 mr-1 inline text-brand-green" aria-hidden />
           Your Metabolic Plan
         </p>
-        <p className="mt-1 text-sm text-app-text-muted">{weekLine ?? 'Week 1 starts at your first check-in'}</p>
+        <p className="text-sm text-app-text-muted sm:mt-1">{weekLine ?? 'Week 1 starts at your first check-in'}</p>
         {status.nextCheckInDate && (
-          <p className="text-sm text-app-text-muted">
+          <p className="hidden text-sm text-app-text-muted sm:block">
             <CalendarCheck size={14} className="mb-0.5 mr-1 inline text-brand-green" aria-hidden />
             Next check-in {formatDate(status.nextCheckInDate)}
           </p>
         )}
-        <Link to="/nutrition" className="mt-1 inline-block text-sm font-bold text-brand-green transition hover:text-brand-deep">
-          Build today&apos;s meals →
+        <Link to="/virtual-coach" className="mt-1 inline-block text-sm font-bold text-brand-green transition hover:text-brand-deep">
+          Chat with Coach →
         </Link>
       </div>
     );

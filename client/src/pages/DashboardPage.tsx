@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Target, Dumbbell, Flame, LineChart, TrendingUp, Users, Sparkles } from 'lucide-react';
+import { Target, Users } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
 import { getIdToken } from '../services/auth';
@@ -8,47 +9,70 @@ import { PlanStatusCard } from '../components/dashboard/PlanStatusCard';
 import type { AppUser, Dashboard } from '../types';
 import { TodayNutrition } from '../components/dashboard/TodayNutrition';
 import { TodayExercise } from '../components/dashboard/TodayExercise';
-import { MacroProgress } from '../components/dashboard/MacroProgress';
+import { MiniBlueprint } from '../components/dashboard/MiniBlueprint';
 import { WeightTrendChart } from '../components/dashboard/WeightTrendChart';
 import { isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
 import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
 
-function RemainingMacrosDisplay({
-  caloriesRemaining,
-  proteinRemaining
+function MacroDonut({
+  label,
+  actual,
+  target,
+  unit,
+  color
 }: {
-  caloriesRemaining: number;
-  proteinRemaining: number;
+  label: string;
+  actual: number;
+  target: number;
+  unit?: string;
+  color: string;
+}) {
+  const remaining = Math.round(target - actual);
+  const fill = target > 0 ? Math.min(Math.max((actual / target) * 100, 0), 100) : 0;
+  const data = [{ value: fill }, { value: Math.max(100 - fill, 0) }];
+
+  return (
+    <div className="text-center">
+      <div className="relative mx-auto h-16 w-16">
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie data={data} innerRadius={20} outerRadius={30} dataKey="value" startAngle={90} endAngle={-270}>
+              <Cell fill={color} />
+              <Cell fill="var(--app-progress-track)" />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 grid place-items-center">
+          <p className="text-xs font-bold tabular-nums text-app-text">
+            {remaining}
+            {unit}
+          </p>
+        </div>
+      </div>
+      <p className="mt-1 text-[11px] font-semibold text-app-text-muted">{label}</p>
+    </div>
+  );
+}
+
+function RemainingMacrosDisplay({
+  calories,
+  protein,
+  carbs,
+  fat
+}: {
+  calories: { actual: number; target: number };
+  protein: { actual: number; target: number };
+  carbs: { actual: number; target: number };
+  fat: { actual: number; target: number };
 }) {
   return (
     <div data-tour="macros-remaining">
-      {/* Mobile: compact horizontal row */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-app-text sm:hidden">
-        <span className="inline-flex items-center gap-1.5">
-          <Flame size={16} className="text-brand-gold" aria-hidden />
-          <span className="tabular-nums">{caloriesRemaining}</span> kcal left
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Dumbbell size={16} className="text-brand-green" aria-hidden />
-          <span className="tabular-nums">{proteinRemaining}g</span> protein left
-        </span>
-      </div>
-
-      {/* Desktop: stacked label + big number */}
-      <div className="hidden gap-6 sm:flex sm:gap-8 sm:text-center">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-app-text-muted">Calories left</p>
-          <p className="text-xl font-semibold tabular-nums text-brand-navy dark:text-brand-off-white">
-            {caloriesRemaining}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-app-text-muted">Protein left</p>
-          <p className="text-xl font-semibold tabular-nums text-brand-navy dark:text-brand-off-white">
-            {proteinRemaining}g
-          </p>
-        </div>
+      <div className="grid grid-cols-4 gap-3">
+        <MacroDonut label="Kcal" actual={calories.actual} target={calories.target} color="#eab308" />
+        <MacroDonut label="Protein" actual={protein.actual} target={protein.target} unit="g" color="#22c55e" />
+        <MacroDonut label="Carbs" actual={carbs.actual} target={carbs.target} unit="g" color="#3b82f6" />
+        <MacroDonut label="Fat" actual={fat.actual} target={fat.target} unit="g" color="#ef4444" />
       </div>
     </div>
   );
@@ -166,7 +190,6 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
     );
   }
 
-  const s = data.summary!;
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -174,26 +197,37 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
           <DashboardWelcome firstName={user?.firstName} />
         </div>
         <RemainingMacrosDisplay
-          caloriesRemaining={s.caloriesRemaining}
-          proteinRemaining={s.proteinRemaining}
+          calories={{
+            actual: Number(data.dailyLog?.caloriesActual ?? 0),
+            target: Number(data.dailyLog?.calorieTarget ?? 0)
+          }}
+          protein={{
+            actual: Number(data.dailyLog?.proteinActual ?? 0),
+            target: Number(data.dailyLog?.proteinTarget ?? 0)
+          }}
+          carbs={{
+            actual: Number(data.dailyLog?.carbsActual ?? 0),
+            target: Number(data.dailyLog?.carbTarget ?? 0)
+          }}
+          fat={{
+            actual: Number(data.dailyLog?.fatActual ?? 0),
+            target: Number(data.dailyLog?.fatTarget ?? 0)
+          }}
         />
         <PlanStatusCard />
       </div>
 
-      <section className="hidden sm:block">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-app-text-muted mb-3">Navigation</h2>
-        <div
-          data-tour="nav-tiles"
-          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4"
-        >
-          <QuickLink to="/program" icon={Target} label="Metabolic Blueprint" />
-          <QuickLink to="/exercise" icon={Dumbbell} label="Exercise" />
-          <QuickLink to="/level-up" icon={TrendingUp} label="Level Up" tourId="nav-level-up" />
-          <QuickLink to="/progress" icon={LineChart} label="Progress" />
-          <QuickLink to="/virtual-coach" icon={Sparkles} label="Virtual Coach" />
-          {isCoachRole(user?.role) && <QuickLink to="/coach" icon={Users} label="Coach" />}
-        </div>
-      </section>
+      {isCoachRole(user?.role) && (
+        <section className="hidden sm:block">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-app-text-muted mb-3">Navigation</h2>
+          <div
+            data-tour="nav-tiles"
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4"
+          >
+            <QuickLink to="/coach" icon={Users} label="Coach" />
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-6 lg:grid-cols-2">
         <div data-tour="today-nutrition">
@@ -207,10 +241,10 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
           <TodayExercise exercises={data.exercises} onChange={() => loadDashboard({ silent: true })} />
         </div>
         <div data-tour="macro-progress">
-          <MacroProgress dashboard={data} />
+          <MiniBlueprint program={data.program} />
         </div>
         <div data-tour="weight-trend">
-          <WeightTrendChart data={data.weightTrend} />
+          <WeightTrendChart program={data.program} weightTrend={data.weightTrend} />
         </div>
       </section>
 
