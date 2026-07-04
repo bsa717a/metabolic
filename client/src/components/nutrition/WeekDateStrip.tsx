@@ -49,8 +49,8 @@ export function WeekDateStrip({
           </div>
         </div>
       )}
-      <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
+      <div className={clsx(endAction ? 'space-y-2 sm:flex sm:items-center sm:gap-2 sm:space-y-0' : 'flex items-center gap-2')}>
+        <div className="grid min-w-0 flex-1 grid-cols-7 gap-1 sm:flex sm:gap-2 sm:overflow-x-auto sm:pb-1 sm:snap-x sm:snap-mandatory">
         {weekDates.map((date) => {
           const selected = date === selectedDate;
           const today = isToday(date);
@@ -73,7 +73,7 @@ export function WeekDateStrip({
               type="button"
               onClick={() => onSelectDate(date)}
               className={clsx(
-                'flex min-w-[3.5rem] snap-start flex-col items-center rounded-2xl border px-3 py-2 transition',
+                'flex min-w-0 flex-col items-center rounded-2xl border px-1 py-1.5 transition sm:min-w-[3.5rem] sm:snap-start sm:px-3 sm:py-2',
                 themed
                   ? clsx(
                       showTint
@@ -94,7 +94,7 @@ export function WeekDateStrip({
             >
               <span
                 className={clsx(
-                  'text-xs',
+                  'text-[10px] sm:text-xs',
                   selected ? 'font-bold' : 'font-medium opacity-80'
                 )}
               >
@@ -102,8 +102,8 @@ export function WeekDateStrip({
               </span>
               <span
                 className={clsx(
-                  'text-lg',
-                  selected ? 'text-xl font-extrabold' : 'font-bold',
+                  'text-sm sm:text-lg',
+                  selected ? 'text-base font-extrabold sm:text-xl' : 'font-bold',
                   showMealTint &&
                     targetStatus === 'over' &&
                     'text-red-700 dark:text-red-300',
@@ -133,7 +133,7 @@ export function WeekDateStrip({
           );
         })}
         </div>
-        {endAction && <div className="shrink-0 pb-1">{endAction}</div>}
+        {endAction && <div className="shrink-0 sm:pb-1">{endAction}</div>}
       </div>
     </div>
   );
