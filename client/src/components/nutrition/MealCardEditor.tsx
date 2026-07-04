@@ -1,10 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Minus, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, Minus, Search, Sparkles } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Food, Meal, MealItem } from '../../types';
 import { Button } from '../ui/Button';
 import { plannedTimeToInputValue } from '../../utils/plannedTime';
 import { foodEmoji } from '../../utils/foodEmoji';
+import {
+  formatFoodMacros,
+  useFoodSearchWithAi,
+  type FoodLookupOption,
+  type PendingFoodLookup
+} from '../../hooks/useFoodSearchWithAi';
 
 type LocalEditItem = {
   serverId?: string;
@@ -73,41 +79,65 @@ export function MealCardEditor({
 
   const [recentFoods, setRecentFoods] = useState<Food[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Food[]>([]);
-  const [searching, setSearching] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const {
+    local,
+    queue,
+    pending,
+    searching,
+    searched,
+    hasResults,
+    aiOptions,
+    aiLoading,
+    aiError,
+    runAiSearch,
+    acceptLookup,
+    resetAi
+  } = useFoodSearchWithAi(searchQuery);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [searchAcceptError, setSearchAcceptError] = useState<string | null>(null);
 
   useEffect(() => {
     api<Food[]>('/api/foods/recent').then(setRecentFoods).catch(() => setRecentFoods([]));
   }, []);
 
   useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      setSearching(false);
-      setSelectedIndex(-1);
-      return;
-    }
-    setSearching(true);
-    const timer = setTimeout(async () => {
-      try {
-        const results = await api<Food[]>(`/api/foods?query=${encodeURIComponent(searchQuery.trim())}`);
-        setSearchResults(results);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    resetAi();
+    setSelectedIndex(-1);
+  }, [searchQuery, resetAi]);
 
-  const dropdownItems = searchQuery.trim().length >= 2 ? searchResults : recentFoods;
-  const showDropdown = searchFocused && (searching || dropdownItems.length > 0 || searchQuery.trim().length >= 2);
+  type DropdownEntry =
+    | { kind: 'food'; food: Food; label?: string }
+    | { kind: 'pending'; pending: PendingFoodLookup }
+    | { kind: 'ai'; option: FoodLookupOption }
+    | { kind: 'ai-search' };
+
+  const dropdownEntries = useMemo<DropdownEntry[]>(() => {
+    if (searchQuery.trim().length < 2) {
+      return recentFoods.map((food) => ({ kind: 'food', food }));
+    }
+    const entries: DropdownEntry[] = [
+      ...local.map((food) => ({ kind: 'food' as const, food })),
+      ...queue.map((food) => ({ kind: 'food' as const, food, label: 'AI review queue' })),
+      ...pending.map((item) => ({ kind: 'pending' as const, pending: item })),
+      ...aiOptions.map((option) => ({ kind: 'ai' as const, option }))
+    ];
+    if (!searching && !aiLoading && searched && !aiError && aiOptions.length === 0 && !hasResults) {
+      entries.push({ kind: 'ai-search' });
+    }
+    return entries;
+  }, [searchQuery, recentFoods, local, queue, pending, aiOptions, searching, aiLoading, searched, aiError]);
+
+  const showDropdown =
+    searchFocused &&
+    (searching ||
+      aiLoading ||
+      dropdownEntries.length > 0 ||
+      searchQuery.trim().length >= 2 ||
+      Boolean(aiError));
   const showRecentLabel = searchQuery.trim().length < 2 && recentFoods.length > 0;
 
   const totals = {
@@ -161,24 +191,48 @@ export function MealCardEditor({
     };
     setLocalItems((prev) => [...prev, newItem]);
     setSearchQuery('');
-    setSearchResults([]);
+    resetAi();
     setSelectedIndex(-1);
-    // Input stays focused after mousedown+preventDefault; keep searchFocused true so the dropdown reopens on the next query.
     setSearchFocused(true);
+  }
+
+  async function selectEntry(entry: DropdownEntry) {
+    setSearchAcceptError(null);
+    try {
+      if (entry.kind === 'food') {
+        addFood(entry.food);
+        return;
+      }
+      if (entry.kind === 'pending') {
+        const food = await acceptLookup(entry.pending.lookupId);
+        addFood(food);
+        return;
+      }
+      if (entry.kind === 'ai') {
+        const food = await acceptLookup(entry.option.lookupId);
+        addFood(food);
+        return;
+      }
+      if (entry.kind === 'ai-search') {
+        await runAiSearch();
+      }
+    } catch (err) {
+      setSearchAcceptError(err instanceof Error ? err.message : 'Could not add that food.');
+    }
   }
 
   function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (!showDropdown) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setSelectedIndex((prev) => Math.min(prev + 1, dropdownItems.length - 1));
+      setSelectedIndex((prev) => Math.min(prev + 1, dropdownEntries.length - 1));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       setSelectedIndex((prev) => Math.max(prev - 1, -1));
     } else if (event.key === 'Enter' && selectedIndex >= 0) {
       event.preventDefault();
-      const food = dropdownItems[selectedIndex];
-      if (food) addFood(food);
+      const entry = dropdownEntries[selectedIndex];
+      if (entry) void selectEntry(entry);
     } else if (event.key === 'Escape') {
       setSearchFocused(false);
       setSelectedIndex(-1);
@@ -377,25 +431,75 @@ export function MealCardEditor({
                   <li className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Recent foods</li>
                 )}
                 {searching && <li className="px-3 py-2 text-sm text-slate-400">Searching…</li>}
-                {!searching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-                  <li className="px-3 py-2 text-sm text-slate-400">No foods found.</li>
+                {aiLoading && <li className="px-3 py-2 text-sm text-slate-400">Asking AI for matches…</li>}
+                {!searching && searchQuery.trim().length >= 2 && !hasResults && aiOptions.length === 0 && !aiLoading && (
+                  <li className="px-3 py-2 text-sm text-slate-400">No foods found in your library or AI queue.</li>
                 )}
+                {aiError && (
+                  <li className="px-3 py-2 text-sm text-red-600">
+                    {aiError}
+                    <button type="button" className="ml-2 font-bold underline" onMouseDown={(e) => e.preventDefault()} onClick={() => void runAiSearch()}>
+                      Try again
+                    </button>
+                  </li>
+                )}
+                {searchAcceptError && <li className="px-3 py-2 text-sm text-red-600">{searchAcceptError}</li>}
                 {!searching &&
-                  dropdownItems.map((food, idx) => (
-                    <li key={food.id} role="option" aria-selected={selectedIndex === idx}>
-                      <button
-                        type="button"
-                        className={`w-full px-3 py-2 text-left text-sm transition ${selectedIndex === idx ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          addFood(food);
-                        }}
-                      >
-                        <span className="font-medium text-slate-800">{food.name}</span>
-                        <span className="ml-2 text-slate-400 text-xs">{formatMacros(food)}</span>
-                      </button>
-                    </li>
-                  ))}
+                  dropdownEntries.map((entry, idx) => {
+                    if (entry.kind === 'ai-search') {
+                      return (
+                        <li key="ai-search" role="option" aria-selected={selectedIndex === idx}>
+                          <button
+                            type="button"
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${selectedIndex === idx ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              void runAiSearch();
+                            }}
+                          >
+                            <Sparkles size={14} className="text-emerald-600" />
+                            <span className="font-medium text-emerald-700">Search with AI for &quot;{searchQuery.trim()}&quot;</span>
+                          </button>
+                        </li>
+                      );
+                    }
+
+                    const label =
+                      entry.kind === 'food'
+                        ? entry.food.name
+                        : entry.kind === 'pending'
+                          ? entry.pending.name
+                          : entry.option.name;
+                    const macros =
+                      entry.kind === 'food'
+                        ? formatMacros(entry.food)
+                        : entry.kind === 'pending'
+                          ? formatFoodMacros(entry.pending)
+                          : formatFoodMacros(entry.option);
+                    const hint =
+                      entry.kind === 'food'
+                        ? entry.label
+                        : entry.kind === 'pending'
+                          ? 'saved lookup'
+                          : 'AI estimate';
+
+                    return (
+                      <li key={entry.kind === 'food' ? entry.food.id : entry.kind === 'pending' ? entry.pending.lookupId : entry.option.lookupId} role="option" aria-selected={selectedIndex === idx}>
+                        <button
+                          type="button"
+                          className={`w-full px-3 py-2 text-left text-sm transition ${selectedIndex === idx ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            void selectEntry(entry);
+                          }}
+                        >
+                          <span className="font-medium text-slate-800">{label}</span>
+                          {hint ? <span className="ml-2 text-xs text-emerald-700">{hint}</span> : null}
+                          <span className="ml-2 text-slate-400 text-xs">{macros}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
               </ul>
             )}
           </div>

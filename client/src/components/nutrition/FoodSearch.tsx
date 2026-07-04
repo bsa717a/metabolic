@@ -1,6 +1,42 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../services/api';
+import { Sparkles } from 'lucide-react';
 import type { Food } from '../../types';
+import {
+  formatFoodMacros,
+  useFoodSearchWithAi,
+  type FoodLookupOption,
+  type PendingFoodLookup
+} from '../../hooks/useFoodSearchWithAi';
+
+function SectionLabel({ children }: { children: string }) {
+  return <li className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-app-text-muted">{children}</li>;
+}
+
+function FoodResultButton({
+  label,
+  macros,
+  hint,
+  onClick
+}: {
+  label: string;
+  macros: string;
+  hint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        className="w-full px-4 py-2 text-left text-sm text-app-text hover:bg-app-muted"
+        onClick={onClick}
+      >
+        <span className="font-medium">{label}</span>
+        {hint ? <span className="ml-2 text-xs text-brand-green">{hint}</span> : null}
+        <span className="ml-2 text-app-text-muted">{macros}</span>
+      </button>
+    </li>
+  );
+}
 
 export function FoodSearch({
   onSelect,
@@ -10,40 +46,54 @@ export function FoodSearch({
   dropUp?: boolean;
 }) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Food[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [searched, setSearched] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+  const {
+    local,
+    queue,
+    pending,
+    searching,
+    searchError,
+    searched,
+    hasResults,
+    aiOptions,
+    aiLoading,
+    aiError,
+    runAiSearch,
+    acceptLookup,
+    resetAi
+  } = useFoodSearchWithAi(query);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([]);
-      setError('');
-      setSearched(false);
-      setLoading(false);
-      return;
+    resetAi();
+    setAcceptError(null);
+  }, [query, resetAi]);
+
+  const showDropdown = query.trim().length >= 2 && (searching || searched || aiLoading || aiOptions.length > 0 || aiError || acceptError);
+
+  async function selectFood(food: Food) {
+    setAcceptError(null);
+    onSelect(food);
+    setQuery('');
+    resetAi();
+  }
+
+  async function selectPending(item: PendingFoodLookup) {
+    try {
+      const food = await acceptLookup(item.lookupId);
+      await selectFood(food);
+    } catch (err) {
+      setAcceptError(err instanceof Error ? err.message : 'Could not save that food.');
     }
+  }
 
-    setLoading(true);
-    setError('');
-    const timer = setTimeout(() => {
-      api<Food[]>(`/api/foods?query=${encodeURIComponent(query.trim())}`)
-        .then((rows) => {
-          setResults(rows);
-          setSearched(true);
-        })
-        .catch((err) => {
-          setResults([]);
-          setSearched(true);
-          setError(err instanceof Error ? err.message : 'Food search failed');
-        })
-        .finally(() => setLoading(false));
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  const showDropdown = query.trim().length >= 2 && (loading || searched || error);
+  async function selectAiOption(option: FoodLookupOption) {
+    try {
+      const food = await acceptLookup(option.lookupId);
+      await selectFood(food);
+    } catch (err) {
+      setAcceptError(err instanceof Error ? err.message : 'Could not save that food.');
+    }
+  }
 
   return (
     <div className="relative">
@@ -55,33 +105,94 @@ export function FoodSearch({
       />
       {showDropdown && (
         <ul
-          className={`absolute z-[100] max-h-48 w-full overflow-y-auto rounded-2xl border border-app-border bg-app-surface shadow-lg ${
+          className={`absolute z-[100] max-h-64 w-full overflow-y-auto rounded-2xl border border-app-border bg-app-surface shadow-lg ${
             dropUp ? 'bottom-full mb-1' : 'mt-1'
           }`}
         >
-          {loading && <li className="px-4 py-2 text-sm text-app-text-muted">Searching…</li>}
-          {!loading && error && <li className="px-4 py-2 text-sm text-red-600">{error}</li>}
-          {!loading && !error && results.length === 0 && (
-            <li className="px-4 py-2 text-sm text-app-text-muted">No foods found. Try a shorter name like &quot;chicken&quot; or &quot;rice&quot;.</li>
+          {searching && <li className="px-4 py-2 text-sm text-app-text-muted">Searching…</li>}
+          {!searching && searchError && <li className="px-4 py-2 text-sm text-red-600">{searchError}</li>}
+
+          {!searching && !searchError && local.length > 0 && (
+            <>
+              <SectionLabel>Foods</SectionLabel>
+              {local.map((food) => (
+                <FoodResultButton
+                  key={food.id}
+                  label={food.name}
+                  macros={`${Math.round(Number(food.calories))} kcal`}
+                  onClick={() => void selectFood(food)}
+                />
+              ))}
+            </>
           )}
-          {!loading &&
-            !error &&
-            results.map((food) => (
-              <li key={food.id}>
-                <button
-                  type="button"
-                  className="w-full px-4 py-2 text-left text-sm text-app-text hover:bg-app-muted"
-                  onClick={() => {
-                    onSelect(food);
-                    setQuery('');
-                    setResults([]);
-                    setSearched(false);
-                  }}
-                >
-                  <span className="font-medium">{food.name}</span>
-                  <span className="ml-2 text-app-text-muted">{Math.round(Number(food.calories))} kcal</span>
-                </button>
-              </li>
+
+          {!searching && !searchError && queue.length > 0 && (
+            <>
+              <SectionLabel>AI review queue</SectionLabel>
+              {queue.map((food) => (
+                <FoodResultButton
+                  key={food.id}
+                  label={food.name}
+                  macros={`${Math.round(Number(food.calories))} kcal`}
+                  hint="pending review"
+                  onClick={() => void selectFood(food)}
+                />
+              ))}
+            </>
+          )}
+
+          {!searching && !searchError && pending.length > 0 && (
+            <>
+              <SectionLabel>Your AI lookups</SectionLabel>
+              {pending.map((item) => (
+                <FoodResultButton
+                  key={item.lookupId}
+                  label={item.name}
+                  macros={formatFoodMacros(item)}
+                  hint="saved lookup"
+                  onClick={() => void selectPending(item)}
+                />
+              ))}
+            </>
+          )}
+
+          {!searching && !aiLoading && searched && !hasResults && aiOptions.length === 0 && !aiError && (
+            <li className="px-4 py-2 text-sm text-app-text-muted">No foods found in your library or AI queue.</li>
+          )}
+
+          {!searching && !aiLoading && aiOptions.length === 0 && !aiError && query.trim().length >= 2 && !hasResults && (
+            <li>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-medium text-brand-green hover:bg-app-muted"
+                onClick={() => void runAiSearch()}
+              >
+                <Sparkles size={14} />
+                Search with AI for &quot;{query.trim()}&quot;
+              </button>
+            </li>
+          )}
+
+          {aiLoading && <li className="px-4 py-2 text-sm text-app-text-muted">Asking AI for matches…</li>}
+          {aiError && (
+            <li className="px-4 py-2 text-sm text-red-600">
+              {aiError}
+              <button type="button" className="ml-2 font-bold underline" onClick={() => void runAiSearch()}>
+                Try again
+              </button>
+            </li>
+          )}
+          {acceptError && <li className="px-4 py-2 text-sm text-red-600">{acceptError}</li>}
+
+          {!aiLoading &&
+            aiOptions.map((option) => (
+              <FoodResultButton
+                key={option.lookupId}
+                label={option.name}
+                macros={formatFoodMacros(option)}
+                hint="AI estimate"
+                onClick={() => void selectAiOption(option)}
+              />
             ))}
         </ul>
       )}

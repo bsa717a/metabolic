@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Meal } from '../../types';
 import { MealCard } from './MealCard';
+import { MealSuggestionsDrawer } from './MealSuggestionsDrawer';
+import { MealSwapDrawer } from './MealSwapDrawer';
 
 export function MealPlanner({
   meals,
@@ -22,9 +24,13 @@ export function MealPlanner({
   onBuildMeal?: (mealNumber: number) => void;
 }) {
   const [editingMealId, setEditingMealId] = useState<string | undefined>();
+  const [swapMeal, setSwapMeal] = useState<Meal | null>(null);
+  const [suggestionsMeal, setSuggestionsMeal] = useState<Meal | null>(null);
 
   useEffect(() => {
     setEditingMealId(undefined);
+    setSwapMeal(null);
+    setSuggestionsMeal(null);
   }, [selectedDate]);
 
   function handleEnterEditMode(mealId: string) {
@@ -39,25 +45,45 @@ export function MealPlanner({
   }
 
   return (
-    <div className="space-y-4">
-      {meals.map((meal) => {
-        const cardMeal = cardMeals.find((c) => c.mealNumber === meal.mealNumber);
-        return (
-          <MealCard
-            key={meal.id}
-            meal={meal}
-            selectedDate={selectedDate}
-            onChange={onChange}
-            isEditing={meal.id === editingMealId}
-            onEnterEditMode={handleEnterEditMode}
-            onExitEditMode={handleExitEditMode}
-            onLogActual={onLogActual}
-            selected={meal.id === selectedMealId}
-            onSelect={onSelectMeal}
-            onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
-          />
-        );
-      })}
-    </div>
+    <>
+      <div className="space-y-4">
+        {meals.map((meal) => {
+          const cardMeal = cardMeals.find((c) => c.mealNumber === meal.mealNumber);
+          return (
+            <MealCard
+              key={meal.id}
+              meal={meal}
+              selectedDate={selectedDate}
+              onChange={onChange}
+              isEditing={meal.id === editingMealId}
+              onEnterEditMode={handleEnterEditMode}
+              onExitEditMode={handleExitEditMode}
+              onLogActual={onLogActual}
+              onAiSuggestions={setSuggestionsMeal}
+              onSwapMeal={setSwapMeal}
+              selected={meal.id === selectedMealId}
+              onSelect={onSelectMeal}
+              onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
+            />
+          );
+        })}
+      </div>
+
+      <MealSwapDrawer
+        open={swapMeal != null}
+        sourceMeal={swapMeal}
+        otherMeals={swapMeal ? meals.filter((meal) => meal.id !== swapMeal.id) : []}
+        onClose={() => setSwapMeal(null)}
+        onSaved={() => void onChange()}
+      />
+
+      <MealSuggestionsDrawer
+        open={suggestionsMeal != null}
+        date={selectedDate}
+        meal={suggestionsMeal}
+        onClose={() => setSuggestionsMeal(null)}
+        onSaved={() => void onChange()}
+      />
+    </>
   );
 }

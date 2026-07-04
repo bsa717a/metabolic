@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { acceptFoodLookup, acceptFoodLookups, lookupFood, lookupFoodFromImage } from '../services/foodLookupService.js';
+import { lookupFoodOptions } from '../services/foodSearchService.js';
 import { acceptExerciseLookup, lookupExercise } from '../services/exerciseLookupService.js';
 import { chatWithAssistant, suggestMealOptions } from '../services/assistantService.js';
 import { isCoachVoiceConfigured, synthesizeCoachSpeech } from '../services/coachVoiceService.js';
@@ -13,6 +14,16 @@ const chatMessageSchema = z.object({
 const mealSuggestionBody = z.object({ inputText: z.string().min(5).max(1000) });
 
 export async function aiRoutes(app: FastifyInstance) {
+  app.post('/api/ai/food-lookup/options', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      const body = z.object({ query: z.string().min(2) }).parse(request.body);
+      return await lookupFoodOptions(request.appUser!.id, body.query);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Food options lookup failed';
+      request.log.error({ err: error }, 'Food options lookup failed');
+      return reply.code(502).send({ error: message });
+    }
+  });
   app.post('/api/ai/food-lookup', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const body = z.object({ inputText: z.string().min(2) }).parse(request.body);

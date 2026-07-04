@@ -182,6 +182,7 @@ export type CoachCheckInTurnResult = {
 
 export interface AiProvider {
   lookupFood(input: string): Promise<FoodEstimate[]>;
+  lookupFoodOptions(input: string): Promise<FoodEstimate[]>;
   lookupFoodFromImage(image: { data: string; mimeType: string }, input?: string): Promise<FoodEstimate[]>;
   lookupExercises(input: string): Promise<ExerciseEstimate[]>;
   suggestMealOptions(input: string, context: string): Promise<MealSuggestionResult>;
@@ -340,6 +341,13 @@ Calories must be consistent with the macros: roughly 4 cal per gram of protein, 
 Set confidence below 0.5 when you are unsure of a specific branded or restaurant item.
 Return JSON only: { "items": [ { "normalizedFoodName": string (include portion), "calories": number, "protein": grams, "carbs": grams, "fat": grams, "confidence": 0-1 }, ... ] }
 Each food line must be its own item. Never combine multiple foods into one entry.`;
+
+const FOOD_OPTIONS_PROMPT = `The user is searching for a single food to log.
+If the query clearly specifies one food with a portion (e.g. "6 oz grilled chicken breast"), return exactly 1 precise estimate.
+If the query is ambiguous (generic name, brand vs homemade, raw vs cooked, unclear portion), return up to 3 distinct plausible interpretations with different portions or preparations.
+Each option must be realistic and internally consistent: roughly 4 cal/g protein, 4 cal/g carbs, 9 cal/g fat.
+Return JSON only: { "items": [ { "normalizedFoodName": string (include portion in the name), "calories": number, "protein": grams, "carbs": grams, "fat": grams, "confidence": 0-1 }, ... ] }
+Return between 1 and 3 items. Never return more than 3.`;
 
 const EXERCISE_LOOKUP_PROMPT = `Suggest relevant exercises for the user's query.
 Return JSON only: { "items": [ { "name": string, "description": string (1 short sentence on form and cues), "category": "Strength"|"Cardio"|"Recovery"|null, "bodyPart": "Chest"|"Back"|"Shoulders"|"Biceps"|"Triceps"|"Forearms"|"Core"|"Legs"|"Glutes"|"Calves"|"Full Body"|null, "defaultSets": number|null, "defaultReps": number|null, "defaultDurationMinutes": number|null, "confidence": 0-1 }, ... ] }
@@ -840,6 +848,40 @@ export class MockAiProvider implements AiProvider {
         confidence: 0.72
       };
     });
+  }
+
+  async lookupFoodOptions(input: string): Promise<FoodEstimate[]> {
+    const query = input.trim();
+    const lower = query.toLowerCase();
+    if (lower.includes('chicken')) {
+      return [
+        {
+          normalizedFoodName: '6 oz grilled chicken breast',
+          calories: 280,
+          protein: 52,
+          carbs: 0,
+          fat: 6,
+          confidence: 0.86
+        },
+        {
+          normalizedFoodName: '1 cup diced rotisserie chicken',
+          calories: 320,
+          protein: 48,
+          carbs: 0,
+          fat: 14,
+          confidence: 0.74
+        },
+        {
+          normalizedFoodName: '4 oz breaded chicken tenders',
+          calories: 290,
+          protein: 18,
+          carbs: 18,
+          fat: 16,
+          confidence: 0.68
+        }
+      ];
+    }
+    return this.lookupFood(query);
   }
 
   async lookupFoodFromImage(_image: { data: string; mimeType: string }, input = 'uploaded meal photo'): Promise<FoodEstimate[]> {
@@ -1384,6 +1426,25 @@ class GeminiAiProvider implements AiProvider {
         return parseFoodLookupResponse(retry.response.text());
       } catch (retryError) {
         throw wrapAiError(retryError, 'food lookup');
+      }
+    }
+  }
+
+  async lookupFoodOptions(input: string): Promise<FoodEstimate[]> {
+    const query = input.trim();
+    const prompt = `${FOOD_OPTIONS_PROMPT}\n\nSearch query: ${query}`;
+
+    try {
+      const result = await this.foodModel().generateContent(prompt);
+      return parseFoodLookupResponse(result.response.text()).slice(0, 3);
+    } catch (error) {
+      try {
+        const retry = await this.foodModel().generateContent(
+          `${prompt}\n\nImportant: respond with valid JSON and between 1 and 3 food options.`
+        );
+        return parseFoodLookupResponse(retry.response.text()).slice(0, 3);
+      } catch (retryError) {
+        throw wrapAiError(retryError, 'food options lookup');
       }
     }
   }

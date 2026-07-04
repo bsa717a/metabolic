@@ -3,7 +3,7 @@ import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { canAccessUser } from '../auth/requireRole.js';
-import { addMealItem, copyDayPlanForward, copyDayPlanToDates, applyMealForward, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, updateMealItem } from '../services/nutritionService.js';
+import { addMealItem, applyMealForward, clearMealPlannedFoods, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
@@ -114,6 +114,26 @@ export async function nutritionRoutes(app: FastifyInstance) {
     const mealId = (request.params as { id: string }).id;
     const ownerId = await mealOwnerForActor(request.appUser!, mealId);
     return applyMealForward(ownerId, mealId);
+  });
+  app.post('/api/meals/:id/swap', { preHandler: requireAuth }, async (request, reply) => {
+    const mealId = (request.params as { id: string }).id;
+    const ownerId = await mealOwnerForActor(request.appUser!, mealId);
+    const body = z.object({ otherMealId: z.string().trim().min(1) }).parse(request.body);
+    await mealOwnerForActor(request.appUser!, body.otherMealId);
+    try {
+      return await swapMeals(ownerId, mealId, body.otherMealId);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to swap meals' });
+    }
+  });
+  app.post('/api/meals/:id/clear-planned', { preHandler: requireAuth }, async (request, reply) => {
+    const mealId = (request.params as { id: string }).id;
+    const ownerId = await mealOwnerForActor(request.appUser!, mealId);
+    try {
+      return await clearMealPlannedFoods(ownerId, mealId);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clear planned foods' });
+    }
   });
   app.get('/api/plan-status', { preHandler: requireAuth }, async (request, reply) => {
     const status = await getPlanStatus(request.appUser!.id);
