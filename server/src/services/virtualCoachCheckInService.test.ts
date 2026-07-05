@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   CHECK_IN_STAGES,
   KICKOFF_STAGES,
+  applyCoachNameUsage,
   nextStage,
   parseTranscript,
   stagesForKind
@@ -89,5 +90,28 @@ describe('mock provider kickoff walk', () => {
     });
     assert.equal(result.done, true);
     assert.ok(result.recap);
+  });
+});
+
+describe('applyCoachNameUsage', () => {
+  it('keeps the name on the opening line and injects one when missing', () => {
+    assert.match(applyCoachNameUsage('How are you feeling about the week?', 'Derek', 1), /Derek/);
+    assert.match(applyCoachNameUsage('Hi Derek. How are you feeling?', 'Derek', 1), /Hi Derek/);
+  });
+
+  it('strips the name on even-numbered coach messages', () => {
+    const stripped = applyCoachNameUsage('Okay Derek, what went well this week?', 'Derek', 2);
+    assert.doesNotMatch(stripped, /\bDerek\b/);
+    assert.match(stripped, /what went well/i);
+  });
+
+  it('keeps or adds the name on odd-numbered coach messages after the opening', () => {
+    assert.match(applyCoachNameUsage('Derek, what got in the way?', 'Derek', 3), /\bDerek\b/);
+    assert.match(applyCoachNameUsage('What got in the way?', 'Derek', 3), /\bDerek\b/);
+  });
+
+  it('always keeps the name on recap sign-off even on an even coach message number', () => {
+    const closing = applyCoachNameUsage('Okay Derek, talk soon.', 'Derek', 8, true);
+    assert.match(closing, /\bDerek\b/);
   });
 });

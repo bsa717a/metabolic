@@ -273,28 +273,18 @@ export async function setCheckInDay(userId: string, day: number) {
   return getCheckInState(userId);
 }
 
-/**
- * The model tends to address the user by name in nearly every message, which feels
- * unnerving. Keep the name only ~30% of the time (chosen at random) and otherwise
- * strip the common vocative/greeting forms while keeping the sentence natural.
- */
-const KEEP_NAME_PROBABILITY = 0.3;
+function messageIncludesName(message: string, firstName: string) {
+  const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(message);
+}
 
-export function softenCoachName(message: string, firstName?: string | null): string {
-  const name = firstName?.trim();
-  if (!message || !name) return message;
-  if (Math.random() < KEEP_NAME_PROBABILITY) return message;
-
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function stripCoachName(message: string, firstName: string): string {
+  const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   let out = message;
-  // "Hey Derek" / "Hi Derek" / "Okay Derek" -> drop the name, keep the greeting.
   out = out.replace(new RegExp(`\\b(hey|hi|hello|okay|ok|alright|well|so|oh)\\s+${escaped}\\b`, 'gi'), '$1');
-  // Vocative comma forms: "great, Derek" and "Derek, let's" -> remove the address.
   out = out.replace(new RegExp(`\\s*,\\s*${escaped}\\b(?!['’]s)`, 'gi'), '');
   out = out.replace(new RegExp(`\\b${escaped}\\b(?!['’]s)\\s*,\\s*`, 'gi'), '');
-  // Any remaining standalone use (not possessive), with trailing ! or .
   out = out.replace(new RegExp(`\\b${escaped}\\b(?!['’]s)[!.]?`, 'gi'), '');
-  // Tidy spacing and punctuation left behind.
   out = out
     .replace(/\(\s*\)/g, '')
     .replace(/\s{2,}/g, ' ')
@@ -303,6 +293,32 @@ export function softenCoachName(message: string, firstName?: string | null): str
     .trim();
   if (out) out = out.charAt(0).toUpperCase() + out.slice(1);
   return out || message;
+}
+
+function ensureCoachUsesName(message: string, firstName: string, isOpening: boolean): string {
+  if (messageIncludesName(message, firstName)) return message;
+  const trimmed = message.trim();
+  if (isOpening) {
+    return `Hi ${firstName}. ${trimmed}`;
+  }
+  return `${firstName}, ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
+}
+
+/** Opening line always uses their name; every other coach message alternates name on/off. Recap sign-off always keeps it. */
+export function applyCoachNameUsage(
+  message: string,
+  firstName?: string | null,
+  coachMessageNumber = 1,
+  isRecapClosing = false
+): string {
+  const name = firstName?.trim();
+  if (!message || !name) return message;
+
+  const keepName = isRecapClosing || coachMessageNumber % 2 === 1;
+  if (keepName) {
+    return ensureCoachUsesName(message, name, coachMessageNumber === 1);
+  }
+  return stripCoachName(message, name);
 }
 
 const GOAL_METRIC_LABELS: Record<string, string> = {
@@ -351,6 +367,8 @@ async function runCoachTurn(
   });
   const kickoffContext = flow === 'kickoff' ? { goalLines: await kickoffGoalLines(userId) } : undefined;
 
+  const coachMessageNumber = transcript.messages.filter((entry) => entry.role === 'coach').length + 1;
+
   const turn = await getAiProvider().coachCheckInTurn({
     coachId,
     stage,
@@ -360,10 +378,11 @@ async function runCoachTurn(
     kickoffContext,
     transcript: transcript.messages,
     userMessage,
-    userFirstName: user.firstName
+    userFirstName: user.firstName,
+    coachMessageNumber
   });
 
-  return { ...turn, message: softenCoachName(turn.message, user.firstName) };
+  return { ...turn, message: applyCoachNameUsage(turn.message, user.firstName, coachMessageNumber, stage === 'recap') };
 }
 
 /** Persisting the kickoff "why" must never fail the check-in itself. */

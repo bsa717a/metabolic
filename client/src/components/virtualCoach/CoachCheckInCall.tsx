@@ -43,9 +43,7 @@ export function CoachCheckInCall({
     voices,
     voiceURI,
     setVoiceURI,
-    naturalAvailable,
-    naturalVoice,
-    setNaturalVoice
+    naturalAvailable
   } = useSpeech(coach.id);
   speakRef.current = speak;
   const sampleLine = `Hi, it's ${coach.name}. This is how I'll sound.`;
@@ -113,9 +111,9 @@ export function CoachCheckInCall({
       const result = await api<VirtualCoachCheckInSession>(`/api/virtual-coach/check-in/${session.id}/complete`, {
         method: 'POST'
       });
+      setSession(result);
       setEndedRecap(result.recap);
       setPlanAdvance(result.planAdvance ?? null);
-      onEnd(result.recap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to end check-in');
     } finally {
@@ -124,8 +122,16 @@ export function CoachCheckInCall({
   }
 
   if (endedRecap) {
+    const closingMessage = [...session.transcript].reverse().find((entry) => entry.role === 'coach')?.content;
+
     return (
       <div className="space-y-6">
+        {closingMessage ? (
+          <div className="rounded-2xl border border-app-border bg-app-muted/40 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-green">{coach.name}</p>
+            <p className="mt-2 text-sm leading-relaxed text-app-text">{closingMessage}</p>
+          </div>
+        ) : null}
         <CheckInRecap recap={endedRecap} coachName={coach.name} planAdvance={planAdvance} kind={session.kind} />
         <Button variant="secondary" onClick={() => onEnd(endedRecap)}>
           Back to {coach.name}
@@ -238,26 +244,7 @@ export function CoachCheckInCall({
 
         {showVoicePicker && (naturalAvailable || voices.length > 0) && (
           <div className="mt-3 space-y-3 rounded-xl border border-app-border bg-app-bg/60 p-3">
-            {naturalAvailable && (
-              <label className="flex items-center justify-between gap-3 text-xs font-medium text-app-text">
-                <span>
-                  Natural AI voice
-                  <span className="ml-1 font-normal text-app-text-muted">— lifelike, recommended</span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={naturalVoice}
-                  onChange={(event) => {
-                    setNaturalVoice(event.target.checked);
-                    setMuted(false);
-                    window.setTimeout(() => speak(sampleLine), 50);
-                  }}
-                  className="h-4 w-4 accent-brand-green"
-                />
-              </label>
-            )}
-
-            {naturalVoice && naturalAvailable ? (
+            {naturalAvailable ? (
               <button
                 type="button"
                 onClick={() => {

@@ -45,7 +45,7 @@ export function CheckInRecap({
         <p className="mt-1 text-sm text-app-text-muted">
           {kickoff
             ? `Where you and ${coachName} are starting from.`
-            : `A few notes from ${coachName} to carry into the week.`}
+            : `What you and ${coachName} are working on this week.`}
         </p>
       </div>
 

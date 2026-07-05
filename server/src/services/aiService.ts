@@ -161,6 +161,8 @@ export type CoachCheckInTurnInput = {
   transcript: CoachCheckInTranscriptEntry[];
   userMessage?: string;
   userFirstName: string;
+  /** 1-based count of coach lines in this session, including the one being generated. */
+  coachMessageNumber?: number;
 };
 
 export type CoachCheckInRecap = {
@@ -420,7 +422,7 @@ const WEEKLY_STAGE_GOALS: Partial<Record<CoachCheckInStage, string>> = {
   pattern: 'Name the single most important pattern you notice across the conversation and their data.',
   focus: 'Help them choose one clear focus for the coming week.',
   commitment: 'Agree on one simple support action they can actually do.',
-  recap: 'Summarize win, pattern, focus, and support action warmly. Set done true with recap filled in.'
+  recap: 'Warm sign-off: you need to go, their one focus in plain language, recap saved below, message you on their coach page between check-ins. Set done true with recap filled in.'
 };
 
 const KICKOFF_STAGE_GOALS: Partial<Record<CoachCheckInStage, string>> = {
@@ -430,7 +432,7 @@ const KICKOFF_STAGE_GOALS: Partial<Record<CoachCheckInStage, string>> = {
   rhythm: 'Explain how their week works: build their meals each day, check in with you weekly, and their plan adjusts to their body over time. Confirm it makes sense.',
   first_focus: 'Help them pick one simple, confidence-building focus for their first week. Small and winnable.',
   commitment: 'Agree on one simple support action they can actually do.',
-  recap: 'Summarize their why, goal, first-week focus, and support action warmly. Set done true; fill recap with win = their goal, pattern = their why, focus, supportAction, and motivation = their why as one polished sentence.'
+  recap: 'Warm sign-off: you need to go, what you are starting together, recap saved below, message you on their coach page before the first weekly check-in. Set done true; fill recap with win = their goal, pattern = their why, focus, supportAction, and motivation = their why as one polished sentence.'
 };
 
 function stageGoalsFor(flow: CoachCheckInFlow | undefined): Partial<Record<CoachCheckInStage, string>> {
@@ -441,6 +443,7 @@ const COACH_CHECK_IN_JSON_PROMPT = `Return JSON only:
 { "message": string, "chips": string[], "advance": boolean, "done": boolean, "recap"?: { "win": string, "pattern": string, "focus": string, "supportAction": string, "motivation"?: string } }
 Set advance true when this stage feels complete and you are ready to move on.
 Set done true only on the recap stage when you are closing the check-in; include recap then.
+On recap, message is spoken aloud as your goodbye — warm, conversational, and complete. Do not list recap fields in the message; those go in recap JSON.
 Include recap.motivation (their core "why" as one sentence) only on a kickoff call.`;
 
 const ASSISTANT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
@@ -570,6 +573,13 @@ function buildCoachCheckInPrompt(input: CoachCheckInTurnInput) {
     .map((entry) => `${entry.role === 'coach' ? 'Coach' : 'User'}: ${entry.content}`)
     .join('\n');
   const userLine = input.userMessage ? `\nUser just said: ${input.userMessage.trim()}` : '\nThis is the opening coach line — no user reply yet.';
+  const coachMessageNumber = input.coachMessageNumber ?? input.transcript.filter((entry) => entry.role === 'coach').length + 1;
+  const nameInstruction =
+    coachMessageNumber === 1
+      ? 'Name usage: this is your opening line — greet them by first name.'
+      : coachMessageNumber % 2 === 1
+        ? 'Name usage: include their first name naturally in this message.'
+        : 'Name usage: do not use their first name in this message.';
 
   // Kickoff calls have no week behind them: goals on file replace the weekly data section.
   const contextSection =
@@ -583,6 +593,7 @@ ${input.weeklyReview.highlights.map((line) => `- ${line}`).join('\n') || '- Limi
 
 Current stage: ${input.stage}
 Stage goal: ${stageGoalsFor(input.flow)[input.stage] ?? 'Continue the conversation naturally toward the recap.'}
+${nameInstruction}
 
 ${contextSection}
 
@@ -1259,7 +1270,10 @@ export class MockAiProvider implements AiProvider {
         done: false
       },
       recap: {
-        message: `${name}, you showed up today — that matters. Here is what I am taking with us into next week.`,
+        message: (() => {
+          const focus = input.userMessage?.trim() || 'one clear focus for the week ahead';
+          return `${name}, I've got to hop off — but before I go: we're keeping "${focus}" front and center this week. I've saved the details below for you. If something comes up before our next check-in, just message me on your coach page. Talk soon.`;
+        })(),
         chips: [],
         advance: true,
         done: true,
@@ -1324,7 +1338,10 @@ export class MockAiProvider implements AiProvider {
         done: false
       },
       recap: {
-        message: `${name}, this was a great start. I know your why, we've confirmed where we're headed, and week one has one simple job. I'll see you at your first weekly check-in.`,
+        message: (() => {
+          const focus = input.userMessage?.trim() || 'one simple focus for week one';
+          return `${name}, I need to run — but we're aligned. Week one is about ${focus}, and I've got everything saved below. Message me on your coach page anytime before our first weekly check-in. So glad you're here.`;
+        })(),
         chips: [],
         advance: true,
         done: true,
