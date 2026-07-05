@@ -335,15 +335,14 @@ function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: App
         </div>
       </div>
 
-      {latestRecap && (latestRecap.win || latestRecap.focus) && (
-        <CheckInRecap recap={latestRecap} coachName={coach.name} kind={latestRecap.kind ?? 'WEEKLY'} />
-      )}
-
       {error && <p className="text-center text-sm text-red-600">{error}</p>}
 
       <div className="space-y-3">
         <CoachChatBox coach={coach} />
         <CoachHelpSection coach={coach} />
+        {latestRecap && (latestRecap.win || latestRecap.focus) ? (
+          <CheckInRecap recap={latestRecap} coachName={coach.name} kind={latestRecap.kind ?? 'WEEKLY'} />
+        ) : null}
       </div>
 
       <CoachWeekStatsModal open={showStats} onClose={() => setShowStats(false)} coachName={coach.name} />

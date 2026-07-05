@@ -133,7 +133,6 @@ export function useSpeech(coachId: VirtualCoachId) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceURI, setVoiceURIState] = useState<string | null>(() => readStoredVoiceURI(coachId));
   const [naturalAvailable, setNaturalAvailable] = useState(false);
-  const [naturalVoice, setNaturalVoice] = useState(true);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const availabilityRef = useRef<Promise<boolean> | null>(null);
@@ -271,22 +270,13 @@ export function useSpeech(coachId: VirtualCoachId) {
     (text: string) => {
       if (muted || typeof window === 'undefined') return;
       stopSpeaking();
-      if (naturalVoice) {
-        // Wait for the availability check instead of assuming "not yet known"
-        // means unavailable — otherwise the first coach line (spoken on mount,
-        // before the check resolves) always lands on the robotic browser voice.
-        // Fall back to the browser voice for THIS line only if the natural audio
-        // fails to play (e.g. a transient autoplay block). Do not permanently
-        // disable the natural voice — the next line (after a user gesture) retries.
-        void checkNaturalAvailable().then(async (available) => {
-          const ok = available ? await playNatural(text) : false;
-          if (!ok) browserSpeak(text);
-        });
-        return;
-      }
-      browserSpeak(text);
+      // Prefer server-side natural voice when configured; fall back to browser TTS for this line only.
+      void checkNaturalAvailable().then(async (available) => {
+        const ok = available ? await playNatural(text) : false;
+        if (!ok) browserSpeak(text);
+      });
     },
-    [muted, stopSpeaking, naturalVoice, checkNaturalAvailable, playNatural, browserSpeak]
+    [muted, stopSpeaking, checkNaturalAvailable, playNatural, browserSpeak]
   );
 
   const startListening = useCallback(
@@ -336,8 +326,6 @@ export function useSpeech(coachId: VirtualCoachId) {
     voices: selectableVoices,
     voiceURI: resolveVoice()?.voiceURI ?? null,
     setVoiceURI,
-    naturalAvailable,
-    naturalVoice,
-    setNaturalVoice
+    naturalAvailable
   };
 }
