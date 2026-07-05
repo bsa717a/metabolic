@@ -8,6 +8,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { BrandLogo } from '../brand/BrandLogo';
 import { EditAccountDetailsDrawer } from '../user/EditAccountDetailsDrawer';
 import { TopbarGamification } from './TopbarGamification';
+import { ColorThemePicker } from './ColorThemePicker';
 import { ThemeToggle } from './ThemeToggle';
 import { isAdminRole, isCoachRole } from '../../utils/roles';
 
@@ -217,7 +218,7 @@ export function Topbar({ user }: { user?: AppUser | null }) {
               </button>
               {profileOpen && (
                 <ul
-                  className="absolute right-0 z-50 mt-1 min-w-[200px] rounded-xl border border-app-border bg-app-surface py-1 shadow-lg"
+                  className="absolute right-0 z-50 mt-1 min-w-[260px] rounded-xl border border-app-border bg-app-surface py-1 shadow-lg"
                   role="menu"
                 >
                   <li className="border-b border-app-border px-4 py-2">
@@ -254,6 +255,9 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                       }}
                     />
                   ) : null}
+                  <li className="border-t border-app-border px-4 py-3">
+                    <ColorThemePicker />
+                  </li>
                   <ProfileMenuItem
                     label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
                     icon={theme === 'dark' ? Sun : Moon}
