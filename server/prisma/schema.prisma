@@ -19,6 +19,26 @@ enum UserStatus {
   INVITED
   DISABLED
 }
+enum PlanTier {
+  STARTER
+  SELF_GUIDED
+  PLUS
+  COACH_LED
+}
+enum SubscriptionStatus {
+  FREE
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  COACH_MANAGED
+}
+enum CoachRelationshipStatus {
+  ACTIVE
+  COMPLETED
+  RELEASED
+  ARCHIVED
+}
 enum ProgramStatus {
   DRAFT
   ACTIVE
@@ -207,6 +227,14 @@ model User {
   smsRemindersIntroCompletedAt DateTime?
   selectedVirtualCoachId String?
   virtualCoachCheckInDay Int?
+  plan PlanTier @default(STARTER)
+  subscriptionStatus SubscriptionStatus @default(FREE)
+  subscriptionStartedAt DateTime?
+  subscriptionCurrentPeriodEnd DateTime?
+  stripeCustomerId String? @unique
+  stripeSubscriptionId String? @unique
+  gracePeriodEndsAt DateTime?
+  nextPlanAfterCoach PlanTier?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organizations UserOrganization[]
@@ -348,12 +376,17 @@ model CoachAssignment {
   id String @id @default(cuid())
   coachId String
   userId String
+  status CoachRelationshipStatus @default(ACTIVE)
+  accessStartedAt DateTime @default(now())
+  accessEndsAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   coach User @relation("CoachAssignments", fields: [coachId], references: [id], onDelete: Cascade)
   user User @relation("UserAssignments", fields: [userId], references: [id], onDelete: Cascade)
   @@unique([coachId, userId])
-  @@unique([userId])
+  /// One ACTIVE assignment per user is enforced by partial unique index `CoachAssignment_userId_active_key` (see migration 20260705130000_v1_pricing_access).
+  @@index([userId])
+  @@index([coachId, status])
 }
 
 model ClientGroup {

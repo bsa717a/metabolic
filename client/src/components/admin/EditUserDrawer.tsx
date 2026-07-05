@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react';
-import type { AdminUser, Role, UserAccountDetails, UserStatus, UserSummary } from '../../types';
+import type { AdminUser, CoachSummary, PlanSlug, Role, SubscriptionStatusSlug, UserAccountDetails, UserStatus } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { UserProfileFields } from '../user/UserProfileFields';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from '../user/userProfileForm';
 import { timezoneOptions } from '../../utils/timezoneOptions';
+import { planLabel } from '../../utils/entitlements';
 
 const roles: Role[] = ['SUPER_ADMIN', 'ADMIN', 'COACH', 'USER', 'VIEWER'];
 const statuses: UserStatus[] = ['ACTIVE', 'INVITED', 'DISABLED'];
+const plans: PlanSlug[] = ['starter', 'self_guided', 'plus', 'coach_led'];
+const subscriptionStatuses: SubscriptionStatusSlug[] = [
+  'free',
+  'active',
+  'trialing',
+  'past_due',
+  'canceled',
+  'coach_managed'
+];
 
 type UserDraft = {
   firstName: string;
@@ -17,6 +27,8 @@ type UserDraft = {
   phone: string;
   role: Role;
   status: UserStatus;
+  plan: PlanSlug;
+  subscriptionStatus: SubscriptionStatusSlug;
 };
 
 function toDraft(user: AdminUser): UserDraft {
@@ -26,12 +38,34 @@ function toDraft(user: AdminUser): UserDraft {
     email: user.email,
     phone: user.phone ?? '',
     role: user.role,
-    status: user.status
+    status: user.status,
+    plan: user.plan ?? 'starter',
+    subscriptionStatus: user.subscriptionStatus ?? 'free'
   };
 }
 
 function formatRole(role: string) {
   return role.replaceAll('_', ' ');
+}
+
+function toServerPlan(plan: PlanSlug) {
+  const map: Record<PlanSlug, string> = {
+    starter: 'STARTER',
+    self_guided: 'SELF_GUIDED',
+    plus: 'PLUS',
+    coach_led: 'COACH_LED'
+  };
+  return map[plan];
+}
+
+function toServerSubscriptionStatus(status: SubscriptionStatusSlug) {
+  return status.toUpperCase() as
+    | 'FREE'
+    | 'ACTIVE'
+    | 'TRIALING'
+    | 'PAST_DUE'
+    | 'CANCELED'
+    | 'COACH_MANAGED';
 }
 
 function labelClassName() {
@@ -51,7 +85,7 @@ export function EditUserDrawer({
 }: {
   open: boolean;
   user?: AdminUser;
-  coaches?: UserSummary[];
+  coaches?: CoachSummary[];
   onClose: () => void;
   onSaved: (user: AdminUser) => void;
 }) {
@@ -80,7 +114,7 @@ function EditUserDrawerContent({
 }: {
   open: boolean;
   user: AdminUser;
-  coaches: UserSummary[];
+  coaches: CoachSummary[];
   onClose: () => void;
   onSaved: (user: AdminUser) => void;
 }) {
@@ -90,7 +124,10 @@ function EditUserDrawerContent({
   const [smsMealRemindersEnabled, setSmsMealRemindersEnabled] = useState(true);
   const [smsEveningRecapEnabled, setSmsEveningRecapEnabled] = useState(true);
   const [canEditClientNotes, setCanEditClientNotes] = useState(true);
-  const [coachId, setCoachId] = useState(user.assignedCoach?.id ?? '');
+  const [coachLedCoachId, setCoachLedCoachId] = useState(user.assignedCoach?.id ?? '');
+  const [endNextPlan, setEndNextPlan] = useState<PlanSlug>('plus');
+  const [endGraceDays, setEndGraceDays] = useState(7);
+  const [coachActionLoading, setCoachActionLoading] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState('');
@@ -124,6 +161,23 @@ function EditUserDrawerContent({
     setProfileDraft((current) => ({ ...current, [field]: value }));
   }
 
+  async function endCoachLed() {
+    setCoachActionLoading(true);
+    setError('');
+    try {
+      const nextUser = await api<AdminUser>(`/api/admin/users/${user.id}/coach-led`, {
+        method: 'DELETE',
+        body: JSON.stringify({ nextPlan: toServerPlan(endNextPlan), graceDays: endGraceDays })
+      });
+      onSaved(nextUser);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to end coach-led');
+    } finally {
+      setCoachActionLoading(false);
+    }
+  }
+
   async function save() {
     setSaving(true);
     setError('');
@@ -134,7 +188,9 @@ function EditUserDrawerContent({
         email: draft.email.trim(),
         phone: draft.phone.trim() ? draft.phone.trim() : null,
         role: draft.role,
-        status: draft.status
+        status: draft.status,
+        plan: toServerPlan(draft.plan),
+        subscriptionStatus: toServerSubscriptionStatus(draft.subscriptionStatus)
       };
       if (!payload.firstName || !payload.lastName || !payload.email) {
         throw new Error('First name, last name, and email are required.');
@@ -144,13 +200,26 @@ function EditUserDrawerContent({
         body: JSON.stringify(payload)
       });
       let nextUser = updated;
-      if (coachId !== (user.assignedCoach?.id ?? '')) {
-        nextUser = coachId
-          ? await api<AdminUser>(`/api/admin/users/${user.id}/coach-assignment`, {
-              method: 'PUT',
-              body: JSON.stringify({ coachId })
-            })
-          : await api<AdminUser>(`/api/admin/users/${user.id}/coach-assignment`, { method: 'DELETE' });
+      const previousCoachId = user.assignedCoach?.id ?? '';
+      const previousPlan = user.plan ?? 'starter';
+      const planChangedOffCoachLed = previousPlan === 'coach_led' && draft.plan !== 'coach_led';
+
+      if (planChangedOffCoachLed && previousCoachId) {
+        nextUser = await api<AdminUser>(`/api/admin/users/${user.id}/coach-assignment`, { method: 'DELETE' });
+      } else if (coachLedCoachId !== previousCoachId || (draft.plan === 'coach_led' && coachLedCoachId)) {
+        if (draft.plan === 'coach_led' && coachLedCoachId) {
+          nextUser = await api<AdminUser>(`/api/admin/users/${user.id}/coach-led`, {
+            method: 'POST',
+            body: JSON.stringify({ coachId: coachLedCoachId })
+          });
+        } else if (coachLedCoachId) {
+          nextUser = await api<AdminUser>(`/api/admin/users/${user.id}/coach-assignment`, {
+            method: 'PUT',
+            body: JSON.stringify({ coachId: coachLedCoachId })
+          });
+        } else if (previousCoachId) {
+          nextUser = await api<AdminUser>(`/api/admin/users/${user.id}/coach-assignment`, { method: 'DELETE' });
+        }
       }
       if (profileLoaded) {
         await api<UserAccountDetails>(`/api/users/${user.id}/profile`, {
@@ -237,17 +306,74 @@ function EditUserDrawerContent({
         </label>
 
         <label className="block">
+          <span className={labelClassName()}>Plan</span>
+          <select className={inputClassName()} value={draft.plan} onChange={(event) => updateDraft('plan', event.target.value as PlanSlug)}>
+            {plans.map((plan) => (
+              <option key={plan} value={plan}>
+                {planLabel(plan)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className={labelClassName()}>Subscription status</span>
+          <select
+            className={inputClassName()}
+            value={draft.subscriptionStatus}
+            onChange={(event) => updateDraft('subscriptionStatus', event.target.value as SubscriptionStatusSlug)}
+          >
+            {subscriptionStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status.replaceAll('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
           <span className={labelClassName()}>Primary coach</span>
-          <select className={inputClassName()} value={coachId} onChange={(event) => setCoachId(event.target.value)}>
+          <select className={inputClassName()} value={coachLedCoachId} onChange={(event) => setCoachLedCoachId(event.target.value)}>
             <option value="">No coach assigned</option>
             {coaches.map((coach) => (
               <option key={coach.id} value={coach.id}>
                 {coach.firstName} {coach.lastName} ({coach.email})
+                {coach.activeCoachLedLicenses != null ? ` — ${coach.activeCoachLedLicenses} active licenses` : ''}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500">Only super admins can save coach assignment changes.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Set plan to Coach-Led and pick a coach, then save to assign coach-led access.
+          </p>
         </label>
+
+        {user.plan === 'coach_led' ? (
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900">End coach-led relationship</p>
+            <label className="block">
+              <span className={labelClassName()}>Next plan after grace</span>
+              <select className={inputClassName()} value={endNextPlan} onChange={(event) => setEndNextPlan(event.target.value as PlanSlug)}>
+                <option value="plus">Metabolic Plus</option>
+                <option value="self_guided">Self-Guided</option>
+                <option value="starter">Starter</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className={labelClassName()}>Grace period (days)</span>
+              <input
+                className={inputClassName()}
+                type="number"
+                min={0}
+                max={30}
+                value={endGraceDays}
+                onChange={(event) => setEndGraceDays(Number(event.target.value))}
+              />
+            </label>
+            <Button variant="secondary" disabled={coachActionLoading || saving} onClick={() => void endCoachLed()}>
+              End coach-led (removes coach access immediately)
+            </Button>
+          </div>
+        ) : null}
 
         <label className="block">
           <span className={labelClassName()}>Timezone</span>

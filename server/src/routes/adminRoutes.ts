@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { FoodSource, Role, UserStatus, Visibility } from '@prisma/client';
+import { FoodSource, PlanTier, Role, SubscriptionStatus, UserStatus, Visibility } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { requireRole } from '../auth/requireRole.js';
@@ -22,6 +22,7 @@ import {
   updateAdminFood,
   updateAdminUser
 } from '../services/adminService.js';
+import { assignCoachLed, endCoachLed, finalizeCoachLedTransition } from '../services/coachLedService.js';
 import {
   nutritionTemplateCreateBody,
   nutritionTemplateUpdateBody
@@ -68,9 +69,20 @@ const userUpdateBody = z
     email: z.string().trim().email().optional(),
     phone: z.string().trim().nullable().optional(),
     role: z.nativeEnum(Role).optional(),
-    status: z.nativeEnum(UserStatus).optional()
+    status: z.nativeEnum(UserStatus).optional(),
+    plan: z.nativeEnum(PlanTier).optional(),
+    subscriptionStatus: z.nativeEnum(SubscriptionStatus).optional()
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
+
+const coachLedAssignBody = z.object({
+  coachId: z.string().trim().min(1)
+});
+
+const coachLedEndBody = z.object({
+  nextPlan: z.nativeEnum(PlanTier).optional(),
+  graceDays: z.number().int().min(0).max(30).optional()
+});
 
 const coachAssignmentBody = z.object({
   coachId: z.string().trim().min(1)
@@ -280,6 +292,80 @@ export async function adminRoutes(app: FastifyInstance) {
     } catch (error) {
       request.log.error({ err: error }, 'Failed to unassign coach');
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to unassign coach' });
+    }
+  });
+
+  app.post('/api/admin/users/:id/coach-led', { preHandler: superAdminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = coachLedAssignBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid coach-led assignment' });
+    }
+    try {
+      await assignCoachLed(id, parsed.data.coachId);
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id },
+        include: {
+          userAssignments: {
+            where: { status: 'ACTIVE' },
+            include: { coach: { select: { id: true, firstName: true, lastName: true, email: true, role: true, status: true } } },
+            take: 1
+          }
+        }
+      });
+      return serializeAdminUser(user);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to assign coach-led');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to assign coach-led' });
+    }
+  });
+
+  app.delete('/api/admin/users/:id/coach-led', { preHandler: superAdminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = coachLedEndBody.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid coach-led end request' });
+    }
+    try {
+      await endCoachLed(id, parsed.data);
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id },
+        include: {
+          userAssignments: {
+            where: { status: 'ACTIVE' },
+            include: { coach: { select: { id: true, firstName: true, lastName: true, email: true, role: true, status: true } } },
+            take: 1
+          }
+        }
+      });
+      return serializeAdminUser(user);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to end coach-led');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to end coach-led' });
+    }
+  });
+
+  app.post('/api/admin/users/:id/coach-led/finalize', { preHandler: superAdminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = z.object({ nextPlan: z.nativeEnum(PlanTier).optional() }).safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid finalize request' });
+    }
+    try {
+      await finalizeCoachLedTransition(id, parsed.data.nextPlan);
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id },
+        include: {
+          userAssignments: {
+            where: { status: 'ACTIVE' },
+            include: { coach: { select: { id: true, firstName: true, lastName: true, email: true, role: true, status: true } } },
+            take: 1
+          }
+        }
+      });
+      return serializeAdminUser(user);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to finalize transition' });
     }
   });
 

@@ -19,6 +19,8 @@ import {
   getWeekRange,
   weekHasMeals
 } from '../utils/planExportData';
+import { useEntitlements } from '../context/EntitlementsContext';
+import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
 import { printNutritionPlan, printNutritionWeekPlan } from '../utils/printNutritionPlan';
 
 function dateFromParams(params: URLSearchParams) {
@@ -42,6 +44,8 @@ export function NutritionPage() {
   const [cardMeals, setCardMeals] = useState<MealCardsPayload[]>([]);
   const [builderMealNumber, setBuilderMealNumber] = useState<number | null>(null);
   const [planPeriod, setPlanPeriod] = useState<PlanPeriodInfo | null>(null);
+  const [upgradePrompt, setUpgradePrompt] = useState<'meal_planning' | 'personalized_targets' | null>(null);
+  const { canAccess } = useEntitlements();
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
@@ -191,8 +195,12 @@ export function NutritionPage() {
           onCopyDay={() => void handleCopyDay()}
           copyDayDisabled={!currentDayMeals.length}
           copyingDay={copyingDay}
-          onGroceryList={() => setShoppingListOpen(true)}
-          onAdjustTargets={() => setTargetsOpen(true)}
+          onGroceryList={() =>
+            canAccess('meal_planning') ? setShoppingListOpen(true) : setUpgradePrompt('meal_planning')
+          }
+          onAdjustTargets={() =>
+            canAccess('personalized_targets') ? setTargetsOpen(true) : setUpgradePrompt('personalized_targets')
+          }
           printing={printing}
           onPrintDay={handlePrintDay}
           onPrintWeek={handlePrintWeek}
@@ -208,6 +216,8 @@ export function NutritionPage() {
       {printError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError}</div>}
       {loadError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>}
 
+      {upgradePrompt ? <UpgradePrompt feature={upgradePrompt} /> : null}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0 space-y-4">
               <MealPlanner
@@ -218,7 +228,9 @@ export function NutritionPage() {
                 selectedMealId={effectiveSelectedMealId}
                 onSelectMeal={setSelectedMealId}
                 cardMeals={cardMeals.map(({ mealNumber, slotType }) => ({ mealNumber, slotType }))}
-                onBuildMeal={setBuilderMealNumber}
+                onBuildMeal={(mealNumber) =>
+                  canAccess('meal_planning') ? setBuilderMealNumber(mealNumber) : setUpgradePrompt('meal_planning')
+                }
               />
 
               {currentDayMeals.length > 0 && (

@@ -1,5 +1,14 @@
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'COACH' | 'USER' | 'VIEWER';
 export type UserStatus = 'ACTIVE' | 'INVITED' | 'DISABLED';
+export type PlanSlug = 'starter' | 'self_guided' | 'plus' | 'coach_led';
+export type SubscriptionStatusSlug =
+  | 'free'
+  | 'active'
+  | 'trialing'
+  | 'past_due'
+  | 'canceled'
+  | 'coach_managed';
+export type CoachRelationshipStatusSlug = 'active' | 'completed' | 'released' | 'archived';
 export type AppUser = {
   id: string;
   email: string;
@@ -13,6 +22,14 @@ export type AppUser = {
   dashboardTutorialCompletedAt?: string | null;
   smsRemindersIntroCompletedAt?: string | null;
   selectedVirtualCoachId?: string | null;
+  plan: PlanSlug;
+  subscriptionStatus: SubscriptionStatusSlug;
+  subscriptionStartedAt?: string | null;
+  subscriptionCurrentPeriodEnd?: string | null;
+  gracePeriodEndsAt?: string | null;
+  nextPlanAfterCoach?: PlanSlug | null;
+  assignedCoach?: UserSummary | null;
+  coachRelationshipStatus?: CoachRelationshipStatusSlug | null;
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
 export type UserClientProfile = UserDemographics & {
@@ -43,7 +60,10 @@ export type AdminUser = AppUser & {
   createdAt: string;
   coachCode?: string | null;
   coachRequestedAt?: string | null;
-  assignedCoach?: UserSummary | null;
+};
+
+export type CoachSummary = UserSummary & {
+  activeCoachLedLicenses?: number;
 };
 export type Food = { id: string; name: string; servingSize: number; servingUnit: string; calories: number; protein: number; carbs: number; fat: number; brand?: string };
 export type FoodSource = 'MANUAL' | 'AI' | 'IMPORTED' | 'VERIFIED';

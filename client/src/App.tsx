@@ -34,6 +34,8 @@ import { ExerciseExportPage } from './pages/export/ExerciseExportPage';
 import { NutritionExportPage } from './pages/export/NutritionExportPage';
 import { ShoppingListExportPage } from './pages/export/ShoppingListExportPage';
 import { ProgressExportPage } from './pages/export/ProgressExportPage';
+import { PricingPage } from './pages/PricingPage';
+import { UpgradePage } from './pages/UpgradePage';
 import { isAdminRole, isCoachRole } from './utils/roles';
 
 function LoadingScreen() {
@@ -162,6 +164,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage authenticated={Boolean(firebaseUser)} appUser={appUser} />} />
+        <Route path="/pricing" element={<PricingPage authenticated={Boolean(firebaseUser)} />} />
         <Route path="/sms-opt-in" element={<SmsOptInPage />} />
         <Route path="/campaign-policy" element={<CampaignPolicyPage />} />
         <Route path="/campaign-terms" element={<CampaignTermsPage />} />
@@ -195,6 +198,7 @@ export default function App() {
           <Route path="exercise/export" element={<ExerciseExportPage />} />
           <Route path="progress/export" element={<ProgressExportPage />} />
           <Route element={<AppShell user={appUser} onTutorialComplete={setAppUser} />}>
+            <Route path="upgrade" element={<UpgradePage user={appUser} />} />
             <Route index element={<DashboardPage user={appUser} />} />
             <Route path="program" element={<ProgramPage />} />
             <Route path="nutrition" element={<NutritionPage />} />

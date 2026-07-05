@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../services/api';
-import type { AdminUser, UserSummary } from '../../types';
+import type { AdminUser, CoachSummary } from '../../types';
 import { Card } from '../ui/Card';
+import { planLabel } from '../../utils/entitlements';
 import { EditUserDrawer } from './EditUserDrawer';
 
 type SortKey = 'name' | 'email' | 'role' | 'coach' | 'joined';
@@ -92,7 +93,7 @@ function statusClass(status: AdminUser['status']) {
 
 export function UserTable() {
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [coaches, setCoaches] = useState<UserSummary[]>([]);
+  const [coaches, setCoaches] = useState<CoachSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -131,7 +132,7 @@ export function UserTable() {
     try {
       const [rows, coachRows] = await Promise.all([
         api<AdminUser[]>('/api/admin/users'),
-        api<UserSummary[]>('/api/admin/coaches').catch(() => [])
+        api<CoachSummary[]>('/api/admin/coaches').catch(() => [])
       ]);
       setUsers(rows);
       setCoaches(coachRows);
@@ -214,6 +215,7 @@ export function UserTable() {
                     sortDirection={sortDirection}
                     onSort={handleSort}
                   />
+                  <th className="py-3 pr-4 font-medium">Plan</th>
                   <SortableHeader
                     label="Coach"
                     sortKey="coach"
@@ -254,6 +256,7 @@ export function UserTable() {
                       <td className="py-3 pr-4 font-semibold">{userName(user)}</td>
                       <td className="py-3 pr-4 text-slate-600">{user.email}</td>
                       <td className="py-3 pr-4 text-slate-600">{formatRole(user.role)}</td>
+                      <td className="py-3 pr-4 text-slate-600">{planLabel(user.plan ?? 'starter')}</td>
                       <td className="py-3 pr-4 text-slate-600">{coachLabel(user) || '—'}</td>
                       <td className="py-3 pr-4 text-slate-600">
                         {user.coachRequestedAt && !user.assignedCoach ? 'Coach requested' : '—'}

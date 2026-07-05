@@ -66,7 +66,11 @@ function resolveClientMessagingPhone(profilePhone: string | null | undefined, in
 
 export async function listCoachClients(coachId: string) {
   const assignments = await prisma.coachAssignment.findMany({
-    where: { coachId },
+    where: {
+      coachId,
+      status: 'ACTIVE',
+      OR: [{ accessEndsAt: null }, { accessEndsAt: { gt: new Date() } }]
+    },
     include: {
       user: {
         include: {

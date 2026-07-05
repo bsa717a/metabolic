@@ -17,6 +17,7 @@ import type { AppUser, VirtualCoachCheckInRecap, VirtualCoachCheckInSession, Vir
 import { VIRTUAL_COACHES, getVirtualCoach, type VirtualCoach } from '../data/virtualCoaches';
 import { api } from '../services/api';
 import { Button } from '../components/ui/Button';
+import { FeatureGate } from '../components/entitlements/FeatureGate';
 import { CheckInRecap } from '../components/virtualCoach/CheckInRecap';
 import { CoachCheckInCall } from '../components/virtualCoach/CoachCheckInCall';
 import { CoachChatBox } from '../components/virtualCoach/CoachChatBox';
@@ -290,6 +291,7 @@ function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: App
             <p className="text-center text-sm text-app-text-muted">Loading your check-in…</p>
           ) : (
             <div className="space-y-4">
+              <FeatureGate feature="weekly_virtual_coach">
               <div className="space-y-2 text-center md:text-left">
                 {state?.isCheckInDay && !state.inProgressSession && (
                   <p className="text-sm font-semibold text-brand-green">It&apos;s your check-in day.</p>
@@ -310,6 +312,7 @@ function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: App
                   <p className="text-sm text-app-text-muted">About 20 minutes with {coach.name}</p>
                 )}
               </div>
+              </FeatureGate>
 
               {state && (
                 <div className="flex flex-col items-center gap-2 text-center md:items-start md:text-left">

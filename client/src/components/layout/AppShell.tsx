@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Topbar } from './Topbar';
 import { MobileBottomHomeBar } from './MobileBottomHomeBar';
 import type { AppUser } from '../../types';
+import { EntitlementsProvider } from '../../context/EntitlementsContext';
 import { TutorialProvider } from '../tutorial/TutorialContext';
 import { DashboardTutorial } from '../tutorial/DashboardTutorial';
 import { SmsRemindersIntroModal } from '../sms/SmsRemindersIntroModal';
@@ -44,6 +45,7 @@ export function AppShell({
   }, [nutritionMobileLayout]);
 
   return (
+    <EntitlementsProvider user={user ?? null}>
     <TutorialProvider user={user} onComplete={onTutorialComplete}>
       <div className="min-h-screen bg-app-bg flex flex-col transition-colors duration-200">
         <div className={nutritionMobileLayout ? 'hidden sm:block' : undefined}>
@@ -62,5 +64,6 @@ export function AppShell({
         <DashboardTutorial />
       </div>
     </TutorialProvider>
+    </EntitlementsProvider>
   );
 }

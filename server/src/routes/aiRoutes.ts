@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireAnyFeature, requireFeature } from '../auth/requireFeature.js';
 import { acceptFoodLookup, acceptFoodLookups, lookupFood, lookupFoodFromImage } from '../services/foodLookupService.js';
 import { lookupFoodOptions } from '../services/foodSearchService.js';
 import { acceptExerciseLookup, lookupExercise } from '../services/exerciseLookupService.js';
@@ -82,7 +83,7 @@ export async function aiRoutes(app: FastifyInstance) {
   app.post('/api/ai/exercise-lookup/:lookupId/accept', { preHandler: requireAuth }, async (request) =>
     acceptExerciseLookup(request.appUser!.id, (request.params as { lookupId: string }).lookupId)
   );
-  app.post('/api/ai/chat', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/ai/chat', { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] }, async (request, reply) => {
     try {
       const body = z.object({ messages: z.array(chatMessageSchema).min(1).max(20) }).parse(request.body);
       return await chatWithAssistant(request.appUser!.id, body.messages);
@@ -110,7 +111,7 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: message });
     }
   });
-  app.post('/api/ai/meal-suggestions', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/ai/meal-suggestions', { preHandler: [requireAuth, requireFeature('basic_recipe_help')] }, async (request, reply) => {
     try {
       const body = mealSuggestionBody.parse(request.body);
       return await suggestMealOptions(request.appUser!.id, body.inputText);
