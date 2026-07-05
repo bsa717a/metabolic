@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireFeature } from '../auth/requireFeature.js';
 import {
   ensureGamificationUser,
   getBadges,
@@ -17,14 +18,14 @@ import { syncGamificationDefinitions } from '../services/gamificationService.js'
 import { parseClientDayQuery, resolveRequestTimeZone } from '../utils/dates.js';
 
 export async function gamificationRoutes(app: FastifyInstance) {
-  app.get('/api/gamification/dashboard', { preHandler: requireAuth }, async (request) => {
+  app.get('/api/gamification/dashboard', { preHandler: [requireAuth, requireFeature('habit_consistency_scoring')] }, async (request) => {
     await ensureGamificationUser(request.appUser!.id);
     const { dateKey, timeZone: clientTimeZone } = parseClientDayQuery(request.query);
     const timeZone = resolveRequestTimeZone(clientTimeZone, request.appUser!.timezone);
     return getGamificationDashboard(request.appUser!.id, dateKey, timeZone);
   });
 
-  app.get('/api/gamification/journey', { preHandler: requireAuth }, async (request) => {
+  app.get('/api/gamification/journey', { preHandler: [requireAuth, requireFeature('habit_consistency_scoring')] }, async (request) => {
     return getJourney(request.appUser!.id);
   });
 

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireFeature } from '../auth/requireFeature.js';
 import { canAccessUser } from '../auth/requireRole.js';
 import { addMealItem, applyMealForward, clearMealPlannedFoods, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
@@ -140,11 +141,11 @@ export async function nutritionRoutes(app: FastifyInstance) {
     if (!status) return reply.code(404).send({ error: 'No active program' });
     return status;
   });
-  app.get('/api/plan-proposal', { preHandler: requireAuth }, async (request) => getPlanProposal(request.appUser!.id));
-  app.get('/api/nutrition-targets', { preHandler: requireAuth }, async (request) =>
+  app.get('/api/plan-proposal', { preHandler: [requireAuth, requireFeature('weekly_nutrition_plan')] }, async (request) => getPlanProposal(request.appUser!.id));
+  app.get('/api/nutrition-targets', { preHandler: [requireAuth, requireFeature('personalized_targets')] }, async (request) =>
     getUserNutritionTargets(request.appUser!.id)
   );
-  app.put('/api/nutrition-targets', { preHandler: requireAuth }, async (request, reply) => {
+  app.put('/api/nutrition-targets', { preHandler: [requireAuth, requireFeature('personalized_targets')] }, async (request, reply) => {
     const macro = z.number().int().positive().max(20000).nullable();
     const parsed = z
       .object({
@@ -163,7 +164,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save targets' });
     }
   });
-  app.post('/api/plan-adopt', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/plan-adopt', { preHandler: [requireAuth, requireFeature('weekly_nutrition_plan')] }, async (request, reply) => {
     try {
       return await adoptProposedPlan(request.appUser!.id);
     } catch (error) {
@@ -176,7 +177,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
     if (!info) return reply.code(404).send({ error: 'No active program' });
     return info;
   });
-  app.get('/api/daily-logs/:date/meal-cards', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/api/daily-logs/:date/meal-cards', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     try {
       return await getMealCardsForDate(request.appUser!.id, (request.params as { date: string }).date);
     } catch (error) {
@@ -184,7 +185,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       throw error;
     }
   });
-  app.get('/api/daily-logs/:date/meal-recommendations', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/api/daily-logs/:date/meal-recommendations', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     const query = z
       .object({ mealNumber: z.coerce.number().int().min(1), craving: z.string().max(200).optional() })
       .parse(request.query);
@@ -195,7 +196,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       throw error;
     }
   });
-  app.post('/api/daily-logs/:date/meal-recommendation', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/daily-logs/:date/meal-recommendation', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     const body = z
       .object({ mealNumber: z.number().int().min(1), suggestion: z.unknown() })
       .parse(request.body);
@@ -206,7 +207,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       throw error;
     }
   });
-  app.post('/api/daily-logs/:date/meal-selections', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/daily-logs/:date/meal-selections', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     const body = z
       .object({
         mealNumber: z.number().int().min(1),
@@ -220,7 +221,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       throw error;
     }
   });
-  app.post('/api/daily-logs/:date/copy-forward', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/daily-logs/:date/copy-forward', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     const body = z.object({ days: z.number().int().min(1).max(31) }).parse(request.body);
     try {
       return await copyDayPlanForward(request.appUser!.id, (request.params as { date: string }).date, body.days);
@@ -228,7 +229,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day forward' });
     }
   });
-  app.post('/api/daily-logs/:date/copy-to-dates', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/daily-logs/:date/copy-to-dates', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     const body = z
       .object({
         targetDates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default([]),
@@ -270,7 +271,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
     return deleteMealItem(ownerId, itemId);
   });
 
-  app.get('/api/nutrition/shopping-list', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/api/nutrition/shopping-list', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     const query = z
       .object({
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -301,7 +302,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/daily-logs/:date/apply-template', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/daily-logs/:date/apply-template', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
     const body = z
       .object({
         templateId: z.string().trim().min(1),

@@ -3,6 +3,9 @@ import { api } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 
+import { FeatureGate } from '../components/entitlements/FeatureGate';
+import { EntitlementError } from '../services/api';
+
 const prompts = [
   'What meal is next?',
   'Where do I stand with calories?',
@@ -37,6 +40,12 @@ export function AssistantPage() {
       });
       setMessages([...nextMessages, { role: 'assistant', content: result.reply }]);
     } catch (err) {
+      if (err instanceof EntitlementError) {
+        setError(undefined);
+        setMessages(messages);
+        setInput(trimmed);
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Something went wrong');
       setMessages(messages);
       setInput(trimmed);
@@ -48,6 +57,7 @@ export function AssistantPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">AI Assistant</h1>
+      <FeatureGate feature="extended_ai_coach">
       <Card className="flex min-h-[32rem] flex-col">
         <p className="text-slate-500">
           Powered by Gemini on the backend. Your program, meals, and exercise data are included as context.
@@ -105,6 +115,7 @@ export function AssistantPage() {
           </Button>
         </form>
       </Card>
+      </FeatureGate>
     </div>
   );
 }

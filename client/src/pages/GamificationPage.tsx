@@ -7,6 +7,8 @@ import { CurrentLevelCard } from '../components/gamification/CurrentLevelCard';
 import { MomentumCard } from '../components/gamification/MomentumCard';
 import { RecentBadgesCard } from '../components/gamification/RecentBadgesCard';
 import { CelebrationModal } from '../components/gamification/CelebrationModal';
+import { EntitlementError } from '../services/api';
+import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
 import { Card } from '../components/ui/Card';
 
 export function GamificationPage() {
@@ -14,11 +16,19 @@ export function GamificationPage() {
   const [loading, setLoading] = useState(true);
   const [celebration, setCelebration] = useState<GamificationCelebration | null>(null);
 
+  const [entitlementBlocked, setEntitlementBlocked] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
+    setEntitlementBlocked(false);
     try {
       const dashboard = await api<GamificationDashboard>('/api/gamification/dashboard');
       setData(dashboard);
+    } catch (error) {
+      if (error instanceof EntitlementError) {
+        setEntitlementBlocked(true);
+        setData(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -35,6 +45,15 @@ export function GamificationPage() {
   }, [load]);
 
   if (loading) return <p className="text-app-text-muted">Loading your journey…</p>;
+
+  if (entitlementBlocked) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Level Up</h1>
+        <UpgradePrompt feature="habit_consistency_scoring" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

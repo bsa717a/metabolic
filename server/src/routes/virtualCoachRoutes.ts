@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireFeature } from '../auth/requireFeature.js';
 import { prisma } from '../db/prisma.js';
 import { VIRTUAL_COACH_IDS } from '../data/virtualCoachPersonas.js';
 import {
@@ -62,7 +63,7 @@ export async function virtualCoachRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/virtual-coach/check-in/start', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/virtual-coach/check-in/start', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach')] }, async (request, reply) => {
     try {
       return await startCheckIn(request.appUser!.id);
     } catch (error) {
@@ -70,7 +71,7 @@ export async function virtualCoachRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/virtual-coach/check-in/:id/message', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/virtual-coach/check-in/:id/message', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach')] }, async (request, reply) => {
     const parsed = messageBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Enter a message to continue.' });
@@ -84,7 +85,7 @@ export async function virtualCoachRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/virtual-coach/check-in/:id/complete', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/virtual-coach/check-in/:id/complete', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
       return await completeCheckIn(request.appUser!.id, id);
@@ -93,7 +94,7 @@ export async function virtualCoachRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete('/api/virtual-coach/check-in/:id', { preHandler: requireAuth }, async (request, reply) => {
+  app.delete('/api/virtual-coach/check-in/:id', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
       return await discardCheckIn(request.appUser!.id, id);

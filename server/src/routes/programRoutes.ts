@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireFeature } from '../auth/requireFeature.js';
 import { activateProgram, getProgram, listPrograms, listProgramMetricSnapshots, listProgressPhotoSets, saveProgramMetricSnapshot, updateProgramMetricSnapshot, updateProgramMetrics, upsertProgressPhotoSet, upsertSnapshotMeasurement } from '../services/programService.js';
 import { getActiveProgressSummaryForUser, getProgressSummary } from '../services/progressSummaryService.js';
 import { prisma } from '../db/prisma.js';
@@ -169,7 +170,7 @@ export async function programRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/programs/:id/progress-summary', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/api/programs/:id/progress-summary', { preHandler: [requireAuth, requireFeature('advanced_progress_reports')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
       return await getProgressSummary(request.appUser!, id);
@@ -180,7 +181,7 @@ export async function programRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/progress/summary', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/api/progress/summary', { preHandler: [requireAuth, requireFeature('advanced_progress_reports')] }, async (request, reply) => {
     const query = request.query as { userId?: string };
     try {
       return await getActiveProgressSummaryForUser(request.appUser!, query.userId);

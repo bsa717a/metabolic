@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Apple, ChevronDown, Dumbbell, Gauge, LayoutDashboard, LineChart, LogOut, Moon, Settings, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LineChart, LogOut, Moon, Settings, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -11,6 +11,7 @@ import { TopbarGamification } from './TopbarGamification';
 import { ColorThemePicker } from './ColorThemePicker';
 import { ThemeToggle } from './ThemeToggle';
 import { isAdminRole, isCoachRole } from '../../utils/roles';
+import { planLabel } from '../../utils/entitlements';
 
 const MOBILE_NAV_LINKS = [
   ['/', 'Home', Gauge],
@@ -228,7 +229,18 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                     {user.email ? (
                       <p className="mt-0.5 truncate text-xs text-app-text-muted">{user.email}</p>
                     ) : null}
+                    <p className="mt-1 text-xs font-medium text-brand-green">
+                      {planLabel(user.plan ?? 'starter')}
+                    </p>
                   </li>
+                  <ProfileMenuItem
+                    label="Plan & upgrade"
+                    icon={CreditCard}
+                    onClick={() => {
+                      closeProfileMenu();
+                      navigate('/upgrade');
+                    }}
+                  />
                   <ProfileMenuItem
                     label="Account details"
                     icon={UserRound}

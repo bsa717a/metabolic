@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { serializeAppUser } from '../services/userSerialization.js';
 import { getUserDemographics, getUserProfile, updateUserDemographics, updateUserProfile } from '../services/userProfileService.js';
 
 const demographicsBody = z.object({
@@ -28,7 +29,9 @@ const profileBody = demographicsBody.extend({
 });
 
 export async function authRoutes(app: FastifyInstance) {
-  app.get('/api/me', { preHandler: requireAuth }, async (request) => ({ user: request.appUser }));
+  app.get('/api/me', { preHandler: requireAuth }, async (request) => ({
+    user: await serializeAppUser(request.appUser!)
+  }));
 
   app.get('/api/users/:userId/demographics', { preHandler: requireAuth }, async (request, reply) => {
     const { userId } = request.params as { userId: string };

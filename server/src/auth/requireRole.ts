@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Role } from "@prisma/client";
+import { CoachRelationshipStatus } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 
 export function requireRole(roles: Role[]) {
@@ -24,8 +25,14 @@ export function isCoach(actor: { role: Role }) {
 
 export async function isAssignedCoach(actor: { id: string; role: Role }, ownerId: string) {
   if (!isCoach(actor)) return false;
-  const assignment = await prisma.coachAssignment.findUnique({
-    where: { userId: ownerId },
+  const now = new Date();
+  const assignment = await prisma.coachAssignment.findFirst({
+    where: {
+      userId: ownerId,
+      coachId: actor.id,
+      status: CoachRelationshipStatus.ACTIVE,
+      OR: [{ accessEndsAt: null }, { accessEndsAt: { gt: now } }]
+    },
     select: { coachId: true }
   });
   return assignment?.coachId === actor.id;

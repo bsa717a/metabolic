@@ -2,6 +2,24 @@ import { getIdToken } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
+export type EntitlementErrorPayload = {
+  error: string;
+  feature: string;
+  requiredPlan: string;
+  currentPlan: string;
+  upgradePlan: string;
+};
+
+export class EntitlementError extends Error {
+  payload: EntitlementErrorPayload;
+
+  constructor(payload: EntitlementErrorPayload) {
+    super(payload.error);
+    this.name = 'EntitlementError';
+    this.payload = payload;
+  }
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getIdToken();
   const method = (options.method ?? 'GET').toUpperCase();
@@ -27,6 +45,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    if (response.status === 402 && payload?.requiredPlan) {
+      throw new EntitlementError(payload as EntitlementErrorPayload);
+    }
     throw new Error(payload?.error ?? payload?.message ?? response.statusText);
   }
   if (response.status === 204) return undefined as T;

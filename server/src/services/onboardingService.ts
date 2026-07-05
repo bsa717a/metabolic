@@ -237,21 +237,31 @@ async function applyCoachSupport(
   const coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
 
   if (coach) {
+    const now = new Date();
     await prisma.$transaction(async (tx) => {
-      await tx.coachAssignment.deleteMany({ where: { userId } });
-      await tx.coachAssignment.create({ data: { coachId: coach.id, userId } });
+      await tx.coachAssignment.updateMany({
+        where: { userId, status: 'ACTIVE' },
+        data: { status: 'COMPLETED', accessEndsAt: now }
+      });
+      await tx.coachAssignment.create({
+        data: { coachId: coach.id, userId, status: 'ACTIVE', accessStartedAt: now }
+      });
       if (options?.programId) {
         await tx.program.update({
           where: { id: options.programId },
           data: { coachId: coach.id }
         });
       }
-      if (input.wantsCoach || input.coachCode?.trim()) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { coachRequestedAt: null }
-        });
-      }
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          plan: 'COACH_LED',
+          subscriptionStatus: 'COACH_MANAGED',
+          gracePeriodEndsAt: null,
+          nextPlanAfterCoach: null,
+          ...(input.wantsCoach || input.coachCode?.trim() ? { coachRequestedAt: null } : {})
+        }
+      });
     });
     return { coach, shouldNotifyCoachRequest: false };
   }
