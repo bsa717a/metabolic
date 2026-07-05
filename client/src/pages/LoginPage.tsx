@@ -3,6 +3,7 @@ import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { login, loginWithGoogle, resetPassword, signUp } from '../services/auth';
 import { isFirebaseConfigured } from '../services/firebase';
+import { ColorThemePicker } from '../components/layout/ColorThemePicker';
 import { ThemeToggle } from '../components/layout/ThemeToggle';
 import { BrandLogo } from '../components/brand/BrandLogo';
 import type { AppUser } from '../types';
@@ -132,7 +133,10 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center bg-app-bg px-4 py-12 text-app-text">
-      <div className="absolute right-4 top-4">
+      <div className="absolute right-4 top-4 flex flex-col items-end gap-3">
+        <div className="w-56 rounded-xl border border-app-border bg-app-surface p-3 shadow-sm">
+          <ColorThemePicker />
+        </div>
         <ThemeToggle />
       </div>
 

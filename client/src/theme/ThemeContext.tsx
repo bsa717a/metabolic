@@ -1,59 +1,95 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  COLOR_THEME_STORAGE_KEY,
+  resolveColorTheme,
+  type ColorTheme
+} from './palettes';
 
-export type Theme = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark';
 
-const STORAGE_KEY = 'metabolic-theme';
+const MODE_STORAGE_KEY = 'metabolic-theme';
 
-function getSystemTheme(): Theme {
+function getSystemMode(): ThemeMode {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-function getStoredTheme(): Theme | null {
-  const stored = localStorage.getItem(STORAGE_KEY);
+function getStoredMode(): ThemeMode | null {
+  const stored = localStorage.getItem(MODE_STORAGE_KEY);
   return stored === 'light' || stored === 'dark' ? stored : null;
 }
 
-function resolveTheme(): Theme {
-  return getStoredTheme() ?? getSystemTheme();
+function getStoredColorTheme(): ColorTheme {
+  return resolveColorTheme(localStorage.getItem(COLOR_THEME_STORAGE_KEY));
 }
 
-function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle('dark', theme === 'dark');
+function resolveMode(): ThemeMode {
+  return getStoredMode() ?? getSystemMode();
+}
+
+function applyTheme(mode: ThemeMode, colorTheme: ColorTheme) {
+  document.documentElement.dataset.theme = colorTheme;
+  document.documentElement.classList.toggle('dark', mode === 'dark');
 }
 
 type ThemeContextValue = {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  mode: ThemeMode;
+  colorTheme: ColorTheme;
+  setMode: (mode: ThemeMode) => void;
+  setColorTheme: (colorTheme: ColorTheme) => void;
+  toggleMode: () => void;
+  /** @deprecated Use `mode` instead */
+  theme: ThemeMode;
+  /** @deprecated Use `setMode` instead */
+  setTheme: (mode: ThemeMode) => void;
+  /** @deprecated Use `toggleMode` instead */
   toggleTheme: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => resolveTheme());
+  const [mode, setModeState] = useState<ThemeMode>(() => resolveMode());
+  const [colorTheme, setColorThemeState] = useState<ColorTheme>(() => getStoredColorTheme());
 
   useEffect(() => {
-    applyTheme(theme);
-    localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+    applyTheme(mode, colorTheme);
+    localStorage.setItem(MODE_STORAGE_KEY, mode);
+    localStorage.setItem(COLOR_THEME_STORAGE_KEY, colorTheme);
+  }, [mode, colorTheme]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => {
-      if (!getStoredTheme()) {
+      if (!getStoredMode()) {
         const next = media.matches ? 'dark' : 'light';
-        setThemeState(next);
-        applyTheme(next);
+        setModeState(next);
+        applyTheme(next, colorTheme);
       }
     };
     media.addEventListener('change', onChange);
     return () => media.removeEventListener('change', onChange);
-  }, []);
+  }, [colorTheme]);
 
-  const setTheme = useCallback((next: Theme) => setThemeState(next), []);
-  const toggleTheme = useCallback(() => setThemeState((current) => (current === 'dark' ? 'light' : 'dark')), []);
+  const setMode = useCallback((next: ThemeMode) => setModeState(next), []);
+  const setColorTheme = useCallback((next: ColorTheme) => setColorThemeState(next), []);
+  const toggleMode = useCallback(() => setModeState((current) => (current === 'dark' ? 'light' : 'dark')), []);
 
-  return <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider
+      value={{
+        mode,
+        colorTheme,
+        setMode,
+        setColorTheme,
+        toggleMode,
+        theme: mode,
+        setTheme: setMode,
+        toggleTheme: toggleMode
+      }}
+    >
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {
