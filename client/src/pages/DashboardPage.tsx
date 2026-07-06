@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import { api, todayDateParam } from '../services/api';
@@ -33,7 +34,11 @@ function MacroDonut({
   const data = [{ value: fill }, { value: Math.max(100 - fill, 0) }];
 
   return (
-    <div className="text-center">
+    <Link
+      to="/nutrition?targets=1"
+      className="block rounded-xl text-center transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
+      aria-label={`Adjust ${label} target`}
+    >
       <div className="relative mx-auto h-16 w-16">
         <ResponsiveContainer>
           <PieChart>
@@ -51,7 +56,7 @@ function MacroDonut({
         </div>
       </div>
       <p className="mt-1 text-[11px] font-semibold text-app-text-muted">{label}</p>
-    </div>
+    </Link>
   );
 }
 
@@ -80,6 +85,7 @@ function RemainingMacrosDisplay({
 
 
 export function DashboardPage({ user }: { user?: AppUser | null }) {
+  const location = useLocation();
   const { startTour, hasAutoStarted, isActive } = useTutorial();
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,7 +103,9 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
         throw new Error('Not signed in yet. Please refresh or sign in again.');
       }
 
-      const dashboard = await api<Dashboard>(`/api/dashboard/today?${todayDateParam()}`);
+      const dashboard = await api<Dashboard>(`/api/dashboard/today?${todayDateParam()}&_=${Date.now()}`, {
+        cache: 'no-store'
+      });
       if (dashboard.program && !dashboard.summary) {
         throw new Error('Dashboard data is incomplete. Restart the backend server and try again.');
       }
@@ -114,8 +122,20 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
   }, []);
 
   useEffect(() => {
+    if (location.pathname !== '/') return;
     void loadDashboard();
-  }, [loadDashboard]);
+  }, [location.pathname, loadDashboard]);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && location.pathname === '/') {
+        void loadDashboard({ silent: true });
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [location.pathname, loadDashboard]);
 
   useEffect(() => {
     if (loading || error || !data?.program || user?.dashboardTutorialCompletedAt || hasAutoStarted || isActive) {

@@ -41,7 +41,8 @@ export function MacroOverridePanel({
   onError,
   onSubmit,
   title = 'Macro targets',
-  description = 'These drive meal planning amounts. Leave a field blank to use the formula for that macro.'
+  description = 'These drive meal planning amounts. Leave a field blank to use the formula for that macro.',
+  prefillWithResolved = false
 }: {
   source: NutritionTargetSource | null;
   resolvedTargets: NutritionMacroTargets | null;
@@ -52,12 +53,21 @@ export function MacroOverridePanel({
   onSubmit: (payload: NutritionMacroTargets) => Promise<void>;
   title?: string;
   description?: string;
+  prefillWithResolved?: boolean;
 }) {
+  // When requested, seed each field with the real effective value (override if set,
+  // otherwise the calculated target) so the user sees editable numbers, not grey hints.
+  function initialValue(key: MacroKey): string {
+    if (overrideTargets[key] != null) return toInput(overrideTargets[key]);
+    if (prefillWithResolved) return toInput(resolvedTargets?.[key]);
+    return '';
+  }
+
   const [values, setValues] = useState<Record<MacroKey, string>>({
-    calories: toInput(overrideTargets.calories),
-    protein: toInput(overrideTargets.protein),
-    carbs: toInput(overrideTargets.carbs),
-    fat: toInput(overrideTargets.fat)
+    calories: initialValue('calories'),
+    protein: initialValue('protein'),
+    carbs: initialValue('carbs'),
+    fat: initialValue('fat')
   });
 
   const hasOverride = MACROS.some((m) => overrideTargets[m.key] != null);
@@ -82,6 +92,15 @@ export function MacroOverridePanel({
       if (!Number.isFinite(num) || num <= 0 || !Number.isInteger(num)) {
         onError(`${macro.label} must be a positive whole number.`);
         return null;
+      }
+      // Prefilled formula values are for editing convenience only — don't pin them as
+      // overrides unless the user changed them or they were already overridden.
+      if (
+        prefillWithResolved &&
+        overrideTargets[macro.key] == null &&
+        resolvedTargets?.[macro.key] === num
+      ) {
+        continue;
       }
       out[macro.key] = num;
     }

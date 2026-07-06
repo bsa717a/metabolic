@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeFormulaTargets,
+  buildFormulaTargetBreakdown,
   DEFAULT_MEAL_STRUCTURE,
   DEFAULT_TARGET_FORMULA,
   pickOverrideBand,
@@ -44,6 +45,28 @@ describe('computeFormulaTargets', () => {
   it('protein never exceeds 45% of calories', () => {
     const t = computeFormulaTargets({ gender: 'f', heightInches: 62, weightLbs: 240, activityLevel: 1, ageYears: 65 });
     assert.ok(t.protein * 4 <= t.calories * 0.45 + 4);
+  });
+});
+
+describe('buildFormulaTargetBreakdown', () => {
+  it('matches computeFormulaTargets results', () => {
+    const profile = { gender: 'f' as const, heightInches: 64, weightLbs: 150 };
+    const breakdown = buildFormulaTargetBreakdown(profile);
+    const targets = computeFormulaTargets(profile);
+    assert.deepEqual(breakdown.result, targets);
+    assert.equal(breakdown.formulaName, 'Mifflin-St Jeor');
+    assert.equal(breakdown.steps.length, 5);
+  });
+
+  it('notes when the calorie floor is applied', () => {
+    const breakdown = buildFormulaTargetBreakdown({
+      gender: 'f',
+      heightInches: 60,
+      weightLbs: 95,
+      activityLevel: 1,
+      ageYears: 70
+    });
+    assert.ok(breakdown.adjustments.some((note) => note.includes('safety floor')));
   });
 });
 

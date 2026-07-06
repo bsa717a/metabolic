@@ -483,12 +483,35 @@ export type NutritionMacroTargets = {
   fat: number | null;
 };
 
+export type NutritionTargetFormulaBreakdownStep = {
+  title: string;
+  detail: string;
+};
+
+export type NutritionTargetFormulaBreakdown = {
+  formulaName: 'Mifflin-St Jeor';
+  profile: {
+    genderLabel: string;
+    heightLabel: string;
+    weightLbs: number;
+    ageYears: number;
+    ageIsEstimated: boolean;
+    activityLevel: number;
+    activityLabel: string;
+    activityMultiplier: number;
+  };
+  steps: NutritionTargetFormulaBreakdownStep[];
+  result: { calories: number; protein: number; carbs: number; fat: number };
+  adjustments: string[];
+};
+
 export type NutritionTargetSource = 'FORMULA' | 'OVERRIDE_BAND' | 'COACH' | 'TEMPLATE';
 
 export type UserNutritionTargets = {
   source: NutritionTargetSource | null;
   resolvedTargets: NutritionMacroTargets | null;
   overrideTargets: NutritionMacroTargets;
+  formulaBreakdown: NutritionTargetFormulaBreakdown | null;
 };
 
 export type CoachClientPlanStatus = PlanStatus & {

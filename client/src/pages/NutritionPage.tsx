@@ -66,6 +66,20 @@ export function NutritionPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (searchParams.get('targets') !== '1') return;
+
+    if (canAccess('personalized_targets')) {
+      setTargetsOpen(true);
+    } else {
+      setUpgradePrompt('personalized_targets');
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('targets');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, canAccess, setSearchParams]);
+
+  useEffect(() => {
     void reloadWeek();
   }, [reloadWeek]);
 

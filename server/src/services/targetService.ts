@@ -113,6 +113,165 @@ export type ResolvedTargets = {
 const DEFAULT_ACTIVITY = 2;
 const DEFAULT_AGE_YEARS = 40;
 
+const ACTIVITY_LABELS: Record<number, string> = {
+  1: 'Mostly sedentary',
+  2: 'Lightly active',
+  3: 'Moderately active',
+  4: 'Very active',
+  5: 'Extremely active'
+};
+
+function formatHeightInches(inches: number) {
+  const feet = Math.floor(inches / 12);
+  const remainder = inches % 12;
+  return `${feet}'${remainder}"`;
+}
+
+export type TargetFormulaBreakdownStep = {
+  title: string;
+  detail: string;
+};
+
+export type TargetFormulaBreakdown = {
+  formulaName: 'Mifflin-St Jeor';
+  profile: {
+    genderLabel: string;
+    heightLabel: string;
+    weightLbs: number;
+    ageYears: number;
+    ageIsEstimated: boolean;
+    activityLevel: number;
+    activityLabel: string;
+    activityMultiplier: number;
+  };
+  steps: TargetFormulaBreakdownStep[];
+  result: { calories: number; protein: number; carbs: number; fat: number };
+  adjustments: string[];
+};
+
+export function buildFormulaTargetBreakdown(
+  profile: TargetProfileInput,
+  config: TargetFormulaConfig = DEFAULT_TARGET_FORMULA
+): TargetFormulaBreakdown {
+  const kg = profile.weightLbs * 0.45359237;
+  const cm = profile.heightInches * 2.54;
+  const age = profile.ageYears && profile.ageYears > 0 ? profile.ageYears : DEFAULT_AGE_YEARS;
+  const ageIsEstimated = !(profile.ageYears && profile.ageYears > 0);
+  const activity = Math.min(5, Math.max(1, Math.round(profile.activityLevel ?? DEFAULT_ACTIVITY)));
+  const multiplier =
+    config.activityMultipliers[String(activity) as (typeof activityLevels)[number]] ?? 1.375;
+
+  const genderAdjustment = profile.gender === 'm' ? 5 : -161;
+  const bmr = 10 * kg + 6.25 * cm - 5 * age + genderAdjustment;
+  const tdee = bmr * multiplier;
+  const rawCalories = Math.round(tdee * (1 - config.deficitPct / 100));
+  const calories = Math.max(config.calorieFloor, rawCalories);
+
+  let rawProtein = Math.round(profile.weightLbs * config.proteinPerLb);
+  const proteinBeforeClamps = rawProtein;
+  rawProtein = Math.min(config.proteinMaxGrams, Math.max(config.proteinMinGrams, rawProtein));
+  const proteinBeforeCalorieCap = rawProtein;
+  const protein = Math.min(rawProtein, Math.floor((calories * 0.45) / 4));
+
+  const remaining = Math.max(0, calories - protein * 4);
+  const carbs = Math.round((remaining * config.carbShareOfRemaining) / 4);
+  const fat = Math.round((remaining * (1 - config.carbShareOfRemaining)) / 9);
+
+  const adjustments: string[] = [];
+  if (calories > rawCalories) {
+    adjustments.push(
+      `Calorie target was raised to the ${config.calorieFloor.toLocaleString()} kcal safety floor (formula result was ${rawCalories.toLocaleString()} kcal).`
+    );
+  }
+  if (proteinBeforeClamps !== proteinBeforeCalorieCap) {
+    if (proteinBeforeClamps < config.proteinMinGrams) {
+      adjustments.push(`Protein was raised to the ${config.proteinMinGrams} g minimum.`);
+    } else if (proteinBeforeClamps > config.proteinMaxGrams) {
+      adjustments.push(`Protein was capped at the ${config.proteinMaxGrams} g maximum.`);
+    }
+  }
+  if (protein < proteinBeforeCalorieCap) {
+    adjustments.push('Protein was capped so it stays at or below 45% of total calories.');
+  }
+
+  const genderLabel = profile.gender === 'm' ? 'Male' : 'Female';
+  const genderTerm = profile.gender === 'm' ? '+ 5' : '− 161';
+
+  const steps: TargetFormulaBreakdownStep[] = [
+    {
+      title: 'Basal metabolic rate (BMR)',
+      detail: `10 × ${kg.toFixed(1)} kg + 6.25 × ${cm.toFixed(1)} cm − 5 × ${age} ${genderTerm} = ${Math.round(bmr).toLocaleString()} kcal/day`
+    },
+    {
+      title: 'Total daily energy expenditure (TDEE)',
+      detail: `${Math.round(bmr).toLocaleString()} × ${multiplier} (${ACTIVITY_LABELS[activity] ?? 'Lightly active'}) = ${Math.round(tdee).toLocaleString()} kcal/day`
+    },
+    {
+      title: 'Calorie target',
+      detail: `${Math.round(tdee).toLocaleString()} × (1 − ${config.deficitPct}% deficit) = ${rawCalories.toLocaleString()} kcal/day`
+    },
+    {
+      title: 'Protein',
+      detail: `${profile.weightLbs} lb × ${config.proteinPerLb} g/lb = ${proteinBeforeClamps} g`
+    },
+    {
+      title: 'Carbs and fat',
+      detail: `Remaining after protein: ${calories.toLocaleString()} − (${protein} × 4) = ${remaining.toLocaleString()} kcal · Carbs (${Math.round(config.carbShareOfRemaining * 100)}%): ${remaining.toLocaleString()} × ${config.carbShareOfRemaining} ÷ 4 = ${carbs} g · Fat (${Math.round((1 - config.carbShareOfRemaining) * 100)}%): ${remaining.toLocaleString()} × ${(1 - config.carbShareOfRemaining).toFixed(2)} ÷ 9 = ${fat} g`
+    }
+  ];
+
+  return {
+    formulaName: 'Mifflin-St Jeor',
+    profile: {
+      genderLabel,
+      heightLabel: formatHeightInches(profile.heightInches),
+      weightLbs: profile.weightLbs,
+      ageYears: age,
+      ageIsEstimated,
+      activityLevel: activity,
+      activityLabel: ACTIVITY_LABELS[activity] ?? 'Lightly active',
+      activityMultiplier: multiplier
+    },
+    steps,
+    result: { calories, protein, carbs, fat },
+    adjustments
+  };
+}
+
+export async function getFormulaTargetBreakdownForUser(userId: string): Promise<TargetFormulaBreakdown | null> {
+  const [user, program, config] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        gender: true,
+        birthDate: true,
+        clientProfile: { select: { heightInches: true, activityLevel: true } }
+      }
+    }),
+    prisma.program.findFirst({
+      where: { userId, status: ProgramStatus.ACTIVE },
+      select: { metrics: { where: { metricType: 'WEIGHT' }, select: { currentValue: true } } }
+    }),
+    getTargetFormulaConfig()
+  ]);
+
+  const gender = normalizeGender(user?.gender ?? null);
+  const heightInches = user?.clientProfile?.heightInches ?? null;
+  const weightLbs = program?.metrics[0] ? n(program.metrics[0].currentValue) : null;
+  if ((gender !== 'm' && gender !== 'f') || !heightInches || !weightLbs || weightLbs <= 0) return null;
+
+  return buildFormulaTargetBreakdown(
+    {
+      gender,
+      heightInches,
+      weightLbs,
+      activityLevel: user?.clientProfile?.activityLevel ?? DEFAULT_ACTIVITY,
+      ageYears: ageFromBirthDate(user?.birthDate ?? null)
+    },
+    config
+  );
+}
+
 export function computeFormulaTargets(
   profile: TargetProfileInput,
   config: TargetFormulaConfig = DEFAULT_TARGET_FORMULA

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, toDateKey } from '../services/api';
-import type { Program, ProgramMetric } from '../types';
+import type { AppUser, Program, ProgramMetric } from '../types';
 import { EditMetricsDrawer } from '../components/program/EditMetricsDrawer';
 import { ProgramDonutSummary } from '../components/program/ProgramDonutSummary';
 import { ProgramMetricTable } from '../components/program/ProgramMetricTable';
@@ -19,7 +19,7 @@ function normalizeMetric(metric: ProgramMetric): ProgramMetric {
   };
 }
 
-export function ProgramPage() {
+export function ProgramPage({ user }: { user?: AppUser | null }) {
   const [program, setProgram] = useState<Program | null>(null);
   const [metrics, setMetrics] = useState<ProgramMetric[]>([]);
   const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
@@ -63,12 +63,16 @@ export function ProgramPage() {
     }
   }, []);
 
-  const loadProgram = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const loadProgram = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const rows = await api<Program[]>('/api/programs');
-      const active = rows[0] ?? null;
+      // Admins/coaches receive every accessible program; always show the signed-in
+      // user's own program (matching the dashboard) rather than the first in the list.
+      const active = (user?.id ? rows.find((row) => row.userId === user.id) : null) ?? rows[0] ?? null;
       setProgram(active);
       setMetrics((active?.metrics ?? []).map(normalizeMetric));
       if (active) {
@@ -83,9 +87,9 @@ export function ProgramPage() {
       setProgram(null);
       setError(err instanceof Error ? err.message : 'Unable to load program');
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
-  }, [loadSnapshots, loadProgressPhotos, loadBloodPanels]);
+  }, [loadSnapshots, loadProgressPhotos, loadBloodPanels, user?.id]);
 
   useEffect(() => {
     void loadProgram();
@@ -112,6 +116,7 @@ export function ProgramPage() {
       if (index === -1) return [updated, ...current].sort((a, b) => b.date.localeCompare(a.date));
       return current.map((snapshot) => (snapshot.id === updated.id ? updated : snapshot));
     });
+    void loadProgram({ silent: true });
   }
 
   function upsertBloodPanel(updated: BloodPanelSummary) {
@@ -137,6 +142,7 @@ export function ProgramPage() {
       });
       await loadSnapshots(program.id);
       setSelectedSnapshotId(snapshot.id);
+      await loadProgram({ silent: true });
     } catch (err) {
       setSnapshotError(err instanceof Error ? err.message : 'Unable to save session snapshot');
     } finally {
@@ -170,12 +176,17 @@ export function ProgramPage() {
           <p className="text-slate-500">Where intention meets results.</p>
         </div>
         <ProgramDonutSummary
-          metrics={displayMetrics}
-          currentLabel={currentChartLabel}
+          metrics={bodyCompMetrics}
           onSaveSnapshot={() => void saveSnapshot()}
           savingSnapshot={savingSnapshot}
           todaySnapshotSaved={Boolean(todaySnapshot)}
         />
+        {selectedSnapshot ? (
+          <p className="text-sm text-slate-500">
+            Previewing session from {formatSnapshotCurrentLabel(selectedSnapshot.date)}. The chart above is your live
+            current weight — use Edit metrics to update weight on the dashboard and targets.
+          </p>
+        ) : null}
         <ProgramMetricTable
           metrics={displayMetrics}
           currentLabel={currentChartLabel}
@@ -191,7 +202,7 @@ export function ProgramPage() {
           selectedSnapshot={selectedSnapshot}
           onSnapshotUpdated={upsertSnapshot}
           onBloodPanelUpdated={upsertBloodPanel}
-          onRefresh={loadProgram}
+          onRefresh={() => loadProgram({ silent: true })}
         />
         <ProgramMetricSnapshotHistory
           programId={program.id}
@@ -209,7 +220,7 @@ export function ProgramPage() {
         programId={program.id}
         metrics={bodyCompMetrics}
         onClose={() => setMetricsDrawerOpen(false)}
-        onSaved={loadProgram}
+        onSaved={() => loadProgram({ silent: true })}
       />
     </>
   );

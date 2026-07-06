@@ -14,7 +14,13 @@ type MetricDraft = {
 };
 
 function toDraft(metrics: ProgramMetric[]): MetricDraft[] {
-  return metrics.map((metric) => ({
+  // Weight is the primary metric, so surface it first in the drawer.
+  const ordered = [...metrics].sort((a, b) => {
+    if (a.metricType === 'WEIGHT') return -1;
+    if (b.metricType === 'WEIGHT') return 1;
+    return 0;
+  });
+  return ordered.map((metric) => ({
     id: metric.id,
     metricType: metric.metricType,
     unit: metric.unit,
