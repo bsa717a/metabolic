@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import type { NutritionMacroTargets, UserNutritionTargets } from '../../types';
 import { Drawer } from '../ui/Drawer';
 import { MacroOverridePanel } from '../coach/MacroOverridePanel';
+import { NutritionTargetCalculationExplainer } from './NutritionTargetCalculationExplainer';
 
 /**
  * Self-serve macro override. Lets a user set their own calorie/macro goals — the same
@@ -74,7 +75,7 @@ export function NutritionTargetsDrawer({
             plan re-scales to match.
           </p>
           <MacroOverridePanel
-            key={`${targets.overrideTargets.calories}|${targets.overrideTargets.protein}|${targets.overrideTargets.carbs}|${targets.overrideTargets.fat}`}
+            key={`${targets.overrideTargets.calories}|${targets.overrideTargets.protein}|${targets.overrideTargets.carbs}|${targets.overrideTargets.fat}|${targets.resolvedTargets?.calories}|${targets.resolvedTargets?.protein}|${targets.resolvedTargets?.carbs}|${targets.resolvedTargets?.fat}`}
             source={targets.source}
             resolvedTargets={targets.resolvedTargets}
             overrideTargets={targets.overrideTargets}
@@ -83,8 +84,10 @@ export function NutritionTargetsDrawer({
             onError={setError}
             onSubmit={submit}
             title="My macro goals"
-            description="These drive your meal plan amounts. Leave a field blank to use the automatic calculation."
+            description="These drive your meal plan amounts. Adjust any value and save to re-scale your plan."
+            prefillWithResolved
           />
+          <NutritionTargetCalculationExplainer breakdown={targets.formulaBreakdown} source={targets.source} />
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
         </div>
       )}

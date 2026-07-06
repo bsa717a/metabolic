@@ -49,7 +49,7 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
 
   const weightMetric = program.metrics.find((metric) => metric.metricType === 'WEIGHT');
   const start = n(weightMetric?.startValue);
-  const current = n(weightMetric?.currentValue ?? dailyLog?.weight);
+  const current = n(weightMetric?.currentValue);
   const goal = n(weightMetric?.goalValue);
   const goalProgress = start !== goal ? round(((start - current) / (start - goal)) * 100, 1) : 0;
   const minutesOfDay = timeZone ? localTimeParts(timeZone).minutesOfDay : undefined;
@@ -72,7 +72,7 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
         }
       : null,
     summary: {
-          currentWeight: current || n(dailyLog.weight),
+          currentWeight: current,
           caloriesRemaining: round(n(dailyLog.calorieTarget) - n(dailyLog.caloriesActual), 1),
           proteinRemaining: round(n(dailyLog.proteinTarget) - n(dailyLog.proteinActual), 1),
           nextMeal: nextMeal?.name ?? 'All meals complete',

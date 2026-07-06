@@ -2,8 +2,17 @@ import { ProgramStatus, Role } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { runProgressionEvaluation } from '../gamification/progressionEngine.js';
 import { canAccessUser, isAdmin, isCoach } from '../auth/requireRole.js';
-import { parseDateParam } from '../utils/dates.js';
+import {
+  BODY_COMP_METRIC_TYPES,
+  reconcileProgramBodyCompMetricsFromLatestSnapshot,
+  setProgramMetricCurrentValue,
+  syncProgramMetricsFromSnapshotValues,
+  syncTodayDailyLogBodyComp
+} from '../utils/programBodyCompSync.js';
+import { parseDateParam, userDayKey } from '../utils/dates.js';
 import { metricUpdatesForLegacyGoals, missingProgramMetrics } from '../utils/programMetrics.js';
+import { ensureDailyLogByUserId } from './dailyLogService.js';
+import { freezeTargetsOnPeriod, resolveTargets } from './targetService.js';
 
 const REQUIRED_METRICS = ['WEIGHT', 'BODY_FAT', 'LEAN_TISSUE_MASS', 'FAT_MASS', 'CALORIES', 'PROTEIN'] as const;
 const MEASUREMENT_METRICS = ['WAIST', 'HIPS', 'CHEST'] as const;
@@ -79,6 +88,17 @@ async function ensureMeasurementProgramMetrics(programId: string, metrics: Array
   await prisma.programMetric.createMany({ data: toCreate });
 }
 
+async function reloadProgram(programId: string) {
+  const header = await prisma.program.findUnique({ where: { id: programId }, select: { userId: true } });
+  if (header) {
+    await reconcileProgramBodyCompMetricsFromLatestSnapshot(programId, header.userId);
+  }
+  return prisma.program.findUniqueOrThrow({
+    where: { id: programId },
+    include: { metrics: true, user: true }
+  });
+}
+
 export async function listPrograms(user: { id: string; role: Role }) {
   const where = isAdmin(user) ? {} : isCoach(user) ? { coachId: user.id } : { userId: user.id };
   const programs = await prisma.program.findMany({ where, include: { metrics: true, user: true }, orderBy: { createdAt: 'desc' } });
@@ -107,10 +127,7 @@ export async function listPrograms(user: { id: string; role: Role }) {
         resolved = completed ?? program;
       }
       await ensureMeasurementProgramMetrics(resolved.id, resolved.metrics);
-      return prisma.program.findUniqueOrThrow({
-        where: { id: resolved.id },
-        include: { metrics: true, user: true }
-      });
+      return reloadProgram(resolved.id);
     })
   );
 }
@@ -141,10 +158,7 @@ export async function getProgram(user: { id: string; role: Role }, id: string) {
     resolved = completed ?? program;
   }
   await ensureMeasurementProgramMetrics(resolved.id, resolved.metrics);
-  return prisma.program.findUniqueOrThrow({
-    where: { id: resolved.id },
-    include: { metrics: true, user: true }
-  });
+  return reloadProgram(resolved.id);
 }
 
 export async function activateProgram(userId: string, id: string) {
@@ -158,6 +172,42 @@ export async function activateProgram(userId: string, id: string) {
 type MetricUpdate = { id: string; startValue?: number; currentValue?: number; goalValue?: number };
 
 type SnapshotValueInput = { metricType: string; currentValue: number; unit: string };
+
+function isBodyCompMetricType(type: string) {
+  return (BODY_COMP_METRIC_TYPES as readonly string[]).includes(type);
+}
+
+/** Camera-save payloads can carry stale body-comp; always trust stored program metrics. */
+function mergeBodyCompFromProgramMetrics(
+  values: SnapshotValueInput[],
+  programMetrics: Array<{ metricType: string; currentValue: unknown; unit: string }>
+): SnapshotValueInput[] {
+  const byType = new Map(
+    programMetrics.filter((metric) => isBodyCompMetricType(metric.metricType)).map((metric) => [metric.metricType, metric])
+  );
+
+  const merged = values.map((value) => {
+    const stored = byType.get(value.metricType);
+    if (!stored) return value;
+    return {
+      metricType: value.metricType,
+      currentValue: Number(stored.currentValue),
+      unit: stored.unit
+    };
+  });
+
+  for (const metric of programMetrics) {
+    if (!isBodyCompMetricType(metric.metricType)) continue;
+    if (merged.some((value) => value.metricType === metric.metricType)) continue;
+    merged.push({
+      metricType: metric.metricType,
+      currentValue: Number(metric.currentValue),
+      unit: metric.unit
+    });
+  }
+
+  return merged;
+}
 
 export async function listProgramMetricSnapshots(
   user: { id: string; role: Role },
@@ -214,7 +264,9 @@ export async function saveProgramMetricSnapshot(
   const program = await getProgram(user, programId);
   if (!program) throw new Error('Program not found');
 
-  const date = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
+  const owner = await prisma.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+  const date = parseDateParam(userDayKey(owner?.timezone ?? null));
+  const mergedValues = mergeBodyCompFromProgramMetrics(values, program.metrics);
 
   return prisma.$transaction(async (tx) => {
     const snapshot = await tx.programMetricSnapshot.upsert({
@@ -223,7 +275,7 @@ export async function saveProgramMetricSnapshot(
       update: { updatedAt: new Date() }
     });
 
-    for (const value of values) {
+    for (const value of mergedValues) {
       await tx.programMetricSnapshotValue.upsert({
         where: {
           snapshotId_metricType: {
@@ -248,8 +300,13 @@ export async function saveProgramMetricSnapshot(
       where: { id: snapshot.id },
       include: { values: true }
     });
+    await syncProgramMetricsFromSnapshotValues(programId, date, result.values, tx);
+    await syncTodayDailyLogBodyComp(program.userId, programId, date, tx);
     return result;
   }).then(async (result) => {
+    const ownerTz = await prisma.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+    await ensureDailyLogByUserId(program.userId, userDayKey(ownerTz?.timezone ?? null));
+    await syncTodayDailyLogBodyComp(program.userId, programId, date);
     void runProgressionEvaluation(program.userId);
     return result;
   });
@@ -280,11 +337,33 @@ export async function updateProgramMetricSnapshot(
       }))
     });
 
-    return tx.programMetricSnapshot.update({
+    const result = await tx.programMetricSnapshot.update({
       where: { id: snapshotId },
       data: { updatedAt: new Date() },
       include: { values: true }
     });
+    const synced = await syncProgramMetricsFromSnapshotValues(programId, snapshot.date, result.values, tx);
+    if (!synced) {
+      const owner = await tx.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+      const userToday = parseDateParam(userDayKey(owner?.timezone ?? null));
+      if (snapshot.date.getTime() >= userToday.getTime()) {
+        for (const value of result.values) {
+          if (!isBodyCompMetricType(value.metricType)) continue;
+          await setProgramMetricCurrentValue(programId, value.metricType as never, Number(value.currentValue), tx);
+        }
+      }
+    }
+    await syncTodayDailyLogBodyComp(program.userId, programId, snapshot.date, tx);
+    return result;
+  }).then(async (result) => {
+    const owner = await prisma.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+    const todayKey = userDayKey(owner?.timezone ?? null);
+    if (result.date.toISOString().slice(0, 10) === todayKey) {
+      await ensureDailyLogByUserId(program.userId, todayKey);
+      await syncTodayDailyLogBodyComp(program.userId, programId, parseDateParam(todayKey));
+    }
+    void runProgressionEvaluation(program.userId);
+    return result;
   });
 }
 
@@ -314,6 +393,94 @@ export async function updateProgramMetrics(
           }
         })
       );
+    }
+
+    const bodyCompMetrics = await tx.programMetric.findMany({
+      where: { programId, metricType: { in: [...BODY_COMP_METRIC_TYPES] } }
+    });
+    if (bodyCompMetrics.length) {
+      const owner = await tx.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+      const today = parseDateParam(userDayKey(owner?.timezone ?? null));
+      const snapshot = await tx.programMetricSnapshot.upsert({
+        where: { programId_date: { programId, date: today } },
+        create: { programId, date: today },
+        update: { updatedAt: new Date() }
+      });
+      for (const metric of bodyCompMetrics) {
+        await tx.programMetricSnapshotValue.upsert({
+          where: {
+            snapshotId_metricType: {
+              snapshotId: snapshot.id,
+              metricType: metric.metricType as never
+            }
+          },
+          create: {
+            snapshotId: snapshot.id,
+            metricType: metric.metricType as never,
+            currentValue: metric.currentValue,
+            unit: metric.unit
+          },
+          update: {
+            currentValue: metric.currentValue,
+            unit: metric.unit
+          }
+        });
+      }
+      await syncTodayDailyLogBodyComp(program.userId, programId, today, tx);
+    }
+
+    return results;
+  }).then(async (results) => {
+    const bodyCompUpdate = updates.some((update) =>
+      program.metrics.some(
+        (metric) =>
+          metric.id === update.id &&
+          update.currentValue != null &&
+          (BODY_COMP_METRIC_TYPES as readonly string[]).includes(metric.metricType)
+      )
+    );
+    const weightCurrentChanged = updates.some((update) =>
+      program.metrics.some(
+        (metric) =>
+          metric.id === update.id &&
+          metric.metricType === 'WEIGHT' &&
+          update.currentValue != null &&
+          Number(metric.currentValue) !== Number(update.currentValue)
+      )
+    );
+    if (bodyCompUpdate) {
+      const owner = await prisma.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+      const todayKey = userDayKey(owner?.timezone ?? null);
+      await ensureDailyLogByUserId(program.userId, todayKey);
+      await syncTodayDailyLogBodyComp(program.userId, programId, parseDateParam(todayKey));
+    }
+    if (weightCurrentChanged) {
+      const owner = await prisma.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+      const todayKey = userDayKey(owner?.timezone ?? null);
+      const today = parseDateParam(todayKey);
+      const resolved = await resolveTargets(program.userId);
+      if (resolved) {
+        const activePeriod = await prisma.planPeriod.findFirst({
+          where: { programId: program.id, effectiveDate: { lte: today } },
+          orderBy: { effectiveDate: 'desc' },
+          select: { effectiveDate: true }
+        });
+        if (activePeriod) {
+          await freezeTargetsOnPeriod(program.userId, program.id, activePeriod.effectiveDate);
+        }
+        const log = await ensureDailyLogByUserId(program.userId, todayKey);
+        if (log) {
+          await prisma.dailyLog.update({
+            where: { id: log.id },
+            data: {
+              calorieTarget: resolved.calories,
+              proteinTarget: resolved.protein,
+              carbTarget: resolved.carbs,
+              fatTarget: resolved.fat
+            }
+          });
+        }
+      }
     }
     return results;
   });
@@ -355,11 +522,25 @@ export async function upsertSnapshotMeasurement(
       }
     });
 
-    return tx.programMetricSnapshot.findUniqueOrThrow({
+    const result = await tx.programMetricSnapshot.findUniqueOrThrow({
       where: { id: snapshot.id },
       include: { values: true }
     });
+    const synced = await syncProgramMetricsFromSnapshotValues(programId, day, result.values, tx);
+    if (!synced && isBodyCompMetricType(input.metricType)) {
+      const owner = await tx.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
+      const userToday = parseDateParam(userDayKey(owner?.timezone ?? null));
+      if (day.getTime() >= userToday.getTime()) {
+        await setProgramMetricCurrentValue(programId, input.metricType as never, input.currentValue, tx);
+      }
+    }
+    await syncTodayDailyLogBodyComp(program.userId, programId, day, tx);
+    return result;
   }).then(async (result) => {
+    if (isBodyCompMetricType(input.metricType)) {
+      await ensureDailyLogByUserId(program.userId, input.date);
+      await syncTodayDailyLogBodyComp(program.userId, programId, day);
+    }
     void runProgressionEvaluation(program.userId);
     return result;
   });

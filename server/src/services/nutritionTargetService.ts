@@ -1,7 +1,7 @@
 import { ProgramStatus, type TargetSource } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, userDayKey } from '../utils/dates.js';
-import { freezeTargetsOnPeriod, resolveTargets } from './targetService.js';
+import { freezeTargetsOnPeriod, getFormulaTargetBreakdownForUser, resolveTargets, type TargetFormulaBreakdown } from './targetService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import {
   applyStructureMealsToLog,
@@ -24,13 +24,15 @@ export type UserNutritionTargets = {
   resolvedTargets: { calories: number; protein: number; carbs: number; fat: number } | null;
   /** Raw pinned override per macro (null = that macro falls back to the formula). */
   overrideTargets: NutritionMacroInput;
+  /** Step-by-step Mifflin-St Jeor breakdown from the user's profile, when available. */
+  formulaBreakdown: TargetFormulaBreakdown | null;
 };
 
 const toNum = (value: unknown) => (value == null ? null : Math.round(Number(value)));
 
 /** Current resolved targets, the resolution source, and any pinned override for a user. */
 export async function getUserNutritionTargets(userId: string): Promise<UserNutritionTargets> {
-  const [program, resolved] = await Promise.all([
+  const [program, resolved, formulaBreakdown] = await Promise.all([
     prisma.program.findFirst({
       where: { userId, status: ProgramStatus.ACTIVE },
       select: {
@@ -40,7 +42,8 @@ export async function getUserNutritionTargets(userId: string): Promise<UserNutri
         pinnedFatTarget: true
       }
     }),
-    resolveTargets(userId)
+    resolveTargets(userId),
+    getFormulaTargetBreakdownForUser(userId)
   ]);
 
   return {
@@ -53,7 +56,8 @@ export async function getUserNutritionTargets(userId: string): Promise<UserNutri
       protein: toNum(program?.pinnedProteinTarget),
       carbs: toNum(program?.pinnedCarbTarget),
       fat: toNum(program?.pinnedFatTarget)
-    }
+    },
+    formulaBreakdown
   };
 }
 
