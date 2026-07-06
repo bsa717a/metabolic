@@ -1,5 +1,5 @@
 import { MealItemType, type Prisma } from '@prisma/client';
-import { n } from '../utils/numbers.js';
+import { n, round } from '../utils/numbers.js';
 import { scaleFactor, scaleOptionFood, type ScaledFoodLine } from './mealCardScaling.js';
 import { recalculateMealTotals } from './totalsService.js';
 
@@ -24,6 +24,29 @@ export const cardSetInclude = {
 export type LoadedCardSet = Prisma.MealCardSetGetPayload<{ include: typeof cardSetInclude }>;
 
 export type CardPicks = Record<string, string | string[]>;
+export type QuantityOverrides = Record<string, number>;
+
+/** UserMealCardPicks.picks is either flat CardPicks or { picks, quantities? }. */
+export function parseStoredPicks(raw: unknown): { picks: CardPicks; quantities?: QuantityOverrides } {
+  if (!raw || typeof raw !== 'object') return { picks: {} };
+  const record = raw as Record<string, unknown>;
+  if (record.picks && typeof record.picks === 'object' && !Array.isArray(record.picks)) {
+    return {
+      picks: record.picks as CardPicks,
+      quantities: record.quantities as QuantityOverrides | undefined
+    };
+  }
+  return { picks: raw as CardPicks };
+}
+
+export function serializeStoredPicks(picks: CardPicks, quantities?: QuantityOverrides) {
+  if (quantities && Object.keys(quantities).length) return { picks, quantities };
+  return picks;
+}
+
+export function foodQuantityOverrideKey(optionId: string, foodId: string) {
+  return `${optionId}:${foodId}`;
+}
 
 export function pickedOptionIds(picks: CardPicks, cardId: string): string[] {
   const raw = picks[cardId];
@@ -50,11 +73,34 @@ export function scaledLinesForPicks(cardSet: LoadedCardSet, targetCalories: numb
       const option = card.options.find((o) => o.id === optionId);
       if (!option) continue;
       for (const line of option.foods) {
-        lines.push(scaleOptionFood({ ...line, food: line.food, isFree: line.food.isFreeFood || !line.scalable }, factor));
+        lines.push({
+          ...scaleOptionFood({ ...line, food: line.food, isFree: line.food.isFreeFood || !line.scalable }, factor),
+          optionId
+        });
       }
     }
   }
   return lines;
+}
+
+/** Scale line macros when the user edits a food quantity in the builder. */
+export function applyQuantityOverrides(lines: ScaledFoodLine[], overrides: QuantityOverrides): ScaledFoodLine[] {
+  if (!Object.keys(overrides).length) return lines;
+  return lines.map((line) => {
+    const keyed = line.optionId ? foodQuantityOverrideKey(line.optionId, line.foodId) : line.foodId;
+    const override = overrides[keyed] ?? overrides[line.foodId];
+    if (override == null || override <= 0 || line.quantity <= 0) return line;
+    const factor = override / line.quantity;
+    return {
+      ...line,
+      quantity: round(override, 2),
+      servings: round(line.servings * factor, 2),
+      calories: round(line.calories * factor, 2),
+      protein: round(line.protein * factor, 2),
+      carbs: round(line.carbs * factor, 2),
+      fat: round(line.fat * factor, 2)
+    };
+  });
 }
 
 export function cardMealTarget(templateMeal: { calorieTarget: unknown | null }, cardSet: { referenceCalories: unknown }) {
@@ -70,7 +116,8 @@ export async function materializeCardMeal(
   mealId: string,
   setId: string,
   picks: CardPicks,
-  lines: ScaledFoodLine[]
+  lines: ScaledFoodLine[],
+  quantities?: QuantityOverrides
 ) {
   await tx.mealItem.deleteMany({ where: { mealId, type: MealItemType.PLANNED } });
   if (lines.length) {
@@ -89,6 +136,9 @@ export async function materializeCardMeal(
       }))
     });
   }
-  await tx.meal.update({ where: { id: mealId }, data: { cardSelections: { setId, picks } } });
+  await tx.meal.update({
+    where: { id: mealId },
+    data: { cardSelections: { setId, picks, ...(quantities && Object.keys(quantities).length ? { quantities } : {}) } }
+  });
   await recalculateMealTotals(mealId, tx);
 }

@@ -334,6 +334,18 @@ export function slotTargets(dayCalories: number, structure: MealStructure): Slot
   }));
 }
 
+export type DayMacroTargets = { protein: number; carbs: number; fat: number };
+
+/** Split day-level macro targets across meal slots by sharePct (mirrors slotTargets). */
+export function slotMacroTargets(sharePct: number, dayTargets: DayMacroTargets, structure: MealStructure) {
+  const totalShare = structure.slots.reduce((s, slot) => s + slot.sharePct, 0) || 100;
+  return {
+    protein: Math.round((dayTargets.protein * sharePct) / totalShare),
+    carbs: Math.round((dayTargets.carbs * sharePct) / totalShare),
+    fat: Math.round((dayTargets.fat * sharePct) / totalShare)
+  };
+}
+
 /* ---------------- resolution ---------------- */
 
 function ageFromBirthDate(birthDate: Date | null): number | null {

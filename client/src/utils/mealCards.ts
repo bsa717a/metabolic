@@ -47,9 +47,13 @@ export type MealCardsPayload = {
   mealNumber: number;
   mealName: string;
   targetCalories: number;
+  targetProtein: number;
+  targetCarbs: number;
+  targetFat: number;
   referenceCalories: number;
+  dailyTargets: { calories: number; protein: number; carbs: number; fat: number } | null;
   cards: BuilderCard[];
-  savedSelections: { setId: string; picks: Record<string, string | string[]> } | null;
+  savedSelections: { setId: string; picks: Record<string, string | string[]>; quantities?: Record<string, number> } | null;
 };
 
 export type RecommendedMealItem = {
@@ -80,6 +84,9 @@ export type MealRecommendationsPayload = {
 };
 
 export type BuilderPicks = Record<string, string[]>;
+export type QuantityOverrides = Record<string, number>;
+
+export type SelectedFoodLine = CardFood & { optionId: string; cardName: string };
 
 export function defaultPicks(cards: BuilderCard[]): BuilderPicks {
   const picks: BuilderPicks = {};
@@ -110,18 +117,74 @@ export function togglePick(card: BuilderCard, picks: BuilderPicks, optionId: str
   return { ...picks, [card.id]: [...current, optionId] };
 }
 
-export function selectionTotals(cards: BuilderCard[], picks: BuilderPicks) {
-  let calories = 0;
-  let protein = 0;
+export function selectedFoodLines(cards: BuilderCard[], picks: BuilderPicks): SelectedFoodLine[] {
+  const lines: SelectedFoodLine[] = [];
   for (const card of cards) {
     for (const optionId of picks[card.id] ?? []) {
-      const option = card.options.find((o) => o.id === optionId);
+      const option = card.options.find((entry) => entry.id === optionId);
       if (!option) continue;
-      calories += option.totals.calories;
-      protein += option.totals.protein;
+      for (const food of option.foods) {
+        lines.push({ ...food, optionId, cardName: card.name });
+      }
     }
   }
-  return { calories: Math.round(calories), protein: Math.round(protein) };
+  return lines;
+}
+
+function scaledFood(food: CardFood, quantity: number): CardFood {
+  if (quantity <= 0 || food.quantity <= 0) return food;
+  const factor = quantity / food.quantity;
+  return {
+    ...food,
+    quantity,
+    servings: food.servings * factor,
+    calories: food.calories * factor,
+    protein: food.protein * factor,
+    carbs: food.carbs * factor,
+    fat: food.fat * factor
+  };
+}
+
+export function foodQuantityKey(line: Pick<SelectedFoodLine, 'optionId' | 'foodId'>) {
+  return `${line.optionId}:${line.foodId}`;
+}
+
+export function foodQuantity(line: SelectedFoodLine, overrides: QuantityOverrides) {
+  return overrides[foodQuantityKey(line)] ?? overrides[line.foodId] ?? line.quantity;
+}
+
+export function selectionTotals(cards: BuilderCard[], picks: BuilderPicks, quantityOverrides: QuantityOverrides = {}) {
+  let calories = 0;
+  let protein = 0;
+  let carbs = 0;
+  let fat = 0;
+
+  for (const line of selectedFoodLines(cards, picks)) {
+    const qty = foodQuantity(line, quantityOverrides);
+    const scaled = scaledFood(line, qty);
+    calories += scaled.calories;
+    protein += scaled.protein;
+    carbs += scaled.carbs;
+    fat += scaled.fat;
+  }
+
+  for (const card of cards) {
+    for (const optionId of picks[card.id] ?? []) {
+      const option = card.options.find((entry) => entry.id === optionId);
+      if (!option || option.foods.length) continue;
+      calories += option.totals.calories;
+      protein += option.totals.protein;
+      carbs += option.totals.carbs;
+      fat += option.totals.fat;
+    }
+  }
+
+  return {
+    calories: Math.round(calories),
+    protein: Math.round(protein),
+    carbs: Math.round(carbs),
+    fat: Math.round(fat)
+  };
 }
 
 /** First blood-sugar role (protein/carb/veg) present in the set but left unpicked. */
@@ -148,4 +211,18 @@ export function picksToSelections(cards: BuilderCard[], picks: BuilderPicks) {
     selections[card.id] = card.maxSelect <= 1 ? ids[0] : ids;
   }
   return selections;
+}
+
+/** Drop quantity overrides for foods no longer in the current picks. */
+export function pruneQuantityOverrides(
+  cards: BuilderCard[],
+  picks: BuilderPicks,
+  overrides: QuantityOverrides
+): QuantityOverrides {
+  const active = new Set(selectedFoodLines(cards, picks).map((line) => foodQuantityKey(line)));
+  const next: QuantityOverrides = {};
+  for (const [key, quantity] of Object.entries(overrides)) {
+    if (active.has(key) || active.has(key.split(':').pop()!)) next[key] = quantity;
+  }
+  return next;
 }

@@ -229,11 +229,18 @@ export async function nutritionRoutes(app: FastifyInstance) {
     const body = z
       .object({
         mealNumber: z.number().int().min(1),
-        selections: z.record(z.string(), z.union([z.string(), z.array(z.string())]))
+        selections: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+        quantities: z.record(z.string(), z.number().finite().positive()).optional()
       })
       .parse(request.body);
     try {
-      return await saveMealSelections(request.appUser!.id, (request.params as { date: string }).date, body.mealNumber, body.selections);
+      return await saveMealSelections(
+        request.appUser!.id,
+        (request.params as { date: string }).date,
+        body.mealNumber,
+        body.selections,
+        body.quantities
+      );
     } catch (error) {
       if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
       throw error;

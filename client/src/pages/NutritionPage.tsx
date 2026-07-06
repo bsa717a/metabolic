@@ -241,7 +241,24 @@ export function NutritionPage() {
                 onLogActual={(mealId) => setLogActualMealId(mealId)}
                 selectedMealId={effectiveSelectedMealId}
                 onSelectMeal={setSelectedMealId}
-                cardMeals={cardMeals.map(({ mealNumber, slotType }) => ({ mealNumber, slotType }))}
+                cardMeals={cardMeals.map(({ mealNumber, slotType, targetCalories, targetProtein, targetCarbs, targetFat, dailyTargets }) => ({
+                  mealNumber,
+                  slotType,
+                  macroTargets: {
+                    calories: targetCalories,
+                    protein: targetProtein ?? 0,
+                    carbs: targetCarbs ?? 0,
+                    fat: targetFat ?? 0
+                  },
+                  dailyTargets: dailyTargets
+                    ? {
+                        calories: dailyTargets.calories,
+                        protein: dailyTargets.protein,
+                        carbs: dailyTargets.carbs,
+                        fat: dailyTargets.fat
+                      }
+                    : null
+                }))}
                 onBuildMeal={(mealNumber) =>
                   canAccess('meal_planning') ? setBuilderMealNumber(mealNumber) : setUpgradePrompt('meal_planning')
                 }

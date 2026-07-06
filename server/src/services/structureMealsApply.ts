@@ -8,7 +8,10 @@ import {
   defaultPicksForSet,
   materializeCardMeal,
   scaledLinesForPicks,
-  type CardPicks
+  applyQuantityOverrides,
+  parseStoredPicks,
+  type CardPicks,
+  type QuantityOverrides
 } from './mealCardMaterialize.js';
 
 /**
@@ -54,15 +57,11 @@ export async function applyStructureMealsToLog(userId: string, dailyLogId: strin
       const cardSet = sets.find((set) => set.slotType === slot.slotType);
       if (!cardSet) continue;
       const standing = standingPicks.find((p) => p.cardSetId === cardSet.id && p.mealNumber === slot.mealNumber);
-      const picks = standing ? (standing.picks as CardPicks) : defaultPicksForSet(cardSet);
+      const { picks, quantities } = standing ? parseStoredPicks(standing.picks) : { picks: defaultPicksForSet(cardSet) };
       if (!Object.keys(picks).length) continue;
-      await materializeCardMeal(
-        tx,
-        meal.id,
-        cardSet.id,
-        picks,
-        scaledLinesForPicks(cardSet, slot.calorieTarget, picks)
-      );
+      let lines = scaledLinesForPicks(cardSet, slot.calorieTarget, picks);
+      if (quantities && Object.keys(quantities).length) lines = applyQuantityOverrides(lines, quantities);
+      await materializeCardMeal(tx, meal.id, cardSet.id, picks, lines, quantities);
     }
     await tx.dailyLog.update({ where: { id: dailyLogId }, data: { mealsPlanned: slots.length } });
     await recalculateDailyLogTotals(dailyLogId, tx);
@@ -104,17 +103,15 @@ export async function resyncCardMealsToFrozenPeriod(userId: string, dailyLogId: 
 
   await prisma.$transaction(async (tx) => {
     for (const meal of cardMeals) {
-      const sel = meal.cardSelections as { setId: string; picks: CardPicks };
+      const sel = meal.cardSelections as { setId: string; picks: CardPicks; quantities?: QuantityOverrides };
       const set = sets.find((candidate) => candidate.id === sel.setId);
       const slot = slotByNumber.get(meal.mealNumber);
       if (!set || !slot) continue;
-      await materializeCardMeal(
-        tx,
-        meal.id,
-        set.id,
-        sel.picks,
-        scaledLinesForPicks(set, slot.calorieTarget, sel.picks)
-      );
+      let lines = scaledLinesForPicks(set, slot.calorieTarget, sel.picks);
+      if (sel.quantities && Object.keys(sel.quantities).length) {
+        lines = applyQuantityOverrides(lines, sel.quantities);
+      }
+      await materializeCardMeal(tx, meal.id, set.id, sel.picks, lines, sel.quantities);
     }
     await recalculateDailyLogTotals(dailyLogId, tx);
   });

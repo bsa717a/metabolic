@@ -5,7 +5,7 @@ import type { Meal } from '../../types';
 import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
-import { MealCardEditor } from './MealCardEditor';
+import { MealCardEditor, type MealMacroTargets } from './MealCardEditor';
 import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
 
@@ -117,6 +117,8 @@ export function MealCard({
   selected = false,
   onSelect,
   onBuildMeal,
+  macroTargets,
+  dailyTargets,
 }: {
   meal: Meal;
   selectedDate: string;
@@ -130,6 +132,8 @@ export function MealCard({
   selected?: boolean;
   onSelect?: (mealId: string) => void;
   onBuildMeal?: () => void;
+  macroTargets?: MealMacroTargets;
+  dailyTargets?: MealMacroTargets | null;
 }) {
   const future = isFuture(selectedDate);
   const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
@@ -205,6 +209,8 @@ export function MealCard({
         <MealCardEditor
           key={editorKey}
           meal={meal}
+          macroTargets={macroTargets}
+          dailyTargets={dailyTargets}
           onSaved={() => {
             onExitEditMode();
             void onChange();
