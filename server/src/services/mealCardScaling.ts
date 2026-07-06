@@ -32,6 +32,7 @@ export type FoodMacros = {
 
 export type ScaledFoodLine = {
   foodId: string;
+  optionId?: string;
   name: string;
   imageUrl: string | null;
   /** servings of the Food's servingSize (the scaling unit) */

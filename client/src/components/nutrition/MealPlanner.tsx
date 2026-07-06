@@ -3,6 +3,14 @@ import type { Meal } from '../../types';
 import { MealCard } from './MealCard';
 import { MealSuggestionsDrawer } from './MealSuggestionsDrawer';
 import { MealSwapDrawer } from './MealSwapDrawer';
+import type { MealMacroTargets } from './MealCardEditor';
+
+export type CardMealInfo = {
+  mealNumber: number;
+  slotType: 'BREAKFAST' | 'SNACK' | 'LUNCH' | 'DINNER';
+  macroTargets: MealMacroTargets;
+  dailyTargets: MealMacroTargets | null;
+};
 
 export function MealPlanner({
   meals,
@@ -20,7 +28,7 @@ export function MealPlanner({
   onLogActual: (mealId: string) => void;
   selectedMealId?: string;
   onSelectMeal?: (mealId: string) => void;
-  cardMeals?: Array<{ mealNumber: number; slotType: 'BREAKFAST' | 'SNACK' | 'LUNCH' | 'DINNER' }>;
+  cardMeals?: CardMealInfo[];
   onBuildMeal?: (mealNumber: number) => void;
 }) {
   const [editingMealId, setEditingMealId] = useState<string | undefined>();
@@ -64,6 +72,8 @@ export function MealPlanner({
               selected={meal.id === selectedMealId}
               onSelect={onSelectMeal}
               onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
+              macroTargets={cardMeal?.macroTargets}
+              dailyTargets={cardMeal?.dailyTargets}
             />
           );
         })}

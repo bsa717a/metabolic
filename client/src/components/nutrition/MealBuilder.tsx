@@ -6,9 +6,13 @@ import { api } from '../../services/api';
 import {
   defaultPicks,
   foodsLabel,
+  foodQuantity,
+  foodQuantityKey,
   missingCoverageRole,
   picksToSelections,
+  pruneQuantityOverrides,
   restorePicks,
+  selectedFoodLines,
   selectionTotals,
   togglePick,
   type BuilderCard,
@@ -16,8 +20,10 @@ import {
   type MealCardsPayload,
   type MealRecommendationsPayload,
   type RecommendedMeal,
-  type BuilderPicks
+  type BuilderPicks,
+  type QuantityOverrides
 } from '../../utils/mealCards';
+import { MacroSummaryFooter } from './MacroSummaryFooter';
 
 export type { MealCardsPayload } from '../../utils/mealCards';
 
@@ -41,6 +47,7 @@ export function MealBuilder({
   const [mode, setMode] = useState<'choose' | 'wizard' | 'recommend'>('choose');
   const [step, setStep] = useState(0); // cards.length = review step
   const [picks, setPicks] = useState<BuilderPicks>({});
+  const [quantityOverrides, setQuantityOverrides] = useState<QuantityOverrides>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [craving, setCraving] = useState('');
@@ -63,15 +70,42 @@ export function MealBuilder({
       setRecs(null);
       setRecError(null);
       setChosen(null);
-      setPicks(
+      const restoredPicks =
         payload.savedSelections?.setId === payload.setId
           ? restorePicks(cards, payload.savedSelections.picks)
-          : defaultPicks(cards)
+          : defaultPicks(cards);
+      setPicks(restoredPicks);
+      setQuantityOverrides(
+        payload.savedSelections?.setId === payload.setId ? (payload.savedSelections.quantities ?? {}) : {}
       );
     }
   }
 
-  const totals = useMemo(() => selectionTotals(cards, picks), [cards, picks]);
+  const totals = useMemo(
+    () => selectionTotals(cards, picks, quantityOverrides),
+    [cards, picks, quantityOverrides]
+  );
+  const foodLines = useMemo(() => selectedFoodLines(cards, picks), [cards, picks]);
+  const macroTargets = useMemo(
+    () => ({
+      calories: payload?.targetCalories ?? 0,
+      protein: payload?.targetProtein ?? 0,
+      carbs: payload?.targetCarbs ?? 0,
+      fat: payload?.targetFat ?? 0
+    }),
+    [payload]
+  );
+  const activeQuantityOverrides = useMemo(() => {
+    const next: QuantityOverrides = {};
+    for (const line of foodLines) {
+      const key = foodQuantityKey(line);
+      const qty = quantityOverrides[key] ?? quantityOverrides[line.foodId];
+      if (qty != null && Math.abs(qty - line.quantity) > 1e-6) {
+        next[key] = qty;
+      }
+    }
+    return next;
+  }, [foodLines, quantityOverrides]);
 
   if (!payload) return null;
 
@@ -86,7 +120,16 @@ export function MealBuilder({
   const canAdvance = !currentCard || !currentCard.required || stepPicked;
 
   function toggleOption(card: BuilderCard, optionId: string) {
-    setPicks((prev) => togglePick(card, prev, optionId));
+    setPicks((prev) => {
+      const next = togglePick(card, prev, optionId);
+      setQuantityOverrides((overrides) => pruneQuantityOverrides(cards, next, overrides));
+      return next;
+    });
+  }
+
+  function updateFoodQuantity(key: string, quantity: number) {
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
+    setQuantityOverrides((prev) => ({ ...prev, [key]: quantity }));
   }
 
   async function save() {
@@ -97,7 +140,11 @@ export function MealBuilder({
       const selections = picksToSelections(cards, picks);
       const updated = await api<MealCardsPayload>(`/api/daily-logs/${date}/meal-selections`, {
         method: 'POST',
-        body: JSON.stringify({ mealNumber: payload.mealNumber, selections })
+        body: JSON.stringify({
+          mealNumber: payload.mealNumber,
+          selections,
+          ...(Object.keys(activeQuantityOverrides).length ? { quantities: activeQuantityOverrides } : {})
+        })
       });
       await onSaved(updated);
       onClose();
@@ -114,6 +161,25 @@ export function MealBuilder({
       .filter((option): option is CardOption => Boolean(option))
       .map((option) => ({ card, option }))
   );
+
+  function renderFoodQuantityRow(line: (typeof foodLines)[number]) {
+    const key = foodQuantityKey(line);
+    return (
+      <li key={key} className="flex items-baseline gap-2 py-1.5 text-sm">
+        <Check size={14} className="shrink-0 self-center text-brand-green" strokeWidth={3} />
+        <span className="min-w-0 flex-1 text-app-text">{line.name}</span>
+        <input
+          type="number"
+          min={0.25}
+          step={0.25}
+          className="w-16 rounded-lg border border-app-border bg-app-bg px-2 py-1 text-sm tabular-nums text-app-text"
+          value={foodQuantity(line, quantityOverrides)}
+          onChange={(event) => updateFoodQuantity(key, Number(event.target.value))}
+        />
+        <span className="w-12 shrink-0 text-xs font-semibold text-brand-green">{line.unit}</span>
+      </li>
+    );
+  }
 
   async function loadRecommendations() {
     if (!payload) return;
@@ -166,7 +232,7 @@ export function MealBuilder({
       />
       <div
         className={clsx(
-          'absolute inset-x-0 bottom-0 top-0 flex flex-col bg-app-bg transition-transform sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(720px,92vh)] sm:w-[420px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:overflow-hidden sm:rounded-3xl sm:shadow-2xl',
+          'absolute inset-x-0 bottom-0 top-0 flex flex-col bg-app-bg transition-transform sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(800px,92vh)] sm:w-[420px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:overflow-hidden sm:rounded-3xl sm:shadow-2xl',
           open ? 'translate-y-0' : 'translate-y-full sm:translate-y-[calc(-50%+100vh)]'
         )}
       >
@@ -420,29 +486,19 @@ export function MealBuilder({
               <div className="rounded-2xl border border-app-border bg-app-surface p-4">
                 <h3 className="text-base font-bold text-app-text">{payload.setName}</h3>
                 <ul className="mt-2 divide-y divide-app-muted">
-                  {selectedLines.map(({ option }) =>
-                    option.foods.length ? (
-                      option.foods.map((food) => (
-                        <li key={`${option.id}-${food.foodId}`} className="flex items-baseline gap-2 py-1.5 text-sm">
-                          <Check size={14} className="shrink-0 self-center text-brand-green" strokeWidth={3} />
-                          <span className="min-w-0 flex-1 text-app-text">{food.name}</span>
-                          <span className="shrink-0 text-xs font-semibold text-brand-green">
-                            {food.quantity} {food.unit}
-                          </span>
-                        </li>
-                      ))
-                    ) : (
+                  {foodLines.map((line) => renderFoodQuantityRow(line))}
+                  {selectedLines
+                    .filter(({ option }) => !option.foods.length)
+                    .map(({ option }) => (
                       <li key={option.id} className="flex items-baseline gap-2 py-1.5 text-sm">
                         <Check size={14} className="shrink-0 self-center text-brand-green" strokeWidth={3} />
                         <span className="text-app-text">{option.name}</span>
                       </li>
-                    )
-                  )}
+                    ))}
                 </ul>
-                <p className="mt-3 text-lg font-bold text-app-text">
-                  {totals.calories} kcal{' '}
-                  <span className="text-xs font-semibold text-app-text-muted">target {target} (±10%)</span>
-                </p>
+                <div className="mt-4 border-t border-app-muted pt-3">
+                  <MacroSummaryFooter totals={totals} targets={macroTargets} dailyTargets={payload.dailyTargets} />
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {missingRole ? (
                     <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
@@ -478,33 +534,37 @@ export function MealBuilder({
 
         {/* Sticky footer (wizard only) */}
         {mode === 'wizard' && (
-        <div className="shrink-0 border-t border-app-border bg-app-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <p className="text-sm font-bold text-app-text">{totals.calories} kcal so far</p>
-              <p className="text-xs text-app-text-muted">{payload.setName} · target {target} (±10%)</p>
+            <div className="shrink-0 border-t border-app-border bg-app-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <MacroSummaryFooter totals={totals} targets={macroTargets} dailyTargets={payload.dailyTargets} />
+              <div className="mt-3 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-app-text-muted">
+                    {isReview
+                      ? `${payload.setName} · adjust portions above anytime`
+                      : `${payload.setName} · target ${target} (±10%)`}
+                  </p>
+                </div>
+                {isReview ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void save()}
+                    className="shrink-0 rounded-xl bg-brand-green px-6 py-2.5 text-sm font-bold text-white transition hover:bg-brand-deep disabled:opacity-50"
+                  >
+                    {saving ? 'Saving…' : 'Add to plan'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!canAdvance}
+                    onClick={() => setStep((s) => s + 1)}
+                    className="shrink-0 rounded-xl bg-brand-green px-6 py-2.5 text-sm font-bold text-white transition hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {step === cards.length - 1 ? 'Review meal' : 'Next'}
+                  </button>
+                )}
+              </div>
             </div>
-            {isReview ? (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void save()}
-                className="rounded-xl bg-brand-green px-6 py-2.5 text-sm font-bold text-white transition hover:bg-brand-deep disabled:opacity-50"
-              >
-                {saving ? 'Saving…' : 'Add to plan'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={!canAdvance}
-                onClick={() => setStep((s) => s + 1)}
-                className="rounded-xl bg-brand-green px-6 py-2.5 text-sm font-bold text-white transition hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {step === cards.length - 1 ? 'Review meal' : 'Next'}
-              </button>
-            )}
-          </div>
-        </div>
         )}
       </div>
     </div>,

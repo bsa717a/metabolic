@@ -11,10 +11,14 @@ import {
   cardSetInclude,
   materializeCardMeal,
   scaledLinesForPicks,
+  applyQuantityOverrides,
+  parseStoredPicks,
+  serializeStoredPicks,
   type CardPicks,
-  type LoadedCardSet
+  type LoadedCardSet,
+  type QuantityOverrides
 } from './mealCardMaterialize.js';
-import { getMealStructure, slotTargets } from './targetService.js';
+import { getMealStructure, slotMacroTargets, slotTargets } from './targetService.js';
 import { findCardSetForTemplateMeal } from '../utils/mealSlotMatch.js';
 
 const DAY_MS = 86400000;
@@ -35,7 +39,32 @@ export type ResolvedCardSlot = {
   plannedTime: string | null;
   cardSet: LoadedCardSet;
   targetCalories: number;
+  targetProtein: number;
+  targetCarbs: number;
+  targetFat: number;
 };
+
+function mealMacroTargets(
+  mealNumber: number,
+  targetCalories: number,
+  structure: Awaited<ReturnType<typeof getMealStructure>>,
+  dayTargets: { protein: number; carbs: number; fat: number } | null,
+  template: { calorieTarget: unknown; proteinTarget: unknown; carbTarget: unknown; fatTarget: unknown } | null
+) {
+  const slot = structure.slots.find((entry) => entry.mealNumber === mealNumber);
+  if (dayTargets && slot) {
+    return slotMacroTargets(slot.sharePct, dayTargets, structure);
+  }
+  if (template && n(template.calorieTarget) > 0) {
+    const ratio = targetCalories / n(template.calorieTarget);
+    return {
+      protein: Math.round(n(template.proteinTarget) * ratio),
+      carbs: Math.round(n(template.carbTarget) * ratio),
+      fat: Math.round(n(template.fatTarget) * ratio)
+    };
+  }
+  return { protein: 0, carbs: 0, fat: 0 };
+}
 
 /**
  * Resolve every card-backed meal slot for a user's date. Two sources:
@@ -58,14 +87,17 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
       prisma.nutritionTemplateMeal.findMany({
         where: { templateId: plan.nutritionTemplateId },
         orderBy: { mealNumber: 'asc' },
-        include: { mealCardSet: { include: cardSetInclude } }
+        include: {
+          mealCardSet: { include: cardSetInclude },
+          template: { select: { calorieTarget: true, proteinTarget: true, carbTarget: true, fatTarget: true } }
+        }
       }),
       prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude }),
       getMealStructure(),
       prisma.planPeriod.findFirst({
         where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
         orderBy: { effectiveDate: 'desc' },
-        select: { calorieTarget: true }
+        select: { calorieTarget: true, proteinTarget: true, carbTarget: true, fatTarget: true }
       }),
       prisma.dailyLog.findUnique({ where: { userId_date: { userId, date: day } }, select: { id: true } })
     ]);
@@ -73,18 +105,35 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
     const slotCalories = period
       ? new Map(slotTargets(n(period.calorieTarget), structure).map((slot) => [slot.mealNumber, slot.calorieTarget]))
       : null;
+    const dayTargets = period
+      ? {
+          protein: Math.round(n(period.proteinTarget)),
+          carbs: Math.round(n(period.carbTarget)),
+          fat: Math.round(n(period.fatTarget))
+        }
+      : null;
 
     const resolved: ResolvedCardSlot[] = templateMeals.flatMap((templateMeal) => {
       const cardSet = findCardSetForTemplateMeal(templateMeal, sets, structureSlots);
       if (!cardSet) return [];
+      const targetCalories = slotCalories?.get(templateMeal.mealNumber) ?? cardMealTarget(templateMeal, cardSet);
+      const macros = mealMacroTargets(
+        templateMeal.mealNumber,
+        targetCalories,
+        structure,
+        dayTargets,
+        templateMeal.template ?? null
+      );
       return [
         {
           mealNumber: templateMeal.mealNumber,
           name: templateMeal.name,
           plannedTime: templateMeal.plannedTime,
           cardSet,
-          targetCalories:
-            slotCalories?.get(templateMeal.mealNumber) ?? cardMealTarget(templateMeal, cardSet)
+          targetCalories,
+          targetProtein: macros.protein,
+          targetCarbs: macros.carbs,
+          targetFat: macros.fat
         }
       ];
     });
@@ -103,12 +152,17 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
           structureSlots
         );
         if (!cardSet) continue;
+        const targetCalories = slotCalories?.get(dayMeal.mealNumber) ?? n(cardSet.referenceCalories);
+        const macros = mealMacroTargets(dayMeal.mealNumber, targetCalories, structure, dayTargets, null);
         resolved.push({
           mealNumber: dayMeal.mealNumber,
           name: dayMeal.name,
           plannedTime: dayMeal.plannedTime,
           cardSet,
-          targetCalories: slotCalories?.get(dayMeal.mealNumber) ?? n(cardSet.referenceCalories)
+          targetCalories,
+          targetProtein: macros.protein,
+          targetCarbs: macros.carbs,
+          targetFat: macros.fat
         });
         covered.add(dayMeal.mealNumber);
       }
@@ -120,7 +174,7 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
   const period = await prisma.planPeriod.findFirst({
     where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
     orderBy: { effectiveDate: 'desc' },
-    select: { calorieTarget: true }
+    select: { calorieTarget: true, proteinTarget: true, carbTarget: true, fatTarget: true }
   });
   if (!period) throw new MealCardError('No nutrition plan for this date', 404);
 
@@ -128,17 +182,26 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
     getMealStructure(),
     prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude })
   ]);
+  const dayTargets = {
+    protein: Math.round(n(period.proteinTarget)),
+    carbs: Math.round(n(period.carbTarget)),
+    fat: Math.round(n(period.fatTarget))
+  };
   const slots = slotTargets(n(period.calorieTarget), structure);
   return slots.flatMap((slot) => {
     const cardSet = sets.find((set) => set.slotType === slot.slotType);
     if (!cardSet) return [];
+    const macros = slotMacroTargets(slot.sharePct, dayTargets, structure);
     return [
       {
         mealNumber: slot.mealNumber,
         name: slot.name,
         plannedTime: slot.plannedTime,
         cardSet,
-        targetCalories: slot.calorieTarget
+        targetCalories: slot.calorieTarget,
+        targetProtein: macros.protein,
+        targetCarbs: macros.carbs,
+        targetFat: macros.fat
       }
     ];
   });
@@ -179,12 +242,52 @@ function scaledOptionPayload(cardSet: LoadedCardSet, targetCalories: number) {
   }));
 }
 
+export type DailyMacroTargets = { calories: number; protein: number; carbs: number; fat: number };
+
+/** Daily macro targets for a date — daily log first, then the active plan period. */
+export async function resolveDailyMacroTargets(userId: string, date: string): Promise<DailyMacroTargets | null> {
+  const day = parseDateParam(date);
+  const log = await prisma.dailyLog.findUnique({
+    where: { userId_date: { userId, date: day } },
+    select: { calorieTarget: true, proteinTarget: true, carbTarget: true, fatTarget: true }
+  });
+  if (log && n(log.calorieTarget) > 0) {
+    return {
+      calories: Math.round(n(log.calorieTarget)),
+      protein: Math.round(n(log.proteinTarget)),
+      carbs: Math.round(n(log.carbTarget)),
+      fat: Math.round(n(log.fatTarget))
+    };
+  }
+
+  const program = await prisma.program.findFirst({
+    where: { userId, status: ProgramStatus.ACTIVE },
+    select: { id: true }
+  });
+  if (!program) return null;
+
+  const period = await prisma.planPeriod.findFirst({
+    where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
+    orderBy: { effectiveDate: 'desc' },
+    select: { calorieTarget: true, proteinTarget: true, carbTarget: true, fatTarget: true }
+  });
+  if (!period || n(period.calorieTarget) <= 0) return null;
+
+  return {
+    calories: Math.round(n(period.calorieTarget)),
+    protein: Math.round(n(period.proteinTarget)),
+    carbs: Math.round(n(period.carbTarget)),
+    fat: Math.round(n(period.fatTarget))
+  };
+}
+
 /** GET payload: every card-backed meal's scaled set + any selections saved for the date. */
 export async function getMealCardsForDate(userId: string, date: string) {
   const cardMeals = await resolveCardMealsForDate(userId, date);
   if (!cardMeals.length) throw new MealCardError('No card sets on this plan', 404);
 
   const day = parseDateParam(date);
+  const dailyTargets = await resolveDailyMacroTargets(userId, date);
   const log = await prisma.dailyLog.findUnique({ where: { userId_date: { userId, date: day } } });
   const dayMeals = log
     ? await prisma.meal.findMany({ where: { dailyLogId: log.id }, select: { mealNumber: true, name: true, cardSelections: true } })
@@ -197,8 +300,21 @@ export async function getMealCardsForDate(userId: string, date: string) {
   return cardMeals.map((slot) => {
     const meal = dayMeals.find((m) => m.mealNumber === slot.mealNumber);
     // Day-specific provenance wins; otherwise the user's standing picks for this slot.
-    const daySaved = meal?.cardSelections as { setId: string; picks: CardPicks } | null | undefined;
+    const daySaved = meal?.cardSelections as
+      | { setId: string; picks: CardPicks; quantities?: QuantityOverrides }
+      | null
+      | undefined;
     const standing = userPicks.find((p) => p.cardSetId === slot.cardSet.id && p.mealNumber === slot.mealNumber);
+    const standingParsed = standing ? parseStoredPicks(standing.picks) : null;
+    const saved =
+      daySaved ??
+      (standingParsed
+        ? {
+            setId: slot.cardSet.id,
+            picks: standingParsed.picks,
+            ...(standingParsed.quantities ? { quantities: standingParsed.quantities } : {})
+          }
+        : null);
     return {
       setId: slot.cardSet.id,
       setName: slot.cardSet.name,
@@ -206,10 +322,13 @@ export async function getMealCardsForDate(userId: string, date: string) {
       mealNumber: slot.mealNumber,
       mealName: meal?.name ?? slot.name,
       targetCalories: round(slot.targetCalories, 0),
+      targetProtein: slot.targetProtein,
+      targetCarbs: slot.targetCarbs,
+      targetFat: slot.targetFat,
       referenceCalories: n(slot.cardSet.referenceCalories),
+      dailyTargets,
       cards: scaledOptionPayload(slot.cardSet, slot.targetCalories),
-      savedSelections:
-        daySaved ?? (standing ? { setId: slot.cardSet.id, picks: standing.picks as CardPicks } : null)
+      savedSelections: saved
     };
   });
 }
@@ -243,11 +362,20 @@ function validateSelections(cardSet: LoadedCardSet, selections: MealSelections) 
  * created pick the standing selection up at materialization time. Macros are frozen
  * into PLANNED MealItems (logs stay historically accurate); ACTUAL items untouched.
  */
-export async function saveMealSelections(userId: string, date: string, mealNumber: number, selections: MealSelections) {
+export async function saveMealSelections(
+  userId: string,
+  date: string,
+  mealNumber: number,
+  selections: MealSelections,
+  quantities?: QuantityOverrides
+) {
   const slot = await resolveCardMealForDate(userId, date, mealNumber);
   validateSelections(slot.cardSet, selections);
 
-  const lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, selections);
+  let lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, selections);
+  if (quantities && Object.keys(quantities).length) {
+    lines = applyQuantityOverrides(lines, quantities);
+  }
 
   const log = await ensureDailyLogByUserId(userId, date);
   if (!log) throw new MealCardError('No active program found', 404);
@@ -257,16 +385,28 @@ export async function saveMealSelections(userId: string, date: string, mealNumbe
       where: {
         userId_cardSetId_mealNumber: { userId, cardSetId: slot.cardSet.id, mealNumber: slot.mealNumber }
       },
-      create: { userId, cardSetId: slot.cardSet.id, mealNumber: slot.mealNumber, picks: selections },
-      update: { picks: selections }
+      create: {
+        userId,
+        cardSetId: slot.cardSet.id,
+        mealNumber: slot.mealNumber,
+        picks: serializeStoredPicks(selections, quantities)
+      },
+      update: { picks: serializeStoredPicks(selections, quantities) }
     });
 
     const meal = await ensureMealRow(tx, log.id, userId, slot);
-    await materializeCardMeal(tx, meal.id, slot.cardSet.id, selections, lines);
+    await materializeCardMeal(tx, meal.id, slot.cardSet.id, selections, lines, quantities);
     await recalculateDailyLogTotals(log.id, tx);
   });
 
-  const appliedDays = await applyPicksToFutureLogs(userId, parseDateParam(date), mealNumber, slot.cardSet.id, selections);
+  const appliedDays = await applyPicksToFutureLogs(
+    userId,
+    parseDateParam(date),
+    mealNumber,
+    slot.cardSet.id,
+    selections,
+    quantities
+  );
 
   const payloads = await getMealCardsForDate(userId, date);
   const payload = payloads.find((p) => p.mealNumber === mealNumber) ?? payloads[0];
@@ -301,7 +441,8 @@ async function applyPicksToFutureLogs(
   fromDay: Date,
   mealNumber: number,
   cardSetId: string,
-  picks: CardPicks
+  picks: CardPicks,
+  quantities?: QuantityOverrides
 ) {
   const horizon = new Date(fromDay.getTime() + FORWARD_APPLY_DAYS * DAY_MS);
   const futureLogs = await prisma.dailyLog.findMany({
@@ -323,10 +464,13 @@ async function applyPicksToFutureLogs(
     }
     if (!slot) continue;
 
-    const lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, picks);
+    let lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, picks);
+    if (quantities && Object.keys(quantities).length) {
+      lines = applyQuantityOverrides(lines, quantities);
+    }
     await prisma.$transaction(async (tx) => {
       const meal = await ensureMealRow(tx, log.id, userId, slot!);
-      await materializeCardMeal(tx, meal.id, cardSetId, picks, lines);
+      await materializeCardMeal(tx, meal.id, cardSetId, picks, lines, quantities);
       await recalculateDailyLogTotals(log.id, tx);
     });
     applied += 1;

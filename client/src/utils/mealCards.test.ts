@@ -114,6 +114,33 @@ describe('selectionTotals + coverage', () => {
   it('sums option totals across picks', () => {
     const totals = selectionTotals(cards, { protein: ['beef'], carb: ['tortillas'], free: ['salsa', 'pico'] });
     expect(totals.calories).toBe(229 + 70 + 9 + 10);
+    expect(totals.protein).toBe(24 + 2 + 0 + 0);
+    expect(totals.carbs).toBe(0 + 12 + 2 + 2);
+    expect(totals.fat).toBe(13 + 2 + 0 + 0);
+  });
+
+  it('scales totals when quantities are overridden', () => {
+    const card = cards[0];
+    const beef = card.options[0];
+    beef.foods = [
+      {
+        foodId: 'beef-id',
+        name: 'Beef',
+        imageUrl: null,
+        servings: 2,
+        quantity: 4,
+        unit: 'oz',
+        calories: 229,
+        protein: 24,
+        carbs: 0,
+        fat: 13,
+        free: false,
+        rounded: false
+      }
+    ];
+    const totals = selectionTotals([card], { protein: ['beef'] }, { 'beef:beef-id': 8 });
+    expect(totals.calories).toBe(458);
+    expect(totals.protein).toBe(48);
   });
 
   it('flags the first uncovered blood-sugar role', () => {

@@ -11,6 +11,9 @@ import {
   type FoodLookupOption,
   type PendingFoodLookup
 } from '../../hooks/useFoodSearchWithAi';
+import { MacroSummaryFooter, type MacroTotals } from './MacroSummaryFooter';
+
+export type MealMacroTargets = MacroTotals;
 
 type LocalEditItem = {
   serverId?: string;
@@ -54,11 +57,15 @@ function toLocalItems(items: MealItem[]) {
 
 export function MealCardEditor({
   meal,
+  macroTargets,
+  dailyTargets,
   onSaved,
   onCancel,
   onRefresh,
 }: {
   meal: Meal;
+  macroTargets?: MealMacroTargets;
+  dailyTargets?: MealMacroTargets | null;
   onSaved: () => void;
   onCancel: () => void;
   onRefresh: () => void | Promise<void>;
@@ -396,8 +403,26 @@ export function MealCardEditor({
 
           {/* Planned totals */}
           <div className="border-t border-brand-gold/20 pt-2">
-            <p className="text-sm font-medium text-app-text">{formatMealTotals(totals.calories, totals.protein, totals.carbs, totals.fat)}</p>
-            <p className="mt-0.5 text-xs text-app-text-muted">Totals update automatically.</p>
+            {macroTargets ? (
+              <>
+                <MacroSummaryFooter
+                  totals={{
+                    calories: Math.round(totals.calories),
+                    protein: Math.round(totals.protein),
+                    carbs: Math.round(totals.carbs),
+                    fat: Math.round(totals.fat)
+                  }}
+                  targets={macroTargets}
+                  dailyTargets={dailyTargets}
+                />
+                <p className="mt-2 text-xs text-app-text-muted">Totals update automatically as you edit.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-app-text">{formatMealTotals(totals.calories, totals.protein, totals.carbs, totals.fat)}</p>
+                <p className="mt-0.5 text-xs text-app-text-muted">Totals update automatically.</p>
+              </>
+            )}
           </div>
 
           {/* Add food search */}
