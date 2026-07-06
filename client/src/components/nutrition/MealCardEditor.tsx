@@ -242,10 +242,15 @@ export function MealCardEditor({
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
+    if (!localTime.trim()) {
+      setSaveError('Meal time is required.');
+      setSaving(false);
+      return;
+    }
     try {
       const patch: Record<string, unknown> = {};
       if (localName !== baseline.name) patch.name = localName;
-      if (localTime !== baseline.plannedTime) patch.plannedTime = localTime || null;
+      if (localTime !== baseline.plannedTime) patch.plannedTime = localTime;
       const mealMetaChanged = Object.keys(patch).length > 0;
       if (mealMetaChanged) {
         await api(`/api/meals/${meal.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
@@ -338,8 +343,9 @@ export function MealCardEditor({
               type="time"
               value={localTime}
               onChange={(e) => setLocalTime(e.target.value)}
+              required
               className="rounded-lg border border-app-border bg-app-surface px-3 py-1.5 text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              aria-label="Meal time"
+              aria-label="Meal time (required)"
             />
           </div>
         </div>
@@ -347,8 +353,8 @@ export function MealCardEditor({
 
       {/* Planned panel (editable) */}
       <div>
-        <div className="space-y-3 rounded-2xl bg-yellow-50 p-3">
-          <p className="font-semibold">Planned</p>
+        <div className="space-y-3 rounded-2xl bg-brand-gold/10 p-3 ring-1 ring-brand-gold/20">
+          <p className="font-semibold text-app-text">Planned</p>
 
           {localItems.length > 0 ? (
             <ul className="space-y-2">
@@ -357,7 +363,7 @@ export function MealCardEditor({
                   <button
                     type="button"
                     aria-label={`Remove ${item.nameSnapshot}`}
-                    className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                    className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-app-text-muted transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40"
                     onClick={() => removeItem(item)}
                   >
                     <Minus size={14} />
@@ -369,39 +375,39 @@ export function MealCardEditor({
                       step={0.25}
                       value={item.quantity}
                       onChange={(e) => updateQuantity(item, Number(e.target.value))}
-                      className="w-14 rounded-lg border border-slate-200 bg-white px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                      className="w-20 rounded-lg border border-app-border bg-app-surface px-2 py-1 text-center text-sm font-medium text-app-text focus:outline-none focus:ring-2 focus:ring-emerald-400"
                       aria-label={`Quantity for ${item.nameSnapshot}`}
                     />
-                    <span className="text-xs text-slate-500">{item.unit}</span>
+                    <span className="text-xs text-app-text-muted">{item.unit}</span>
                   </div>
                   <span className="mt-0.5 w-5 shrink-0 text-center" aria-hidden>
                     {foodEmoji(item.nameSnapshot)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-800">{item.nameSnapshot}</p>
-                    <p className="text-xs text-slate-500">{formatMacros(item)}</p>
+                    <p className="truncate text-sm font-medium text-app-text">{item.nameSnapshot}</p>
+                    <p className="text-xs text-app-text-muted">{formatMacros(item)}</p>
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-slate-500">No foods planned</p>
+            <p className="text-sm text-app-text-muted">No foods planned</p>
           )}
 
           {/* Planned totals */}
-          <div className="border-t border-yellow-100 pt-2">
-            <p className="text-sm font-medium text-slate-700">{formatMealTotals(totals.calories, totals.protein, totals.carbs, totals.fat)}</p>
-            <p className="mt-0.5 text-xs text-slate-400">Totals update automatically.</p>
+          <div className="border-t border-brand-gold/20 pt-2">
+            <p className="text-sm font-medium text-app-text">{formatMealTotals(totals.calories, totals.protein, totals.carbs, totals.fat)}</p>
+            <p className="mt-0.5 text-xs text-app-text-muted">Totals update automatically.</p>
           </div>
 
           {/* Add food search */}
           <div className="relative">
             <div
-              className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2 transition ${
-                searchFocused ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200'
+              className={`flex items-center gap-2 rounded-xl border bg-app-surface px-3 py-2 transition ${
+                searchFocused ? 'border-emerald-400 ring-2 ring-emerald-400/20' : 'border-app-border'
               }`}
             >
-              <Search size={14} className="shrink-0 text-slate-400" />
+              <Search size={14} className="shrink-0 text-app-text-muted" />
               <input
                 type="text"
                 placeholder="Search or add food…"
@@ -413,27 +419,27 @@ export function MealCardEditor({
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                 onKeyDown={handleSearchKeyDown}
-                className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm text-app-text placeholder:text-app-text-muted focus:outline-none"
                 aria-label="Search or add food"
                 aria-expanded={showDropdown}
                 aria-autocomplete="list"
                 role="combobox"
               />
-              <ChevronDown size={14} className="shrink-0 text-slate-400" />
+              <ChevronDown size={14} className="shrink-0 text-app-text-muted" />
             </div>
 
             {showDropdown && (
               <ul
-                className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+                className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-app-border bg-app-surface shadow-lg"
                 role="listbox"
               >
                 {showRecentLabel && (
-                  <li className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Recent foods</li>
+                  <li className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-app-text-muted">Recent foods</li>
                 )}
-                {searching && <li className="px-3 py-2 text-sm text-slate-400">Searching…</li>}
-                {aiLoading && <li className="px-3 py-2 text-sm text-slate-400">Asking AI for matches…</li>}
+                {searching && <li className="px-3 py-2 text-sm text-app-text-muted">Searching…</li>}
+                {aiLoading && <li className="px-3 py-2 text-sm text-app-text-muted">Asking AI for matches…</li>}
                 {!searching && searchQuery.trim().length >= 2 && !hasResults && aiOptions.length === 0 && !aiLoading && (
-                  <li className="px-3 py-2 text-sm text-slate-400">No foods found in your library or AI queue.</li>
+                  <li className="px-3 py-2 text-sm text-app-text-muted">No foods found in your library or AI queue.</li>
                 )}
                 {aiError && (
                   <li className="px-3 py-2 text-sm text-red-600">
@@ -451,7 +457,7 @@ export function MealCardEditor({
                         <li key="ai-search" role="option" aria-selected={selectedIndex === idx}>
                           <button
                             type="button"
-                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${selectedIndex === idx ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${selectedIndex === idx ? 'bg-emerald-500/10' : 'hover:bg-app-muted'}`}
                             onMouseDown={(e) => {
                               e.preventDefault();
                               void runAiSearch();
@@ -487,15 +493,15 @@ export function MealCardEditor({
                       <li key={entry.kind === 'food' ? entry.food.id : entry.kind === 'pending' ? entry.pending.lookupId : entry.option.lookupId} role="option" aria-selected={selectedIndex === idx}>
                         <button
                           type="button"
-                          className={`w-full px-3 py-2 text-left text-sm transition ${selectedIndex === idx ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                          className={`w-full px-3 py-2 text-left text-sm transition ${selectedIndex === idx ? 'bg-emerald-500/10' : 'hover:bg-app-muted'}`}
                           onMouseDown={(e) => {
                             e.preventDefault();
                             void selectEntry(entry);
                           }}
                         >
-                          <span className="font-medium text-slate-800">{label}</span>
-                          {hint ? <span className="ml-2 text-xs text-emerald-700">{hint}</span> : null}
-                          <span className="ml-2 text-slate-400 text-xs">{macros}</span>
+                          <span className="font-medium text-app-text">{label}</span>
+                          {hint ? <span className="ml-2 text-xs text-emerald-700 dark:text-emerald-300">{hint}</span> : null}
+                          <span className="ml-2 text-xs text-app-text-muted">{macros}</span>
                         </button>
                       </li>
                     );
@@ -509,7 +515,7 @@ export function MealCardEditor({
       {/* Footer: error + save/cancel */}
       {saveError && <p className="text-sm text-red-600">{saveError}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-slate-400">Saving sets this meal for the rest of the week — days you've already logged stay untouched.</p>
+        <p className="text-xs text-app-text-muted">Saving sets this meal for the rest of the week — days you've already logged stay untouched.</p>
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
             Cancel

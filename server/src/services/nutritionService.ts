@@ -49,8 +49,17 @@ export async function createMeal(userId: string, date: string, data: { name: str
     where: { dailyLogId: log.id, mealNumber: data.mealNumber }
   });
   if (existing) return existing;
+
+  let plannedTime = data.plannedTime ?? null;
+  if (!plannedTime) {
+    const { getMealStructure } = await import('./targetService.js');
+    const slot = (await getMealStructure()).slots.find((entry) => entry.mealNumber === data.mealNumber);
+    plannedTime = slot?.plannedTime ?? null;
+  }
+  if (!plannedTime) throw new Error('Meal time is required.');
+
   return prisma.meal.create({
-    data: { dailyLogId: log.id, userId, mealNumber: data.mealNumber, name: data.name, plannedTime: data.plannedTime ?? null }
+    data: { dailyLogId: log.id, userId, mealNumber: data.mealNumber, name: data.name, plannedTime, status: MealStatus.PLANNED }
   });
 }
 
@@ -278,6 +287,8 @@ export async function copyMealFromPreviousDay(userId: string, mealId: string) {
       });
     }
 
+    await tx.meal.update({ where: { id: mealId }, data: { name: sourceMeal.name } });
+
     await recalculateMealTotals(mealId, tx);
     return tx.meal.findFirstOrThrow({ where: { id: mealId }, include: { items: true } });
   });
@@ -413,6 +424,8 @@ async function applySourceMealsToDailyLog(
               status: MealStatus.PLANNED
             }
           });
+        } else {
+          await tx.meal.update({ where: { id: target.id }, data: { name: source.name } });
         }
 
         await tx.mealItem.deleteMany({ where: { mealId: target.id, type: MealItemType.PLANNED } });
