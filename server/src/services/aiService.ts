@@ -542,11 +542,21 @@ function splitFoodLines(input: string) {
 // truncated structured JSON responses mid-array ("Expected ',' or ']' after array element"). Disable
 // thinking for the deterministic JSON-extraction models — the detailed prompts handle accuracy, and
 // disabling it frees the whole budget for output (also faster and cheaper). Not in the SDK types yet.
-type JsonGenConfig = GenerationConfig & { thinkingConfig: { thinkingBudget: number } };
+type ThinkingGenConfig = GenerationConfig & { thinkingConfig: { thinkingBudget: number } };
+type JsonGenConfig = ThinkingGenConfig & { responseMimeType: string };
+
 function jsonModelConfig(maxOutputTokens: number): JsonGenConfig {
   return {
     responseMimeType: 'application/json',
     temperature: 0.2,
+    maxOutputTokens,
+    thinkingConfig: { thinkingBudget: 0 }
+  };
+}
+
+function chatModelConfig(maxOutputTokens = 2048): ThinkingGenConfig {
+  return {
+    temperature: 0.6,
     maxOutputTokens,
     thinkingConfig: { thinkingBudget: 0 }
   };
@@ -1409,7 +1419,7 @@ class GeminiAiProvider implements AiProvider {
   private chatModel() {
     return this.client.getGenerativeModel({
       model: this.model,
-      generationConfig: { temperature: 0.6, maxOutputTokens: 1024 }
+      generationConfig: chatModelConfig()
     });
   }
 
