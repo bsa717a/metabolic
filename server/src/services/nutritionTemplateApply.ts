@@ -10,6 +10,7 @@ import {
   type CardPicks
 } from './mealCardMaterialize.js';
 import { findCardSetForTemplateMeal } from '../utils/mealSlotMatch.js';
+import { getMealStructure } from './targetService.js';
 
 const templateInclude = {
   meals: {
@@ -53,10 +54,11 @@ export async function applyTemplateMealsToLog(
   // The user's standing card-builder picks: card-backed meals materialize from these
   // (scaled to the meal's target) instead of the template's fixed items.
   const allSets = await tx.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude });
+  const structureSlots = (await getMealStructure()).slots;
   const cardSetIds = [
     ...new Set(
       template.meals
-        .map((meal) => findCardSetForTemplateMeal(meal, allSets)?.id)
+        .map((meal) => findCardSetForTemplateMeal(meal, allSets, structureSlots)?.id)
         .filter((id): id is string => id != null)
     )
   ];
@@ -67,7 +69,7 @@ export async function applyTemplateMealsToLog(
   await tx.meal.deleteMany({ where: { dailyLogId } });
 
   for (const templateMeal of template.meals) {
-    const cardSet = findCardSetForTemplateMeal(templateMeal, allSets);
+    const cardSet = findCardSetForTemplateMeal(templateMeal, allSets, structureSlots);
     const standing = cardSet
       ? standingPicks.find(
           (p) => p.cardSetId === cardSet.id && p.mealNumber === templateMeal.mealNumber

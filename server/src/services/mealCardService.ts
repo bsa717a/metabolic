@@ -54,16 +54,28 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
   const plan = await resolvePlanForDate(program, day);
 
   if (plan.nutritionTemplateId) {
-    const [templateMeals, sets] = await Promise.all([
+    const [templateMeals, sets, structure, period, log] = await Promise.all([
       prisma.nutritionTemplateMeal.findMany({
         where: { templateId: plan.nutritionTemplateId },
         orderBy: { mealNumber: 'asc' },
         include: { mealCardSet: { include: cardSetInclude } }
       }),
-      prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude })
+      prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude }),
+      getMealStructure(),
+      prisma.planPeriod.findFirst({
+        where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
+        orderBy: { effectiveDate: 'desc' },
+        select: { calorieTarget: true }
+      }),
+      prisma.dailyLog.findUnique({ where: { userId_date: { userId, date: day } }, select: { id: true } })
     ]);
-    return templateMeals.flatMap((templateMeal) => {
-      const cardSet = findCardSetForTemplateMeal(templateMeal, sets);
+    const structureSlots = structure.slots;
+    const slotCalories = period
+      ? new Map(slotTargets(n(period.calorieTarget), structure).map((slot) => [slot.mealNumber, slot.calorieTarget]))
+      : null;
+
+    const resolved: ResolvedCardSlot[] = templateMeals.flatMap((templateMeal) => {
+      const cardSet = findCardSetForTemplateMeal(templateMeal, sets, structureSlots);
       if (!cardSet) return [];
       return [
         {
@@ -71,11 +83,38 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
           name: templateMeal.name,
           plannedTime: templateMeal.plannedTime,
           cardSet,
-          // The scale numerator: the meal's stored target, else scale 1:1 against the reference.
-          targetCalories: cardMealTarget(templateMeal, cardSet)
+          targetCalories:
+            slotCalories?.get(templateMeal.mealNumber) ?? cardMealTarget(templateMeal, cardSet)
         }
       ];
     });
+
+    if (log) {
+      const dayMeals = await prisma.meal.findMany({
+        where: { dailyLogId: log.id },
+        select: { mealNumber: true, name: true, plannedTime: true }
+      });
+      const covered = new Set(resolved.map((slot) => slot.mealNumber));
+      for (const dayMeal of dayMeals) {
+        if (covered.has(dayMeal.mealNumber)) continue;
+        const cardSet = findCardSetForTemplateMeal(
+          { ...dayMeal, mealCardSet: null },
+          sets,
+          structureSlots
+        );
+        if (!cardSet) continue;
+        resolved.push({
+          mealNumber: dayMeal.mealNumber,
+          name: dayMeal.name,
+          plannedTime: dayMeal.plannedTime,
+          cardSet,
+          targetCalories: slotCalories?.get(dayMeal.mealNumber) ?? n(cardSet.referenceCalories)
+        });
+        covered.add(dayMeal.mealNumber);
+      }
+    }
+
+    return resolved.sort((a, b) => a.mealNumber - b.mealNumber);
   }
 
   const period = await prisma.planPeriod.findFirst({

@@ -51,13 +51,22 @@ export function mealMatchesCardSet(
   return matchesMealSlot(meal, slotType) && !isDinnerMeal(meal);
 }
 
+export type StructureSlotRef = { mealNumber: number; slotType: MealSlotType };
+
 export function findCardSetForTemplateMeal<T extends { slotType: MealSlotType }>(
-  meal: { name: string; plannedTime: string | null; mealCardSet?: T | null },
-  sets: T[]
+  meal: { mealNumber: number; name: string; plannedTime: string | null; mealCardSet?: T | null },
+  sets: T[],
+  structureSlots?: StructureSlotRef[]
 ): T | undefined {
   if (meal.mealCardSet) return meal.mealCardSet;
   if (meal.name.toLowerCase().includes('snack')) {
     return sets.find((set) => set.slotType === 'SNACK');
   }
-  return sets.find((set) => mealMatchesCardSet(meal, set.slotType));
+  const byHeuristic = sets.find((set) => mealMatchesCardSet(meal, set.slotType));
+  if (byHeuristic) return byHeuristic;
+  const structureSlot = structureSlots?.find((slot) => slot.mealNumber === meal.mealNumber);
+  if (structureSlot) {
+    return sets.find((set) => set.slotType === structureSlot.slotType);
+  }
+  return undefined;
 }
