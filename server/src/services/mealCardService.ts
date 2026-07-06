@@ -15,6 +15,7 @@ import {
   type LoadedCardSet
 } from './mealCardMaterialize.js';
 import { getMealStructure, slotTargets } from './targetService.js';
+import { findCardSetForTemplateMeal } from '../utils/mealSlotMatch.js';
 
 const DAY_MS = 86400000;
 /** How far forward a builder save propagates to already-materialized days. */
@@ -53,21 +54,28 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
   const plan = await resolvePlanForDate(program, day);
 
   if (plan.nutritionTemplateId) {
-    const templateMeals = await prisma.nutritionTemplateMeal.findMany({
-      where: { templateId: plan.nutritionTemplateId, mealCardSetId: { not: null } },
-      orderBy: { mealNumber: 'asc' },
-      include: { mealCardSet: { include: cardSetInclude } }
+    const [templateMeals, sets] = await Promise.all([
+      prisma.nutritionTemplateMeal.findMany({
+        where: { templateId: plan.nutritionTemplateId },
+        orderBy: { mealNumber: 'asc' },
+        include: { mealCardSet: { include: cardSetInclude } }
+      }),
+      prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude })
+    ]);
+    return templateMeals.flatMap((templateMeal) => {
+      const cardSet = findCardSetForTemplateMeal(templateMeal, sets);
+      if (!cardSet) return [];
+      return [
+        {
+          mealNumber: templateMeal.mealNumber,
+          name: templateMeal.name,
+          plannedTime: templateMeal.plannedTime,
+          cardSet,
+          // The scale numerator: the meal's stored target, else scale 1:1 against the reference.
+          targetCalories: cardMealTarget(templateMeal, cardSet)
+        }
+      ];
     });
-    return templateMeals
-      .filter((meal) => meal.mealCardSet != null)
-      .map((templateMeal) => ({
-        mealNumber: templateMeal.mealNumber,
-        name: templateMeal.name,
-        plannedTime: templateMeal.plannedTime,
-        cardSet: templateMeal.mealCardSet!,
-        // The scale numerator: the meal's stored target, else scale 1:1 against the reference.
-        targetCalories: cardMealTarget(templateMeal, templateMeal.mealCardSet!)
-      }));
   }
 
   const period = await prisma.planPeriod.findFirst({

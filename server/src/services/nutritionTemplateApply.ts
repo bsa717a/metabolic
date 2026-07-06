@@ -9,6 +9,7 @@ import {
   scaledLinesForPicks,
   type CardPicks
 } from './mealCardMaterialize.js';
+import { findCardSetForTemplateMeal } from '../utils/mealSlotMatch.js';
 
 const templateInclude = {
   meals: {
@@ -51,7 +52,14 @@ export async function applyTemplateMealsToLog(
 
   // The user's standing card-builder picks: card-backed meals materialize from these
   // (scaled to the meal's target) instead of the template's fixed items.
-  const cardSetIds = template.meals.map((meal) => meal.mealCardSetId).filter((id): id is string => id != null);
+  const allSets = await tx.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude });
+  const cardSetIds = [
+    ...new Set(
+      template.meals
+        .map((meal) => findCardSetForTemplateMeal(meal, allSets)?.id)
+        .filter((id): id is string => id != null)
+    )
+  ];
   const standingPicks = cardSetIds.length
     ? await tx.userMealCardPicks.findMany({ where: { userId, cardSetId: { in: cardSetIds } } })
     : [];
@@ -59,15 +67,16 @@ export async function applyTemplateMealsToLog(
   await tx.meal.deleteMany({ where: { dailyLogId } });
 
   for (const templateMeal of template.meals) {
-    const standing = templateMeal.mealCardSetId
+    const cardSet = findCardSetForTemplateMeal(templateMeal, allSets);
+    const standing = cardSet
       ? standingPicks.find(
-          (p) => p.cardSetId === templateMeal.mealCardSetId && p.mealNumber === templateMeal.mealNumber
+          (p) => p.cardSetId === cardSet.id && p.mealNumber === templateMeal.mealNumber
         )
       : undefined;
     // Card-backed meals materialize from the card system: the user's standing picks,
     // else the set's authored defaults. Template items are the pre-card legacy path.
-    if (templateMeal.mealCardSet) {
-      const picks = standing ? (standing.picks as CardPicks) : defaultPicksForSet(templateMeal.mealCardSet);
+    if (cardSet) {
+      const picks = standing ? (standing.picks as CardPicks) : defaultPicksForSet(cardSet);
       if (Object.keys(picks).length > 0) {
         const meal = await tx.meal.create({
           data: {
@@ -79,8 +88,8 @@ export async function applyTemplateMealsToLog(
             status: MealStatus.PLANNED
           }
         });
-        const target = cardMealTarget(templateMeal, templateMeal.mealCardSet) * factor;
-        await materializeCardMeal(tx, meal.id, templateMeal.mealCardSet.id, picks, scaledLinesForPicks(templateMeal.mealCardSet, target, picks));
+        const target = cardMealTarget(templateMeal, cardSet) * factor;
+        await materializeCardMeal(tx, meal.id, cardSet.id, picks, scaledLinesForPicks(cardSet, target, picks));
         continue;
       }
     }
