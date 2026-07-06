@@ -173,7 +173,7 @@ export function NutritionPage() {
 
   async function handleCopyDay() {
     if (!currentDayMeals.length || copyingDay) return;
-    if (!window.confirm("Copy the previous day's plan into this day? Planned foods will be added to each meal.")) return;
+    if (!window.confirm("Copy the previous day's plan into this day? Planned foods and meal names will be copied into each meal.")) return;
     setCopyingDay(true);
     try {
       await Promise.all(

@@ -31,10 +31,23 @@ const plannedTimeSchema = z
     return normalized;
   });
 
+const requiredPlannedTimeSchema = z
+  .string()
+  .trim()
+  .min(1, 'Meal time is required.')
+  .transform((value, ctx) => {
+    const normalized = normalizePlannedTimeStorage(value);
+    if (normalized == null) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid planned time' });
+      return z.NEVER;
+    }
+    return normalized;
+  });
+
 const mealUpdateSchema = z
   .object({
     name: z.string().min(1).optional(),
-    plannedTime: plannedTimeSchema,
+    plannedTime: requiredPlannedTimeSchema.optional(),
     plannedCalories: z.number().optional(),
     plannedProtein: z.number().optional(),
     plannedCarbs: z.number().optional(),
@@ -82,7 +95,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
     }
     return getMealsForDate(request.appUser!.id, date);
   });
-  app.post('/api/daily-logs/:date/meals', { preHandler: requireAuth }, async (request) => {
+  app.post('/api/daily-logs/:date/meals', { preHandler: requireAuth }, async (request, reply) => {
     const body = z
       .object({
         name: z.string(),
@@ -90,7 +103,12 @@ export async function nutritionRoutes(app: FastifyInstance) {
         plannedTime: plannedTimeSchema.optional()
       })
       .parse(request.body);
-    return createMeal(request.appUser!.id, (request.params as { date: string }).date, body);
+    try {
+      return await createMeal(request.appUser!.id, (request.params as { date: string }).date, body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create meal';
+      return reply.code(400).send({ error: message });
+    }
   });
   app.patch('/api/meals/:id', { preHandler: requireAuth }, async (request) => {
     const mealId = (request.params as { id: string }).id;

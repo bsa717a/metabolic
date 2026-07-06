@@ -87,8 +87,14 @@ export function EditMealPlanDrawer({
     setManualOpen(false);
   }, [meal, mode]);
 
+  function requirePlannedTime(): boolean {
+    if (plannedTime.trim()) return true;
+    setTimeError('Meal time is required.');
+    return false;
+  }
+
   async function addFood(food: Food) {
-    if (!meal) return;
+    if (!meal || !requirePlannedTime()) return;
     await api(`/api/meals/${meal.id}/items`, {
       method: 'POST',
       body: JSON.stringify({
@@ -107,6 +113,7 @@ export function EditMealPlanDrawer({
   }
 
   async function updateQuantity(item: MealItem, quantity: number) {
+    if (!requirePlannedTime()) return;
     const factor = quantity / Number(item.quantity);
     await api(`/api/meal-items/${item.id}`, {
       method: 'PATCH',
@@ -122,12 +129,13 @@ export function EditMealPlanDrawer({
   }
 
   async function removeItem(itemId: string) {
+    if (!requirePlannedTime()) return;
     await api(`/api/meal-items/${itemId}`, { method: 'DELETE' });
     onSaved();
   }
 
   async function saveManual() {
-    if (!meal) return;
+    if (!meal || !requirePlannedTime()) return;
     await api(`/api/meals/${meal.id}`, {
       method: 'PATCH',
       body: JSON.stringify(config.patchFields(manual))
@@ -138,12 +146,16 @@ export function EditMealPlanDrawer({
 
   async function savePlannedTime() {
     if (!meal) return;
+    if (!plannedTime) {
+      setTimeError('Meal time is required.');
+      return;
+    }
     setSavingTime(true);
     setTimeError(null);
     try {
       await api(`/api/meals/${meal.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ plannedTime: plannedTime || null })
+        body: JSON.stringify({ plannedTime })
       });
       onSaved();
     } catch (error) {
@@ -158,12 +170,13 @@ export function EditMealPlanDrawer({
       <div className="space-y-6">
         <div className="rounded-2xl border border-app-border bg-app-muted p-4">
           <label className="text-sm font-semibold text-app-text" htmlFor="meal-planned-time">
-            Meal time
+            Meal time <span className="text-red-600">*</span>
           </label>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input
               id="meal-planned-time"
               type="time"
+              required
               className="rounded-xl border border-app-border bg-app-surface px-3 py-2 text-app-text"
               value={plannedTime}
               onChange={(event) => setPlannedTime(event.target.value)}
@@ -173,7 +186,7 @@ export function EditMealPlanDrawer({
               type="button"
               variant="secondary"
               onClick={() => void savePlannedTime()}
-              disabled={!meal || savingTime || plannedTime === plannedTimeToInputValue(meal.plannedTime)}
+              disabled={!meal || savingTime || !plannedTime || plannedTime === plannedTimeToInputValue(meal.plannedTime)}
             >
               {savingTime ? 'Saving...' : 'Save time'}
             </Button>
