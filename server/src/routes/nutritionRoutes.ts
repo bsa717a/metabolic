@@ -148,8 +148,9 @@ export async function nutritionRoutes(app: FastifyInstance) {
   app.post('/api/meals/:id/clear-planned', { preHandler: requireAuth }, async (request, reply) => {
     const mealId = (request.params as { id: string }).id;
     const ownerId = await mealOwnerForActor(request.appUser!, mealId);
+    const body = z.object({ applyForward: z.boolean().optional() }).parse(request.body ?? {});
     try {
-      return await clearMealPlannedFoods(ownerId, mealId);
+      return await clearMealPlannedFoods(ownerId, mealId, { applyForward: body.applyForward });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to clear planned foods' });
     }

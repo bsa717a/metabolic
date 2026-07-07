@@ -313,14 +313,65 @@ export async function copyDayFromPreviousDay(userId: string, targetDate: string)
   return { sourceDate, copiedMeals: sourceMeals.length };
 }
 
-export async function clearMealPlannedFoods(userId: string, mealId: string) {
-  return prisma.$transaction(async (tx) => {
-    const meal = await tx.meal.findFirstOrThrow({ where: { id: mealId, userId }, include: { dailyLog: true } });
-    await tx.mealItem.deleteMany({ where: { mealId, type: MealItemType.PLANNED } });
-    await recalculateMealTotals(mealId, tx);
-    await recalculateDailyLogTotals(meal.dailyLogId, tx);
-    return meal;
+export async function clearMealPlannedFoods(
+  userId: string,
+  mealId: string,
+  options?: { applyForward?: boolean }
+) {
+  const source = await prisma.meal.findFirstOrThrow({
+    where: { id: mealId, userId },
+    include: { dailyLog: true }
   });
+
+  if (!options?.applyForward) {
+    return prisma.$transaction(async (tx) => {
+      await tx.mealItem.deleteMany({ where: { mealId, type: MealItemType.PLANNED } });
+      await recalculateMealTotals(mealId, tx);
+      await recalculateDailyLogTotals(source.dailyLogId, tx);
+      return tx.meal.findFirstOrThrow({ where: { id: mealId, userId } });
+    });
+  }
+
+  const fromDay = source.dailyLog.date;
+  const horizon = new Date(fromDay.getTime() + APPLY_FORWARD_DAYS * DAY_MS);
+  const futureLogs = await prisma.dailyLog.findMany({
+    where: { userId, date: { gt: fromDay, lte: horizon } },
+    orderBy: { date: 'asc' },
+    select: { id: true }
+  });
+
+  let clearedFutureDays = 0;
+  await prisma.$transaction(async (tx) => {
+    await tx.mealItem.deleteMany({ where: { mealId, type: MealItemType.PLANNED } });
+    await tx.meal.update({
+      where: { id: mealId },
+      data: { cardSelections: Prisma.JsonNull }
+    });
+    await recalculateMealTotals(mealId, tx);
+    await recalculateDailyLogTotals(source.dailyLogId, tx);
+
+    for (const log of futureLogs) {
+      const target = await tx.meal.findFirst({
+        where: { dailyLogId: log.id, mealNumber: source.mealNumber }
+      });
+      if (!target) continue;
+
+      const deleted = await tx.mealItem.deleteMany({
+        where: { mealId: target.id, type: MealItemType.PLANNED }
+      });
+      if (deleted.count === 0) continue;
+
+      await tx.meal.update({
+        where: { id: target.id },
+        data: { cardSelections: Prisma.JsonNull }
+      });
+      await recalculateMealTotals(target.id, tx);
+      await recalculateDailyLogTotals(log.id, tx);
+      clearedFutureDays += 1;
+    }
+  });
+
+  return { clearedFutureDays };
 }
 
 export async function swapMeals(userId: string, mealIdA: string, mealIdB: string) {
