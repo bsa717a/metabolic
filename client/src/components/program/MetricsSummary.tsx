@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import type { ProgramMetric } from '../../types';
 import { Card } from '../ui/Card';
-import { JourneyDialsGrid } from './JourneyDialsGrid';
+import { MetricsSummaryTable } from './MetricsSummaryTable';
 
 function SnapshotButton({
   label,
@@ -29,13 +29,17 @@ function SnapshotButton({
   );
 }
 
-export function BlueprintJourneyDials({
+export function MetricsSummary({
   metrics,
+  currentLabel = 'Now',
+  eyebrow = 'Metrics',
   onSaveSnapshot,
   savingSnapshot = false,
   todaySnapshotSaved = false
 }: {
   metrics: ProgramMetric[];
+  currentLabel?: string;
+  eyebrow?: string;
   onSaveSnapshot?: () => void;
   savingSnapshot?: boolean;
   todaySnapshotSaved?: boolean;
@@ -50,8 +54,8 @@ export function BlueprintJourneyDials({
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-text-muted">Blueprint</p>
-          <h2 className="text-base font-bold text-brand-navy dark:text-brand-off-white">Journey dials</h2>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-text-muted">{eyebrow}</p>
+          <h2 className="text-base font-bold text-brand-navy dark:text-brand-off-white">Start · {currentLabel} · Goal</h2>
         </div>
         {onSaveSnapshot ? (
           <SnapshotButton label={saveSnapshotLabel} disabled={savingSnapshot} onClick={onSaveSnapshot}>
@@ -60,7 +64,7 @@ export function BlueprintJourneyDials({
         ) : null}
       </div>
 
-      <JourneyDialsGrid metrics={metrics} />
+      <MetricsSummaryTable metrics={metrics} currentLabel={currentLabel} />
     </Card>
   );
 }

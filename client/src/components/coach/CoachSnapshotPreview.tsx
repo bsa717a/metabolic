@@ -34,7 +34,7 @@ export function CoachSnapshotPreview({
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-bold">Recent snapshots</h3>
-            <p className="text-xs text-app-text-muted">Select a snapshot to preview in the comparison table</p>
+            <p className="text-xs text-app-text-muted">Select a snapshot to preview metrics or open check-in details</p>
           </div>
           <button
             type="button"
