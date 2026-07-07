@@ -1,14 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeftRight, Pencil } from 'lucide-react';
 import { api, toDateKey } from '../../services/api';
-import type { Program, ProgramMetric, ProgramMetricSnapshot } from '../../types';
+import type { Program, ProgramMetric, ProgramMetricSnapshot, ProgressPhotoSet } from '../../types';
 import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../../utils/measurementUtils';
-import {
-  formatSnapshotCurrentLabel,
-  metricsWithSnapshotCurrent
-} from '../../utils/snapshotHistoryUtils';
+import { formatSnapshotCurrentLabel, metricsWithSnapshotCurrent } from '../../utils/snapshotHistoryUtils';
+import { BlueprintCheckInModal } from '../program/BlueprintCheckInModal';
+import { BlueprintPhotoComparisonModal } from '../program/BlueprintPhotoComparisonModal';
+import { CoachMetricsSummary } from './CoachMetricsSummary';
 import { EditMetricsDrawer } from '../program/EditMetricsDrawer';
-import { ProgramDonutSummary } from '../program/ProgramDonutSummary';
-import { ProgramMetricTable } from '../program/ProgramMetricTable';
+import { ProgramMetricSnapshotHistory } from '../program/ProgramMetricSnapshotHistory';
 
 function normalizeMetric(metric: ProgramMetric): ProgramMetric {
   return {
@@ -33,6 +33,10 @@ export function ClientMetricsPanel({
   onRefresh: () => Promise<void>;
 }) {
   const [metricsDrawerOpen, setMetricsDrawerOpen] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkInSnapshot, setCheckInSnapshot] = useState<ProgramMetricSnapshot | null>(null);
+  const [progressPhotos, setProgressPhotos] = useState<ProgressPhotoSet[]>([]);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [error, setError] = useState('');
 
@@ -58,7 +62,39 @@ export function ClientMetricsPanel({
     [bodyCompMetrics, selectedSnapshot]
   );
 
-  const currentLabel = selectedSnapshot ? formatSnapshotCurrentLabel(selectedSnapshot.date) : 'Current';
+  const currentLabel = selectedSnapshot ? formatSnapshotCurrentLabel(selectedSnapshot.date) : 'Now';
+
+  const loadProgressPhotos = useCallback(async (programId: string) => {
+    try {
+      const rows = await api<ProgressPhotoSet[]>(`/api/programs/${programId}/progress-photos`);
+      setProgressPhotos(rows);
+    } catch {
+      setProgressPhotos([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!program) {
+      setProgressPhotos([]);
+      return;
+    }
+    void loadProgressPhotos(program.id);
+  }, [program, loadProgressPhotos]);
+
+  const checkInPhotoSet = useMemo(() => {
+    if (!checkInSnapshot) return null;
+    return progressPhotos.find((photoSet) => photoSet.date === checkInSnapshot.date) ?? null;
+  }, [checkInSnapshot, progressPhotos]);
+
+  function openCheckIn(snapshot: ProgramMetricSnapshot | null = null) {
+    setCheckInSnapshot(snapshot);
+    setCheckInOpen(true);
+  }
+
+  function closeCheckIn() {
+    setCheckInOpen(false);
+    setCheckInSnapshot(null);
+  }
 
   async function saveSnapshot() {
     if (!program) return;
@@ -80,6 +116,11 @@ export function ClientMetricsPanel({
     } finally {
       setSavingSnapshot(false);
     }
+  }
+
+  async function handleCheckInSaved() {
+    if (!program) return;
+    await Promise.all([onRefresh(), loadProgressPhotos(program.id)]);
   }
 
   async function handleMetricsSaved() {
@@ -104,22 +145,69 @@ export function ClientMetricsPanel({
 
   return (
     <>
-      <ProgramDonutSummary
-        metrics={displayMetrics}
-        currentLabel={currentLabel}
-        onSaveSnapshot={() => void saveSnapshot()}
-        savingSnapshot={savingSnapshot}
-        todaySnapshotSaved={Boolean(todaySnapshot)}
-      />
-      <div className="mt-4">
-        <ProgramMetricTable
-          compact
+      <div className="space-y-4">
+        <CoachMetricsSummary
           metrics={displayMetrics}
           currentLabel={currentLabel}
-          onEdit={() => setMetricsDrawerOpen(true)}
+          onSaveSnapshot={() => void saveSnapshot()}
+          savingSnapshot={savingSnapshot}
+          todaySnapshotSaved={Boolean(todaySnapshot)}
+        />
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
+            onClick={() => setComparisonOpen(true)}
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+            Comparison
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
+            onClick={() => setMetricsDrawerOpen(true)}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit metrics
+          </button>
+        </div>
+
+        {selectedSnapshot ? (
+          <p className="text-sm text-slate-500 dark:text-app-text-muted">
+            Previewing session from {formatSnapshotCurrentLabel(selectedSnapshot.date)}. Metrics reflect this
+            session&apos;s values.
+          </p>
+        ) : null}
+
+        <ProgramMetricSnapshotHistory
+          programId={program.id}
+          snapshots={snapshots}
+          selectedId={selectedSnapshotId}
+          onSelect={onSelectSnapshotId}
+          onUpdated={() => void onRefresh()}
+          onOpenSnapshot={(snapshot) => openCheckIn(snapshot)}
         />
       </div>
+
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+      <BlueprintPhotoComparisonModal
+        open={comparisonOpen}
+        snapshots={snapshots}
+        progressPhotos={progressPhotos}
+        onClose={() => setComparisonOpen(false)}
+      />
+
+      <BlueprintCheckInModal
+        open={checkInOpen}
+        programId={program.id}
+        metrics={bodyCompMetrics}
+        snapshot={checkInSnapshot}
+        photoSet={checkInPhotoSet}
+        onClose={closeCheckIn}
+        onSaved={handleCheckInSaved}
+      />
 
       <EditMetricsDrawer
         open={metricsDrawerOpen}

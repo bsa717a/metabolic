@@ -339,13 +339,7 @@ export function ClientDetailTabs({
         )}
 
         {activeTab === 'measurements' && (
-          <ClientMeasurementsPanel
-            program={dashboard?.program ?? null}
-            userId={client.id}
-            snapshots={snapshots}
-            selectedSnapshotId={selectedSnapshotId}
-            onRefresh={onRefresh}
-          />
+          <ClientMeasurementsPanel program={dashboard?.program ?? null} userId={client.id} />
         )}
       </div>
 

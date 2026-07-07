@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, Flag, Target } from 'lucide-react';
+import { ArrowLeftRight, CalendarCheck, Flag, Target } from 'lucide-react';
 import { api, toDateKey } from '../services/api';
 import type { AppUser, Program, ProgramMetric } from '../types';
 import { BlueprintCheckInModal } from '../components/program/BlueprintCheckInModal';
+import { BlueprintPhotoComparisonModal } from '../components/program/BlueprintPhotoComparisonModal';
 import { EditBlueprintGoalsDrawer } from '../components/program/EditBlueprintGoalsDrawer';
 import { EditBlueprintStartDrawer } from '../components/program/EditBlueprintStartDrawer';
 import { BlueprintJourneyDials } from '../components/program/BlueprintJourneyDials';
@@ -27,6 +28,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
   const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
   const [progressPhotos, setProgressPhotos] = useState<ProgressPhotoSet[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [startDrawerOpen, setStartDrawerOpen] = useState(false);
   const [goalsDrawerOpen, setGoalsDrawerOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
@@ -193,6 +195,14 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
             <button
               type="button"
               className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
+              onClick={() => setComparisonOpen(true)}
+            >
+              <ArrowLeftRight className="mr-2 h-4 w-4" />
+              Comparison
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
               onClick={() => setStartDrawerOpen(true)}
             >
               <Flag className="mr-2 h-4 w-4" />
@@ -231,6 +241,13 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
         {error && <p className="text-sm text-red-600">{error}</p>}
         {snapshotError && <p className="text-sm text-red-600">{snapshotError}</p>}
       </div>
+
+      <BlueprintPhotoComparisonModal
+        open={comparisonOpen}
+        snapshots={snapshots}
+        progressPhotos={progressPhotos}
+        onClose={() => setComparisonOpen(false)}
+      />
 
       <BlueprintCheckInModal
         open={checkInOpen}
