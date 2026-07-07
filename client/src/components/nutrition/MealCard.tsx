@@ -8,6 +8,7 @@ import { Card } from '../ui/Card';
 import { MealCardEditor, type MealMacroTargets } from './MealCardEditor';
 import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
+import { DeleteMealScopeModal } from './DeleteMealScopeModal';
 
 function formatPlannedTime(plannedTime?: string | null) {
   if (!plannedTime) return null;
@@ -139,6 +140,8 @@ export function MealCard({
   const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteScopeOpen, setDeleteScopeOpen] = useState(false);
+  const [deletingMeal, setDeletingMeal] = useState(false);
   const [macroDetailsOpen, setMacroDetailsOpen] = useState(false);
   const plannedTime = formatPlannedTime(meal.plannedTime);
 
@@ -175,18 +178,30 @@ export function MealCard({
     }
   }
 
-  async function deleteMealPlan() {
+  function openDeleteMealScope() {
     setActionError(null);
     if (!plannedItems.length) {
       setActionError('This meal has no planned foods to delete.');
       return;
     }
-    if (!window.confirm(`Clear all planned foods from ${meal.name}? Logged intake is kept.`)) return;
+    setDeleteScopeOpen(true);
+  }
+
+  async function deleteMealPlan(scope: 'today' | 'forward') {
+    setActionError(null);
+    setDeletingMeal(true);
     try {
-      await api(`/api/meals/${meal.id}/clear-planned`, { method: 'POST' });
+      await api(`/api/meals/${meal.id}/clear-planned`, {
+        method: 'POST',
+        body: JSON.stringify({ applyForward: scope === 'forward' })
+      });
+      setDeleteScopeOpen(false);
       await onChange();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Could not delete meal plan.');
+      await onChange();
+    } finally {
+      setDeletingMeal(false);
     }
   }
 
@@ -253,7 +268,7 @@ export function MealCard({
                 onSwapMeal={() => onSwapMeal(meal)}
                 onSaveAsPlan={() => void saveAsPlan()}
                 onViewMacroDetails={() => setMacroDetailsOpen(true)}
-                onDeleteMeal={() => void deleteMealPlan()}
+                onDeleteMeal={openDeleteMealScope}
               />
               {(() => {
                 const displayStatus = meal.status === 'SKIPPED' ? 'PLANNED' : meal.status;
@@ -281,6 +296,15 @@ export function MealCard({
       </Card>
 
       <MealMacroDetailsDrawer open={macroDetailsOpen} meal={meal} onClose={() => setMacroDetailsOpen(false)} />
+      <DeleteMealScopeModal
+        open={deleteScopeOpen}
+        mealName={meal.name}
+        saving={deletingMeal}
+        onClose={() => {
+          if (!deletingMeal) setDeleteScopeOpen(false);
+        }}
+        onConfirm={deleteMealPlan}
+      />
     </div>
   );
 }
