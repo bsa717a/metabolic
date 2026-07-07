@@ -2,6 +2,15 @@ export type FoodGroup = 'Protein' | 'Fruits' | 'Veggies' | 'Fats' | 'Carbs';
 
 export const FOOD_GROUPS: FoodGroup[] = ['Protein', 'Fruits', 'Veggies', 'Fats', 'Carbs'];
 
+// Maps builder food groups onto the roles that `foodEmoji` uses as its icon fallback.
+export const GROUP_EMOJI_ROLE: Record<FoodGroup, string> = {
+  Protein: 'PROTEIN',
+  Fruits: 'FRUIT',
+  Veggies: 'VEGETABLE',
+  Fats: 'FAT',
+  Carbs: 'CARB'
+};
+
 export const GROUP_COLORS: Record<FoodGroup, { bg: string; text: string; border: string; chip: string }> = {
   Protein: { bg: '#fde8ec', text: '#b4233a', border: '#f5a3b5', chip: '#e74c5e' },
   Fruits: { bg: '#fff4e5', text: '#9a5b00', border: '#f5c77a', chip: '#f59e0b' },
@@ -36,6 +45,7 @@ export type AddedFoodEntry = {
   instanceId: string;
   foodId: string;
   name: string;
+  servingUnit: string;
   calories: number;
   protein: number;
   carbs: number;

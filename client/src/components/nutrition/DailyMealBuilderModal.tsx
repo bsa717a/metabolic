@@ -7,6 +7,7 @@ import {
   DAILY_GOALS,
   FOOD_GROUPS,
   GROUP_COLORS,
+  GROUP_EMOJI_ROLE,
   emptyFoodsByGroup,
   emptyFoodsByGroupCatalog,
   mealTotals,
@@ -17,6 +18,7 @@ import {
   type FoodsByGroup,
   type MacroTotals
 } from '../../data/mealBuilderGroups';
+import { foodEmoji } from '../../utils/foodEmoji';
 
 type PlanMeal = {
   id: string;
@@ -91,8 +93,15 @@ function FoodListCard({ food, onAdd }: { food: BuilderFood; onAdd: () => void })
       onClick={onAdd}
       className="w-full rounded-xl border border-[#dde3e8] bg-white p-3 text-left shadow-sm transition hover:border-[#b8c5d0] hover:shadow-md active:scale-[0.99]"
     >
-      <p className="font-semibold text-[#1b2733]">{food.name}</p>
-      <p className="mt-0.5 text-xs text-[#5a6b7d]">{servingLabel}</p>
+      <div className="flex items-start gap-2">
+        <span className="shrink-0 text-lg leading-6" aria-hidden>
+          {foodEmoji(food.name, GROUP_EMOJI_ROLE[food.group])}
+        </span>
+        <div className="min-w-0">
+          <p className="font-semibold text-[#1b2733]">{food.name}</p>
+          <p className="mt-0.5 text-xs text-[#5a6b7d]">{servingLabel}</p>
+        </div>
+      </div>
       <div className="mt-2 flex flex-wrap gap-1">
         <MacroChip label="kcal" value={food.calories} color={colors.chip} />
         <MacroChip label="P" value={food.protein} color="#e74c5e" />
@@ -279,6 +288,7 @@ function MealRow({
                   {items.map((item) => (
                     <li key={item.instanceId} className="flex items-center justify-between gap-2 text-xs text-[#1b2733]">
                       <span className="min-w-0 truncate">
+                        <span aria-hidden>{foodEmoji(item.name, GROUP_EMOJI_ROLE[group])}</span>{' '}
                         {item.name}{' '}
                         <span className="text-[#5a6b7d]">{Math.round(item.calories)} kcal</span>
                       </span>
@@ -320,11 +330,26 @@ function MacroFooterRow({ label, actual, goal, unit }: { label: string; actual: 
   );
 }
 
-export function DailyMealBuilderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function DailyMealBuilderModal({
+  open,
+  onClose,
+  date,
+  hasExistingPlan = false,
+  onSaved
+}: {
+  open: boolean;
+  onClose: () => void;
+  date: string;
+  hasExistingPlan?: boolean;
+  onSaved?: () => void | Promise<void>;
+}) {
   const [meals, setMeals] = useState<PlanMeal[]>(createSeedMeals);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [catalog, setCatalog] = useState<FoodsByGroup | null>(null);
   const [foodError, setFoodError] = useState<string | null>(null);
+  const [pushForwardDays, setPushForwardDays] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [prevOpenKey, setPrevOpenKey] = useState(false);
   if (open !== prevOpenKey) {
@@ -335,6 +360,9 @@ export function DailyMealBuilderModal({ open, onClose }: { open: boolean; onClos
       setSelection({ mealId: seeded[0].id, group: 'Protein' });
       setCatalog(null);
       setFoodError(null);
+      setSaveError(null);
+      setSaving(false);
+      setPushForwardDays(0);
     }
   }
 
@@ -405,6 +433,7 @@ export function DailyMealBuilderModal({ open, onClose }: { open: boolean; onClos
       instanceId: crypto.randomUUID(),
       foodId: food.id,
       name: food.name,
+      servingUnit: food.servingUnit,
       calories: food.calories,
       protein: food.protein,
       carbs: food.carbs,
@@ -440,6 +469,50 @@ export function DailyMealBuilderModal({ open, onClose }: { open: boolean; onClos
     });
   }
 
+  async function savePlan() {
+    if (saving) return;
+    // Saving replaces the day's planned foods (and pushed-forward days), so warn before
+    // clobbering an existing plan — the builder starts from an empty template each open.
+    if (hasExistingPlan || pushForwardDays > 0) {
+      const forwardNote =
+        pushForwardDays > 0 ? ` and overwrite the plan on the next ${pushForwardDays} day${pushForwardDays === 1 ? '' : 's'}` : '';
+      const dayNote = hasExistingPlan ? "This replaces this day's current planned foods" : 'This saves the plan to this day';
+      if (!window.confirm(`${dayNote}${forwardNote}. Continue?`)) return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = {
+        meals: meals.map((meal, index) => ({
+          mealNumber: index + 1,
+          name: meal.name.trim() || `Meal ${index + 1}`,
+          items: FOOD_GROUPS.flatMap((group) =>
+            meal.foods[group].map((entry) => ({
+              foodId: entry.foodId,
+              name: entry.name,
+              quantity: 1,
+              unit: entry.servingUnit || 'serving',
+              calories: entry.calories,
+              protein: entry.protein,
+              carbs: entry.carbs,
+              fat: entry.fat
+            }))
+          )
+        })),
+        copyForwardDays: pushForwardDays
+      };
+      await api(`/api/daily-logs/${date}/build-plan`, { method: 'POST', body: JSON.stringify(payload) });
+      await onSaved?.();
+      onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save this plan.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasPlannedFood = dailyTotals.calories > 0;
+
   if (!open) return null;
 
   return createPortal(
@@ -449,19 +522,47 @@ export function DailyMealBuilderModal({ open, onClose }: { open: boolean; onClos
         style={{ backgroundColor: '#eef1f4' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[#dde3e8] bg-white px-5 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#dde3e8] bg-white px-5 py-4">
           <div>
-            <h2 className="text-xl font-bold text-[#1b2733]">Meal Builder</h2>
-            <p className="text-sm text-[#5a6b7d]">Plan today&apos;s meals by food group</p>
+            <h2 className="text-xl font-bold text-[#1b2733]">Day Builder</h2>
+            <p className="text-sm text-[#5a6b7d]">Plan this day&apos;s meals by food group</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-[#dde3e8] px-3 py-1.5 text-sm font-semibold text-[#5a6b7d] transition hover:bg-[#eef1f4]"
-          >
-            Close
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded-lg border border-[#dde3e8] bg-[#f8fafb] px-3 py-1.5 text-sm text-[#5a6b7d]">
+              <span className="font-semibold">Also apply to next</span>
+              <input
+                type="number"
+                min={0}
+                max={31}
+                value={pushForwardDays}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  setPushForwardDays(Number.isFinite(next) ? Math.min(31, Math.max(0, Math.trunc(next))) : 0);
+                }}
+                className="w-14 rounded-md border border-[#dde3e8] bg-white px-2 py-1 text-center text-sm font-semibold text-[#1b2733] outline-none focus:border-[#3b82f6]"
+              />
+              <span className="font-semibold">days</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => void savePlan()}
+              disabled={saving || !hasPlannedFood}
+              className="rounded-lg bg-[#22c55e] px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-[#1ba34c] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : pushForwardDays > 0 ? `Save & push ${pushForwardDays} days` : 'Save to day'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-[#dde3e8] px-3 py-1.5 text-sm font-semibold text-[#5a6b7d] transition hover:bg-[#eef1f4]"
+            >
+              Close
+            </button>
+          </div>
         </div>
+        {saveError && (
+          <div className="shrink-0 border-b border-red-100 bg-red-50 px-5 py-2 text-sm text-red-700">{saveError}</div>
+        )}
 
         <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">
           <div className="flex min-h-0 flex-col rounded-2xl border border-[#dde3e8] bg-white shadow-sm">

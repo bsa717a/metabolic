@@ -215,7 +215,9 @@ export function NutritionPage() {
           onAdjustTargets={() =>
             canAccess('personalized_targets') ? setTargetsOpen(true) : setUpgradePrompt('personalized_targets')
           }
-          onMealBuilder={() => setMealBuilderOpen(true)}
+          onMealBuilder={() =>
+            canAccess('meal_planning') ? setMealBuilderOpen(true) : setUpgradePrompt('meal_planning')
+          }
           printing={printing}
           onPrintDay={handlePrintDay}
           onPrintWeek={handlePrintWeek}
@@ -330,7 +332,13 @@ export function NutritionPage() {
         }}
       />
 
-      <DailyMealBuilderModal open={mealBuilderOpen} onClose={() => setMealBuilderOpen(false)} />
+      <DailyMealBuilderModal
+        open={mealBuilderOpen}
+        date={selectedDate}
+        hasExistingPlan={currentDayMeals.some((meal) => meal.items.some((item) => item.type === 'PLANNED'))}
+        onClose={() => setMealBuilderOpen(false)}
+        onSaved={() => void reloadWeek()}
+      />
     </div>
   );
 }

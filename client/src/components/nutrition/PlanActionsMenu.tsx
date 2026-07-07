@@ -74,7 +74,7 @@ export function PlanActionsMenu({
           </button>
           <button type="button" role="menuitem" className={itemClass} onClick={() => runAndClose(onMealBuilder)}>
             <LayoutGrid className="h-4 w-4" />
-            Meal Builder
+            Day Builder
           </button>
           <button type="button" role="menuitem" className={itemClass} onClick={() => runAndClose(onGroceryList)}>
             <ShoppingCart className="h-4 w-4" />
