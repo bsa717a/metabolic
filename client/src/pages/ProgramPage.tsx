@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, CalendarCheck, Flag, Target } from 'lucide-react';
 import { api, toDateKey } from '../services/api';
 import type { AppUser, Program, ProgramMetric } from '../types';
+import { BlueprintActionsMenu } from '../components/program/BlueprintActionsMenu';
 import { BlueprintCheckInModal } from '../components/program/BlueprintCheckInModal';
 import { BlueprintPhotoComparisonModal } from '../components/program/BlueprintPhotoComparisonModal';
 import { EditBlueprintGoalsDrawer } from '../components/program/EditBlueprintGoalsDrawer';
 import { EditBlueprintStartDrawer } from '../components/program/EditBlueprintStartDrawer';
-import { BlueprintJourneyDials } from '../components/program/BlueprintJourneyDials';
+import { BlueprintMetricsPanel } from '../components/program/BlueprintMetricsPanel';
 import { ProgramMetricSnapshotHistory } from '../components/program/ProgramMetricSnapshotHistory';
 import type { ProgramMetricSnapshot, ProgressPhotoSet } from '../types';
 import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../utils/measurementUtils';
@@ -178,47 +179,58 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
   return (
     <>
       <div className="space-y-6 pb-24">
-        <div className="relative flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-3 md:relative md:flex md:flex-wrap md:items-start md:justify-between md:gap-3 md:space-y-0">
           <div className="min-w-0">
             <h1 className="text-3xl font-bold">Metabolic Blueprint</h1>
             <p className="text-slate-500">Where intention meets results.</p>
           </div>
-          <button
-            type="button"
-            className="absolute left-1/2 top-0 inline-flex -translate-x-1/2 items-center rounded-xl bg-brand-navy px-5 py-2 text-sm font-semibold text-brand-off-white shadow-sm transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
-            onClick={() => openCheckIn(todaySnapshot ?? null)}
-          >
-            <CalendarCheck className="mr-2 h-4 w-4" />
-            Check-in
-          </button>
-          <div className="ml-auto flex flex-wrap gap-2">
+          <div className="flex w-full items-center justify-between gap-2 md:contents">
             <button
               type="button"
-              className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
-              onClick={() => setComparisonOpen(true)}
+              className="inline-flex shrink-0 items-center rounded-xl bg-brand-navy px-5 py-2 text-sm font-semibold text-brand-off-white shadow-sm transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light md:absolute md:left-1/2 md:top-0 md:-translate-x-1/2"
+              onClick={() => openCheckIn(todaySnapshot ?? null)}
             >
-              <ArrowLeftRight className="mr-2 h-4 w-4" />
-              Comparison
+              <CalendarCheck className="mr-2 h-4 w-4" />
+              Check-in
             </button>
-            <button
-              type="button"
-              className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
-              onClick={() => setStartDrawerOpen(true)}
-            >
-              <Flag className="mr-2 h-4 w-4" />
-              Start
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
-              onClick={() => setGoalsDrawerOpen(true)}
-            >
-              <Target className="mr-2 h-4 w-4" />
-              Goals
-            </button>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <div className="md:hidden">
+                <BlueprintActionsMenu
+                  onComparison={() => setComparisonOpen(true)}
+                  onStart={() => setStartDrawerOpen(true)}
+                  onGoals={() => setGoalsDrawerOpen(true)}
+                />
+              </div>
+              <div className="hidden flex-wrap gap-2 md:flex">
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
+                  onClick={() => setComparisonOpen(true)}
+                >
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  Comparison
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
+                  onClick={() => setStartDrawerOpen(true)}
+                >
+                  <Flag className="mr-2 h-4 w-4" />
+                  Start
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
+                  onClick={() => setGoalsDrawerOpen(true)}
+                >
+                  <Target className="mr-2 h-4 w-4" />
+                  Goals
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        <BlueprintJourneyDials
+        <BlueprintMetricsPanel
           metrics={bodyCompMetrics}
           onSaveSnapshot={() => void saveSnapshot()}
           savingSnapshot={savingSnapshot}
@@ -226,8 +238,8 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
         />
         {selectedSnapshot ? (
           <p className="text-sm text-slate-500">
-            Previewing session from {formatSnapshotCurrentLabel(selectedSnapshot.date)}. Journey dials show your live
-            current values.
+            Previewing session from {formatSnapshotCurrentLabel(selectedSnapshot.date)}. Metrics show your live current
+            values.
           </p>
         ) : null}
         <ProgramMetricSnapshotHistory

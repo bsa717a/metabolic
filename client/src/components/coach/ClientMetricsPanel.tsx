@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, Pencil } from 'lucide-react';
+import { ArrowLeftRight, CalendarCheck, Pencil } from 'lucide-react';
 import { api, toDateKey } from '../../services/api';
 import type { Program, ProgramMetric, ProgramMetricSnapshot, ProgressPhotoSet } from '../../types';
 import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../../utils/measurementUtils';
 import { formatSnapshotCurrentLabel, metricsWithSnapshotCurrent } from '../../utils/snapshotHistoryUtils';
 import { BlueprintCheckInModal } from '../program/BlueprintCheckInModal';
 import { BlueprintPhotoComparisonModal } from '../program/BlueprintPhotoComparisonModal';
-import { CoachMetricsSummary } from './CoachMetricsSummary';
+import { MetricsSummary } from '../program/MetricsSummary';
 import { EditMetricsDrawer } from '../program/EditMetricsDrawer';
 import { ProgramMetricSnapshotHistory } from '../program/ProgramMetricSnapshotHistory';
 
@@ -146,7 +146,8 @@ export function ClientMetricsPanel({
   return (
     <>
       <div className="space-y-4">
-        <CoachMetricsSummary
+        <MetricsSummary
+          eyebrow="Client metrics"
           metrics={displayMetrics}
           currentLabel={currentLabel}
           onSaveSnapshot={() => void saveSnapshot()}
@@ -154,7 +155,15 @@ export function ClientMetricsPanel({
           todaySnapshotSaved={Boolean(todaySnapshot)}
         />
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white shadow-sm transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+            onClick={() => openCheckIn(todaySnapshot ?? null)}
+          >
+            <CalendarCheck className="h-4 w-4" />
+            Check-in
+          </button>
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
