@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { canAccessUser } from '../auth/requireRole.js';
-import { addMealItem, applyMealForward, clearMealPlannedFoods, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
+import { addMealItem, applyMealForward, clearMealPlannedFoods, copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
@@ -244,6 +244,13 @@ export async function nutritionRoutes(app: FastifyInstance) {
     } catch (error) {
       if (error instanceof MealCardError) return reply.code(error.statusCode).send({ error: error.message });
       throw error;
+    }
+  });
+  app.post('/api/daily-logs/:date/copy-from-previous-day', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await copyDayFromPreviousDay(request.appUser!.id, (request.params as { date: string }).date);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day from previous day' });
     }
   });
   app.post('/api/daily-logs/:date/copy-forward', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {

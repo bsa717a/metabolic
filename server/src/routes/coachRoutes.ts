@@ -7,6 +7,7 @@ import {
   applyCoachExerciseTemplate,
   applyCoachNutritionTemplate,
   copyCoachClientDayForward,
+  copyCoachClientDayFromPreviousDay,
   copyCoachClientDayToDates,
   copyCoachClientExercisesToDates,
   createCoachClientGroup,
@@ -586,6 +587,18 @@ export async function coachRoutes(app: FastifyInstance) {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to apply plan';
       return reply.code(nutritionTemplateApplyErrorStatus(message)).send({ error: message });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/daily-logs/:date/copy-from-previous-day', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    try {
+      return await copyCoachClientDayFromPreviousDay(request.appUser!, userId, date);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day from previous day' });
     }
   });
 

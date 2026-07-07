@@ -294,6 +294,25 @@ export async function copyMealFromPreviousDay(userId: string, mealId: string) {
   });
 }
 
+export async function copyDayFromPreviousDay(userId: string, targetDate: string) {
+  const target = parseDateParam(targetDate);
+  const sourceDate = toDateKey(addUtcDays(target, -1));
+  const sourceMeals = await getSourceMealsForCopy(userId, sourceDate);
+  if (!sourceMeals.some((meal) => meal.plannedItems.length > 0)) {
+    throw new Error('No meal plan on the previous day to copy.');
+  }
+
+  const log = await ensureDailyLogByUserId(userId, targetDate);
+  if (!log) {
+    throw new Error('No active program found. Visit the dashboard first or contact your coach.');
+  }
+
+  const dayTransactionTimeoutMs = Math.min(60_000, 10_000 + sourceMeals.length * 500);
+  await applySourceMealsToDailyLog(userId, log, sourceMeals, dayTransactionTimeoutMs);
+
+  return { sourceDate, copiedMeals: sourceMeals.length };
+}
+
 export async function clearMealPlannedFoods(userId: string, mealId: string) {
   return prisma.$transaction(async (tx) => {
     const meal = await tx.meal.findFirstOrThrow({ where: { id: mealId, userId }, include: { dailyLog: true } });
