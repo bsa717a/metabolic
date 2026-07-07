@@ -23,12 +23,12 @@ export function MacroSummaryFooter({
   targets: MacroTotals;
   dailyTargets?: MacroTotals | null;
 }) {
-  const rows = [
+  const rows: Array<{ label: string; actual: number; target: number; unit?: string }> = [
     { label: 'Kcal', actual: totals.calories, target: targets.calories },
     { label: 'Protein', actual: totals.protein, target: targets.protein, unit: 'g' },
     { label: 'Carbs', actual: totals.carbs, target: targets.carbs, unit: 'g' },
     { label: 'Fat', actual: totals.fat, target: targets.fat, unit: 'g' }
-  ] as const;
+  ];
   const dayShare = dailyTargets ? mealGoalShareOfDay(targets, dailyTargets) : null;
 
   return (
