@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { requireRole } from '../auth/requireRole.js';
 import { prisma } from '../db/prisma.js';
+import { getFoodsByGroup } from '../services/foodGroupService.js';
 import { searchFoods } from '../services/foodSearchService.js';
 
 const foodBody = z.object({ name: z.string(), servingSize: z.number().default(1), servingUnit: z.string().default('serving'), calories: z.number(), protein: z.number(), carbs: z.number(), fat: z.number(), brand: z.string().optional() });
@@ -23,6 +24,10 @@ export async function foodRoutes(app: FastifyInstance) {
   app.get('/api/foods/search', { preHandler: requireAuth }, async (request) => {
     const query = String((request.query as { query?: string }).query ?? '').trim();
     return searchFoods(request.appUser!.id, query);
+  });
+
+  app.get('/api/foods/by-group', { preHandler: requireAuth }, async (request) => {
+    return getFoodsByGroup(request.appUser!.id);
   });
 
   app.get('/api/foods', { preHandler: requireAuth }, async (request) => {

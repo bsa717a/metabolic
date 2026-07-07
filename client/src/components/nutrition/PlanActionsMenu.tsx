@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, CopyPlus, Printer, ShoppingCart, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, CopyPlus, LayoutGrid, Printer, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export function PlanActionsMenu({
@@ -8,6 +8,7 @@ export function PlanActionsMenu({
   copyingDay = false,
   onGroceryList,
   onAdjustTargets,
+  onMealBuilder,
   printing = null,
   onPrintDay,
   onPrintWeek
@@ -17,6 +18,7 @@ export function PlanActionsMenu({
   copyingDay?: boolean;
   onGroceryList: () => void;
   onAdjustTargets: () => void;
+  onMealBuilder: () => void;
   printing?: 'day' | 'week' | null;
   onPrintDay: () => void;
   onPrintWeek: () => void | Promise<void>;
@@ -69,6 +71,10 @@ export function PlanActionsMenu({
           >
             <CopyPlus className="h-4 w-4" />
             {copyingDay ? 'Copying…' : 'Copy day'}
+          </button>
+          <button type="button" role="menuitem" className={itemClass} onClick={() => runAndClose(onMealBuilder)}>
+            <LayoutGrid className="h-4 w-4" />
+            Day Builder
           </button>
           <button type="button" role="menuitem" className={itemClass} onClick={() => runAndClose(onGroceryList)}>
             <ShoppingCart className="h-4 w-4" />

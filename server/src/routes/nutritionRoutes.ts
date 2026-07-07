@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { canAccessUser } from '../auth/requireRole.js';
-import { addMealItem, applyMealForward, clearMealPlannedFoods, copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
+import { addMealItem, applyMealForward, clearMealPlannedFoods, copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, saveBuiltDayPlan, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
@@ -252,6 +252,47 @@ export async function nutritionRoutes(app: FastifyInstance) {
       return await copyDayFromPreviousDay(request.appUser!.id, (request.params as { date: string }).date);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to copy day from previous day' });
+    }
+  });
+  app.post('/api/daily-logs/:date/build-plan', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
+    const macro = z.number().finite().nonnegative();
+    const body = z
+      .object({
+        meals: z
+          .array(
+            z.object({
+              mealNumber: z.number().int().min(1),
+              name: z.string().trim().min(1),
+              plannedTime: plannedTimeSchema.optional(),
+              items: z
+                .array(
+                  z.object({
+                    foodId: z.string().trim().min(1).nullable().optional(),
+                    name: z.string().trim().min(1),
+                    quantity: z.number().finite().positive().optional(),
+                    unit: z.string().trim().min(1).optional(),
+                    calories: macro,
+                    protein: macro,
+                    carbs: macro,
+                    fat: macro
+                  })
+                )
+                .default([])
+            })
+          )
+          .min(1, 'Add at least one meal to save.'),
+        copyForwardDays: z.number().int().min(0).max(31).optional()
+      })
+      .parse(request.body);
+    try {
+      return await saveBuiltDayPlan(
+        request.appUser!.id,
+        (request.params as { date: string }).date,
+        body.meals,
+        body.copyForwardDays ?? 0
+      );
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save plan' });
     }
   });
   app.post('/api/daily-logs/:date/copy-forward', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {

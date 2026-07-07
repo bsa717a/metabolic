@@ -11,6 +11,7 @@ import { MealBuilder, type MealCardsPayload } from '../components/nutrition/Meal
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { NutritionTargetsDrawer } from '../components/nutrition/NutritionTargetsDrawer';
 import { PlanActionsMenu } from '../components/nutrition/PlanActionsMenu';
+import { DailyMealBuilderModal } from '../components/nutrition/DailyMealBuilderModal';
 import { PlanPeriodBanner } from '../components/nutrition/PlanPeriodBanner';
 import {
   type DayMeals,
@@ -37,6 +38,7 @@ export function NutritionPage() {
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const [targetsOpen, setTargetsOpen] = useState(false);
+  const [mealBuilderOpen, setMealBuilderOpen] = useState(false);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [copyingDay, setCopyingDay] = useState(false);
@@ -213,6 +215,9 @@ export function NutritionPage() {
           onAdjustTargets={() =>
             canAccess('personalized_targets') ? setTargetsOpen(true) : setUpgradePrompt('personalized_targets')
           }
+          onMealBuilder={() =>
+            canAccess('meal_planning') ? setMealBuilderOpen(true) : setUpgradePrompt('meal_planning')
+          }
           printing={printing}
           onPrintDay={handlePrintDay}
           onPrintWeek={handlePrintWeek}
@@ -325,6 +330,14 @@ export function NutritionPage() {
           setCardMeals((prev) => prev.map((p) => (p.mealNumber === updated.mealNumber ? updated : p)));
           await reloadWeek();
         }}
+      />
+
+      <DailyMealBuilderModal
+        open={mealBuilderOpen}
+        date={selectedDate}
+        hasExistingPlan={currentDayMeals.some((meal) => meal.items.some((item) => item.type === 'PLANNED'))}
+        onClose={() => setMealBuilderOpen(false)}
+        onSaved={() => void reloadWeek()}
       />
     </div>
   );

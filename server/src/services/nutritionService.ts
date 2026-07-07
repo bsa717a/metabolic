@@ -576,6 +576,109 @@ export async function copyDayPlanForward(userId: string, sourceDate: string, day
   return { copiedDays: days, targetDates: targetDateKeys };
 }
 
+export type BuiltMealInput = {
+  mealNumber: number;
+  name: string;
+  plannedTime?: string | null;
+  items: Array<{
+    foodId?: string | null;
+    name: string;
+    quantity?: number;
+    unit?: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }>;
+};
+
+/**
+ * Persist a plan assembled in the Daily Meal Builder onto `date`, then optionally push the same
+ * plan forward across the next `copyForwardDays` days. The day's existing PLANNED items are replaced
+ * (logged ACTUAL items are always left untouched); meals are matched/created by mealNumber.
+ */
+export async function saveBuiltDayPlan(
+  userId: string,
+  date: string,
+  meals: BuiltMealInput[],
+  copyForwardDays = 0
+) {
+  const log = await ensureDailyLogByUserId(userId, date);
+  if (!log) {
+    throw new Error('No active program found. Visit the dashboard first or contact your coach.');
+  }
+
+  const { getMealStructure } = await import('./targetService.js');
+  const slots = (await getMealStructure()).slots;
+  const existingMeals = await prisma.meal.findMany({ where: { dailyLogId: log.id }, select: { id: true } });
+  const dayTransactionTimeoutMs = Math.min(60_000, 10_000 + meals.length * 500);
+
+  await prisma.$transaction(
+    async (tx) => {
+      // Clear every PLANNED item on the day first so meals dropped in the builder don't linger.
+      for (const meal of existingMeals) {
+        await tx.mealItem.deleteMany({ where: { mealId: meal.id, type: MealItemType.PLANNED } });
+      }
+
+      for (const source of meals) {
+        const plannedTime =
+          source.plannedTime ?? slots.find((slot) => slot.mealNumber === source.mealNumber)?.plannedTime ?? null;
+
+        let target = await tx.meal.findFirst({ where: { dailyLogId: log.id, mealNumber: source.mealNumber } });
+        if (!target) {
+          target = await tx.meal.create({
+            data: {
+              dailyLogId: log.id,
+              userId,
+              mealNumber: source.mealNumber,
+              name: source.name,
+              plannedTime,
+              status: MealStatus.PLANNED
+            }
+          });
+        } else {
+          await tx.meal.update({
+            where: { id: target.id },
+            data: { name: source.name, plannedTime, cardSelections: Prisma.JsonNull }
+          });
+        }
+
+        if (source.items.length) {
+          await tx.mealItem.createMany({
+            data: source.items.map((item) => ({
+              mealId: target!.id,
+              foodId: item.foodId ?? null,
+              type: MealItemType.PLANNED,
+              nameSnapshot: item.name,
+              quantity: item.quantity ?? 1,
+              unit: item.unit ?? 'serving',
+              calories: item.calories,
+              protein: item.protein,
+              carbs: item.carbs,
+              fat: item.fat
+            }))
+          });
+        }
+
+        await recalculateMealTotals(target.id, tx);
+      }
+
+      await recalculateDailyLogTotals(log.id, tx);
+    },
+    { maxWait: 10_000, timeout: dayTransactionTimeoutMs }
+  );
+
+  let copiedDays = 0;
+  let targetDates: string[] = [];
+  if (copyForwardDays > 0) {
+    const forwarded = await copyDayPlanForward(userId, date, copyForwardDays);
+    copiedDays = forwarded.copiedDays;
+    targetDates = forwarded.targetDates;
+  }
+
+  return { savedMeals: meals.length, copiedDays, targetDates };
+}
+
 export async function copyDayPlanToDates(
   userId: string,
   sourceDate: string,
