@@ -186,13 +186,11 @@ export function NutritionPage() {
   }
 
   async function handleCopyDay() {
-    if (!currentDayMeals.length || copyingDay) return;
+    if (copyingDay) return;
     if (!window.confirm("Copy the previous day's plan into this day? Planned foods and meal names will be copied into each meal.")) return;
     setCopyingDay(true);
     try {
-      await Promise.all(
-        currentDayMeals.map((meal) => api(`/api/meals/${meal.id}/copy-from-previous-day`, { method: 'POST' }))
-      );
+      await api(`/api/daily-logs/${selectedDate}/copy-from-previous-day`, { method: 'POST' });
       await reloadWeek();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Could not copy the previous day.');
@@ -207,7 +205,7 @@ export function NutritionPage() {
         <h1 className="text-3xl font-bold">Nutrition</h1>
         <PlanActionsMenu
           onCopyDay={() => void handleCopyDay()}
-          copyDayDisabled={!currentDayMeals.length}
+          copyDayDisabled={false}
           copyingDay={copyingDay}
           onGroceryList={() =>
             canAccess('meal_planning') ? setShoppingListOpen(true) : setUpgradePrompt('meal_planning')

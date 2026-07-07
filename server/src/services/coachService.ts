@@ -16,7 +16,7 @@ import {
 } from './exerciseService.js';
 import { getGamificationDashboard } from './gamificationService.js';
 import { getCoachHydrationStats, setWaterGoal } from './hydrationService.js';
-import { copyDayPlanForward, copyDayPlanToDates, getMealsForDate } from './nutritionService.js';
+import { copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, getMealsForDate } from './nutritionService.js';
 import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
 import { getUserNutritionTargets, setUserNutritionTargets } from './nutritionTargetService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
@@ -314,6 +314,15 @@ export async function getCoachClientMeals(actor: { id: string; role: Role }, use
   const log = await ensureDailyLogByUserId(userId, date);
   if (!log) throw new Error('No active program found');
   return getMealsForDate(userId, date);
+}
+
+export async function copyCoachClientDayFromPreviousDay(
+  actor: { id: string; role: Role },
+  userId: string,
+  date: string
+) {
+  await requireCoachClient(actor, userId);
+  return copyDayFromPreviousDay(userId, date);
 }
 
 export async function copyCoachClientDayForward(

@@ -108,11 +108,11 @@ export function CoachDayNutritionEditor({
   }
 
   async function handleCopyDay() {
-    if (!meals.length || copyingDay) return;
+    if (copyingDay) return;
     if (!window.confirm("Copy the previous day's plan into this day? Planned foods will be added to each meal.")) return;
     setCopyingDay(true);
     try {
-      await Promise.all(meals.map((meal) => api(`/api/meals/${meal.id}/copy-from-previous-day`, { method: 'POST' })));
+      await api(`/api/coach/users/${clientId}/daily-logs/${selectedDate}/copy-from-previous-day`, { method: 'POST' });
       await reloadMeals();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Could not copy the previous day.');
@@ -162,7 +162,7 @@ export function CoachDayNutritionEditor({
               type="button"
               variant="secondary"
               onClick={() => void handleCopyDay()}
-              disabled={copyingDay || !meals.length}
+              disabled={copyingDay}
             >
               <CopyPlus className="mr-1 inline h-4 w-4" />
               Copy day
