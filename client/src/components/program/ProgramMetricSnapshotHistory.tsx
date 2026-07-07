@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pencil, StickyNote } from 'lucide-react';
+import { StickyNote } from 'lucide-react';
 import type { ProgramMetricSnapshot } from '../../types';
 import {
   buildSnapshotRows,
@@ -16,6 +16,7 @@ type Props = {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onUpdated: (snapshot: ProgramMetricSnapshot) => void;
+  onOpenSnapshot?: (snapshot: ProgramMetricSnapshot) => void;
   compact?: boolean;
   embedded?: boolean;
 };
@@ -31,6 +32,7 @@ export function ProgramMetricSnapshotHistory({
   selectedId,
   onSelect,
   onUpdated,
+  onOpenSnapshot,
   compact = false,
   embedded = false
 }: Props) {
@@ -40,7 +42,7 @@ export function ProgramMetricSnapshotHistory({
   const editingRow = rows.find((row) => row.snapshot.id === editingSnapshot?.id);
   const headerClass = compact ? compactHeaderCellClass : headerCellClass;
   const cellClass = compact ? compactBodyCellClass : bodyCellClass;
-  const pencilSize = compact ? 14 : 16;
+  const noteIconSize = compact ? 14 : 16;
 
   if (snapshots.length === 0) {
     if (embedded) {
@@ -73,7 +75,6 @@ export function ProgramMetricSnapshotHistory({
             <th className={headerClass}>Scale Change</th>
             <th className={headerClass}>% Change</th>
             <th className={`${headerClass} w-12`} aria-label="Session notes" />
-            <th className={`${headerClass} w-12`} aria-label="Edit" />
           </tr>
         </thead>
         <tbody>
@@ -83,11 +84,17 @@ export function ProgramMetricSnapshotHistory({
               <tr
                 key={row.snapshot.id}
                 tabIndex={0}
-                onClick={() => onSelect(selected ? null : row.snapshot.id)}
+                onClick={() => {
+                  onSelect(row.snapshot.id);
+                  if (onOpenSnapshot) onOpenSnapshot(row.snapshot);
+                  else setEditingSnapshot(row.snapshot);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    onSelect(selected ? null : row.snapshot.id);
+                    onSelect(row.snapshot.id);
+                    if (onOpenSnapshot) onOpenSnapshot(row.snapshot);
+                    else setEditingSnapshot(row.snapshot);
                   }
                 }}
                 className={`cursor-pointer border-t border-slate-100 transition dark:border-app-border ${
@@ -118,22 +125,9 @@ export function ProgramMetricSnapshotHistory({
                         });
                       }}
                     >
-                      <StickyNote size={pencilSize} />
+                      <StickyNote size={noteIconSize} />
                     </button>
                   ) : null}
-                </td>
-                <td className={`${cellClass} text-right`}>
-                  <button
-                    type="button"
-                    aria-label={`Edit session ${row.session}`}
-                    className="rounded-lg p-2 text-slate-500 transition hover:bg-white hover:text-slate-900 dark:text-app-text-muted dark:hover:bg-app-muted dark:hover:text-app-text"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setEditingSnapshot(row.snapshot);
-                    }}
-                  >
-                    <Pencil size={pencilSize} />
-                  </button>
                 </td>
               </tr>
             );
@@ -148,26 +142,33 @@ export function ProgramMetricSnapshotHistory({
       {embedded ? (
         <>
           <p className="mb-3 text-sm text-slate-500 dark:text-app-text-muted">
-            Select a session to preview it in the chart, or edit with the pencil.
+            {onOpenSnapshot ? 'Select a session to open its check-in details.' : 'Select a session to edit its values.'}
           </p>
           {table}
         </>
       ) : (
         <Card>
           <h2 className="mb-1 text-lg font-bold">Session Snapshots</h2>
-          <p className="mb-4 text-sm text-slate-500 dark:text-app-text-muted">Select a session to preview it in the chart, or edit with the pencil.</p>
+          <p className="mb-4 text-sm text-slate-500 dark:text-app-text-muted">
+            {onOpenSnapshot ? 'Select a session to open its check-in details.' : 'Select a session to edit its values.'}
+          </p>
           {table}
         </Card>
       )}
 
-      <EditSnapshotDrawer
-        open={Boolean(editingSnapshot)}
-        programId={programId}
-        snapshot={editingSnapshot ?? undefined}
-        session={editingRow?.session}
-        onClose={() => setEditingSnapshot(null)}
-        onSaved={onUpdated}
-      />
+      {!onOpenSnapshot ? (
+        <EditSnapshotDrawer
+          open={Boolean(editingSnapshot)}
+          programId={programId}
+          snapshot={editingSnapshot ?? undefined}
+          session={editingRow?.session}
+          onClose={() => setEditingSnapshot(null)}
+          onSaved={(updated) => {
+            onUpdated(updated);
+            setEditingSnapshot(null);
+          }}
+        />
+      ) : null}
 
       <Drawer
         open={Boolean(viewingNotes)}

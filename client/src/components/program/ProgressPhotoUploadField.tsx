@@ -15,12 +15,14 @@ export function ProgressPhotoUploadField({
   label,
   draft,
   disabled,
-  onSelect
+  onSelect,
+  previewClassName = 'h-40'
 }: {
   label: string;
   draft: PhotoDraft;
   disabled: boolean;
   onSelect: (file: File) => void;
+  previewClassName?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -56,12 +58,12 @@ export function ProgressPhotoUploadField({
       />
 
       {draft.previewUrl ? (
-        <img src={draft.previewUrl} alt={`${label} progress`} className="h-40 w-full rounded-xl object-cover" />
+        <img src={draft.previewUrl} alt={`${label} progress`} className={`${previewClassName} w-full rounded-xl object-cover`} />
       ) : (
         <button
           type="button"
           disabled={disabled}
-          className="flex h-40 w-full flex-col items-center justify-center rounded-xl border border-dashed border-app-border bg-app-muted/50 text-sm text-app-text-muted transition hover:border-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`flex ${previewClassName} w-full flex-col items-center justify-center rounded-xl border border-dashed border-app-border bg-app-muted/50 text-sm text-app-text-muted transition hover:border-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50`}
           onClick={() => inputRef.current?.click()}
         >
           <Upload size={20} className="mb-2" />
