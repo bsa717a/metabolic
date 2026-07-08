@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
-import { Pencil, Plus, X } from 'lucide-react';
+import { Pencil, Plus, Search, X } from 'lucide-react';
 import { api } from '../../services/api';
+import type { Meal } from '../../types';
 import {
   DAILY_GOALS,
   FOOD_GROUPS,
@@ -11,6 +12,7 @@ import {
   emptyFoodsByGroup,
   emptyFoodsByGroupCatalog,
   mealTotals,
+  mealsFromDayPlan,
   sortGroups,
   type AddedFoodEntry,
   type BuilderFood,
@@ -22,6 +24,7 @@ import { foodEmoji } from '../../utils/foodEmoji';
 
 type PlanMeal = {
   id: string;
+  mealNumber: number;
   name: string;
   percentOfDay: number;
   groups: FoodGroup[];
@@ -38,9 +41,10 @@ const SEED_MEALS: Array<{ name: string; percentOfDay: number }> = [
   { name: 'Snacks', percentOfDay: 15 }
 ];
 
-function createMeal(name: string, percentOfDay: number, editing = false): PlanMeal {
+function createMeal(name: string, percentOfDay: number, mealNumber: number, editing = false): PlanMeal {
   return {
     id: crypto.randomUUID(),
+    mealNumber,
     name,
     percentOfDay,
     groups: [...FOOD_GROUPS],
@@ -50,7 +54,7 @@ function createMeal(name: string, percentOfDay: number, editing = false): PlanMe
 }
 
 function createSeedMeals(): PlanMeal[] {
-  return SEED_MEALS.map(({ name, percentOfDay }) => createMeal(name, percentOfDay));
+  return SEED_MEALS.map(({ name, percentOfDay }, index) => createMeal(name, percentOfDay, index + 1));
 }
 
 function progressColor(actual: number, target: number): string {
@@ -84,7 +88,7 @@ function MacroChip({ label, value, color }: { label: string; value: number; colo
   );
 }
 
-function FoodListCard({ food, onAdd }: { food: BuilderFood; onAdd: () => void }) {
+function FoodListCard({ food, onAdd, showGroup = false }: { food: BuilderFood; onAdd: () => void; showGroup?: boolean }) {
   const colors = GROUP_COLORS[food.group];
   const servingLabel = `${food.servingSize} ${food.servingUnit}`.trim();
   return (
@@ -97,8 +101,18 @@ function FoodListCard({ food, onAdd }: { food: BuilderFood; onAdd: () => void })
         <span className="shrink-0 text-lg leading-6" aria-hidden>
           {foodEmoji(food.name, GROUP_EMOJI_ROLE[food.group])}
         </span>
-        <div className="min-w-0">
-          <p className="font-semibold text-[#1b2733]">{food.name}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold text-[#1b2733]">{food.name}</p>
+            {showGroup && (
+              <span
+                className="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                style={{ backgroundColor: colors.bg, color: colors.text }}
+              >
+                {food.group}
+              </span>
+            )}
+          </div>
           <p className="mt-0.5 text-xs text-[#5a6b7d]">{servingLabel}</p>
         </div>
       </div>
@@ -138,7 +152,7 @@ function MealEditor({
         <input
           type="range"
           min={5}
-          max={60}
+          max={100}
           step={1}
           value={meal.percentOfDay}
           onChange={(e) => onUpdate({ percentOfDay: Number(e.target.value) })}
@@ -194,25 +208,46 @@ function MealEditor({
   );
 }
 
+function mealGoalsFromPercent(percentOfDay: number): MacroTotals {
+  const share = percentOfDay / 100;
+  return {
+    calories: Math.round(share * DAILY_GOALS.calories),
+    protein: Math.round(share * DAILY_GOALS.protein),
+    carbs: Math.round(share * DAILY_GOALS.carbs),
+    fat: Math.round(share * DAILY_GOALS.fat)
+  };
+}
+
+type QuantityEdit = { mealId: string; group: FoodGroup; instanceId: string };
+
 function MealRow({
   meal,
   selected,
+  quantityEdit,
   onSelectGroup,
   onToggleEdit,
   onUpdate,
   onDelete,
-  onRemoveFood
+  onRemoveFood,
+  onQuantityEditSelect,
+  onUpdateQuantity,
+  onQuantityEditDone
 }: {
   meal: PlanMeal;
   selected: Selection | null;
+  quantityEdit: { group: FoodGroup; instanceId: string } | null;
   onSelectGroup: (group: FoodGroup) => void;
   onToggleEdit: () => void;
   onUpdate: (patch: Partial<PlanMeal>) => void;
   onDelete: () => void;
   onRemoveFood: (group: FoodGroup, instanceId: string) => void;
+  onQuantityEditSelect: (group: FoodGroup, instanceId: string) => void;
+  onUpdateQuantity: (group: FoodGroup, instanceId: string, quantity: number) => void;
+  onQuantityEditDone: () => void;
 }) {
   const totals = mealTotals(meal.foods);
-  const targetKcal = Math.round((meal.percentOfDay / 100) * DAILY_GOALS.calories);
+  const goals = mealGoalsFromPercent(meal.percentOfDay);
+  const targetKcal = goals.calories;
   const barColor = progressColor(totals.calories, targetKcal);
   const barPct = progressPercent(totals.calories, targetKcal);
 
@@ -285,13 +320,45 @@ function MealRow({
               </button>
               {items.length > 0 && (
                 <ul className="ml-3 mt-1 space-y-1 border-l-2 pl-3" style={{ borderColor: colors.border }}>
-                  {items.map((item) => (
-                    <li key={item.instanceId} className="flex items-center justify-between gap-2 text-xs text-[#1b2733]">
-                      <span className="min-w-0 truncate">
+                  {items.map((item) => {
+                    const isEditingQty =
+                      quantityEdit?.group === group && quantityEdit.instanceId === item.instanceId;
+                    return (
+                    <li
+                      key={item.instanceId}
+                      className={clsx(
+                        'flex items-center justify-between gap-2 rounded-md text-xs text-[#1b2733]',
+                        isEditingQty && 'bg-[#e8f0fd] px-1 py-1 ring-1 ring-[#93b8f5]'
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onQuantityEditSelect(group, item.instanceId)}
+                        className="min-w-0 flex-1 truncate text-left"
+                      >
                         <span aria-hidden>{foodEmoji(item.name, GROUP_EMOJI_ROLE[group])}</span>{' '}
                         {item.name}{' '}
-                        <span className="text-[#5a6b7d]">{Math.round(item.calories)} kcal</span>
-                      </span>
+                        <span className="text-[#5a6b7d]">
+                          {Math.round(item.calories)} kcal
+                          {!isEditingQty && item.quantity !== 1 ? ` · ${item.quantity} ${item.servingUnit}` : ''}
+                        </span>
+                      </button>
+                      {isEditingQty && (
+                        <input
+                          type="number"
+                          min={0.25}
+                          step={0.25}
+                          value={item.quantity}
+                          autoFocus
+                          onChange={(e) => onUpdateQuantity(group, item.instanceId, Number(e.target.value))}
+                          onBlur={onQuantityEditDone}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === 'Escape') onQuantityEditDone();
+                          }}
+                          className="w-16 shrink-0 rounded-md border border-[#dde3e8] bg-white px-1.5 py-0.5 text-center text-xs font-medium tabular-nums text-[#1b2733] outline-none focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]"
+                          aria-label={`Quantity for ${item.name}`}
+                        />
+                      )}
                       <button
                         type="button"
                         aria-label={`Remove ${item.name}`}
@@ -304,12 +371,22 @@ function MealRow({
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-3 border-t border-[#eef1f4] pt-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <MacroFooterRow label="Cal" actual={totals.calories} goal={goals.calories} unit="" />
+          <MacroFooterRow label="Pro" actual={totals.protein} goal={goals.protein} unit="g" />
+          <MacroFooterRow label="Carb" actual={totals.carbs} goal={goals.carbs} unit="g" />
+          <MacroFooterRow label="Fat" actual={totals.fat} goal={goals.fat} unit="g" />
+        </div>
       </div>
     </div>
   );
@@ -334,27 +411,33 @@ export function DailyMealBuilderModal({
   open,
   onClose,
   date,
-  hasExistingPlan = false,
+  dayMeals,
   onSaved
 }: {
   open: boolean;
   onClose: () => void;
   date: string;
-  hasExistingPlan?: boolean;
+  dayMeals: Meal[];
   onSaved?: () => void | Promise<void>;
 }) {
   const [meals, setMeals] = useState<PlanMeal[]>(createSeedMeals);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [catalog, setCatalog] = useState<FoodsByGroup | null>(null);
   const [foodError, setFoodError] = useState<string | null>(null);
+  const [planReady, setPlanReady] = useState(false);
+  const [foodSearchQuery, setFoodSearchQuery] = useState('');
+  const [quantityEdit, setQuantityEdit] = useState<QuantityEdit | null>(null);
   const [pushForwardDays, setPushForwardDays] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const dayMealsSnapshotRef = useRef<Meal[]>([]);
 
-  const [prevOpenKey, setPrevOpenKey] = useState(false);
-  if (open !== prevOpenKey) {
-    setPrevOpenKey(open);
-    if (open) {
+  const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
+  const openKey = open ? date : null;
+  if (openKey !== prevOpenKey) {
+    setPrevOpenKey(openKey);
+    if (openKey) {
+      dayMealsSnapshotRef.current = dayMeals;
       const seeded = createSeedMeals();
       setMeals(seeded);
       setSelection({ mealId: seeded[0].id, group: 'Protein' });
@@ -363,8 +446,20 @@ export function DailyMealBuilderModal({
       setSaveError(null);
       setSaving(false);
       setPushForwardDays(0);
+      setFoodSearchQuery('');
+      setQuantityEdit(null);
+      setPlanReady(false);
     }
   }
+
+  useEffect(() => {
+    if (!open || catalog === null) return;
+    const hydrated = mealsFromDayPlan(dayMealsSnapshotRef.current, catalog);
+    const next = hydrated?.length ? hydrated : createSeedMeals();
+    setMeals(next);
+    setSelection({ mealId: next[0].id, group: next[0].groups[0] ?? 'Protein' });
+    setPlanReady(true);
+  }, [open, catalog]);
 
   useEffect(() => {
     if (!open || catalog !== null || foodError !== null) return;
@@ -405,7 +500,17 @@ export function DailyMealBuilderModal({
 
   const selectedMeal = meals.find((meal) => meal.id === selection?.mealId) ?? meals[0];
   const selectedGroup = selection?.group ?? 'Protein';
-  const filteredFoods = catalog?.[selectedGroup] ?? [];
+  const searchQuery = foodSearchQuery.trim().toLowerCase();
+  const isSearching = searchQuery.length > 0;
+  const filteredFoods = useMemo(() => {
+    if (!catalog) return [];
+    if (!isSearching) return catalog[selectedGroup] ?? [];
+    return FOOD_GROUPS.flatMap((group) => catalog[group]).filter(
+      (food) =>
+        food.name.toLowerCase().includes(searchQuery) ||
+        (food.brand?.toLowerCase().includes(searchQuery) ?? false)
+    );
+  }, [catalog, selectedGroup, searchQuery, isSearching]);
   const loadingFoods = open && catalog === null && foodError === null;
 
   function updateMeal(id: string, patch: Partial<PlanMeal>) {
@@ -425,6 +530,36 @@ export function DailyMealBuilderModal({
         };
       })
     );
+    setQuantityEdit((current) =>
+      current?.mealId === mealId && current.group === group && current.instanceId === instanceId ? null : current
+    );
+  }
+
+  function updateFoodQuantity(mealId: string, group: FoodGroup, instanceId: string, newQty: number) {
+    if (!Number.isFinite(newQty) || newQty <= 0) return;
+    setMeals((prev) =>
+      prev.map((meal) => {
+        if (meal.id !== mealId) return meal;
+        return {
+          ...meal,
+          foods: {
+            ...meal.foods,
+            [group]: meal.foods[group].map((item) => {
+              if (item.instanceId !== instanceId) return item;
+              const factor = newQty / item.quantity;
+              return {
+                ...item,
+                quantity: newQty,
+                calories: item.calories * factor,
+                protein: item.protein * factor,
+                carbs: item.carbs * factor,
+                fat: item.fat * factor
+              };
+            })
+          }
+        };
+      })
+    );
   }
 
   function addFood(food: BuilderFood) {
@@ -434,6 +569,7 @@ export function DailyMealBuilderModal({
       foodId: food.id,
       name: food.name,
       servingUnit: food.servingUnit,
+      quantity: 1,
       calories: food.calories,
       protein: food.protein,
       carbs: food.carbs,
@@ -443,9 +579,10 @@ export function DailyMealBuilderModal({
       prev.map((meal) => {
         if (meal.id !== selectedMeal.id) return meal;
         const group = food.group;
-        if (!meal.groups.includes(group)) return meal;
+        const nextGroups = meal.groups.includes(group) ? meal.groups : sortGroups([...meal.groups, group]);
         return {
           ...meal,
+          groups: nextGroups,
           foods: { ...meal.foods, [group]: [...meal.foods[group], entry] }
         };
       })
@@ -454,7 +591,8 @@ export function DailyMealBuilderModal({
   }
 
   function addMeal() {
-    const meal = createMeal('New meal', 10, true);
+    const nextMealNumber = meals.reduce((max, meal) => Math.max(max, meal.mealNumber), 0) + 1;
+    const meal = createMeal('New meal', 10, nextMealNumber, true);
     setMeals((prev) => [...prev, meal]);
     setSelection({ mealId: meal.id, group: 'Protein' });
   }
@@ -471,26 +609,27 @@ export function DailyMealBuilderModal({
 
   async function savePlan() {
     if (saving) return;
-    // Saving replaces the day's planned foods (and pushed-forward days), so warn before
-    // clobbering an existing plan — the builder starts from an empty template each open.
-    if (hasExistingPlan || pushForwardDays > 0) {
-      const forwardNote =
-        pushForwardDays > 0 ? ` and overwrite the plan on the next ${pushForwardDays} day${pushForwardDays === 1 ? '' : 's'}` : '';
-      const dayNote = hasExistingPlan ? "This replaces this day's current planned foods" : 'This saves the plan to this day';
-      if (!window.confirm(`${dayNote}${forwardNote}. Continue?`)) return;
+    if (pushForwardDays > 0) {
+      if (
+        !window.confirm(
+          `This saves the plan to this day and overwrites the plan on the next ${pushForwardDays} day${pushForwardDays === 1 ? '' : 's'}. Continue?`
+        )
+      ) {
+        return;
+      }
     }
     setSaving(true);
     setSaveError(null);
     try {
       const payload = {
         meals: meals.map((meal, index) => ({
-          mealNumber: index + 1,
+          mealNumber: meal.mealNumber || index + 1,
           name: meal.name.trim() || `Meal ${index + 1}`,
           items: FOOD_GROUPS.flatMap((group) =>
             meal.foods[group].map((entry) => ({
-              foodId: entry.foodId,
+              foodId: entry.foodId || null,
               name: entry.name,
-              quantity: 1,
+              quantity: entry.quantity,
               unit: entry.servingUnit || 'serving',
               calories: entry.calories,
               protein: entry.protein,
@@ -546,7 +685,7 @@ export function DailyMealBuilderModal({
             <button
               type="button"
               onClick={() => void savePlan()}
-              disabled={saving || !hasPlannedFood}
+              disabled={saving || !hasPlannedFood || !planReady}
               className="rounded-lg bg-[#22c55e] px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-[#1ba34c] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? 'Saving…' : pushForwardDays > 0 ? `Save & push ${pushForwardDays} days` : 'Save to day'}
@@ -584,18 +723,35 @@ export function DailyMealBuilderModal({
             </div>
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-              {meals.map((meal) => (
-                <MealRow
-                  key={meal.id}
-                  meal={meal}
-                  selected={selection}
-                  onSelectGroup={(group) => setSelection({ mealId: meal.id, group })}
-                  onToggleEdit={() => updateMeal(meal.id, { editing: !meal.editing })}
-                  onUpdate={(patch) => updateMeal(meal.id, patch)}
-                  onDelete={() => deleteMeal(meal.id)}
-                  onRemoveFood={(group, instanceId) => removeFood(meal.id, group, instanceId)}
-                />
-              ))}
+              {!planReady && (
+                <p className="text-sm text-[#5a6b7d]">Loading today&apos;s plan…</p>
+              )}
+              {planReady &&
+                meals.map((meal) => (
+                  <MealRow
+                    key={meal.id}
+                    meal={meal}
+                    selected={selection}
+                    quantityEdit={
+                      quantityEdit?.mealId === meal.id
+                        ? { group: quantityEdit.group, instanceId: quantityEdit.instanceId }
+                        : null
+                    }
+                    onSelectGroup={(group) => setSelection({ mealId: meal.id, group })}
+                    onToggleEdit={() => updateMeal(meal.id, { editing: !meal.editing })}
+                    onUpdate={(patch) => updateMeal(meal.id, patch)}
+                    onDelete={() => deleteMeal(meal.id)}
+                    onRemoveFood={(group, instanceId) => removeFood(meal.id, group, instanceId)}
+                    onQuantityEditSelect={(group, instanceId) =>
+                      setQuantityEdit({ mealId: meal.id, group, instanceId })
+                    }
+                    onUpdateQuantity={(group, instanceId, qty) =>
+                      updateFoodQuantity(meal.id, group, instanceId, qty)
+                    }
+                    onQuantityEditDone={() => setQuantityEdit(null)}
+                  />
+                ))}
+              {planReady && (
               <button
                 type="button"
                 onClick={addMeal}
@@ -604,6 +760,7 @@ export function DailyMealBuilderModal({
                 <Plus className="h-4 w-4" />
                 Add meal or snack
               </button>
+              )}
             </div>
 
             <div className="shrink-0 border-t border-[#eef1f4] bg-[#f8fafb] px-4 py-3">
@@ -618,10 +775,25 @@ export function DailyMealBuilderModal({
 
           <div className="flex min-h-0 flex-col rounded-2xl border border-[#dde3e8] bg-white shadow-sm">
             <div className="shrink-0 border-b border-[#eef1f4] px-4 py-3">
-              <h3 className="font-bold text-[#1b2733]">
-                {selectedGroup} for {selectedMeal?.name ?? '—'}
-              </h3>
-              <p className="mt-0.5 text-xs text-[#5a6b7d]">Tap a food to add it to this meal</p>
+              <div className="flex items-center gap-3">
+                <h3 className="min-w-0 flex-1 truncate font-bold text-[#1b2733]">
+                  {isSearching ? 'Search results' : `${selectedGroup} for ${selectedMeal?.name ?? '—'}`}
+                </h3>
+                <label className="flex w-32 shrink-0 items-center gap-1.5 rounded-lg border border-[#dde3e8] bg-[#f8fafb] px-2 py-1.5">
+                  <Search className="h-3.5 w-3.5 shrink-0 text-[#5a6b7d]" aria-hidden />
+                  <input
+                    type="search"
+                    value={foodSearchQuery}
+                    onChange={(e) => setFoodSearchQuery(e.target.value)}
+                    placeholder="Search…"
+                    className="min-w-0 w-full bg-transparent text-xs text-[#1b2733] placeholder:text-[#5a6b7d] outline-none"
+                    aria-label="Search foods"
+                  />
+                </label>
+              </div>
+              <p className="mt-0.5 text-xs text-[#5a6b7d]">
+                {isSearching ? 'Results from all food groups' : 'Tap a food to add it to this meal'}
+              </p>
             </div>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
               {loadingFoods && (
@@ -631,11 +803,13 @@ export function DailyMealBuilderModal({
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{foodError}</p>
               )}
               {!loadingFoods && !foodError && filteredFoods.length === 0 && (
-                <p className="text-sm text-[#5a6b7d]">No foods in this group yet.</p>
+                <p className="text-sm text-[#5a6b7d]">
+                  {isSearching ? 'No foods match your search.' : 'No foods in this group yet.'}
+                </p>
               )}
               {!loadingFoods &&
                 filteredFoods.map((food) => (
-                  <FoodListCard key={food.id} food={food} onAdd={() => addFood(food)} />
+                  <FoodListCard key={food.id} food={food} showGroup={isSearching} onAdd={() => addFood(food)} />
                 ))}
             </div>
           </div>

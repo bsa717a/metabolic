@@ -335,7 +335,7 @@ export function NutritionPage() {
       <DailyMealBuilderModal
         open={mealBuilderOpen}
         date={selectedDate}
-        hasExistingPlan={currentDayMeals.some((meal) => meal.items.some((item) => item.type === 'PLANNED'))}
+        dayMeals={currentDayMeals}
         onClose={() => setMealBuilderOpen(false)}
         onSaved={() => void reloadWeek()}
       />
