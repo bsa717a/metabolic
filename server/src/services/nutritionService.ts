@@ -42,24 +42,83 @@ export async function getMealsForDate(userId: string, date: string) {
   return mealsForNutritionDisplay(meals);
 }
 
-export async function createMeal(userId: string, date: string, data: { name: string; mealNumber: number; plannedTime?: string | null }) {
-  const day = parseDateParam(date);
-  const log = await prisma.dailyLog.findUniqueOrThrow({ where: { userId_date: { userId, date: day } } });
-  const existing = await prisma.meal.findFirst({
-    where: { dailyLogId: log.id, mealNumber: data.mealNumber }
-  });
-  if (existing) return existing;
+async function resolvePlannedTime(mealNumber: number, plannedTime?: string | null) {
+  if (plannedTime) return plannedTime;
+  const { getMealStructure } = await import('./targetService.js');
+  const slot = (await getMealStructure()).slots.find((entry) => entry.mealNumber === mealNumber);
+  return slot?.plannedTime ?? '12:00';
+}
 
-  let plannedTime = data.plannedTime ?? null;
-  if (!plannedTime) {
-    const { getMealStructure } = await import('./targetService.js');
-    const slot = (await getMealStructure()).slots.find((entry) => entry.mealNumber === data.mealNumber);
-    plannedTime = slot?.plannedTime ?? null;
+/** User-added blank meals use UPCOMING so they stay visible once other meals have activity. */
+export async function addBlankMeal(userId: string, date: string, name = 'New meal') {
+  const log = await ensureDailyLogByUserId(userId, date);
+  if (!log) throw new Error('No active program found. Visit the dashboard first or contact your coach.');
+
+  const meals = await prisma.meal.findMany({
+    where: { dailyLogId: log.id },
+    include: { items: true },
+    orderBy: { mealNumber: 'asc' }
+  });
+
+  const activeMeals = meals.filter(hasNutritionActivity);
+  const hiddenEmpty = meals.filter((meal) => !hasNutritionActivity(meal));
+
+  if (activeMeals.length > 0 && hiddenEmpty.length > 0) {
+    const meal = hiddenEmpty[0];
+    return prisma.meal.update({
+      where: { id: meal.id },
+      data: { status: MealStatus.UPCOMING, name },
+      include: { items: true }
+    });
   }
-  if (!plannedTime) throw new Error('Meal time is required.');
+
+  const nextMealNumber = meals.reduce((max, meal) => Math.max(max, meal.mealNumber), 0) + 1;
+  const plannedTime = await resolvePlannedTime(nextMealNumber);
 
   return prisma.meal.create({
-    data: { dailyLogId: log.id, userId, mealNumber: data.mealNumber, name: data.name, plannedTime, status: MealStatus.PLANNED }
+    data: {
+      dailyLogId: log.id,
+      userId,
+      mealNumber: nextMealNumber,
+      name,
+      plannedTime,
+      status: MealStatus.UPCOMING
+    },
+    include: { items: true }
+  });
+}
+
+export async function createMeal(userId: string, date: string, data: { name: string; mealNumber: number; plannedTime?: string | null }) {
+  const log = await ensureDailyLogByUserId(userId, date);
+  if (!log) throw new Error('No active program found. Visit the dashboard first or contact your coach.');
+
+  const existing = await prisma.meal.findFirst({
+    where: { dailyLogId: log.id, mealNumber: data.mealNumber },
+    include: { items: true }
+  });
+  if (existing) {
+    if (!hasNutritionActivity(existing)) {
+      return prisma.meal.update({
+        where: { id: existing.id },
+        data: { status: MealStatus.UPCOMING, name: data.name },
+        include: { items: true }
+      });
+    }
+    return existing;
+  }
+
+  const plannedTime = await resolvePlannedTime(data.mealNumber, data.plannedTime);
+
+  return prisma.meal.create({
+    data: {
+      dailyLogId: log.id,
+      userId,
+      mealNumber: data.mealNumber,
+      name: data.name,
+      plannedTime,
+      status: MealStatus.UPCOMING
+    },
+    include: { items: true }
   });
 }
 

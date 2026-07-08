@@ -182,6 +182,19 @@ export type CoachCheckInTurnResult = {
   recap?: CoachCheckInRecap;
 };
 
+export type CoachMemoryExtractionInput = {
+  existingFacts: string[];
+  existingSummaries: string[];
+  source: 'web_chat' | 'check_in' | 'sms';
+  messages: Array<{ role: 'user' | 'assistant' | 'coach'; content: string }>;
+};
+
+export type CoachMemoryExtraction = {
+  newFacts: string[];
+  removeFactTexts: string[];
+  sessionSummary?: string | null;
+};
+
 export interface AiProvider {
   lookupFood(input: string): Promise<FoodEstimate[]>;
   lookupFoodOptions(input: string): Promise<FoodEstimate[]>;
@@ -196,6 +209,7 @@ export interface AiProvider {
   /** Conversational tool-calling loop for SMS — reads context + history, calls tools, returns the reply text. */
   runAgent(input: AgentRunInput): Promise<string>;
   coachCheckInTurn(input: CoachCheckInTurnInput): Promise<CoachCheckInTurnResult>;
+  extractCoachMemory(input: CoachMemoryExtractionInput): Promise<CoachMemoryExtraction>;
 }
 
 const foodEstimateSchema = z.object({
@@ -414,6 +428,22 @@ const coachCheckInTurnSchema = z.object({
   recap: coachCheckInRecapSchema.optional()
 });
 
+const coachMemoryExtractionSchema = z.object({
+  newFacts: z.array(z.string().min(1).max(280)).max(8).default([]),
+  removeFactTexts: z.array(z.string().min(1).max(280)).max(8).default([]),
+  sessionSummary: z.string().min(1).max(800).nullable().optional()
+});
+
+const COACH_MEMORY_EXTRACTION_PROMPT = `You maintain a private coach memory for one user. Extract durable personal facts and a short session summary from the conversation.
+Return JSON only:
+{ "newFacts": string[], "removeFactTexts": string[], "sessionSummary": string | null }
+
+Rules:
+- newFacts: stable, user-specific details worth remembering later (health events, schedule, preferences, life context, ongoing struggles). Short phrases in third person ("Had knee surgery in June", "Travels for work every other week"). Skip generic coaching advice or one-off meal logs.
+- removeFactTexts: if the user asked to forget something, or a new fact supersedes an old one, include the existing fact text (or close paraphrase) to remove.
+- sessionSummary: 2-4 sentences about this conversation — mood, themes, commitments. Null if too little substance.
+- Do not duplicate existing facts. Max 3 new facts per call.`;
+
 const WEEKLY_STAGE_GOALS: Partial<Record<CoachCheckInStage, string>> = {
   opening: 'Ask how they are feeling about the week — person first, not data.',
   wins: 'Invite what went well this week. Reflect back something specific they share.',
@@ -575,6 +605,19 @@ function parseCoachCheckInTurn(text: string): CoachCheckInTurnResult {
     };
   }
   throw result.error;
+}
+
+function parseCoachMemoryExtraction(text: string): CoachMemoryExtraction {
+  const parsed = parseModelJson(text);
+  const result = coachMemoryExtractionSchema.safeParse(parsed);
+  if (result.success) {
+    return {
+      newFacts: result.data.newFacts.map((fact) => fact.trim()).filter(Boolean),
+      removeFactTexts: result.data.removeFactTexts.map((fact) => fact.trim()).filter(Boolean),
+      sessionSummary: result.data.sessionSummary?.trim() || null
+    };
+  }
+  return { newFacts: [], removeFactTexts: [], sessionSummary: null };
 }
 
 function buildCoachCheckInPrompt(input: CoachCheckInTurnInput) {
@@ -1373,6 +1416,23 @@ export class MockAiProvider implements AiProvider {
       recap: result.recap
     };
   }
+
+  async extractCoachMemory(input: CoachMemoryExtractionInput): Promise<CoachMemoryExtraction> {
+    const lastUser = [...input.messages].reverse().find((entry) => entry.role === 'user')?.content.toLowerCase() ?? '';
+    const removeFactTexts: string[] = [];
+    if (/\bforget\b/.test(lastUser) && input.existingFacts.length) {
+      removeFactTexts.push(input.existingFacts[input.existingFacts.length - 1]);
+    }
+    const newFacts: string[] = [];
+    if (/\bsurgery\b/.test(lastUser) && !input.existingFacts.some((fact) => /surgery/i.test(fact))) {
+      newFacts.push('Recovering from surgery');
+    }
+    const sessionSummary =
+      input.messages.length >= 2
+        ? `Talked about ${input.source.replace('_', ' ')} — ${input.messages.at(-1)?.content.slice(0, 120)}`
+        : null;
+    return { newFacts, removeFactTexts, sessionSummary };
+  }
 }
 
 function wrapAiError(error: unknown, action: string): Error {
@@ -1733,6 +1793,28 @@ ${JSON.stringify(items)}`;
       } catch {
         throw wrapAiError(error, 'coach check-in');
       }
+    }
+  }
+
+  async extractCoachMemory(input: CoachMemoryExtractionInput): Promise<CoachMemoryExtraction> {
+    const transcript = input.messages
+      .slice(-24)
+      .map((entry) => `${entry.role === 'user' ? 'User' : 'Coach'}: ${entry.content}`)
+      .join('\n');
+    const prompt = `${COACH_MEMORY_EXTRACTION_PROMPT}
+
+Source: ${input.source}
+Existing facts: ${JSON.stringify(input.existingFacts)}
+Existing summaries: ${JSON.stringify(input.existingSummaries)}
+
+Conversation:
+${transcript}`;
+
+    try {
+      const result = await this.foodModel().generateContent(prompt);
+      return parseCoachMemoryExtraction(result.response.text());
+    } catch {
+      return new MockAiProvider().extractCoachMemory(input);
     }
   }
 }

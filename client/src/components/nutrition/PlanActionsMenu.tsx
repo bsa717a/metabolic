@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, CopyPlus, LayoutGrid, Printer, ShoppingCart, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, CopyPlus, LayoutGrid, Printer, Share2, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export function PlanActionsMenu({
@@ -10,6 +10,8 @@ export function PlanActionsMenu({
   onAdjustTargets,
   onMealBuilder,
   printing = null,
+  sharingDay = false,
+  onShareDay,
   onPrintDay,
   onPrintWeek
 }: {
@@ -20,6 +22,8 @@ export function PlanActionsMenu({
   onAdjustTargets: () => void;
   onMealBuilder: () => void;
   printing?: 'day' | 'week' | null;
+  sharingDay?: boolean;
+  onShareDay: () => void | Promise<void>;
   onPrintDay: () => void;
   onPrintWeek: () => void | Promise<void>;
 }) {
@@ -44,7 +48,7 @@ export function PlanActionsMenu({
   }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative z-50">
       <Button
         type="button"
         variant="secondary"
@@ -60,7 +64,7 @@ export function PlanActionsMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-2 min-w-[11rem] rounded-2xl border border-app-border bg-app-surface p-1 shadow-lg"
+          className="absolute right-0 z-50 mt-2 min-w-[11rem] rounded-2xl border border-app-border bg-app-surface p-1 shadow-lg"
         >
           <button
             type="button"
@@ -88,7 +92,17 @@ export function PlanActionsMenu({
             type="button"
             role="menuitem"
             className={itemClass}
-            disabled={printing !== null}
+            disabled={sharingDay || printing !== null}
+            onClick={() => runAndClose(onShareDay)}
+          >
+            <Share2 className="h-4 w-4" />
+            {sharingDay ? 'Sharing…' : 'Share day'}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            disabled={printing !== null || sharingDay}
             onClick={() => runAndClose(onPrintDay)}
           >
             <Printer className="h-4 w-4" />
@@ -98,7 +112,7 @@ export function PlanActionsMenu({
             type="button"
             role="menuitem"
             className={itemClass}
-            disabled={printing !== null}
+            disabled={printing !== null || sharingDay}
             onClick={() => runAndClose(onPrintWeek)}
           >
             <Printer className="h-4 w-4" />

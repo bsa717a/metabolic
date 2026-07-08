@@ -7,6 +7,7 @@ import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
 import { MealCardEditor, type MealMacroTargets } from './MealCardEditor';
 import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
+import { MacroSummaryInline, MacroTotalsInline } from './MacroSummaryFooter';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
 import { DeleteMealScopeModal } from './DeleteMealScopeModal';
 
@@ -19,6 +20,15 @@ function formatPlannedTime(plannedTime?: string | null) {
     .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     .replace(' AM', 'am')
     .replace(' PM', 'pm');
+}
+
+function mealMacroTotals(meal: Meal) {
+  return {
+    calories: Math.round(Number(meal.actualCalories)),
+    protein: Math.round(Number(meal.actualProtein)),
+    carbs: Math.round(Number(meal.actualCarbs)),
+    fat: Math.round(Number(meal.actualFat))
+  };
 }
 
 function ActionsDropdown({
@@ -284,12 +294,25 @@ export function MealCard({
           {toggleError && <p className="mt-2 text-sm text-red-600">{toggleError}</p>}
           {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
 
-          <p className="mt-2 text-sm text-app-text-muted">
-            {Math.round(Number(meal.actualCalories))} / {Math.round(Number(meal.plannedCalories))} kcal
-            {plannedItems.length > 0 && ` · ${plannedItems.length} item${plannedItems.length === 1 ? '' : 's'}`}
-          </p>
+          {plannedItems.length > 0 && (
+            <p className="mt-2 text-sm text-app-text-muted">
+              {plannedItems.length} item{plannedItems.length === 1 ? '' : 's'}
+            </p>
+          )}
           <div className="mt-3">
             <PlannedItemChecklist meal={meal} onChange={onChange} allowLogging={!future} />
+          </div>
+
+          <div className="mt-3 border-t border-app-border pt-3">
+            {macroTargets ? (
+              <MacroSummaryInline
+                totals={mealMacroTotals(meal)}
+                targets={macroTargets}
+                dailyTargets={dailyTargets}
+              />
+            ) : (
+              <MacroTotalsInline totals={mealMacroTotals(meal)} />
+            )}
           </div>
         </>
       )}

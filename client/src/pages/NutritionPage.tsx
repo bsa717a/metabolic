@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
-import type { PlanPeriodInfo } from '../types';
+import type { Meal, PlanPeriodInfo } from '../types';
+import { Button } from '../components/ui/Button';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
 import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
@@ -23,6 +25,7 @@ import {
 import { useEntitlements } from '../context/EntitlementsContext';
 import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
 import { printNutritionPlan, printNutritionWeekPlan } from '../utils/printNutritionPlan';
+import { shareNutritionDayPlan } from '../utils/nutritionPlanShare';
 
 function dateFromParams(params: URLSearchParams) {
   const date = params.get('date');
@@ -40,8 +43,10 @@ export function NutritionPage() {
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [mealBuilderOpen, setMealBuilderOpen] = useState(false);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
+  const [sharingDay, setSharingDay] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   const [copyingDay, setCopyingDay] = useState(false);
+  const [addingMeal, setAddingMeal] = useState(false);
   const [selectedMealId, setSelectedMealId] = useState<string>();
   const [cardMeals, setCardMeals] = useState<MealCardsPayload[]>([]);
   const [builderMealNumber, setBuilderMealNumber] = useState<number | null>(null);
@@ -169,6 +174,23 @@ export function NutritionPage() {
     }
   }
 
+  async function handleShareDay() {
+    setPrintError(null);
+    if (!currentDayMeals.length) {
+      setPrintError('No meals planned for this day.');
+      return;
+    }
+    setSharingDay(true);
+    try {
+      await shareNutritionDayPlan(currentDayMeals, selectedDate);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      setPrintError(error instanceof Error ? error.message : 'Could not share meal plan.');
+    } finally {
+      setSharingDay(false);
+    }
+  }
+
   async function handlePrintWeek() {
     setPrintError(null);
     setPrinting('week');
@@ -201,6 +223,24 @@ export function NutritionPage() {
     }
   }
 
+  async function handleAddMeal() {
+    if (addingMeal) return;
+    setAddingMeal(true);
+    try {
+      await api(`/api/daily-logs/${selectedDate}/ensure`, { method: 'POST' });
+      const meal = await api<Meal>(`/api/daily-logs/${selectedDate}/meals`, {
+        method: 'POST',
+        body: JSON.stringify({ name: 'New meal' })
+      });
+      setSelectedMealId(meal.id);
+      await reloadWeek();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not add meal.');
+    } finally {
+      setAddingMeal(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -219,6 +259,8 @@ export function NutritionPage() {
             canAccess('meal_planning') ? setMealBuilderOpen(true) : setUpgradePrompt('meal_planning')
           }
           printing={printing}
+          sharingDay={sharingDay}
+          onShareDay={handleShareDay}
           onPrintDay={handlePrintDay}
           onPrintWeek={handlePrintWeek}
         />
@@ -228,7 +270,17 @@ export function NutritionPage() {
         <PlanPeriodBanner planPeriod={planPeriod} />
       )}
 
-      <WeekDateStrip selectedDate={selectedDate} onSelectDate={selectDate} days={weekDays} />
+      <WeekDateStrip
+        selectedDate={selectedDate}
+        onSelectDate={selectDate}
+        days={weekDays}
+        endAction={
+          <Button type="button" variant="secondary" disabled={addingMeal} onClick={() => void handleAddMeal()}>
+            <Plus className="mr-1 inline h-4 w-4" />
+            {addingMeal ? 'Adding…' : 'Add meal'}
+          </Button>
+        }
+      />
 
       {printError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError}</div>}
       {loadError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>}

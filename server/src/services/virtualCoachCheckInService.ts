@@ -7,6 +7,12 @@ import { buildCoachCheckInSystemPrompt } from './coachPersona.js';
 import { getWeeklyReview, startOfWeekMonday } from './weeklyReviewService.js';
 import { advancePlanForCheckIn } from './planAdvancement.js';
 import { n } from '../utils/numbers.js';
+import {
+  buildMemoryPromptSection,
+  getVirtualCoachMemoryView,
+  scheduleMemoryExtraction,
+  transcriptToMemoryMessages
+} from './virtualCoachMemoryService.js';
 
 export const CHECK_IN_STAGES = [
   'opening',
@@ -361,10 +367,17 @@ async function runCoachTurn(
 
   const flow = kind === 'KICKOFF' ? ('kickoff' as const) : ('weekly' as const);
   const weeklyReview = await getWeeklyReview(userId, user.timezone);
-  const systemPrompt = buildCoachCheckInSystemPrompt(coachId, user.firstName, {
-    flow,
-    motivation: user.clientProfile?.motivation ?? null
-  });
+  const memoryView = await getVirtualCoachMemoryView(userId);
+  const memorySection = buildMemoryPromptSection(memoryView);
+  const systemPrompt = [
+    buildCoachCheckInSystemPrompt(coachId, user.firstName, {
+      flow,
+      motivation: user.clientProfile?.motivation ?? null
+    }),
+    memorySection
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   const kickoffContext = flow === 'kickoff' ? { goalLines: await kickoffGoalLines(userId) } : undefined;
 
   const coachMessageNumber = transcript.messages.filter((entry) => entry.role === 'coach').length + 1;
@@ -527,6 +540,10 @@ export async function sendCheckInMessage(userId: string, sessionId: string, mess
     await persistMotivationSafely(userId, turn.recap?.motivation ?? transcript.whyAnswer);
   }
 
+  if (updateData.status === 'COMPLETED') {
+    scheduleMemoryExtraction(userId, 'check_in', transcriptToMemoryMessages(transcript.messages));
+  }
+
   return {
     ...serializeSession(updated),
     chips: turn.chips,
@@ -566,6 +583,8 @@ export async function completeCheckIn(userId: string, sessionId: string) {
   if (record.kind === 'KICKOFF') {
     await persistMotivationSafely(userId, transcript.whyAnswer);
   }
+
+  scheduleMemoryExtraction(userId, 'check_in', transcriptToMemoryMessages(transcript.messages));
 
   return {
     ...serializeSession(updated),

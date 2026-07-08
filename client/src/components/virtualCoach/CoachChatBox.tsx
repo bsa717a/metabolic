@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SendHorizontal } from 'lucide-react';
+import { Brain, SendHorizontal } from 'lucide-react';
 import type { VirtualCoach } from '../../data/virtualCoaches';
 import { api } from '../../services/api';
 
@@ -10,6 +10,7 @@ export function CoachChatBox({ coach }: { coach: VirtualCoach }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,16 +51,40 @@ export function CoachChatBox({ coach }: { coach: VirtualCoach }) {
           className="h-9 w-9 rounded-full object-cover"
           style={{ objectPosition: '50% 18%' }}
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-app-text">{coach.name}</p>
           <p className="truncate text-xs text-app-text-muted">Ask anything between check-ins</p>
         </div>
+        <button
+          type="button"
+          aria-label={`What ${coach.name} remembers`}
+          aria-expanded={memoryOpen}
+          onClick={() => setMemoryOpen((open) => !open)}
+          className={`shrink-0 rounded-lg p-2 transition ${
+            memoryOpen
+              ? 'bg-brand-green/10 text-brand-green'
+              : 'text-app-text-muted hover:bg-app-muted hover:text-brand-green'
+          }`}
+        >
+          <Brain size={18} aria-hidden />
+        </button>
       </div>
+
+      {memoryOpen ? (
+        <div className="border-b border-app-border bg-app-bg/40 px-4 py-3">
+          <p className="text-sm font-semibold text-app-text">What {coach.name} remembers</p>
+          <p className="mt-1 text-sm leading-relaxed text-app-text-muted">
+            Personal details from your chats, check-ins, and texts — only you can see these. You can also ask
+            &ldquo;show me your memory&rdquo; in chat.
+          </p>
+        </div>
+      ) : null}
 
       <div ref={threadRef} className="flex-1 space-y-2 overflow-y-auto bg-app-bg/40 px-4 py-4">
         {messages.length === 0 && (
           <p className="px-1 text-sm text-app-text-muted">
-            Message {coach.name} about meals, eating out, your numbers, or getting back on track.
+            Message {coach.name} about meals, eating out, your numbers, or getting back on track. Ask &ldquo;show me your
+            memory&rdquo; anytime to see what {coach.name} remembers about you.
           </p>
         )}
         {messages.map((message, index) => (

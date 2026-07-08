@@ -4,6 +4,16 @@ import { prisma } from '../db/prisma.js';
 import { userDayKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
 import { isVirtualCoachId, VIRTUAL_COACH_PERSONA_PROMPTS } from '../data/virtualCoachPersonas.js';
+import {
+  buildMemoryPromptSection,
+  formatMemoryDisplayReply,
+  getVirtualCoachMemoryView,
+  isForgetMemoryRequest,
+  isShowMemoryRequest,
+  awaitMemoryExtraction,
+  scheduleMemoryExtraction,
+  type MemoryConversationMessage
+} from './virtualCoachMemoryService.js';
 
 /** Allergies, dietary preferences, timezone, and first name for personalizing AI replies. */
 export async function loadPersonalization(userId: string) {
@@ -181,6 +191,18 @@ export async function buildSmsAssistantContext(userId: string) {
 }
 
 export async function chatWithAssistant(userId: string, messages: ChatMessage[]) {
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content.trim() ?? '';
+  let memoryView = await getVirtualCoachMemoryView(userId);
+
+  if (isShowMemoryRequest(lastUserMessage)) {
+    return { reply: formatMemoryDisplayReply(memoryView), contextUsed: true };
+  }
+
+  if (isForgetMemoryRequest(lastUserMessage)) {
+    await awaitMemoryExtraction(userId, 'web_chat', toMemoryMessages(messages));
+    memoryView = await getVirtualCoachMemoryView(userId);
+  }
+
   const context = await buildAssistantContext(userId);
   const personalization = await loadPersonalization(userId);
   const isFirstTurn = !messages.some((message) => message.role === 'assistant');
@@ -188,12 +210,37 @@ export async function chatWithAssistant(userId: string, messages: ChatMessage[])
     personalization.firstName && isFirstTurn
       ? `The user's first name is ${personalization.firstName}. This is your first reply in the conversation — greet them by name.\n\n`
       : '';
+  const memorySection = buildMemoryPromptSection(memoryView);
+  const memoryInstruction = memorySection ? `${memorySection}\n\n` : '';
   const personaPrefix =
     personalization.selectedVirtualCoachId && isVirtualCoachId(personalization.selectedVirtualCoachId)
       ? `${VIRTUAL_COACH_PERSONA_PROMPTS[personalization.selectedVirtualCoachId]}\n\nAlso serve as their in-app assistant when they ask quick questions between check-ins.\n\n`
       : '';
-  const reply = await getAiProvider().chat(messages, context, 'web', `${nameInstruction}${personaPrefix}`);
+  const reply = await getAiProvider().chat(
+    messages,
+    context,
+    'web',
+    `${memoryInstruction}${nameInstruction}${personaPrefix}`
+  );
+
+  const memoryMessages: MemoryConversationMessage[] = [
+    ...toMemoryMessages(messages),
+    { role: 'assistant', content: reply }
+  ];
+  if (memoryMessages.length >= 2) {
+    scheduleMemoryExtraction(userId, 'web_chat', memoryMessages);
+  }
+
   return { reply, contextUsed: true };
+}
+
+function toMemoryMessages(messages: ChatMessage[]): MemoryConversationMessage[] {
+  return messages
+    .filter((message) => message.content.trim())
+    .map((message) => ({
+      role: message.role === 'assistant' ? 'assistant' : 'user',
+      content: message.content.trim()
+    }));
 }
 
 export async function suggestMealOptions(userId: string, inputText: string) {
@@ -239,7 +286,31 @@ function truncateSmsReply(reply: string) {
 }
 
 export async function chatWithSmsAssistant(userId: string, messages: ChatMessage[]) {
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content.trim() ?? '';
+  let memoryView = await getVirtualCoachMemoryView(userId);
+
+  if (isShowMemoryRequest(lastUserMessage)) {
+    return { reply: truncateSmsReply(formatMemoryDisplayReply(memoryView)), contextUsed: true };
+  }
+
+  if (isForgetMemoryRequest(lastUserMessage)) {
+    await awaitMemoryExtraction(userId, 'sms', toMemoryMessages(messages));
+    memoryView = await getVirtualCoachMemoryView(userId);
+  }
+
   const context = await buildSmsAssistantContext(userId);
-  const reply = await getAiProvider().chat(messages, context, 'sms');
-  return { reply: truncateSmsReply(reply), contextUsed: true };
+  const memorySection = buildMemoryPromptSection(memoryView);
+  const memoryInstruction = memorySection ? `${memorySection}\n\n` : '';
+  const reply = await getAiProvider().chat(messages, context, 'sms', memoryInstruction);
+  const truncated = truncateSmsReply(reply);
+
+  const memoryMessages: MemoryConversationMessage[] = [
+    ...toMemoryMessages(messages),
+    { role: 'assistant', content: truncated }
+  ];
+  if (memoryMessages.length >= 2) {
+    scheduleMemoryExtraction(userId, 'sms', memoryMessages);
+  }
+
+  return { reply: truncated, contextUsed: true };
 }

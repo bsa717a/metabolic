@@ -14,6 +14,11 @@ import {
   setCheckInDay,
   startCheckIn
 } from '../services/virtualCoachCheckInService.js';
+import {
+  deleteMemoryFact,
+  getVirtualCoachMemoryView,
+  updateMemoryFact
+} from '../services/virtualCoachMemoryService.js';
 
 const selectBody = z.object({
   coachId: z.enum(VIRTUAL_COACH_IDS).nullable()
@@ -25,6 +30,10 @@ const messageBody = z.object({
 
 const dayBody = z.object({
   day: z.number().int().min(0).max(6)
+});
+
+const memoryFactBody = z.object({
+  text: z.string().trim().min(1).max(280)
 });
 
 export async function virtualCoachRoutes(app: FastifyInstance) {
@@ -116,6 +125,34 @@ export async function virtualCoachRoutes(app: FastifyInstance) {
       return { stats: await getWeekStats(request.appUser!.id) };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to load stats.' });
+    }
+  });
+
+  app.get('/api/virtual-coach/memory', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await getVirtualCoachMemoryView(request.appUser!.id);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to load memory.' });
+    }
+  });
+
+  app.patch('/api/virtual-coach/memory/facts/:id', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = memoryFactBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Enter memory text to save.' });
+    }
+    try {
+      return await updateMemoryFact(request.appUser!.id, (request.params as { id: string }).id, parsed.data.text);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update memory.' });
+    }
+  });
+
+  app.delete('/api/virtual-coach/memory/facts/:id', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await deleteMemoryFact(request.appUser!.id, (request.params as { id: string }).id);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete memory.' });
     }
   });
 }
