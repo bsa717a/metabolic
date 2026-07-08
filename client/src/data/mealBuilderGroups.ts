@@ -46,6 +46,7 @@ export type AddedFoodEntry = {
   foodId: string;
   name: string;
   servingUnit: string;
+  quantity: number;
   calories: number;
   protein: number;
   carbs: number;
@@ -97,4 +98,96 @@ export function emptyFoodsByGroupCatalog(): FoodsByGroup {
     Fats: [],
     Carbs: []
   };
+}
+
+/** Client-side mirror of server `resolveFoodGroup` macro fallback when a food has no role. */
+export function resolveFoodGroupFromMacros(item: { protein: number; carbs: number; fat: number }): FoodGroup {
+  const proteinKcal = item.protein * 4;
+  const carbsKcal = item.carbs * 4;
+  const fatKcal = item.fat * 9;
+  if (proteinKcal >= carbsKcal && proteinKcal >= fatKcal) return 'Protein';
+  if (fatKcal >= carbsKcal) return 'Fats';
+  return 'Carbs';
+}
+
+export function buildFoodGroupLookup(catalog: FoodsByGroup): Map<string, FoodGroup> {
+  const lookup = new Map<string, FoodGroup>();
+  for (const group of FOOD_GROUPS) {
+    for (const food of catalog[group]) {
+      lookup.set(food.id, group);
+    }
+  }
+  return lookup;
+}
+
+export type DayPlanMealInput = {
+  mealNumber: number;
+  name: string;
+  plannedCalories: number;
+  items: Array<{
+    id: string;
+    type: 'PLANNED' | 'ACTUAL';
+    foodId?: string | null;
+    nameSnapshot: string;
+    quantity: number;
+    unit: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }>;
+};
+
+/** Hydrate Day Builder meals from an existing day's meals. Returns null when the day has no meals. */
+export function mealsFromDayPlan(
+  dayMeals: DayPlanMealInput[],
+  catalog: FoodsByGroup,
+  dailyCalorieGoal = DAILY_GOALS.calories
+) {
+  if (!dayMeals.length) return null;
+
+  const catalogByFoodId = buildFoodGroupLookup(catalog);
+  const totalDayCalories =
+    dayMeals.reduce((sum, meal) => sum + Number(meal.plannedCalories), 0) || dailyCalorieGoal;
+
+  return dayMeals.map((meal) => {
+    const foods = emptyFoodsByGroup();
+    const activeGroups = new Set<FoodGroup>();
+
+    for (const item of meal.items.filter((entry) => entry.type === 'PLANNED')) {
+      const catalogGroup = item.foodId ? catalogByFoodId.get(item.foodId) : undefined;
+      const group =
+        catalogGroup ??
+        resolveFoodGroupFromMacros({
+          protein: Number(item.protein),
+          carbs: Number(item.carbs),
+          fat: Number(item.fat)
+        });
+      activeGroups.add(group);
+      foods[group].push({
+        instanceId: item.id,
+        foodId: item.foodId ?? '',
+        name: item.nameSnapshot,
+        servingUnit: item.unit,
+        quantity: Number(item.quantity) || 1,
+        calories: Number(item.calories),
+        protein: Number(item.protein),
+        carbs: Number(item.carbs),
+        fat: Number(item.fat)
+      });
+    }
+
+    const rawPercent =
+      totalDayCalories > 0 ? Math.round((Number(meal.plannedCalories) / totalDayCalories) * 100) : Math.round(100 / dayMeals.length);
+
+    return {
+      id: crypto.randomUUID(),
+      mealNumber: meal.mealNumber,
+      name: meal.name,
+      percentOfDay: rawPercent > 0 ? rawPercent : Math.max(1, Math.round(100 / dayMeals.length)),
+      groups: activeGroups.size > 0 ? sortGroups([...activeGroups]) : [...FOOD_GROUPS],
+      foods,
+      editing: false
+    };
+  });
 }
