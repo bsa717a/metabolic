@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { canAccessUser } from '../auth/requireRole.js';
-import { addMealItem, applyMealForward, clearMealPlannedFoods, copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, saveBuiltDayPlan, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
+import { addBlankMeal, addMealItem, applyMealForward, clearMealPlannedFoods, copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, saveBuiltDayPlan, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
@@ -98,13 +98,21 @@ export async function nutritionRoutes(app: FastifyInstance) {
   app.post('/api/daily-logs/:date/meals', { preHandler: requireAuth }, async (request, reply) => {
     const body = z
       .object({
-        name: z.string(),
-        mealNumber: z.number(),
+        name: z.string().optional(),
+        mealNumber: z.number().optional(),
         plannedTime: plannedTimeSchema.optional()
       })
       .parse(request.body);
+    const date = (request.params as { date: string }).date;
     try {
-      return await createMeal(request.appUser!.id, (request.params as { date: string }).date, body);
+      if (body.mealNumber == null) {
+        return await addBlankMeal(request.appUser!.id, date, body.name ?? 'New meal');
+      }
+      return await createMeal(request.appUser!.id, date, {
+        name: body.name ?? `Meal ${body.mealNumber}`,
+        mealNumber: body.mealNumber,
+        plannedTime: body.plannedTime
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create meal';
       return reply.code(400).send({ error: message });

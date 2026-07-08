@@ -277,6 +277,7 @@ model User {
   hydrationEntries HydrationEntry[]
   smsNudgeLogs SmsNudgeLog[]
   virtualCoachCheckIns VirtualCoachCheckIn[]
+  virtualCoachMemory VirtualCoachMemory?
   clientProfile ClientProfile?
   defaultNutritionTemplate NutritionPlanTemplate? @relation("CoachDefaultNutritionTemplate", fields: [defaultNutritionTemplateId], references: [id], onDelete: SetNull)
   defaultExerciseTemplate ExerciseTemplate? @relation("CoachDefaultExerciseTemplate", fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
@@ -1224,6 +1225,17 @@ model VirtualCoachCheckIn {
   completedAt DateTime?
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId, weekStart])
+}
+
+/// User-owned long-term facts and rolling session summaries for the virtual coach (transfers across coach personas).
+model VirtualCoachMemory {
+  id String @id @default(cuid())
+  userId String @unique
+  facts Json @default("[]")
+  sessionSummaries Json @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum TargetSource {

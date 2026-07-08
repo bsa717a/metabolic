@@ -561,6 +561,29 @@ export type VirtualCoachCheckInState = {
   weekStart: string;
 };
 
+export type VirtualCoachMemoryFact = {
+  id: string;
+  text: string;
+  source: 'web_chat' | 'check_in' | 'sms';
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VirtualCoachMemorySessionSummary = {
+  id: string;
+  source: 'web_chat' | 'check_in' | 'sms';
+  summary: string;
+  at: string;
+};
+
+export type VirtualCoachMemoryView = {
+  motivation: string | null;
+  latestCheckInFocus: string | null;
+  facts: VirtualCoachMemoryFact[];
+  sessionSummaries: VirtualCoachMemorySessionSummary[];
+  updatedAt: string | null;
+};
+
 export type WeeklyReviewDayKind = 'no_plan' | 'future' | 'today' | 'on_plan' | 'partial' | 'over' | 'missed';
 
 export type WeeklyReviewDay = {
