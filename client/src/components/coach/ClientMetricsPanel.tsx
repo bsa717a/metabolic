@@ -203,6 +203,7 @@ export function ClientMetricsPanel({
 
       <BlueprintPhotoComparisonModal
         open={comparisonOpen}
+        programId={program.id}
         snapshots={snapshots}
         progressPhotos={progressPhotos}
         onClose={() => setComparisonOpen(false)}

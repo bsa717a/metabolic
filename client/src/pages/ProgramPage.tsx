@@ -256,6 +256,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
 
       <BlueprintPhotoComparisonModal
         open={comparisonOpen}
+        programId={program.id}
         snapshots={snapshots}
         progressPhotos={progressPhotos}
         onClose={() => setComparisonOpen(false)}

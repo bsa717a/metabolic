@@ -55,6 +55,30 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/** Authenticated binary fetch (e.g. proxied progress photos for MediaPipe). */
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = await getIdToken();
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Network request failed';
+    if (message === 'Load failed' || message === 'Failed to fetch') {
+      throw new Error('Could not reach the server. Make sure the API is running.');
+    }
+    throw new Error(message);
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error ?? payload?.message ?? response.statusText);
+  }
+  return response.blob();
+}
+
 export function todayKey(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

@@ -169,6 +169,30 @@ export type ProgressPhotoSet = {
   sideUrl: string | null;
   backUrl: string | null;
 };
+
+export type ProgressPhotoPose = 'front' | 'side' | 'back';
+
+export type ProgressPhotoOverlayLine = {
+  id: string;
+  label?: string;
+  points: Array<{ x: number; y: number }>;
+};
+
+export type ProgressPhotoOverlayShape =
+  | { kind: 'line'; id: string; label?: string; points: Array<{ x: number; y: number }> }
+  | { kind: 'oval'; id: string; label?: string; cx: number; cy: number; rx: number; ry: number };
+
+export type ProgressPhotoAnalysis = {
+  message: string;
+  overlays: {
+    before: { lines: ProgressPhotoOverlayLine[]; shapes?: ProgressPhotoOverlayShape[] };
+    after: { lines: ProgressPhotoOverlayLine[]; shapes?: ProgressPhotoOverlayShape[] };
+  };
+  coachId: string;
+  pose: ProgressPhotoPose;
+  beforeDate: string;
+  afterDate: string;
+};
 export type Program = { id: string; userId: string; name: string; status: string; startDate: string; targetEndDate?: string; metrics: ProgramMetric[] };
 export type NutritionTemplateMealItem = {
   id: string;

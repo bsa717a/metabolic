@@ -7,6 +7,7 @@ import { lookupFoodOptions } from '../services/foodSearchService.js';
 import { acceptExerciseLookup, lookupExercise } from '../services/exerciseLookupService.js';
 import { chatWithAssistant, suggestMealOptions } from '../services/assistantService.js';
 import { isCoachVoiceConfigured, synthesizeCoachSpeech } from '../services/coachVoiceService.js';
+import { analyzeProgressPhotoComparison } from '../services/progressPhotoAnalysisService.js';
 
 const chatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -93,6 +94,32 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: message });
     }
   });
+  app.post(
+    '/api/ai/progress-photo-analysis',
+    { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] },
+    async (request, reply) => {
+      try {
+        const body = z
+          .object({
+            programId: z.string().min(1),
+            pose: z.enum(['front', 'side', 'back']),
+            landmarkSummary: z.string().max(2000).optional().nullable()
+          })
+          .parse(request.body);
+        return await analyzeProgressPhotoComparison(request.appUser!, body);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Progress photo analysis failed';
+        const clientError =
+          message.includes('required') ||
+          message.includes('Upload') ||
+          message.includes('Add more') ||
+          message.includes('not found') ||
+          message.includes('Program not found');
+        request.log.error({ err: error }, 'Progress photo analysis failed');
+        return reply.code(clientError ? 400 : 502).send({ error: message });
+      }
+    }
+  );
   app.get('/api/ai/coach-voice/available', { preHandler: requireAuth }, async () => {
     return { available: isCoachVoiceConfigured() };
   });

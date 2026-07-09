@@ -4,6 +4,7 @@ import { requireAuth } from '../auth/requireAuth.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { activateProgram, getProgram, listPrograms, listProgramMetricSnapshots, listProgressPhotoSets, saveProgramMetricSnapshot, updateProgramMetricSnapshot, updateProgramMetrics, upsertProgressPhotoSet, upsertSnapshotMeasurement } from '../services/programService.js';
 import { getActiveProgressSummaryForUser, getProgressSummary } from '../services/progressSummaryService.js';
+import { getFirebaseStorageBucket } from '../config/firebaseStorage.js';
 import { prisma } from '../db/prisma.js';
 
 const programBody = z.object({ name: z.string().min(1), startDate: z.string(), targetEndDate: z.string().optional().nullable() });
@@ -147,6 +148,71 @@ export async function programRoutes(app: FastifyInstance) {
     } catch (error) {
       request.log.error({ err: error }, 'Failed to list progress photos');
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to list progress photos' });
+    }
+  });
+
+  function isAllowedProgressPhotoProxyUrl(rawUrl: string) {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return false;
+    }
+    if (parsed.protocol !== 'https:') return false;
+
+    const bucket = getFirebaseStorageBucket();
+    const host = parsed.hostname.toLowerCase();
+    // Firebase download URLs only — never follow arbitrary user-supplied hosts.
+    if (host === 'firebasestorage.googleapis.com') {
+      return parsed.pathname.startsWith(`/v0/b/${bucket}/o/`);
+    }
+    if (host === 'storage.googleapis.com') {
+      return parsed.pathname.startsWith(`/${bucket}/`);
+    }
+    return false;
+  }
+
+  /** Proxy a stored progress photo so the browser can run MediaPipe without Firebase Storage CORS. */
+  app.get('/api/programs/:id/progress-photos/proxy', { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const query = z.object({ url: z.string().url() }).safeParse(request.query);
+    if (!query.success) {
+      return reply.code(400).send({ error: 'A valid photo URL is required.' });
+    }
+    if (!isAllowedProgressPhotoProxyUrl(query.data.url)) {
+      return reply.code(400).send({ error: 'Photo URL must be a Firebase Storage progress photo.' });
+    }
+
+    try {
+      const photoSets = await listProgressPhotoSets(request.appUser!, id);
+      const allowed = new Set(
+        photoSets.flatMap((set) => [set.frontUrl, set.sideUrl, set.backUrl].filter(Boolean) as string[])
+      );
+      if (!allowed.has(query.data.url)) {
+        return reply.code(403).send({ error: 'Photo is not part of this program.' });
+      }
+
+      const upstream = await fetch(query.data.url, { redirect: 'error' });
+      if (!upstream.ok) {
+        return reply.code(502).send({ error: 'Could not download progress photo.' });
+      }
+
+      const contentType = (upstream.headers.get('content-type') || 'image/jpeg').split(';')[0]!.trim();
+      if (!contentType.startsWith('image/')) {
+        return reply.code(502).send({ error: 'Progress photo response was not an image.' });
+      }
+
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      if (buffer.byteLength > 10 * 1024 * 1024) {
+        return reply.code(413).send({ error: 'Progress photo is too large.' });
+      }
+
+      reply.header('Content-Type', contentType);
+      reply.header('Cache-Control', 'private, max-age=300');
+      return reply.send(buffer);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to proxy progress photo');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to load progress photo' });
     }
   });
 
