@@ -86,8 +86,9 @@ export function statusDotClass(status: string): string {
 
 export function formatItemLine(item: MealItem): string {
   const qty = Number(item.quantity);
-  const qtyLabel = qty === 1 ? '' : `${qty} ${item.unit} `;
-  return `${qtyLabel}${item.nameSnapshot}`.trim();
+  const unit = item.unit?.trim();
+  const portion = unit ? `${qty} ${unit}` : `${qty}`;
+  return `${portion} ${item.nameSnapshot}`.trim();
 }
 
 export function formatMacrosShort(item: Pick<MealItem, 'calories' | 'protein'>): string {
