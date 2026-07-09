@@ -4,6 +4,7 @@ import { getTodayDashboard } from './dashboardService.js';
 import { capSms } from './smsIntentService.js';
 import { isTwilioConfigured, isTwilioSenderPhone, resolveOutboundChannel, sendOutboundMessage } from './twilioOutboundService.js';
 import { localTimeParts } from '../utils/dates.js';
+import { foodEmoji } from '../utils/foodEmoji.js';
 import { COMPLETED_MEAL_STATUSES, parsePlannedMinutes } from '../utils/meals.js';
 import { n } from '../utils/numbers.js';
 
@@ -81,13 +82,14 @@ function formatPlannedItemLine(item: PlannedMealItem): string | null {
   if (item.type !== 'PLANNED') return null;
   const name = item.nameSnapshot.trim();
   if (!name) return null;
+  const icon = foodEmoji(name);
   const qty = n(item.quantity);
   const unit = item.unit?.trim();
   if (qty > 0 && unit) {
     const qtyLabel = Number.isInteger(qty) ? String(Math.round(qty)) : String(qty);
-    return `${qtyLabel} ${unit} ${name}`;
+    return `${icon} ${qtyLabel} ${unit} ${name}`;
   }
-  return name;
+  return `${icon} ${name}`;
 }
 
 export function buildMealReminder(

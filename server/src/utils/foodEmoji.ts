@@ -3,7 +3,7 @@
  * name (first hit wins, more specific rules first); the food's role is the fallback
  * tier; 🍽️ is the floor. Pure function so AI-created foods get icons automatically.
  *
- * Keep in sync with server/src/utils/foodEmoji.ts.
+ * Keep in sync with client/src/utils/foodEmoji.ts.
  */
 
 type Rule = { keywords: string[]; emoji: string };

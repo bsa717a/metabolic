@@ -32,8 +32,8 @@ describe('buildMealReminder', () => {
     ]);
     assert.match(message, /Hey Earl, Meal 3 is coming up around 12:00pm\./);
     assert.match(message, /Planned:/);
-    assert.match(message, /1\. 3 oz Chicken - Roasted Chicken Breast w\/o Skin/);
-    assert.match(message, /2\. 1 cup Berries - Any/);
+    assert.match(message, /1\. 🍗 3 oz Chicken - Roasted Chicken Breast w\/o Skin/);
+    assert.match(message, /2\. 🫐 1 cup Berries - Any/);
     assert.doesNotMatch(message, /Want ideas that fit your macros/);
   });
 
