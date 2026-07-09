@@ -182,6 +182,38 @@ export type CoachCheckInTurnResult = {
   recap?: CoachCheckInRecap;
 };
 
+export type ProgressPhotoPose = 'front' | 'side' | 'back';
+
+export type ProgressPhotoOverlayPoint = { x: number; y: number };
+
+export type ProgressPhotoOverlayLine = {
+  id: string;
+  label?: string;
+  points: ProgressPhotoOverlayPoint[];
+};
+
+export type ProgressPhotoOverlays = {
+  before: { lines: ProgressPhotoOverlayLine[] };
+  after: { lines: ProgressPhotoOverlayLine[] };
+};
+
+export type ProgressPhotoAnalysisResult = {
+  message: string;
+  overlays: ProgressPhotoOverlays;
+};
+
+export type ProgressPhotoAnalysisInput = {
+  pose: ProgressPhotoPose;
+  personaPrompt: string;
+  coachId: string;
+  userFirstName: string;
+  metricsContext: string;
+  beforeImage: { data: string; mimeType: string };
+  afterImage: { data: string; mimeType: string };
+  /** Optional MediaPipe-measured landmark summary from the client. When present, AI returns coach copy only. */
+  landmarkSummary?: string | null;
+};
+
 export type CoachMemoryExtractionInput = {
   existingFacts: string[];
   existingSummaries: string[];
@@ -210,6 +242,7 @@ export interface AiProvider {
   runAgent(input: AgentRunInput): Promise<string>;
   coachCheckInTurn(input: CoachCheckInTurnInput): Promise<CoachCheckInTurnResult>;
   extractCoachMemory(input: CoachMemoryExtractionInput): Promise<CoachMemoryExtraction>;
+  analyzeProgressPhotos(input: ProgressPhotoAnalysisInput): Promise<ProgressPhotoAnalysisResult>;
 }
 
 const foodEstimateSchema = z.object({
@@ -434,6 +467,42 @@ const coachMemoryExtractionSchema = z.object({
   sessionSummary: z.string().min(1).max(800).nullable().optional()
 });
 
+const progressPhotoOverlayPointSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1)
+});
+
+const progressPhotoOverlayLineSchema = z.object({
+  id: z.string().min(1).max(40),
+  label: z.string().min(1).max(40).optional(),
+  points: z.array(progressPhotoOverlayPointSchema).min(2).max(24)
+});
+
+const progressPhotoOverlaysSchema = z.object({
+  before: z.object({ lines: z.array(progressPhotoOverlayLineSchema).max(8) }),
+  after: z.object({ lines: z.array(progressPhotoOverlayLineSchema).max(8) })
+});
+
+const progressPhotoAnalysisSchema = z.object({
+  message: z.string().min(1).max(1200),
+  overlays: progressPhotoOverlaysSchema
+});
+
+const PROGRESS_PHOTO_ANALYSIS_PROMPT = `You are analyzing a client's before/after progress photos for one pose only.
+Speak in the coach persona provided. Be warm, specific, and encouraging — never clinical, diagnostic, or body-shaming.
+Comment only on visible posture, shape, and silhouette changes for this pose. Do not invent medical conditions.
+Use measurement context and measured landmark summaries only as light supporting color; never lead with raw numbers or coordinates.
+
+The client already measured body landmarks with MediaPipe. Do NOT invent overlay coordinates.
+Return coach copy only.
+
+Return JSON only:
+{ "message": string (2–5 sentences in coach voice) }`;
+
+const progressPhotoMessageOnlySchema = z.object({
+  message: z.string().min(1).max(1200)
+});
+
 const COACH_MEMORY_EXTRACTION_PROMPT = `You maintain a private coach memory for one user. Extract durable personal facts and a short session summary from the conversation.
 Return JSON only:
 { "newFacts": string[], "removeFactTexts": string[], "sessionSummary": string | null }
@@ -618,6 +687,65 @@ function parseCoachMemoryExtraction(text: string): CoachMemoryExtraction {
     };
   }
   return { newFacts: [], removeFactTexts: [], sessionSummary: null };
+}
+
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value));
+}
+
+function parseProgressPhotoAnalysis(text: string): ProgressPhotoAnalysisResult {
+  const parsed = parseModelJson(text);
+  const messageOnly = progressPhotoMessageOnlySchema.safeParse(parsed);
+  if (messageOnly.success) {
+    return {
+      message: messageOnly.data.message.trim(),
+      overlays: { before: { lines: [] }, after: { lines: [] } }
+    };
+  }
+
+  const result = progressPhotoAnalysisSchema.safeParse(parsed);
+  if (!result.success) throw result.error;
+
+  const normalizeLines = (lines: z.infer<typeof progressPhotoOverlayLineSchema>[]) =>
+    lines.map((line) => {
+      const start = line.points[0]!;
+      const end = line.points[line.points.length - 1]!;
+      const y = clamp01((start.y + end.y) / 2);
+      return {
+        id: line.id.trim(),
+        label: line.label?.trim() || undefined,
+        points: [
+          { x: clamp01(Math.min(start.x, end.x)), y },
+          { x: clamp01(Math.max(start.x, end.x)), y }
+        ]
+      };
+    });
+
+  return {
+    message: result.data.message.trim(),
+    overlays: {
+      before: { lines: normalizeLines(result.data.overlays.before.lines) },
+      after: { lines: normalizeLines(result.data.overlays.after.lines) }
+    }
+  };
+}
+
+function buildProgressPhotoAnalysisPrompt(input: ProgressPhotoAnalysisInput) {
+  return `${PROGRESS_PHOTO_ANALYSIS_PROMPT}
+
+Coach persona:
+${input.personaPrompt}
+
+Client first name: ${input.userFirstName}
+Pose: ${input.pose}
+
+Measurement context (optional supporting color only):
+${input.metricsContext || 'None provided'}
+
+Measured landmark summary from MediaPipe (use qualitatively — do not quote raw numbers):
+${input.landmarkSummary?.trim() || 'Not provided'}
+
+Image order: first image is BEFORE, second image is AFTER.`;
 }
 
 function buildCoachCheckInPrompt(input: CoachCheckInTurnInput) {
@@ -1433,6 +1561,24 @@ export class MockAiProvider implements AiProvider {
         : null;
     return { newFacts, removeFactTexts, sessionSummary };
   }
+
+  async analyzeProgressPhotos(input: ProgressPhotoAnalysisInput): Promise<ProgressPhotoAnalysisResult> {
+    const name = input.userFirstName;
+    const pose = input.pose;
+    const messages: Record<string, string> = {
+      kali: `${name}, looking at your ${pose} photos, I can see a softer, more settled posture in the after shot — your midsection looks a touch more defined and you're standing taller. That kind of change usually comes from steady habits, not perfection. Keep tending what is already working.`,
+      tess: `${name}, comparing these ${pose} photos, your waistline looks a bit cleaner and your stance looks more confident in the after shot. Nothing dramatic overnight — just clear, honest progress. Keep doing the simple things that got you here.`,
+      finn: `${name}, the ${pose} comparison shows tighter lines through the midsection and better posture in the after photo. That is real progress you can build on. Stay consistent with the habits that created this shift.`,
+      nora: `${name}, in these ${pose} photos I notice a clearer waistline and a more upright stance in the after shot. It is a solid visual win — keep stacking the same small habits.`,
+      milo: `${name}, looking at your ${pose} before and after, the midsection looks a little tighter and you are standing taller. Nice work — keep the momentum going without overcomplicating it.`,
+      mets: `${name}, these ${pose} photos show a quieter but real shift — a cleaner midsection line and more grounded posture in the after shot. That is the kind of progress that sticks. Keep the habits that got you here.`
+    };
+
+    return {
+      message: messages[input.coachId] ?? messages.nora,
+      overlays: { before: { lines: [] }, after: { lines: [] } }
+    };
+  }
 }
 
 function wrapAiError(error: unknown, action: string): Error {
@@ -1815,6 +1961,41 @@ ${transcript}`;
       return parseCoachMemoryExtraction(result.response.text());
     } catch {
       return new MockAiProvider().extractCoachMemory(input);
+    }
+  }
+
+  async analyzeProgressPhotos(input: ProgressPhotoAnalysisInput): Promise<ProgressPhotoAnalysisResult> {
+    const prompt = buildProgressPhotoAnalysisPrompt(input);
+    const parts = [
+      { text: prompt },
+      { text: 'BEFORE photo:' },
+      { inlineData: { mimeType: input.beforeImage.mimeType, data: input.beforeImage.data } },
+      { text: 'AFTER photo:' },
+      { inlineData: { mimeType: input.afterImage.mimeType, data: input.afterImage.data } }
+    ];
+
+    try {
+      const result = await this.foodModel().generateContent(parts);
+      return parseProgressPhotoAnalysis(result.response.text());
+    } catch (error) {
+      try {
+        const retry = await this.foodModel().generateContent([
+          {
+            text: `${prompt}\n\nImportant: respond with valid JSON only as { "message": "..." }. Do not invent overlay coordinates.`
+          },
+          { text: 'BEFORE photo:' },
+          { inlineData: { mimeType: input.beforeImage.mimeType, data: input.beforeImage.data } },
+          { text: 'AFTER photo:' },
+          { inlineData: { mimeType: input.afterImage.mimeType, data: input.afterImage.data } }
+        ]);
+        return parseProgressPhotoAnalysis(retry.response.text());
+      } catch {
+        try {
+          return await new MockAiProvider().analyzeProgressPhotos(input);
+        } catch {
+          throw wrapAiError(error, 'progress photo analysis');
+        }
+      }
     }
   }
 }
