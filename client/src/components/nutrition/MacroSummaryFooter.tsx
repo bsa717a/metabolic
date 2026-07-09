@@ -14,6 +14,32 @@ function mealGoalShareOfDay(mealGoals: MacroTotals, dailyGoals: MacroTotals): nu
   return Math.round(shares.reduce((sum, value) => sum + value, 0) / shares.length);
 }
 
+/** Actual (green) / Planned (gold, bold) / Goal (muted). */
+function MacroTriple({
+  actual,
+  planned,
+  goal,
+  suffix
+}: {
+  actual: number;
+  planned: number;
+  goal: number;
+  suffix: string;
+}) {
+  return (
+    <>
+      <span className="font-semibold text-brand-green">{actual}</span>
+      <span className="text-app-text-muted"> / </span>
+      <span className="font-bold text-amber-700 dark:text-brand-gold">{planned}</span>
+      <span className="text-app-text-muted">
+        {' '}
+        / {goal}
+        {suffix}
+      </span>
+    </>
+  );
+}
+
 function MacroPair({ actual, goal, suffix }: { actual: number; goal: number; suffix: string }) {
   return (
     <>
@@ -42,28 +68,77 @@ export function formatMacroTotalsInline(totals: MacroTotals) {
 
 export function MacroSummaryInline({
   totals,
+  planned,
   targets,
   dailyTargets,
   className = 'text-sm tabular-nums text-app-text-muted'
 }: {
+  /** When `planned` is set, this is treated as actual intake. Otherwise legacy planned-or-single totals. */
   totals: MacroTotals;
+  planned?: MacroTotals;
   targets: MacroTotals;
   dailyTargets?: MacroTotals | null;
   className?: string;
 }) {
   const dayShare = dailyTargets ? mealGoalShareOfDay(targets, dailyTargets) : null;
+  const showTriple = Boolean(planned);
 
   return (
-    <p className={className}>
-      <MacroPair actual={totals.calories} goal={targets.calories} suffix=" kcal" />
-      <span> · </span>
-      <MacroPair actual={totals.protein} goal={targets.protein} suffix="g P" />
-      <span> · </span>
-      <MacroPair actual={totals.carbs} goal={targets.carbs} suffix="g C" />
-      <span> · </span>
-      <MacroPair actual={totals.fat} goal={targets.fat} suffix="g F" />
-      {dayShare != null && <span> · {dayShare}% day</span>}
-    </p>
+    <div className={`flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 ${className}`}>
+      <p className="min-w-0">
+        {showTriple && planned ? (
+          <>
+            <MacroTriple
+              actual={totals.calories}
+              planned={planned.calories}
+              goal={targets.calories}
+              suffix=" kcal"
+            />
+            <span> · </span>
+            <MacroTriple
+              actual={totals.protein}
+              planned={planned.protein}
+              goal={targets.protein}
+              suffix="g P"
+            />
+            <span> · </span>
+            <MacroTriple
+              actual={totals.carbs}
+              planned={planned.carbs}
+              goal={targets.carbs}
+              suffix="g C"
+            />
+            <span> · </span>
+            <MacroTriple
+              actual={totals.fat}
+              planned={planned.fat}
+              goal={targets.fat}
+              suffix="g F"
+            />
+          </>
+        ) : (
+          <>
+            <MacroPair actual={totals.calories} goal={targets.calories} suffix=" kcal" />
+            <span> · </span>
+            <MacroPair actual={totals.protein} goal={targets.protein} suffix="g P" />
+            <span> · </span>
+            <MacroPair actual={totals.carbs} goal={targets.carbs} suffix="g C" />
+            <span> · </span>
+            <MacroPair actual={totals.fat} goal={targets.fat} suffix="g F" />
+          </>
+        )}
+        {dayShare != null && <span> · {dayShare}% day</span>}
+      </p>
+      {showTriple ? (
+        <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-app-text-muted">
+          <span className="text-brand-green">Actual</span>
+          <span> / </span>
+          <span className="text-amber-700 dark:text-brand-gold">Planned</span>
+          <span> / </span>
+          <span>Goal</span>
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -76,13 +151,13 @@ export function MacroTotalsInline({
 }) {
   return (
     <p className={className}>
-      <span className="font-bold text-app-text">{totals.calories}</span>
+      <span className="font-bold text-amber-700 dark:text-brand-gold">{totals.calories}</span>
       <span> kcal · </span>
-      <span className="font-bold text-app-text">{totals.protein}</span>
+      <span className="font-bold text-amber-700 dark:text-brand-gold">{totals.protein}</span>
       <span>g P · </span>
-      <span className="font-bold text-app-text">{totals.carbs}</span>
+      <span className="font-bold text-amber-700 dark:text-brand-gold">{totals.carbs}</span>
       <span>g C · </span>
-      <span className="font-bold text-app-text">{totals.fat}</span>
+      <span className="font-bold text-amber-700 dark:text-brand-gold">{totals.fat}</span>
       <span>g F</span>
     </p>
   );
@@ -110,9 +185,11 @@ export function MacroSummaryFooter({
       {rows.map(({ label, actual, target, unit }) => (
         <div key={label}>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-app-text-muted">{label}</p>
-          <p className="text-sm font-bold tabular-nums text-app-text">
-            {actual}
-            {unit ?? ''}
+          <p className="text-sm tabular-nums text-app-text">
+            <span className="font-bold text-amber-700 dark:text-brand-gold">
+              {actual}
+              {unit ?? ''}
+            </span>
             <span className="text-xs font-semibold text-app-text-muted">
               {' '}
               / {target}
