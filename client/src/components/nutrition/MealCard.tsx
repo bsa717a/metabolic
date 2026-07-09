@@ -7,7 +7,7 @@ import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
 import { MealCardEditor, type MealMacroTargets } from './MealCardEditor';
 import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
-import { MacroSummaryInline, MacroTotalsInline } from './MacroSummaryFooter';
+import { MacroSummaryInline } from './MacroSummaryFooter';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
 import { DeleteMealScopeModal } from './DeleteMealScopeModal';
 
@@ -22,12 +22,21 @@ function formatPlannedTime(plannedTime?: string | null) {
     .replace(' PM', 'pm');
 }
 
-function mealMacroTotals(meal: Meal) {
+function mealActualTotals(meal: Meal) {
   return {
     calories: Math.round(Number(meal.actualCalories)),
     protein: Math.round(Number(meal.actualProtein)),
     carbs: Math.round(Number(meal.actualCarbs)),
     fat: Math.round(Number(meal.actualFat))
+  };
+}
+
+function mealPlannedTotals(meal: Meal) {
+  return {
+    calories: Math.round(Number(meal.plannedCalories)),
+    protein: Math.round(Number(meal.plannedProtein)),
+    carbs: Math.round(Number(meal.plannedCarbs)),
+    fat: Math.round(Number(meal.plannedFat))
   };
 }
 
@@ -154,6 +163,8 @@ export function MealCard({
   const [deletingMeal, setDeletingMeal] = useState(false);
   const [macroDetailsOpen, setMacroDetailsOpen] = useState(false);
   const plannedTime = formatPlannedTime(meal.plannedTime);
+  const actualTotals = mealActualTotals(meal);
+  const plannedTotals = mealPlannedTotals(meal);
 
   async function markPlannedAsEaten() {
     setToggleError(null);
@@ -306,12 +317,37 @@ export function MealCard({
           <div className="mt-3 border-t border-app-border pt-3">
             {macroTargets ? (
               <MacroSummaryInline
-                totals={mealMacroTotals(meal)}
+                totals={actualTotals}
+                planned={plannedTotals}
                 targets={macroTargets}
                 dailyTargets={dailyTargets}
               />
             ) : (
-              <MacroTotalsInline totals={mealMacroTotals(meal)} />
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm tabular-nums text-app-text-muted">
+                <p className="min-w-0">
+                  <span className="font-semibold text-brand-green">{actualTotals.calories}</span>
+                  <span> / </span>
+                  <span className="font-bold text-amber-700 dark:text-brand-gold">{plannedTotals.calories}</span>
+                  <span> kcal · </span>
+                  <span className="font-semibold text-brand-green">{actualTotals.protein}</span>
+                  <span> / </span>
+                  <span className="font-bold text-amber-700 dark:text-brand-gold">{plannedTotals.protein}</span>
+                  <span>g P · </span>
+                  <span className="font-semibold text-brand-green">{actualTotals.carbs}</span>
+                  <span> / </span>
+                  <span className="font-bold text-amber-700 dark:text-brand-gold">{plannedTotals.carbs}</span>
+                  <span>g C · </span>
+                  <span className="font-semibold text-brand-green">{actualTotals.fat}</span>
+                  <span> / </span>
+                  <span className="font-bold text-amber-700 dark:text-brand-gold">{plannedTotals.fat}</span>
+                  <span>g F</span>
+                </p>
+                <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide">
+                  <span className="text-brand-green">Actual</span>
+                  <span> / </span>
+                  <span className="text-amber-700 dark:text-brand-gold">Planned</span>
+                </p>
+              </div>
             )}
           </div>
         </>
