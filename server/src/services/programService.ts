@@ -99,41 +99,58 @@ async function reloadProgram(programId: string) {
   });
 }
 
+const programWithMetricsInclude = { metrics: true, user: true } as const;
+
 export async function listPrograms(user: { id: string; role: Role }) {
   const where = isAdmin(user) ? {} : isCoach(user) ? { coachId: user.id } : { userId: user.id };
-  const programs = await prisma.program.findMany({ where, include: { metrics: true, user: true }, orderBy: { createdAt: 'desc' } });
-
-  return Promise.all(
-    programs.map(async (program) => {
-      let resolved = program;
-      if (hasCompleteMetrics(program.metrics)) {
-        const goalUpdates = metricUpdatesForLegacyGoals(program.metrics);
-        if (goalUpdates.length) {
-          await prisma.$transaction(async (tx) => {
-            for (const update of goalUpdates) {
-              await tx.programMetric.update({
-                where: { id: update.id },
-                data: { goalValue: update.goalValue }
-              });
-            }
-          });
-          resolved = await prisma.program.findUniqueOrThrow({
-            where: { id: program.id },
-            include: { metrics: true, user: true }
-          });
-        }
-      } else {
-        const completed = await ensureCompleteProgramMetrics(program.id);
-        resolved = completed ?? program;
-      }
-      await ensureMeasurementProgramMetrics(resolved.id, resolved.metrics);
-      return reloadProgram(resolved.id);
-    })
-  );
+  return prisma.program.findMany({
+    where,
+    include: programWithMetricsInclude,
+    orderBy: { createdAt: 'desc' }
+  });
 }
 
-export async function getProgram(user: { id: string; role: Role }, id: string) {
-  const program = await prisma.program.findUnique({ where: { id }, include: { metrics: true, user: true } });
+/** Read-only program fetch for GET endpoints — no reconciliation or metric backfill. */
+export async function getProgramForRead(user: { id: string; role: Role }, id: string) {
+  const program = await prisma.program.findUnique({ where: { id }, include: programWithMetricsInclude });
+  if (!program) return null;
+  if (!(await canAccessUser(user, program.userId)) && program.coachId !== user.id) return null;
+  return program;
+}
+
+/** Program shown on the Metabolic Blueprint page for the signed-in user. */
+export async function getBlueprintProgram(user: { id: string; role: Role }) {
+  const own = await prisma.program.findFirst({
+    where: { userId: user.id },
+    include: { metrics: true },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (own) return own;
+
+  if (!isAdmin(user) && !isCoach(user)) return null;
+
+  const where = isAdmin(user) ? {} : { coachId: user.id };
+  return prisma.program.findFirst({
+    where,
+    include: { metrics: true },
+    orderBy: { createdAt: 'desc' }
+  });
+}
+
+async function assertProgramAccess(user: { id: string; role: Role }, programId: string) {
+  const program = await prisma.program.findUnique({
+    where: { id: programId },
+    select: { id: true, userId: true, coachId: true }
+  });
+  if (!program) throw new Error('Program not found');
+  if (!(await canAccessUser(user, program.userId)) && program.coachId !== user.id) {
+    throw new Error('Program not found');
+  }
+  return program;
+}
+
+async function prepareProgramForMutation(user: { id: string; role: Role }, id: string) {
+  const program = await prisma.program.findUnique({ where: { id }, include: programWithMetricsInclude });
   if (!program) return null;
   if (!(await canAccessUser(user, program.userId)) && program.coachId !== user.id) return null;
   let resolved = program;
@@ -150,7 +167,7 @@ export async function getProgram(user: { id: string; role: Role }, id: string) {
       });
       resolved = await prisma.program.findUniqueOrThrow({
         where: { id: program.id },
-        include: { metrics: true, user: true }
+        include: programWithMetricsInclude
       });
     }
   } else {
@@ -159,6 +176,11 @@ export async function getProgram(user: { id: string; role: Role }, id: string) {
   }
   await ensureMeasurementProgramMetrics(resolved.id, resolved.metrics);
   return reloadProgram(resolved.id);
+}
+
+/** Full program load with metric repair — use on writes, not page loads. */
+export async function getProgram(user: { id: string; role: Role }, id: string) {
+  return prepareProgramForMutation(user, id);
 }
 
 export async function activateProgram(userId: string, id: string) {
@@ -213,8 +235,7 @@ export async function listProgramMetricSnapshots(
   user: { id: string; role: Role },
   programId: string
 ) {
-  const program = await getProgram(user, programId);
-  if (!program) throw new Error('Program not found');
+  const program = await assertProgramAccess(user, programId);
 
   return prisma.programMetricSnapshot.findMany({
     where: { programId },
@@ -563,8 +584,7 @@ function serializeProgressPhotoSet(photoSet: {
 }
 
 export async function listProgressPhotoSets(user: { id: string; role: Role }, programId: string) {
-  const program = await getProgram(user, programId);
-  if (!program) throw new Error('Program not found');
+  await assertProgramAccess(user, programId);
 
   const rows = await prisma.programProgressPhotoSet.findMany({
     where: { programId },

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { requireFeature } from '../auth/requireFeature.js';
-import { activateProgram, getProgram, listPrograms, listProgramMetricSnapshots, listProgressPhotoSets, saveProgramMetricSnapshot, updateProgramMetricSnapshot, updateProgramMetrics, upsertProgressPhotoSet, upsertSnapshotMeasurement } from '../services/programService.js';
+import { activateProgram, getBlueprintProgram, getProgramForRead, listPrograms, listProgramMetricSnapshots, listProgressPhotoSets, saveProgramMetricSnapshot, updateProgramMetricSnapshot, updateProgramMetrics, upsertProgressPhotoSet, upsertSnapshotMeasurement } from '../services/programService.js';
 import { getActiveProgressSummaryForUser, getProgressSummary } from '../services/progressSummaryService.js';
 import { getFirebaseStorageBucket } from '../config/firebaseStorage.js';
 import { prisma } from '../db/prisma.js';
@@ -70,6 +70,10 @@ function serializeSnapshot(snapshot: {
 
 export async function programRoutes(app: FastifyInstance) {
   app.get('/api/programs', { preHandler: requireAuth }, async (request) => listPrograms(request.appUser!));
+
+  app.get('/api/programs/blueprint', { preHandler: requireAuth }, async (request) =>
+    getBlueprintProgram(request.appUser!)
+  );
 
   app.patch('/api/programs/:id/metrics', { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -261,7 +265,7 @@ export async function programRoutes(app: FastifyInstance) {
 
   app.get('/api/programs/:id', { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const program = await getProgram(request.appUser!, id);
+    const program = await getProgramForRead(request.appUser!, id);
     return program ?? reply.code(404).send({ error: 'Program not found' });
   });
 

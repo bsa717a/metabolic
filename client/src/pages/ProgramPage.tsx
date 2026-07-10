@@ -12,7 +12,6 @@ import { ProgramMetricSnapshotHistory } from '../components/program/ProgramMetri
 import type { ProgramMetricSnapshot, ProgressPhotoSet } from '../types';
 import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../utils/measurementUtils';
 import { formatSnapshotCurrentLabel } from '../utils/snapshotHistoryUtils';
-import { isAdminRole, isCoachRole } from '../utils/roles';
 
 function normalizeMetric(metric: ProgramMetric): ProgramMetric {
   return {
@@ -23,7 +22,7 @@ function normalizeMetric(metric: ProgramMetric): ProgramMetric {
   };
 }
 
-export function ProgramPage({ user }: { user?: AppUser | null }) {
+export function ProgramPage(_props: { user?: AppUser | null }) {
   const [program, setProgram] = useState<Program | null>(null);
   const [metrics, setMetrics] = useState<ProgramMetric[]>([]);
   const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
@@ -34,7 +33,9 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
   const [goalsDrawerOpen, setGoalsDrawerOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkInSnapshot, setCheckInSnapshot] = useState<ProgramMetricSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [programLoading, setProgramLoading] = useState(true);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [photosLoaded, setPhotosLoaded] = useState(false);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [error, setError] = useState('');
   const [snapshotError, setSnapshotError] = useState('');
@@ -43,12 +44,14 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
     try {
       const rows = await api<ProgressPhotoSet[]>(`/api/programs/${programId}/progress-photos`);
       setProgressPhotos(rows);
+      setPhotosLoaded(true);
     } catch {
       setProgressPhotos([]);
     }
   }, []);
 
   const loadSnapshots = useCallback(async (programId: string) => {
+    setSnapshotsLoading(true);
     try {
       const rows = await api<ProgramMetricSnapshot[]>(`/api/programs/${programId}/metric-snapshots`);
       setSnapshots(rows);
@@ -58,42 +61,53 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
       setSnapshots([]);
       setSelectedSnapshotId(null);
       setSnapshotError(err instanceof Error ? err.message : 'Unable to load session snapshots');
+    } finally {
+      setSnapshotsLoading(false);
     }
   }, []);
 
-  const loadProgram = useCallback(async (options?: { silent?: boolean }) => {
+  const loadBlueprintProgram = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
-      setLoading(true);
+      setProgramLoading(true);
       setError('');
     }
     try {
-      const rows = await api<Program[]>('/api/programs');
-      // Prefer the signed-in user's OWN program so a regular user never sees anyone else's
-      // data on their personal Blueprint page. Admins/coaches receive every program from the
-      // API and legitimately need to view one, so they fall back to the first available.
-      const ownProgram = user?.id ? rows.find((row) => row.userId === user.id) ?? null : null;
-      const canViewAny = isAdminRole(user?.role) || isCoachRole(user?.role);
-      const active = ownProgram ?? (canViewAny ? rows[0] ?? null : null);
+      const active = await api<Program | null>('/api/programs/blueprint');
       setProgram(active);
       setMetrics((active?.metrics ?? []).map(normalizeMetric));
       if (active) {
-        await Promise.all([loadSnapshots(active.id), loadProgressPhotos(active.id)]);
+        setSnapshotsLoading(true);
       } else {
         setSnapshots([]);
+        setSnapshotsLoading(false);
         setProgressPhotos([]);
         setSelectedSnapshotId(null);
+        setPhotosLoaded(false);
       }
     } catch (err) {
       setProgram(null);
+      setMetrics([]);
       setError(err instanceof Error ? err.message : 'Unable to load program');
     } finally {
-      if (!options?.silent) setLoading(false);
+      if (!options?.silent) setProgramLoading(false);
     }
-  }, [loadSnapshots, loadProgressPhotos, user?.id, user?.role]);
+  }, []);
 
   useEffect(() => {
-    void loadProgram();
-  }, [loadProgram]);
+    void loadBlueprintProgram();
+  }, [loadBlueprintProgram]);
+
+  const programId = program?.id ?? null;
+
+  useEffect(() => {
+    if (!programId) return;
+    void loadSnapshots(programId);
+  }, [programId, loadSnapshots]);
+
+  useEffect(() => {
+    if (!programId || (!comparisonOpen && !checkInOpen)) return;
+    void loadProgressPhotos(programId);
+  }, [programId, comparisonOpen, checkInOpen, loadProgressPhotos]);
 
   const bodyCompMetrics = useMemo(() => bodyCompositionMetrics(metrics), [metrics]);
 
@@ -105,8 +119,6 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
   const todaySnapshot = snapshots.find((snapshot) => snapshot.date === toDateKey(new Date()));
 
   const checkInPhotoSet = useMemo(() => {
-    // Only prefill photos when editing an existing session (today's saved snapshot or a
-    // history row). A brand-new check-in starts with an empty photo area so it feels fresh.
     if (!checkInSnapshot) return null;
     return progressPhotos.find((photoSet) => photoSet.date === checkInSnapshot.date) ?? null;
   }, [checkInSnapshot, progressPhotos]);
@@ -123,7 +135,10 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
 
   async function handleCheckInSaved() {
     if (!program) return;
-    await Promise.all([loadProgram({ silent: true }), loadSnapshots(program.id), loadProgressPhotos(program.id)]);
+    await Promise.all([loadBlueprintProgram({ silent: true }), loadSnapshots(program.id)]);
+    if (photosLoaded || checkInOpen || comparisonOpen) {
+      await loadProgressPhotos(program.id);
+    }
   }
 
   function upsertSnapshot(updated: ProgramMetricSnapshot) {
@@ -132,7 +147,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
       if (index === -1) return [updated, ...current].sort((a, b) => b.date.localeCompare(a.date));
       return current.map((snapshot) => (snapshot.id === updated.id ? updated : snapshot));
     });
-    void loadProgram({ silent: true });
+    void loadBlueprintProgram({ silent: true });
   }
 
   async function saveSnapshot() {
@@ -150,7 +165,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
       });
       await loadSnapshots(program.id);
       setSelectedSnapshotId(snapshot.id);
-      await loadProgram({ silent: true });
+      await loadBlueprintProgram({ silent: true });
     } catch (err) {
       setSnapshotError(err instanceof Error ? err.message : 'Unable to save session snapshot');
     } finally {
@@ -158,7 +173,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
     }
   }
 
-  if (loading) return <p>Loading program...</p>;
+  if (programLoading) return <p>Loading program...</p>;
   if (error) {
     return (
       <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-900">
@@ -242,14 +257,18 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
             values.
           </p>
         ) : null}
-        <ProgramMetricSnapshotHistory
-          programId={program.id}
-          snapshots={snapshots}
-          selectedId={selectedSnapshotId}
-          onSelect={setSelectedSnapshotId}
-          onUpdated={upsertSnapshot}
-          onOpenSnapshot={(snapshot) => openCheckIn(snapshot)}
-        />
+        {snapshotsLoading ? (
+          <p className="text-sm text-slate-500">Loading session history…</p>
+        ) : (
+          <ProgramMetricSnapshotHistory
+            programId={program.id}
+            snapshots={snapshots}
+            selectedId={selectedSnapshotId}
+            onSelect={setSelectedSnapshotId}
+            onUpdated={upsertSnapshot}
+            onOpenSnapshot={(snapshot) => openCheckIn(snapshot)}
+          />
+        )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         {snapshotError && <p className="text-sm text-red-600">{snapshotError}</p>}
       </div>
@@ -277,7 +296,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
         programId={program.id}
         metrics={bodyCompMetrics}
         onClose={() => setStartDrawerOpen(false)}
-        onSaved={() => loadProgram({ silent: true })}
+        onSaved={() => loadBlueprintProgram({ silent: true })}
       />
 
       <EditBlueprintGoalsDrawer
@@ -285,7 +304,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
         programId={program.id}
         metrics={bodyCompMetrics}
         onClose={() => setGoalsDrawerOpen(false)}
-        onSaved={() => loadProgram({ silent: true })}
+        onSaved={() => loadBlueprintProgram({ silent: true })}
       />
     </>
   );

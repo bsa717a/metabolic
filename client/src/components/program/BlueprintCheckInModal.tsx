@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
 import type { ProgramMetric, ProgramMetricSnapshot, ProgressPhotoSet } from '../../types';
 import { api, parseDateKey, toDateKey } from '../../services/api';
 import { isFirebaseStorageConfigured } from '../../services/firebase';
@@ -140,7 +140,7 @@ export function BlueprintCheckInModal({
     [metrics, snapshot, isToday]
   );
   const measurementSource = snapshot ?? null;
-  const openKey = open ? `${programId}:${sessionDate}:${snapshot?.id ?? 'new'}:${photoSet?.id ?? 'new'}` : null;
+  const openKey = open ? `${programId}:${sessionDate}:${snapshot?.id ?? 'new'}` : null;
 
   const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
   const [primaryDraft, setPrimaryDraft] = useState<MetricDraft[]>([]);
@@ -152,6 +152,7 @@ export function BlueprintCheckInModal({
     back: emptyPhotoDraft(photoSet?.backUrl ?? null)
   }));
   const [objectUrls, setObjectUrls] = useState<string[]>([]);
+  const [photosExpanded, setPhotosExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -166,9 +167,19 @@ export function BlueprintCheckInModal({
         side: emptyPhotoDraft(photoSet?.sideUrl ?? null),
         back: emptyPhotoDraft(photoSet?.backUrl ?? null)
       });
+      setPhotosExpanded(false);
       setError('');
     }
   }
+
+  useEffect(() => {
+    if (!open || !photoSet) return;
+    setPhotos((current) => ({
+      front: current.front.file ? current.front : emptyPhotoDraft(photoSet.frontUrl ?? null),
+      side: current.side.file ? current.side : emptyPhotoDraft(photoSet.sideUrl ?? null),
+      back: current.back.file ? current.back : emptyPhotoDraft(photoSet.backUrl ?? null)
+    }));
+  }, [open, photoSet]);
 
   useEffect(() => {
     return () => {
@@ -385,20 +396,36 @@ export function BlueprintCheckInModal({
               </div>
             </section>
 
-            <section>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-app-text-muted">Progress photos</h3>
-              <div className="space-y-3">
-                {PHOTO_SLOTS.map(({ slot, label }) => (
-                  <ProgressPhotoUploadField
-                    key={slot}
-                    label={label}
-                    draft={photos[slot]}
-                    disabled={saving}
-                    previewClassName="h-96"
-                    onSelect={(file) => selectPhoto(slot, file)}
-                  />
-                ))}
-              </div>
+            <section className="rounded-2xl border border-slate-200 p-4 dark:border-app-border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 text-left"
+                aria-expanded={photosExpanded}
+                onClick={() => setPhotosExpanded((open) => !open)}
+              >
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-app-text-muted">Progress photos</h3>
+                  <p className="mt-1 text-xs text-app-text-muted">Take photos approx every 8 weeks.</p>
+                </div>
+                <ChevronDown
+                  size={18}
+                  className={clsx('shrink-0 text-app-text-muted transition', photosExpanded && 'rotate-180')}
+                />
+              </button>
+              {photosExpanded && (
+                <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 dark:border-app-border">
+                  {PHOTO_SLOTS.map(({ slot, label }) => (
+                    <ProgressPhotoUploadField
+                      key={slot}
+                      label={label}
+                      draft={photos[slot]}
+                      disabled={saving}
+                      previewClassName="h-96"
+                      onSelect={(file) => selectPhoto(slot, file)}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
 
             <section>

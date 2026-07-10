@@ -1,7 +1,7 @@
 import { ProgramStatus, type Role } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { canAccessProgramClient } from '../auth/requireRole.js';
-import { getProgram } from './programService.js';
+import { getProgramForRead } from './programService.js';
 import { getBloodPanelHistoryForExport } from './bloodPanelService.js';
 import { n, round } from '../utils/numbers.js';
 
@@ -26,7 +26,7 @@ function metricLabel(metricType: string) {
 }
 
 export async function getProgressSummary(actor: Actor, programId: string) {
-  const program = await getProgram(actor, programId);
+  const program = await getProgramForRead(actor, programId);
   if (!program) throw new Error('Program not found');
 
   const userId = program.userId;
