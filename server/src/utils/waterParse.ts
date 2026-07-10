@@ -46,3 +46,52 @@ export function parseWaterAmountOz(text: string): number | null {
 export function isWaterLogRequest(text: string) {
   return parseWaterAmountOz(text) !== null;
 }
+
+function looksLikeWaterQuestion(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (normalized.endsWith('?')) return true;
+  if (/^(how|what|when|why|where|can|should|do|does|is|are|am)\b/.test(normalized)) return true;
+  if (
+    /\b(how much|how many|should i|do i need|not sure|wondering|wonder if|need to know|is it enough|is that enough|tell me)\b/.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** True when the message is clearly a hydration log, not a question about water. */
+export function looksLikeWaterLogCommand(text: string): boolean {
+  const amount = parseWaterAmountOz(text);
+  if (amount == null) return false;
+  if (looksLikeWaterQuestion(text)) return false;
+
+  const normalized = text.trim().toLowerCase();
+  if (/(\d+(?:\.\d+)?)\s*(?:fl\.?\s*)?(?:oz|ounce|ounces)\b/.test(normalized)) return true;
+  if (/\b(\d+(?:\.\d+)?)\s*(?:ml|milliliters?|millilitre?s?|cups?)\b/.test(normalized)) return true;
+  if (/\b(glass|glasses|bottle|bottles)\b/.test(normalized)) return true;
+  if (/\b(add|log|logged|drank|drink|drinking|had|finished|track)\b/.test(normalized)) return true;
+  return false;
+}
+
+const OTHER_SMS_ACTION =
+  /\b(breakfast|lunch|dinner|snack|meal|food|exercise|workout|walk|run|complete|mark)\b/i;
+
+/** True when the message is only a hydration log — compound requests defer to the agent. */
+export function isWaterOnlySmsCommand(text: string): boolean {
+  if (!looksLikeWaterLogCommand(text)) return false;
+
+  const normalized = text.trim().toLowerCase();
+  if (!/\b(and|also|plus|then)\b/.test(normalized)) return true;
+
+  const segments = normalized.split(/\s+(?:and|also|plus|then)\s+/);
+  if (segments.length <= 1) return true;
+
+  return segments.every((segment) => {
+    const trimmed = segment.trim();
+    if (!trimmed) return true;
+    if (parseWaterAmountOz(trimmed) != null) return true;
+    return !OTHER_SMS_ACTION.test(trimmed) && !/\b(log|logged|logging|ate|eaten|had)\b/.test(trimmed);
+  });
+}

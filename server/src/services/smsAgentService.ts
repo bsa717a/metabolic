@@ -17,12 +17,14 @@ import {
   SmsResponseError,
   capSms,
   downloadSmsImage,
+  handleWriteAction,
   loadSmsChatHistory,
   sendPhotoProcessingAck,
   type HandleSmsResult,
   type SmsMedia,
   type SmsUser
 } from './smsIntentService.js';
+import { isWaterOnlySmsCommand, parseWaterAmountOz } from '../utils/waterParse.js';
 import { buildSmsToolDeclarations, executeSmsTool, type SmsToolContext } from './smsAgentTools.js';
 import {
   PENDING_ACTION_DONE_INTENT,
@@ -175,6 +177,35 @@ export async function runSmsAgentEntry(
     toolCalls: []
   };
 
+  const persistArgs = {
+    inboundId: inbound.id,
+    user,
+    phone,
+    toolCtx,
+    resumedPending: activePending?.pending,
+    resumedPendingId: activePending?.id
+  };
+
+  if (trimmed && !isPhoto && !mediaMissing && isWaterOnlySmsCommand(trimmed)) {
+    const amountOz = parseWaterAmountOz(trimmed)!;
+    try {
+      const reply = capSms(
+        await handleWriteAction(user.id, toolCtx.dateKey, toolCtx.timeZone, {
+          intent: 'LOG_WATER',
+          amountOz,
+          text: trimmed
+        })
+      );
+      toolCtx.toolCalls.push({ name: 'log_water', args: { amountOz, text: trimmed } });
+      await persistAgentReply({ ...persistArgs, reply });
+      return { inbound, response: reply };
+    } catch (error) {
+      const reply = agentErrorReply(error);
+      await persistAgentReply({ ...persistArgs, reply });
+      return { inbound, response: reply };
+    }
+  }
+
   const abort = new AbortController();
   const work = (async (): Promise<string> => {
     if (media) {
@@ -217,15 +248,6 @@ export async function runSmsAgentEntry(
     work.then((reply) => ({ reply })),
     new Promise<typeof TIMEOUT>((resolve) => setTimeout(() => resolve(TIMEOUT), SYNC_AGENT_BUDGET_MS))
   ]);
-
-  const persistArgs = {
-    inboundId: inbound.id,
-    user,
-    phone,
-    toolCtx,
-    resumedPending: activePending?.pending,
-    resumedPendingId: activePending?.id
-  };
 
   if (outcome !== TIMEOUT) {
     const { reply } = outcome as { reply: string };
