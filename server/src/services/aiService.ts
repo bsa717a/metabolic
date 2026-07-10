@@ -1895,6 +1895,8 @@ ${JSON.stringify(items)}`;
     try {
       const chat = model.startChat({ history });
       let result = await chat.sendMessage(last.content);
+      let lastToolSmsResult: string | undefined;
+      let lastToolError: string | undefined;
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
         if (abortSignal?.aborted) throw new Error('SMS assistant cancelled');
@@ -1910,6 +1912,13 @@ ${JSON.stringify(items)}`;
           } catch (error) {
             output = { error: error instanceof Error ? error.message : 'Tool failed.' };
           }
+          if (typeof output.result === 'string' && output.result.trim()) {
+            lastToolSmsResult = output.result.trim();
+            lastToolError = undefined;
+          } else if (output.error) {
+            lastToolSmsResult = undefined;
+            lastToolError = typeof output.error === 'string' ? output.error : 'Tool failed.';
+          }
           responses.push({ functionResponse: { name: call.name, response: output } });
         }
 
@@ -1922,7 +1931,10 @@ ${JSON.stringify(items)}`;
       }
 
       const text = result.response.text().trim();
-      return text || 'Done!';
+      if (text) return text;
+      if (lastToolError) return lastToolError;
+      if (lastToolSmsResult) return lastToolSmsResult;
+      return 'Got it!';
     } catch (error) {
       throw wrapAiError(error, 'assistant');
     }
