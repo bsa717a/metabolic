@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { mockMealPrepBatch, type MealPrepBatchInput } from './aiService.js';
 import { buildPrepBatches, type PlannedMealRow } from './mealPrepService.js';
 
 function meal(overrides: Partial<PlannedMealRow> & { date: string }): PlannedMealRow {
@@ -231,5 +232,19 @@ describe('buildPrepBatches', () => {
 
     const { batches } = buildPrepBatches(rows);
     assert.deepEqual(batches[0].cookNow, [{ name: 'Greek Yogurt', totalQuantity: 2, unit: 'serving' }]);
+  });
+});
+
+describe('mockMealPrepBatch', () => {
+  it('marks a heated snack batch as cook even when its label sounds handheld', () => {
+    const batch: MealPrepBatchInput = {
+      id: 'snack',
+      label: 'Snack',
+      occurrenceCount: 2,
+      cookNow: [{ name: 'Scrambled eggs', totalQuantity: 4, unit: 'egg' }],
+      addFresh: []
+    };
+
+    assert.equal(mockMealPrepBatch(batch).prepStyle, 'cook');
   });
 });

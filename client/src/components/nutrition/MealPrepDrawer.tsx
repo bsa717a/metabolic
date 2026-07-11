@@ -194,7 +194,9 @@ export function MealPrepDrawer({
                       </div>
                     </div>
                     <div className="px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Cook now</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        {batch.prepStyle === 'assemble' ? 'Mix & portion' : 'Cook now'}
+                      </p>
                       <ul className="mt-1 space-y-1">
                         {batch.cookNow.map((item) => (
                           <li key={`${item.name}-${item.unit}`} className="text-sm text-slate-700">

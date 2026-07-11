@@ -31,6 +31,8 @@ export type MealPrepBatch = {
   cookNow: MealPrepIngredient[];
   addFresh: MealPrepFreshIngredient[];
   container: string;
+  /** 'cook' when the batch is actually heated; 'assemble' when it is just mixed/portioned. */
+  prepStyle: 'cook' | 'assemble';
   reheat: string | null;
   storageNote: string | null;
 };
@@ -287,6 +289,7 @@ export async function getMealPrepPlan(userId: string, startDate: string, endDate
     return {
       ...batch,
       container: match?.container ?? 'microwave-safe container',
+      prepStyle: match?.prepStyle ?? 'cook',
       reheat: match?.reheat ?? null,
       storageNote: match?.storageNote ?? null
     };
