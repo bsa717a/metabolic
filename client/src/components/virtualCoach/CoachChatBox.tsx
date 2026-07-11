@@ -12,10 +12,19 @@ export function CoachChatBox({ coach }: { coach: VirtualCoach }) {
   const [error, setError] = useState<string>();
   const [memoryOpen, setMemoryOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length, loading]);
+
+  // Grow the composer with its content like a texting app (up to ~5 lines, then scroll).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [input]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -90,7 +99,7 @@ export function CoachChatBox({ coach }: { coach: VirtualCoach }) {
         {messages.map((message, index) => (
           <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+              className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                 message.role === 'user'
                   ? 'rounded-br-md bg-[#0b84fe] text-white'
                   : 'rounded-bl-md bg-app-muted text-app-text'
@@ -114,17 +123,25 @@ export function CoachChatBox({ coach }: { coach: VirtualCoach }) {
       {error && <p className="px-4 pt-2 text-xs text-red-600">{error}</p>}
 
       <form
-        className="flex items-center gap-2 border-t border-app-border px-3 py-3"
+        className="flex items-end gap-2 border-t border-app-border px-3 py-3"
         onSubmit={(event) => {
           event.preventDefault();
           send(input);
         }}
       >
-        <input
-          className="min-w-0 flex-1 rounded-full border border-app-border bg-app-bg px-4 py-2.5 text-sm text-app-text outline-none focus:border-brand-green/60"
+        <textarea
+          ref={inputRef}
+          rows={1}
+          className="min-w-0 flex-1 resize-none rounded-2xl border border-app-border bg-app-bg px-4 py-2.5 text-sm leading-5 text-app-text outline-none focus:border-brand-green/60"
           placeholder={`Message ${coach.name}…`}
           value={input}
           onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              send(input);
+            }
+          }}
           disabled={loading}
         />
         <button

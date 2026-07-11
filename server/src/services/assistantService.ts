@@ -1,5 +1,6 @@
 import { getTodayDashboard } from './dashboardService.js';
-import { getAiProvider, type ChatMessage } from './aiService.js';
+import { getAiProvider, WEB_AGENT_SYSTEM, type ChatMessage } from './aiService.js';
+import { buildWebCoachToolDeclarations, executeWebCoachTool, type WebCoachToolContext } from './webCoachTools.js';
 import { prisma } from '../db/prisma.js';
 import { userDayKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
@@ -216,12 +217,21 @@ export async function chatWithAssistant(userId: string, messages: ChatMessage[])
     personalization.selectedVirtualCoachId && isVirtualCoachId(personalization.selectedVirtualCoachId)
       ? `${VIRTUAL_COACH_PERSONA_PROMPTS[personalization.selectedVirtualCoachId]}\n\nAlso serve as their in-app assistant when they ask quick questions between check-ins.\n\n`
       : '';
-  const reply = await getAiProvider().chat(
+
+  const toolCtx: WebCoachToolContext = {
+    userId,
+    dateKey: userDayKey(personalization.timezone),
+    timeZone: personalization.timezone,
+    message: lastUserMessage,
+    toolCalls: []
+  };
+  const reply = await getAiProvider().runAgent({
     messages,
     context,
-    'web',
-    `${memoryInstruction}${nameInstruction}${personaPrefix}`
-  );
+    tools: buildWebCoachToolDeclarations(),
+    toolExecutor: (name, args) => executeWebCoachTool(toolCtx, name, args),
+    systemPrompt: `${WEB_AGENT_SYSTEM}\n\n${memoryInstruction}${nameInstruction}${personaPrefix}`.trim()
+  });
 
   const memoryMessages: MemoryConversationMessage[] = [
     ...toMemoryMessages(messages),

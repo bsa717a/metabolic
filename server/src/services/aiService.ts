@@ -99,6 +99,8 @@ export type MealPrepBatchInput = {
 export type EnrichedMealPrepBatch = {
   id: string;
   container: string;
+  /** 'cook' when any ingredient is heated; 'assemble' when the batch is just mixed/portioned. */
+  prepStyle: 'cook' | 'assemble';
   reheat: string | null;
   storageNote: string | null;
 };
@@ -130,6 +132,8 @@ export type AgentRunInput = {
   toolExecutor: AgentToolExecutor;
   /** When aborted, the loop stops calling tools (used for hard timeouts). */
   abortSignal?: AbortSignal;
+  /** Overrides the default SMS agent system prompt (used by the web coach chat). */
+  systemPrompt?: string;
 };
 
 export type CoachCheckInStage =
@@ -408,6 +412,7 @@ const enrichedShoppingListResponseSchema = z.object({
 const enrichedMealPrepBatchSchema = z.object({
   id: z.string().min(1),
   container: z.string().min(1).max(120),
+  prepStyle: z.enum(['cook', 'assemble']).optional(),
   reheat: z.union([z.string().max(200), z.null()]).optional(),
   storageNote: z.union([z.string().max(200), z.null()]).optional()
 });
@@ -466,10 +471,11 @@ Every input id must appear exactly once. Keep groceryDescription under 120 chara
 
 const MEAL_PREP_PROMPT = `The user is batch-cooking meals ahead of time (meal prep). Each batch below is one dish they will cook once and portion into several containers.
 For each batch, recommend how to package and store it. Pick the most practical container: "microwave-safe container" for hot cooked meals, "ziplock bag" for dry, handheld, or snack-style foods, "mason jar" for salads (dressing at the bottom) and overnight oats or parfaits, "small sauce container" only when the batch is mostly condiments.
+Set prepStyle to "cook" when any ingredient in the batch is actually heated (grilled, baked, scrambled, boiled, roasted), and "assemble" when the batch is only mixed, portioned, or layered without heat — protein shakes, yogurt bowls, tuna salad, overnight oats, snack bags.
 Give a short reheat instruction for cooked meals (microwave time, stir/flip guidance) or null when the batch is eaten cold.
 Give a short storageNote with fridge life in days (most cooked meals: 3-4 days) and a freezer tip when the batch count exceeds what stays fresh; null when nothing useful applies.
 The addFresh list names ingredients kept out of the batch and added at serving — do not tell the user to cook or store those in the container.
-Return JSON only: { "intro": string, "batches": [ { "id": string, "container": string, "reheat": string|null, "storageNote": string|null }, ... ] }
+Return JSON only: { "intro": string, "batches": [ { "id": string, "container": string, "prepStyle": "cook"|"assemble", "reheat": string|null, "storageNote": string|null }, ... ] }
 Every input id must appear exactly once. Keep intro under 220 characters, container under 60, reheat and storageNote under 160 each.`;
 
 const MEAL_SUGGESTION_TIMEOUT_MS = 7000;
@@ -592,6 +598,20 @@ const ASSISTANT_SYSTEM = `You are the user's personal nutritionist friend inside
 Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Use profile.firstName from context when greeting or when a personal touch helps; after the opening message, use their name sparingly.
 Answer using the user's live program data, macros, meals, allergies, and dietary preferences when relevant. Be practical and specific.
 Never recommend foods that conflict with the user's stated allergies or dietary preferences.
+Keep responses short unless they ask for detail. Use plain language, not markdown headers.
+If data is missing, say what you would need rather than inventing numbers.
+You are chat-only: you CANNOT create, edit, log, or delete anything — no meal plans, food logs, workouts, or water. Never say you changed, swapped, logged, or updated something; the program data in context is the only source of truth about what exists.
+If they ask you to change their plan or log something, say plainly that you can't make changes from this chat yet, and point them to the right spot: the Nutrition page day view to edit or build meals, or texting their coach number to log food and water.
+Celebrate real wins — meals logged, workouts done, protein hit, consistency — and keep encouragement genuine and tied to their actual progress, never generic hype.`;
+
+export const WEB_AGENT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
+Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Use profile.firstName from context when greeting or when a personal touch helps; after the opening message, use their name sparingly.
+You CAN take real actions through the provided tools: update planned meals for today or a future day, log food they ate, mark meals eaten as planned, mark exercises done, log water, check macros, and suggest meals. Use them when the user clearly asks for one of those things.
+Only claim an action happened when the tool call returned a result — never say you changed, logged, or updated something otherwise. If a tool returns an "error", explain it briefly and suggest a concrete next step. If they ask for something outside your tools (editing past days, changing targets, workouts planning), say you can't do that from chat yet and point them to the right page.
+Tool result strings are the source of truth. Relay a successful tool's "result" nearly verbatim, especially calorie, protein, macro, meal, date, and quantity details; do not paraphrase those facts or substitute values from your own estimate.
+Before replacing meals the user already has planned, confirm once — unless they just gave you the exact list of what they want, in which case act on it.
+When updating planned meals, estimate realistic per-item macros like a nutritionist (about 4 cal per gram of protein and carbs, 9 per gram of fat) and honor any calorie or macro totals the user states.
+Answer using the user's live program data, macros, meals, allergies, and dietary preferences. Never recommend or plan foods that conflict with their stated allergies or dietary preferences.
 Keep responses short unless they ask for detail. Use plain language, not markdown headers.
 If data is missing, say what you would need rather than inventing numbers.
 Celebrate real wins — meals logged, workouts done, protein hit, consistency — and keep encouragement genuine and tied to their actual progress, never generic hype.`;
@@ -1050,10 +1070,13 @@ function mockGroceryDescription(item: ShoppingListInputItem, storeName: string |
 }
 
 function normalizeEnrichedMealPrepBatch(parsed: z.infer<typeof enrichedMealPrepBatchSchema>): EnrichedMealPrepBatch {
+  const reheat = parsed.reheat?.trim() || null;
   return {
     id: parsed.id,
     container: parsed.container.trim(),
-    reheat: parsed.reheat?.trim() || null,
+    // Older/partial model responses may omit prepStyle — a reheat step implies actual cooking.
+    prepStyle: parsed.prepStyle ?? (reheat ? 'cook' : 'assemble'),
+    reheat,
     storageNote: parsed.storageNote?.trim() || null
   };
 }
@@ -1096,13 +1119,18 @@ function parseEnrichedMealPrepResponse(text: string, expectedIds: string[]): Enr
 
 export function mockMealPrepBatch(batch: MealPrepBatchInput): EnrichedMealPrepBatch {
   const lower = batch.label.toLowerCase();
-  const coldKeywords = /salad|overnight oats|parfait|yogurt|smoothie|jar/;
+  const coldKeywords = /salad|overnight oats|parfait|yogurt|smoothie|shake|jar/;
   const handheldKeywords = /wrap|sandwich|snack|bar|trail|nuts|jerky|crackers|toast/;
+  // Does anything in the batch actually get heated, or is it mix-and-portion only?
+  const heatKeywords =
+    /chicken|beef|turkey|pork|steak|fish|salmon|shrimp|egg|rice|quinoa|pasta|potato|sausage|bacon|oatmeal|cooked|grilled|roasted|baked|scrambled|saut/;
+  const needsCooking = batch.cookNow.some((item) => heatKeywords.test(item.name.toLowerCase()));
 
   if (coldKeywords.test(lower)) {
     return {
       id: batch.id,
       container: 'mason jar',
+      prepStyle: needsCooking ? 'cook' : 'assemble',
       reheat: null,
       storageNote: 'Keep dressing or wet items at the bottom of the jar. Refrigerate up to 4 days.'
     };
@@ -1112,14 +1140,26 @@ export function mockMealPrepBatch(batch: MealPrepBatchInput): EnrichedMealPrepBa
     return {
       id: batch.id,
       container: 'ziplock bag',
+      prepStyle: needsCooking ? 'cook' : 'assemble',
       reheat: null,
       storageNote: 'Store bags flat in the fridge (or pantry for dry snacks) up to 4 days.'
+    };
+  }
+
+  if (!needsCooking) {
+    return {
+      id: batch.id,
+      container: 'airtight container',
+      prepStyle: 'assemble',
+      reheat: null,
+      storageNote: 'Refrigerate up to 4 days.'
     };
   }
 
   return {
     id: batch.id,
     container: 'microwave-safe container',
+    prepStyle: 'cook',
     reheat: 'Microwave 2-3 minutes, stirring halfway, until steaming hot.',
     storageNote:
       batch.occurrenceCount > 4
@@ -2020,7 +2060,7 @@ ${JSON.stringify(batches)}`;
   }
 
   async runAgent(input: AgentRunInput): Promise<string> {
-    const { messages, context, tools, toolExecutor, abortSignal } = input;
+    const { messages, context, tools, toolExecutor, abortSignal, systemPrompt } = input;
     const last = messages.at(-1);
     if (!last) throw new Error('Message required');
 
@@ -2039,7 +2079,7 @@ ${JSON.stringify(batches)}`;
     // Text + tools model — NOT the JSON-mode foodModel (responseMimeType JSON is incompatible with tool calling).
     const model = this.client.getGenerativeModel({
       model: this.model,
-      systemInstruction: { role: 'user', parts: [{ text: AGENT_SYSTEM }] },
+      systemInstruction: { role: 'user', parts: [{ text: systemPrompt ?? AGENT_SYSTEM }] },
       tools: [{ functionDeclarations: tools }],
       toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
       generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }

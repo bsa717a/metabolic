@@ -123,6 +123,7 @@ export type MealPrepBatch = {
   cookNow: MealPrepIngredient[];
   addFresh: MealPrepFreshIngredient[];
   container: string;
+  prepStyle: 'cook' | 'assemble';
   reheat: string | null;
   storageNote: string | null;
 };
@@ -308,7 +309,34 @@ export type ExerciseRoutine = {
   programId: string;
   days: ExerciseRoutineDay[];
 };
-export type Dashboard = { program: Program | null; dailyLog: any; meals: Meal[]; allMeals?: Meal[]; exercises: Exercise[]; summary: { currentWeight: number; caloriesRemaining: number; proteinRemaining: number; nextMeal: string; exercisesLeft: number; goalProgress: number } | null; weightTrend: { date: string; weight: number }[] };
+export type DashboardDailyLog = {
+  caloriesActual: number | string;
+  calorieTarget: number | string;
+  proteinActual: number | string;
+  proteinTarget: number | string;
+  carbsActual: number | string;
+  carbTarget: number | string;
+  fatActual: number | string;
+  fatTarget: number | string;
+  exercisesCompleted: number;
+  exercisesPlanned: number;
+};
+export type Dashboard = {
+  program: Program | null;
+  dailyLog: DashboardDailyLog | null;
+  meals: Meal[];
+  allMeals?: Meal[];
+  exercises: Exercise[];
+  summary: {
+    currentWeight: number;
+    caloriesRemaining: number;
+    proteinRemaining: number;
+    nextMeal: string;
+    exercisesLeft: number;
+    goalProgress: number;
+  } | null;
+  weightTrend: { date: string; weight: number }[];
+};
 export type CoachClient = {
   id: string;
   firstName: string;

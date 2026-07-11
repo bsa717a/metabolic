@@ -57,7 +57,7 @@ function buildMealPrepHtml(result: MealPrepPlanResult) {
           <p class="batch-meta">${escapeHtml(
             `${formatContainerCount(batch)} · ${batch.container} · label ${batch.dates.map(formatPrepDate).join(', ')}`
           )}</p>
-          <p class="list-label">Cook now</p>
+          <p class="list-label">${batch.prepStyle === 'assemble' ? 'Mix &amp; portion' : 'Cook now'}</p>
           <ul>${cookItemsHtml}</ul>
           ${freshSection}
           ${notes}

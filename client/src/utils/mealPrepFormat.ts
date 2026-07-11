@@ -40,8 +40,9 @@ export function formatMealPrepForShare(result: MealPrepPlanResult) {
   for (const batch of result.batches) {
     lines.push(`${batch.label} × ${batch.occurrenceCount} (${batch.container})`);
     lines.push(`Label: ${batch.dates.map(formatPrepDate).join(', ')}`);
+    const prepVerb = batch.prepStyle === 'assemble' ? 'Mix' : 'Cook';
     for (const item of batch.cookNow) {
-      lines.push(`☐ Cook ${formatPrepQuantity(item.totalQuantity)} ${pluralizePrepUnit(item.unit, item.totalQuantity)} ${item.name}`);
+      lines.push(`☐ ${prepVerb} ${formatPrepQuantity(item.totalQuantity)} ${pluralizePrepUnit(item.unit, item.totalQuantity)} ${item.name}`);
     }
     for (const item of batch.addFresh) {
       lines.push(
