@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, CopyPlus, LayoutGrid, Printer, Share2, ShoppingCart, SlidersHorizontal } from 'lucide-react';
+import { ChefHat, ChevronDown, CopyPlus, LayoutGrid, Printer, Share2, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export function PlanActionsMenu({
@@ -7,6 +7,7 @@ export function PlanActionsMenu({
   copyDayDisabled = false,
   copyingDay = false,
   onGroceryList,
+  onMealPrep,
   onAdjustTargets,
   onMealBuilder,
   printing = null,
@@ -19,6 +20,7 @@ export function PlanActionsMenu({
   copyDayDisabled?: boolean;
   copyingDay?: boolean;
   onGroceryList: () => void;
+  onMealPrep: () => void;
   onAdjustTargets: () => void;
   onMealBuilder: () => void;
   printing?: 'day' | 'week' | null;
@@ -83,6 +85,10 @@ export function PlanActionsMenu({
           <button type="button" role="menuitem" className={itemClass} onClick={() => runAndClose(onGroceryList)}>
             <ShoppingCart className="h-4 w-4" />
             Grocery list
+          </button>
+          <button type="button" role="menuitem" className={itemClass} onClick={() => runAndClose(onMealPrep)}>
+            <ChefHat className="h-4 w-4" />
+            Meal prep
           </button>
           <button type="button" role="menuitem" className={itemClass} onClick={() => runAndClose(onAdjustTargets)}>
             <SlidersHorizontal className="h-4 w-4" />

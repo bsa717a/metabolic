@@ -8,6 +8,7 @@ import { addBlankMeal, addMealItem, applyMealForward, clearMealPlannedFoods, cop
 import { ensureDailyLogByUserId } from '../services/dailyLogService.js';
 import { applyTemplateToDailyLog, getProgramDefaultTemplate, getTemplateForActor, listTemplatesForUser } from '../services/nutritionTemplateService.js';
 import { getGroceryShoppingList } from '../services/shoppingListService.js';
+import { getMealPrepPlan } from '../services/mealPrepService.js';
 import { getMealCardsForDate, MealCardError, saveMealSelections } from '../services/mealCardService.js';
 import { getPlanPeriodInfo } from '../services/planAdvancement.js';
 import { adoptProposedPlan, getPlanProposal, getPlanStatus, PlanAdoptError } from '../services/planStatusService.js';
@@ -360,11 +361,32 @@ export async function nutritionRoutes(app: FastifyInstance) {
         endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         storeName: z.string().trim().min(1).max(120).optional()
       })
-      .parse(request.query);
+      .safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'startDate and endDate must be YYYY-MM-DD dates.' });
     try {
-      return await getGroceryShoppingList(request.appUser!.id, query.startDate, query.endDate, query.storeName ?? null);
+      return await getGroceryShoppingList(
+        request.appUser!.id,
+        query.data.startDate,
+        query.data.endDate,
+        query.data.storeName ?? null
+      );
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to build shopping list' });
+    }
+  });
+
+  app.get('/api/nutrition/meal-prep', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
+    const query = z
+      .object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+      })
+      .safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'startDate and endDate must be YYYY-MM-DD dates.' });
+    try {
+      return await getMealPrepPlan(request.appUser!.id, query.data.startDate, query.data.endDate);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to build meal prep plan' });
     }
   });
 

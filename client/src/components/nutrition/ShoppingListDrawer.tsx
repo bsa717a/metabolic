@@ -115,7 +115,7 @@ export function ShoppingListDrawer({
     <Drawer open={open} title="Shopping list" onClose={onClose}>
       <div className="space-y-5">
         <div>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-app-text opacity-80">
             AI converts your planned foods into grocery-store amounts. Add a store name for approximate aisle hints.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -151,7 +151,7 @@ export function ShoppingListDrawer({
           {(printError || shareError) && (
             <p className="mt-3 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError ?? shareError}</p>
           )}
-          <p className="mt-3 text-sm font-medium text-slate-700">{formatRangeLabel(range.startDate, range.endDate)}</p>
+          <p className="mt-3 text-sm font-medium text-app-text">{formatRangeLabel(range.startDate, range.endDate)}</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white">
@@ -181,7 +181,7 @@ export function ShoppingListDrawer({
                     if (event.key === 'Enter') applyStoreName();
                   }}
                   placeholder="e.g. Kroger, Whole Foods, Publix"
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-brand-green/30 focus:ring-2"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-brand-green/30 focus:ring-2"
                 />
                 <Button type="button" variant="secondary" onClick={applyStoreName}>
                   Apply
@@ -199,28 +199,28 @@ export function ShoppingListDrawer({
           )}
         </div>
 
-        {loading && <p className="text-sm text-slate-500">Building your grocery list...</p>}
+        {loading && <p className="text-sm text-app-text opacity-80">Building your grocery list...</p>}
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
         {!loading && !error && result && (
           <>
-            {result.intro && <p className="text-sm text-slate-600">{result.intro}</p>}
+            {result.intro && <p className="text-sm text-app-text opacity-80">{result.intro}</p>}
 
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-app-text opacity-80">
               {result.itemCount} grocery item{result.itemCount === 1 ? '' : 's'} across {result.plannedDayCount} planned day
               {result.plannedDayCount === 1 ? '' : 's'}.
               {!result.enriched && result.itemCount > 0 ? ' Using estimated amounts.' : ''}
             </p>
 
             {result.itemCount === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-app-border px-4 py-8 text-center text-sm text-app-text opacity-80">
                 No planned foods in this range yet. Add planned items to your meals to build a shopping list.
               </div>
             ) : (
               <div className="space-y-5">
                 {result.sections.map((section) => (
                   <section key={section.title}>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{section.title}</h3>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-text opacity-80">{section.title}</h3>
                     <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
                       {section.items.map((item) => (
                         <li key={item.id} className="px-4 py-3">
@@ -244,7 +244,7 @@ export function ShoppingListDrawer({
               </div>
             )}
 
-            <p className="text-xs text-slate-400">{result.note}</p>
+            <p className="text-xs text-app-text opacity-80">{result.note}</p>
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { MealItemType } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getAiProvider, MockAiProvider, type EnrichedShoppingListResult, type ShoppingListInputItem } from './aiService.js';
-import { addUtcDays, parseDateParam, toDateKey } from '../utils/dates.js';
+import { parseValidatedDateRange, toDateKey } from '../utils/dates.js';
 import { formatGroceryDescription, isPoorGroceryDescription } from '../utils/groceryConversion.js';
 import { n, round } from '../utils/numbers.js';
 
@@ -39,17 +39,6 @@ const BASE_NOTE =
 const ENRICHED_NOTE =
   'Grocery amounts are AI estimates for typical packages. Adjust based on what you already have at home.';
 const STORE_NOTE = ' Aisle and section hints are approximate and can vary by store location.';
-
-function assertValidRange(startDate: string, endDate: string) {
-  const start = parseDateParam(startDate);
-  const end = parseDateParam(endDate);
-  if (start > end) throw new Error('Start date must be on or before end date.');
-
-  const maxEnd = addUtcDays(start, 31);
-  if (end > maxEnd) throw new Error('Date range cannot exceed 31 days.');
-
-  return { start, end };
-}
 
 function groupGroceryItems(items: GroceryListItem[], storeName: string | null): GroceryListSection[] {
   const useStoreLocations = Boolean(storeName?.trim()) && items.some((item) => item.storeLocation);
@@ -96,7 +85,7 @@ function mergeEnrichment(inputItems: ShoppingListInputItem[], enriched: Enriched
 }
 
 async function aggregatePlannedItems(userId: string, startDate: string, endDate: string) {
-  const { start, end } = assertValidRange(startDate, endDate);
+  const { start, end } = parseValidatedDateRange(startDate, endDate);
 
   const plannedItems = await prisma.mealItem.findMany({
     where: {

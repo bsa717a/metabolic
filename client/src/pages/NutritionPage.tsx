@@ -11,6 +11,7 @@ import { EditMealPlanDrawer } from '../components/nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
 import { MealBuilder, type MealCardsPayload } from '../components/nutrition/MealBuilder';
 import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
+import { MealPrepDrawer } from '../components/nutrition/MealPrepDrawer';
 import { NutritionTargetsDrawer } from '../components/nutrition/NutritionTargetsDrawer';
 import { PlanActionsMenu } from '../components/nutrition/PlanActionsMenu';
 import { DailyMealBuilderModal } from '../components/nutrition/DailyMealBuilderModal';
@@ -40,6 +41,7 @@ export function NutritionPage() {
   const [logActualMealId, setLogActualMealId] = useState<string>();
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
+  const [mealPrepOpen, setMealPrepOpen] = useState(false);
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [mealBuilderOpen, setMealBuilderOpen] = useState(false);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
@@ -252,6 +254,9 @@ export function NutritionPage() {
           onGroceryList={() =>
             canAccess('meal_planning') ? setShoppingListOpen(true) : setUpgradePrompt('meal_planning')
           }
+          onMealPrep={() =>
+            canAccess('meal_planning') ? setMealPrepOpen(true) : setUpgradePrompt('meal_planning')
+          }
           onAdjustTargets={() =>
             canAccess('personalized_targets') ? setTargetsOpen(true) : setUpgradePrompt('personalized_targets')
           }
@@ -363,6 +368,7 @@ export function NutritionPage() {
       />
 
       <ShoppingListDrawer open={shoppingListOpen} anchorDate={selectedDate} onClose={() => setShoppingListOpen(false)} />
+      <MealPrepDrawer open={mealPrepOpen} anchorDate={selectedDate} onClose={() => setMealPrepOpen(false)} />
 
       <NutritionTargetsDrawer
         open={targetsOpen}
