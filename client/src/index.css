@@ -274,12 +274,30 @@ body {
 
 button,
 input,
-textarea {
-  font: inherit;
+textarea,
+select {
+  font-family: inherit;
 }
 
-#root {
-  min-height: 100vh;
+.exercise-metric-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 2.5rem;
+  margin-top: 0.25rem;
+  padding: 0 0.25rem 0 0.625rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 2.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--app-text);
+}
+
+.exercise-metric-input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 0;
 }
 
 @keyframes badge-zoom-spin {
