@@ -139,6 +139,77 @@ export async function sendCoachRequestNotificationEmail(options: {
   }
 }
 
+export async function sendStoreOrderNotificationEmail(options: {
+  to: string;
+  orderId: string;
+  totalCents: number;
+  customerName: string;
+  customerEmail: string;
+  shippingName: string | null;
+  items: Array<{ name: string; quantity: number; priceCents: number }>;
+}) {
+  if (!isEmailConfigured()) {
+    throw new Error('Email is not configured.');
+  }
+
+  sgMail.setApiKey(env.SENDGRID_API_KEY);
+
+  const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const subject = `New store order — ${dollars(options.totalCents)} from ${options.customerName || options.customerEmail}`;
+
+  const itemLines = options.items.map(
+    (item) => `${item.quantity} × ${item.name} — ${dollars(item.priceCents * item.quantity)}`
+  );
+  const text = [
+    `New paid store order ${options.orderId}.`,
+    '',
+    `Customer: ${options.customerName} (${options.customerEmail})`,
+    options.shippingName ? `Ship to: ${options.shippingName} (address on the Stripe payment)` : null,
+    '',
+    ...itemLines,
+    '',
+    `Total: ${dollars(options.totalCents)}`,
+    '',
+    '— Master Metabolic'
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
+
+  const html = [
+    `<p>New paid store order <strong>${escapeHtml(options.orderId)}</strong>.</p>`,
+    `<p>Customer: ${escapeHtml(options.customerName)} (${escapeHtml(options.customerEmail)})</p>`,
+    options.shippingName ? `<p>Ship to: ${escapeHtml(options.shippingName)} (address on the Stripe payment)</p>` : '',
+    '<ul>',
+    ...options.items.map(
+      (item) => `<li>${item.quantity} × ${escapeHtml(item.name)} — ${dollars(item.priceCents * item.quantity)}</li>`
+    ),
+    '</ul>',
+    `<p><strong>Total: ${dollars(options.totalCents)}</strong></p>`,
+    '<p>— Master Metabolic</p>'
+  ].join('');
+
+  try {
+    await sgMail.send({
+      to: options.to,
+      from: {
+        email: env.SENDGRID_FROM_EMAIL,
+        name: env.SENDGRID_FROM_NAME
+      },
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    const detail =
+      error && typeof error === 'object' && 'response' in error
+        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
+        : error instanceof Error
+          ? error.message
+          : 'Unknown SendGrid error';
+    throw new Error(`Could not send store order email: ${detail.slice(0, 300)}`);
+  }
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll('&', '&amp;')

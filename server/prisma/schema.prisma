@@ -278,6 +278,8 @@ model User {
   smsNudgeLogs SmsNudgeLog[]
   virtualCoachCheckIns VirtualCoachCheckIn[]
   virtualCoachMemory VirtualCoachMemory?
+  storeCartItems StoreCartItem[]
+  storeOrders StoreOrder[]
   clientProfile ClientProfile?
   defaultNutritionTemplate NutritionPlanTemplate? @relation("CoachDefaultNutritionTemplate", fields: [defaultNutritionTemplateId], references: [id], onDelete: SetNull)
   defaultExerciseTemplate ExerciseTemplate? @relation("CoachDefaultExerciseTemplate", fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
@@ -1300,4 +1302,78 @@ model PlanPeriod {
   createdBy User? @relation("PlanPeriodCreator", fields: [createdById], references: [id], onDelete: SetNull)
   @@unique([programId, effectiveDate])
   @@index([programId, effectiveDate])
+}
+
+enum StoreProductCategory {
+  SUPPLEMENT
+  PROTEIN
+  EQUIPMENT
+  OTHER
+}
+
+enum StoreOrderStatus {
+  PENDING
+  PAID
+  FULFILLED
+  CANCELED
+}
+
+model StoreProduct {
+  id String @id @default(cuid())
+  name String
+  description String
+  imageUrl String?
+  category StoreProductCategory
+  priceCents Int
+  currency String @default("usd")
+  active Boolean @default(true)
+  sortOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cartItems StoreCartItem[]
+  orderItems StoreOrderItem[]
+  @@index([active, category, sortOrder])
+}
+
+model StoreCartItem {
+  id String @id @default(cuid())
+  userId String
+  productId String
+  quantity Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product StoreProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@unique([userId, productId])
+}
+
+model StoreOrder {
+  id String @id @default(cuid())
+  userId String
+  status StoreOrderStatus @default(PENDING)
+  totalCents Int
+  currency String @default("usd")
+  stripeCheckoutSessionId String? @unique
+  shippingName String?
+  shippingAddress Json?
+  paidAt DateTime?
+  cartClearedAt DateTime?
+  notificationSentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items StoreOrderItem[]
+  @@index([userId, status])
+}
+
+model StoreOrderItem {
+  id String @id @default(cuid())
+  orderId String
+  productId String?
+  /// Name and price frozen at checkout time so later catalog edits never rewrite history.
+  nameSnapshot String
+  priceCentsSnapshot Int
+  quantity Int
+  order StoreOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product StoreProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }

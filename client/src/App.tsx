@@ -36,6 +36,7 @@ import { ShoppingListExportPage } from './pages/export/ShoppingListExportPage';
 import { ProgressExportPage } from './pages/export/ProgressExportPage';
 import { PricingPage } from './pages/PricingPage';
 import { UpgradePage } from './pages/UpgradePage';
+import { StorePage } from './pages/StorePage';
 import { isAdminRole, isCoachRole } from './utils/roles';
 
 function LoadingScreen() {
@@ -199,6 +200,7 @@ export default function App() {
           <Route path="progress/export" element={<ProgressExportPage />} />
           <Route element={<AppShell user={appUser} onTutorialComplete={setAppUser} />}>
             <Route path="upgrade" element={<UpgradePage user={appUser} />} />
+            <Route path="store" element={<StorePage user={appUser} />} />
             <Route index element={<DashboardPage user={appUser} />} />
             <Route path="program" element={<ProgramPage user={appUser} />} />
             <Route path="nutrition" element={<NutritionPage />} />

@@ -35,6 +35,9 @@ const envSchema = z.object({
   SENDGRID_FROM_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   SENDGRID_FROM_NAME: z.string().optional().default("Master Metabolic"),
   CLIENT_URL: z.string().url().default("http://localhost:5173"),
+  STRIPE_SECRET_KEY: z.string().optional().default(""),
+  STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
+  STORE_NOTIFY_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   CRON_SECRET: z.string().optional().default("")
 });
 

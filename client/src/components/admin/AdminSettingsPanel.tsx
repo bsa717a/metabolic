@@ -5,6 +5,8 @@ import { Card } from '../ui/Card';
 
 type AdminSettings = {
   coachRequestNotificationEmail: string | null;
+  storeEnabled: boolean;
+  storeOrderNotificationEmail: string | null;
 };
 
 function labelClassName() {
@@ -18,21 +20,27 @@ function inputClassName() {
 export function AdminSettingsPanel() {
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [email, setEmail] = useState('');
+  const [storeEnabled, setStoreEnabled] = useState(true);
+  const [storeEmail, setStoreEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    setLoading(true);
-    setError('');
-    api<AdminSettings>('/api/admin/settings')
-      .then((data) => {
-        setSettings(data);
-        setEmail(data.coachRequestNotificationEmail ?? '');
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load settings'))
-      .finally(() => setLoading(false));
+    queueMicrotask(() => {
+      setLoading(true);
+      setError('');
+      api<AdminSettings>('/api/admin/settings')
+        .then((data) => {
+          setSettings(data);
+          setEmail(data.coachRequestNotificationEmail ?? '');
+          setStoreEnabled(data.storeEnabled);
+          setStoreEmail(data.storeOrderNotificationEmail ?? '');
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load settings'))
+        .finally(() => setLoading(false));
+    });
   }, []);
 
   async function save() {
@@ -43,11 +51,15 @@ export function AdminSettingsPanel() {
       const saved = await api<AdminSettings>('/api/admin/settings', {
         method: 'PATCH',
         body: JSON.stringify({
-          coachRequestNotificationEmail: email.trim() ? email.trim() : null
+          coachRequestNotificationEmail: email.trim() ? email.trim() : null,
+          storeEnabled,
+          storeOrderNotificationEmail: storeEmail.trim() ? storeEmail.trim() : null
         })
       });
       setSettings(saved);
       setEmail(saved.coachRequestNotificationEmail ?? '');
+      setStoreEnabled(saved.storeEnabled);
+      setStoreEmail(saved.storeOrderNotificationEmail ?? '');
       setMessage('Settings saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
@@ -80,6 +92,33 @@ export function AdminSettingsPanel() {
           <span className="mt-1 block text-xs text-app-text-muted">
             Sends when a user checks &quot;I&apos;d like to work with a real coach&quot; during setup and no coach is
             matched.
+          </span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={storeEnabled}
+            onChange={(event) => setStoreEnabled(event.target.checked)}
+            className="h-4 w-4 rounded border-app-border accent-brand-green"
+          />
+          <span className="text-sm font-medium text-app-text">Store enabled</span>
+        </label>
+        <span className="-mt-3 block text-xs text-app-text-muted">
+          When off, the Store menu item is hidden and store APIs are unavailable.
+        </span>
+
+        <label className="block">
+          <span className={labelClassName()}>Store order notification email</span>
+          <input
+            className={inputClassName()}
+            type="email"
+            value={storeEmail}
+            onChange={(event) => setStoreEmail(event.target.value)}
+            placeholder="orders@example.com"
+          />
+          <span className="mt-1 block text-xs text-app-text-muted">
+            Receives an email for every paid store order (for fulfillment).
           </span>
         </label>
 

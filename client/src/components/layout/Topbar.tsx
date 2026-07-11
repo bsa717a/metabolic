@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LineChart, LogOut, Moon, Settings, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LineChart, LogOut, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -84,8 +84,10 @@ export function Topbar({ user }: { user?: AppUser | null }) {
 
   // Close mobile menu and profile dropdown on route change
   useEffect(() => {
-    setMobileMenuOpen(false);
-    setProfileOpen(false);
+    queueMicrotask(() => {
+      setMobileMenuOpen(false);
+      setProfileOpen(false);
+    });
   }, [location.pathname]);
 
   // Close mobile menu on Escape
@@ -241,6 +243,16 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                       navigate('/upgrade');
                     }}
                   />
+                  {user.storeEnabled !== false ? (
+                    <ProfileMenuItem
+                      label="Store"
+                      icon={ShoppingBag}
+                      onClick={() => {
+                        closeProfileMenu();
+                        navigate('/store');
+                      }}
+                    />
+                  ) : null}
                   <ProfileMenuItem
                     label="Account details"
                     icon={UserRound}

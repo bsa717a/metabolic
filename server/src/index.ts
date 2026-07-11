@@ -24,6 +24,8 @@ import { internalRoutes } from './routes/internalRoutes.js';
 import { tutorialRoutes } from './routes/tutorialRoutes.js';
 import { virtualCoachRoutes } from './routes/virtualCoachRoutes.js';
 import { billingRoutes } from './routes/billingRoutes.js';
+import { storeRoutes } from './routes/storeRoutes.js';
+import { storeWebhookRoutes } from './routes/storeWebhookRoutes.js';
 
 async function main() {
   const app = Fastify({ logger: true, bodyLimit: 16 * 1024 * 1024 });
@@ -61,6 +63,8 @@ async function main() {
   await app.register(tutorialRoutes);
   await app.register(virtualCoachRoutes);
   await app.register(billingRoutes);
+  await app.register(storeRoutes);
+  await app.register(storeWebhookRoutes);
   await app.register(internalRoutes);
 
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {
