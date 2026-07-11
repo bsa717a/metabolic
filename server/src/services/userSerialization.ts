@@ -1,7 +1,7 @@
 import { CoachRelationshipStatus, type User } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { planToSlug } from './entitlements.js';
-import { getStoreEnabled } from './appSettings.js';
+import { getStoreEnabled, getFeedbackWidgetEnabled } from './appSettings.js';
 
 type UserWithCoach = User & {
   userAssignments?: Array<{
@@ -27,9 +27,11 @@ export async function loadActiveCoachAssignment(userId: string) {
 export async function serializeAppUser(user: User) {
   const assignment = await loadActiveCoachAssignment(user.id);
   const storeEnabled = await getStoreEnabled(prisma);
+  const feedbackEnabled = await getFeedbackWidgetEnabled(prisma);
 
   return {
     storeEnabled,
+    feedbackEnabled,
     id: user.id,
     email: user.email,
     firstName: user.firstName,

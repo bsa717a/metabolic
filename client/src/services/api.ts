@@ -1,4 +1,5 @@
 import { getIdToken } from './auth';
+import { recordFailedRequest } from './diagnostics';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -44,6 +45,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new Error(message);
   }
   if (!response.ok) {
+    recordFailedRequest(method, path, response.status);
     const payload = await response.json().catch(() => null);
     if (response.status === 402 && payload?.requiredPlan) {
       throw new EntitlementError(payload as EntitlementErrorPayload);
@@ -73,6 +75,7 @@ export async function apiBlob(path: string): Promise<Blob> {
     throw new Error(message);
   }
   if (!response.ok) {
+    recordFailedRequest('GET', path, response.status);
     const payload = await response.json().catch(() => null);
     throw new Error(payload?.error ?? payload?.message ?? response.statusText);
   }

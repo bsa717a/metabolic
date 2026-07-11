@@ -27,6 +27,8 @@ import { billingRoutes } from './routes/billingRoutes.js';
 import { storeRoutes } from './routes/storeRoutes.js';
 import { storeAdminRoutes } from './routes/storeAdminRoutes.js';
 import { storeWebhookRoutes } from './routes/storeWebhookRoutes.js';
+import { feedbackRoutes } from './routes/feedbackRoutes.js';
+import { feedbackAdminRoutes } from './routes/feedbackAdminRoutes.js';
 
 async function main() {
   const app = Fastify({ logger: true, bodyLimit: 16 * 1024 * 1024 });
@@ -44,7 +46,7 @@ async function main() {
     }
   });
 
-  app.get('/health', async () => ({ ok: true, service: 'metabolic-api' }));
+  app.get('/health', async () => ({ ok: true, service: 'metabolic-api', version: env.GIT_SHA }));
   await app.register(authRoutes);
   await app.register(dashboardRoutes);
   await app.register(programRoutes);
@@ -67,6 +69,8 @@ async function main() {
   await app.register(storeRoutes);
   await app.register(storeAdminRoutes);
   await app.register(storeWebhookRoutes);
+  await app.register(feedbackRoutes);
+  await app.register(feedbackAdminRoutes);
   await app.register(internalRoutes);
 
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

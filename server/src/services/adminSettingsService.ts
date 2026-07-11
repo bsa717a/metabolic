@@ -2,7 +2,9 @@ import { prisma } from '../db/prisma.js';
 import {
   COACH_REQUEST_NOTIFICATION_EMAIL_KEY,
   STORE_ENABLED_KEY,
-  STORE_ORDER_NOTIFICATION_EMAIL_KEY
+  STORE_ORDER_NOTIFICATION_EMAIL_KEY,
+  FEEDBACK_WIDGET_ENABLED_KEY,
+  FEEDBACK_NOTIFICATION_EMAIL_KEY
 } from './appSettings.js';
 
 function isValidEmail(value: string) {
@@ -19,14 +21,26 @@ async function upsertOrClear(key: string, value: string | null) {
 
 export async function getAdminSettings() {
   const settings = await prisma.appSetting.findMany({
-    where: { key: { in: [COACH_REQUEST_NOTIFICATION_EMAIL_KEY, STORE_ENABLED_KEY, STORE_ORDER_NOTIFICATION_EMAIL_KEY] } }
+    where: {
+      key: {
+        in: [
+          COACH_REQUEST_NOTIFICATION_EMAIL_KEY,
+          STORE_ENABLED_KEY,
+          STORE_ORDER_NOTIFICATION_EMAIL_KEY,
+          FEEDBACK_WIDGET_ENABLED_KEY,
+          FEEDBACK_NOTIFICATION_EMAIL_KEY
+        ]
+      }
+    }
   });
   const byKey = new Map(settings.map((setting) => [setting.key, setting.value]));
 
   return {
     coachRequestNotificationEmail: byKey.get(COACH_REQUEST_NOTIFICATION_EMAIL_KEY) ?? null,
     storeEnabled: byKey.get(STORE_ENABLED_KEY) !== 'false',
-    storeOrderNotificationEmail: byKey.get(STORE_ORDER_NOTIFICATION_EMAIL_KEY) ?? null
+    storeOrderNotificationEmail: byKey.get(STORE_ORDER_NOTIFICATION_EMAIL_KEY) ?? null,
+    feedbackWidgetEnabled: byKey.get(FEEDBACK_WIDGET_ENABLED_KEY) !== 'false',
+    feedbackNotificationEmail: byKey.get(FEEDBACK_NOTIFICATION_EMAIL_KEY) ?? null
   };
 }
 
@@ -34,6 +48,8 @@ export async function updateAdminSettings(input: {
   coachRequestNotificationEmail?: string | null;
   storeEnabled?: boolean;
   storeOrderNotificationEmail?: string | null;
+  feedbackWidgetEnabled?: boolean;
+  feedbackNotificationEmail?: string | null;
 }) {
   if (input.coachRequestNotificationEmail !== undefined) {
     const value = input.coachRequestNotificationEmail?.trim() || null;
@@ -54,6 +70,18 @@ export async function updateAdminSettings(input: {
       throw new Error('Enter a valid store notification email.');
     }
     await upsertOrClear(STORE_ORDER_NOTIFICATION_EMAIL_KEY, value);
+  }
+
+  if (input.feedbackWidgetEnabled !== undefined) {
+    await upsertOrClear(FEEDBACK_WIDGET_ENABLED_KEY, input.feedbackWidgetEnabled ? null : 'false');
+  }
+
+  if (input.feedbackNotificationEmail !== undefined) {
+    const value = input.feedbackNotificationEmail?.trim() || null;
+    if (value && !isValidEmail(value)) {
+      throw new Error('Enter a valid feedback notification email.');
+    }
+    await upsertOrClear(FEEDBACK_NOTIFICATION_EMAIL_KEY, value);
   }
 
   return getAdminSettings();

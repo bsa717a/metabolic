@@ -38,6 +38,7 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   STORE_NOTIFY_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
+  GIT_SHA: z.string().optional().default("dev"),
   CRON_SECRET: z.string().optional().default("")
 });
 

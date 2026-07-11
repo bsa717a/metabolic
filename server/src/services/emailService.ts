@@ -210,6 +210,75 @@ export async function sendStoreOrderNotificationEmail(options: {
   }
 }
 
+async function sendSimpleEmail(to: string, subject: string, lines: string[]) {
+  if (!isEmailConfigured()) throw new Error('Email is not configured.');
+  sgMail.setApiKey(env.SENDGRID_API_KEY);
+  const text = lines.join('\n');
+  const html = lines.map((line) => (line ? `<p>${escapeHtml(line)}</p>` : '<br />')).join('');
+  try {
+    await sgMail.send({
+      to,
+      from: { email: env.SENDGRID_FROM_EMAIL, name: env.SENDGRID_FROM_NAME },
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    const detail =
+      error && typeof error === 'object' && 'response' in error
+        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
+        : error instanceof Error
+          ? error.message
+          : 'Unknown SendGrid error';
+    throw new Error(`Could not send email: ${detail.slice(0, 300)}`);
+  }
+}
+
+/** Immediate alert to the team for a blocking / error-heavy feedback report. */
+export async function sendFeedbackAlertEmail(options: {
+  to: string;
+  reference: string;
+  reason: string;
+  type: string;
+  reporterName: string;
+  screenLabel: string;
+  detail: string;
+}) {
+  await sendSimpleEmail(options.to, `Feedback ${options.reference}: ${options.reason}`, [
+    `${options.reference} — ${options.type} (${options.reason})`,
+    `From: ${options.reporterName} · Screen: ${options.screenLabel}`,
+    '',
+    options.detail,
+    '',
+    'Open the Admin → Feedback queue to triage.'
+  ]);
+}
+
+/** Notify the reporter that we need more info or their report is resolved. */
+export async function sendFeedbackTesterEmail(options: {
+  to: string;
+  reference: string;
+  reason: 'need_info' | 'resolved';
+  message: string;
+}) {
+  const subject =
+    options.reason === 'resolved'
+      ? `Your feedback ${options.reference} is resolved`
+      : `We need a bit more on your feedback ${options.reference}`;
+  await sendSimpleEmail(options.to, subject, [
+    `Thanks for your report ${options.reference}.`,
+    '',
+    options.message,
+    '',
+    '— The Metabolic team'
+  ]);
+}
+
+/** Periodic digest of open feedback for the team. */
+export async function sendFeedbackDigestEmail(options: { to: string; subject: string; lines: string[] }) {
+  await sendSimpleEmail(options.to, options.subject, options.lines);
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll('&', '&amp;')

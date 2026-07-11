@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { env } from '../config/env.js';
 import { runSmsReminderTick } from '../services/smsReminderService.js';
 import { processGracePeriodExpirations } from '../services/coachLedService.js';
+import { runFeedbackDigestTick } from '../services/feedbackNotificationService.js';
 
 function isAuthorizedCronRequest(headerValue: unknown) {
   if (!env.CRON_SECRET) return false;
@@ -30,6 +31,18 @@ export async function internalRoutes(app: FastifyInstance) {
     }
     const result = await processGracePeriodExpirations();
     request.log.info({ coachLedTick: result }, 'coach-led grace period tick');
+    return reply.send(result);
+  });
+
+  app.post('/api/internal/feedback/digest', async (request, reply) => {
+    if (!env.CRON_SECRET) {
+      return reply.code(503).send({ error: 'CRON_SECRET is not configured' });
+    }
+    if (!isAuthorizedCronRequest(request.headers['x-cron-secret'])) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const result = await runFeedbackDigestTick();
+    request.log.info({ feedbackDigest: result }, 'feedback digest tick');
     return reply.send(result);
   });
 }

@@ -31,6 +31,7 @@ export type AppUser = {
   assignedCoach?: UserSummary | null;
   coachRelationshipStatus?: CoachRelationshipStatusSlug | null;
   storeEnabled?: boolean;
+  feedbackEnabled?: boolean;
 };
 export type StoreProductCategory = 'SUPPLEMENT' | 'PROTEIN' | 'EQUIPMENT' | 'OTHER';
 export type StoreProduct = {
@@ -67,6 +68,49 @@ export type AdminStoreProduct = StoreProduct & {
   createdAt: string;
   updatedAt: string;
 };
+export type FeedbackType = 'BUG' | 'CONFUSING' | 'IDEA';
+export type FeedbackStatus = 'NEW' | 'REVIEWING' | 'PLANNED' | 'RESOLVED' | 'CLOSED' | 'DUPLICATE' | 'CANNOT_REPRODUCE';
+export type FeedbackSeverity = 'BLOCKING' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type FeedbackListRow = {
+  id: string;
+  reference: string;
+  type: FeedbackType;
+  status: FeedbackStatus;
+  blocking: boolean;
+  severity: FeedbackSeverity | null;
+  shortDescription: string;
+  reporterName: string;
+  reporterEmail: string;
+  accountType: string;
+  route: string;
+  screenLabel: string | null;
+  appVersion: string | null;
+  createdAt: string;
+  assignedTo: { id: string; name: string } | null;
+  hasDiagnostics: boolean;
+};
+export type FeedbackListResult = {
+  reports: FeedbackListRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+export type FeedbackDetail = FeedbackListRow & {
+  goal: string;
+  detail: string;
+  resolutionNote: string | null;
+  externalRef: string | null;
+  userId: string | null;
+  diagnostics: Record<string, unknown> | null;
+  diagnosticsPurgedAt: string | null;
+  duplicateOf: { id: string; reference: string } | null;
+  duplicates: Array<{ id: string; reference: string }>;
+  notes: Array<{ id: string; body: string; author: string | null; createdAt: string }>;
+  events: Array<{ id: string; kind: string; detail: unknown; actor: string | null; createdAt: string }>;
+  similar: FeedbackListRow[];
+};
+export type FeedbackAssignee = { id: string; name: string };
 export type AdminStoreOrder = {
   id: string;
   status: StoreOrderStatus;
