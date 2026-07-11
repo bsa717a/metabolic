@@ -25,12 +25,12 @@ export function AdminCard({ title, description, selected, onClick }: Props) {
           : undefined
       }
       className={clsx(
-        onClick && 'cursor-pointer transition hover:border-slate-300 hover:bg-slate-50',
-        selected && 'border-slate-900 ring-1 ring-slate-900'
+        onClick && 'cursor-pointer transition hover:border-app-border hover:bg-app-muted',
+        selected && 'border-brand-green ring-1 ring-brand-green'
       )}
     >
-      <h3 className="text-lg font-bold">{title}</h3>
-      <p className="mt-2 text-sm text-slate-500">{description}</p>
+      <h3 className="text-lg font-bold text-app-text">{title}</h3>
+      <p className="mt-2 text-sm text-app-text-muted">{description}</p>
     </Card>
   );
 }

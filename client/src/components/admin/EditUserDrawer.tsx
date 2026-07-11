@@ -69,11 +69,11 @@ function toServerSubscriptionStatus(status: SubscriptionStatusSlug) {
 }
 
 function labelClassName() {
-  return 'mb-1 block text-sm font-medium text-slate-600';
+  return 'mb-1 block text-sm font-medium text-app-text-muted';
 }
 
 function inputClassName() {
-  return 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
+  return 'w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm text-app-text outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
 }
 
 export function EditUserDrawer({
@@ -135,22 +135,24 @@ function EditUserDrawerContent({
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setLoadingProfile(true);
-    setProfileLoadError('');
-    setProfileLoaded(false);
-    api<UserAccountDetails>(`/api/users/${user.id}/profile`)
-      .then((details) => {
-        setProfileDraft(profileToDraft(details));
-        setTimezone(details.timezone ?? '');
-        setSmsMealRemindersEnabled(details.smsMealRemindersEnabled ?? details.smsRemindersEnabled ?? true);
-        setSmsEveningRecapEnabled(details.smsEveningRecapEnabled ?? details.smsRemindersEnabled ?? true);
-        setCanEditClientNotes(details.canEditClientNotes);
-        setProfileLoaded(true);
-      })
-      .catch((err) => {
-        setProfileLoadError(err instanceof Error ? err.message : 'Unable to load health profile');
-      })
-      .finally(() => setLoadingProfile(false));
+    queueMicrotask(() => {
+      setLoadingProfile(true);
+      setProfileLoadError('');
+      setProfileLoaded(false);
+      api<UserAccountDetails>(`/api/users/${user.id}/profile`)
+        .then((details) => {
+          setProfileDraft(profileToDraft(details));
+          setTimezone(details.timezone ?? '');
+          setSmsMealRemindersEnabled(details.smsMealRemindersEnabled ?? details.smsRemindersEnabled ?? true);
+          setSmsEveningRecapEnabled(details.smsEveningRecapEnabled ?? details.smsRemindersEnabled ?? true);
+          setCanEditClientNotes(details.canEditClientNotes);
+          setProfileLoaded(true);
+        })
+        .catch((err) => {
+          setProfileLoadError(err instanceof Error ? err.message : 'Unable to load health profile');
+        })
+        .finally(() => setLoadingProfile(false));
+    });
   }, [user.id]);
 
   function updateDraft<K extends keyof UserDraft>(field: K, value: UserDraft[K]) {
@@ -260,7 +262,7 @@ function EditUserDrawerContent({
       }
     >
     <div className="space-y-6">
-      <p className="text-sm text-slate-500">Update account details for {user.email}.</p>
+      <p className="text-sm text-app-text-muted">Update account details for {user.email}.</p>
 
       <div className="space-y-4">
         <label className="block">
@@ -342,7 +344,7 @@ function EditUserDrawerContent({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-app-text-muted">
             Set plan to Coach-Led and pick a coach, then save to assign coach-led access.
           </p>
         </label>
@@ -390,34 +392,34 @@ function EditUserDrawerContent({
               </option>
             ))}
           </select>
-          <span className="mt-1 block text-xs text-slate-500">
+          <span className="mt-1 block text-xs text-app-text-muted">
             Used to time reminder texts. Reminders are skipped until this is set.
           </span>
         </label>
 
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-800">Text reminders</p>
+        <div className="space-y-3 rounded-xl border border-app-border bg-app-muted p-4">
+          <p className="text-sm font-semibold text-app-text">Text reminders</p>
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200"
+              className="mt-1 h-4 w-4 rounded border-app-border text-blue-500 focus:ring-blue-200"
               checked={smsMealRemindersEnabled}
               disabled={loadingProfile || !profileLoaded}
               onChange={(event) => setSmsMealRemindersEnabled(event.target.checked)}
             />
-            <span className="text-sm text-slate-600">
+            <span className="text-sm text-app-text-muted">
               Text before planned meals (up to 30 minutes ahead, once per meal).
             </span>
           </label>
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200"
+              className="mt-1 h-4 w-4 rounded border-app-border text-blue-500 focus:ring-blue-200"
               checked={smsEveningRecapEnabled}
               disabled={loadingProfile || !profileLoaded}
               onChange={(event) => setSmsEveningRecapEnabled(event.target.checked)}
             />
-            <span className="text-sm text-slate-600">
+            <span className="text-sm text-app-text-muted">
               Short evening check-in around 8:00 PM.
             </span>
           </label>
@@ -425,7 +427,7 @@ function EditUserDrawerContent({
       </div>
 
       {loadingProfile ? (
-        <p className="text-sm text-slate-500">Loading health profile…</p>
+        <p className="text-sm text-app-text-muted">Loading health profile…</p>
       ) : profileLoadError ? (
         <p className="text-sm text-amber-700">
           {profileLoadError} Account fields can still be saved, but health profile changes are unavailable until it loads.

@@ -34,11 +34,11 @@ function toDraft(exercise: AdminExercise): ExerciseDraft {
 }
 
 function labelClassName() {
-  return 'mb-1 block text-sm font-medium text-slate-600';
+  return 'mb-1 block text-sm font-medium text-app-text-muted';
 }
 
 function inputClassName() {
-  return 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
+  return 'w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm text-app-text outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
 }
 
 function parseOptionalInt(value: string, label: string) {
@@ -172,7 +172,7 @@ function EditExerciseDrawerContent({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">Update exercise details, how-to video, and default prescription values.</p>
+      <p className="text-sm text-app-text-muted">Update exercise details, how-to video, and default prescription values.</p>
 
       <label className="block">
         <span className={labelClassName()}>Name</span>
@@ -213,11 +213,11 @@ function EditExerciseDrawerContent({
         />
       </label>
 
-      <div className="rounded-2xl border border-slate-200 p-4">
+      <div className="rounded-2xl border border-app-border p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-medium text-slate-700">How-to video</p>
-            <p className="text-xs text-slate-500">MP4, WebM, or MOV up to 100 MB.</p>
+            <p className="text-sm font-medium text-app-text">How-to video</p>
+            <p className="text-xs text-app-text-muted">MP4, WebM, or MOV up to 100 MB.</p>
           </div>
           {(previewVideoUrl || pendingVideoFile) && (
             <button
@@ -236,10 +236,10 @@ function EditExerciseDrawerContent({
             Your browser does not support video playback.
           </video>
         ) : (
-          <p className="mb-3 text-sm text-slate-500">No how-to video uploaded yet.</p>
+          <p className="mb-3 text-sm text-app-text-muted">No how-to video uploaded yet.</p>
         )}
 
-        <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        <label className="inline-flex cursor-pointer items-center rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2 text-sm font-medium text-app-text hover:bg-app-muted">
           {previewVideoUrl ? 'Replace video' : 'Upload video'}
           <input
             type="file"
@@ -253,7 +253,7 @@ function EditExerciseDrawerContent({
             }}
           />
         </label>
-        {pendingVideoFile && <p className="mt-2 text-xs text-slate-500">Selected: {pendingVideoFile.name}</p>}
+        {pendingVideoFile && <p className="mt-2 text-xs text-app-text-muted">Selected: {pendingVideoFile.name}</p>}
       </div>
 
       <div className="grid grid-cols-2 gap-3">

@@ -49,11 +49,11 @@ function toSummary(template: ExercisePlanTemplate): ExercisePlanTemplateSummary 
 }
 
 function labelClassName() {
-  return 'mb-1 block text-sm font-medium text-slate-600';
+  return 'mb-1 block text-sm font-medium text-app-text-muted';
 }
 
 function inputClassName() {
-  return 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
+  return 'w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm text-app-text outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
 }
 
 export function EditExerciseTemplateDrawer({
@@ -70,7 +70,7 @@ export function EditExerciseTemplateDrawer({
   const [title, setTitle] = useState('Exercise plan');
 
   useEffect(() => {
-    if (!open) setTitle('Exercise plan');
+    if (!open) queueMicrotask(() => setTitle('Exercise plan'));
   }, [open]);
 
   return (
@@ -152,13 +152,13 @@ function EditExerciseTemplateDrawerContent({
     }
   }, [onTitleChange, templateId]);
 
-  async function reloadAndNotify() {
+  const reloadAndNotify = useCallback(async () => {
     const data = await load();
     if (data) notifySaved(data);
-  }
+  }, [load, notifySaved]);
 
   useEffect(() => {
-    void load();
+    queueMicrotask(() => void load());
   }, [load]);
 
   useEffect(() => {
@@ -208,7 +208,7 @@ function EditExerciseTemplateDrawerContent({
       window.removeEventListener('pointerup', finishDrag);
       window.removeEventListener('pointercancel', finishDrag);
     };
-  }, [activeId, load, templateId]);
+  }, [activeId, reloadAndNotify, templateId]);
 
   async function saveMetadata() {
     setSaving(true);
@@ -247,7 +247,7 @@ function EditExerciseTemplateDrawerContent({
     .filter((item): item is ExerciseTemplateItem => Boolean(item));
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Loading plan…</p>;
+    return <p className="text-sm text-app-text-muted">Loading plan…</p>;
   }
 
   if (!template) {
@@ -272,7 +272,7 @@ function EditExerciseTemplateDrawerContent({
       )}
 
       <section className="space-y-4">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Plan details</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wide text-app-text-muted">Plan details</h3>
         <label className="block text-sm">
           <span className={labelClassName()}>Name</span>
           <input
@@ -309,8 +309,8 @@ function EditExerciseTemplateDrawerContent({
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Planned exercises</h3>
-            <p className="text-sm text-slate-500">{orderedItems.length} exercises</p>
+            <h3 className="text-sm font-bold uppercase tracking-wide text-app-text-muted">Planned exercises</h3>
+            <p className="text-sm text-app-text-muted">{orderedItems.length} exercises</p>
           </div>
           <Button type="button" onClick={() => setAddOpen(true)}>
             <Plus className="mr-1 inline h-4 w-4" />
@@ -319,7 +319,7 @@ function EditExerciseTemplateDrawerContent({
         </div>
 
         {orderedItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-text-muted">
             No exercises yet. Add one to build this plan.
           </div>
         ) : (
@@ -331,8 +331,8 @@ function EditExerciseTemplateDrawerContent({
                   if (node) rowRefs.current.set(item.id, node);
                   else rowRefs.current.delete(item.id);
                 }}
-                className={`flex items-stretch gap-1 rounded-2xl border bg-white py-3 pl-1 pr-3 ${
-                  activeId === item.id ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200'
+                className={`flex items-stretch gap-1 rounded-2xl border bg-app-surface py-3 pl-1 pr-3 ${
+                  activeId === item.id ? 'border-blue-400 ring-2 ring-blue-100' : 'border-app-border'
                 }`}
               >
                 <div
@@ -340,7 +340,7 @@ function EditExerciseTemplateDrawerContent({
                   tabIndex={0}
                   aria-label={`Reorder ${item.exercise.name}`}
                   title="Drag to reorder"
-                  className="flex shrink-0 touch-none cursor-grab items-center self-stretch rounded-lg px-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600 active:cursor-grabbing"
+                  className="flex shrink-0 touch-none cursor-grab items-center self-stretch rounded-lg px-1 text-app-text-muted hover:bg-app-muted hover:text-app-text-muted active:cursor-grabbing"
                   onPointerDown={(event) => {
                     if (event.button !== 0) return;
                     event.preventDefault();
@@ -354,11 +354,11 @@ function EditExerciseTemplateDrawerContent({
                 <div className={`min-w-0 flex-1 px-1 ${activeId ? 'pointer-events-none select-none' : ''}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900">{item.exercise.name}</p>
+                      <p className="truncate font-semibold text-app-text">{item.exercise.name}</p>
                       {item.exercise.bodyPart && (
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{item.exercise.bodyPart}</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">{item.exercise.bodyPart}</p>
                       )}
-                      <p className="mt-1 text-sm text-slate-500">{formatPlan(item)}</p>
+                      <p className="mt-1 text-sm text-app-text-muted">{formatPlan(item)}</p>
                     </div>
                     <div className="flex shrink-0 gap-1">
                       <button

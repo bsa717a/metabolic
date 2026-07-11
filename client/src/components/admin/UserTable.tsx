@@ -67,7 +67,7 @@ function SortableHeader({
         type="button"
         onClick={() => onSort(sortKey)}
         className={`inline-flex items-center gap-1 transition ${
-          active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
+          active ? 'text-app-text' : 'text-app-text-muted hover:text-app-text'
         }`}
       >
         <span>{label}</span>
@@ -88,7 +88,7 @@ function formatDate(value: string) {
 function statusClass(status: AdminUser['status']) {
   if (status === 'ACTIVE') return 'bg-emerald-50 text-emerald-700';
   if (status === 'INVITED') return 'bg-amber-50 text-amber-700';
-  return 'bg-slate-100 text-slate-600';
+  return 'bg-app-muted text-app-text-muted';
 }
 
 export function UserTable() {
@@ -147,7 +147,7 @@ export function UserTable() {
   }, []);
 
   useEffect(() => {
-    void loadUsers();
+    queueMicrotask(() => void loadUsers());
   }, [loadUsers]);
 
   function handleSaved(updated: AdminUser) {
@@ -160,7 +160,7 @@ export function UserTable() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Users</h2>
-            <p className="text-sm text-slate-500">Click a row to edit account details.</p>
+            <p className="text-sm text-app-text-muted">Click a row to edit account details.</p>
           </div>
           {!loading && !error && (
             <input
@@ -168,16 +168,16 @@ export function UserTable() {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search users…"
-              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:flex-none sm:w-56"
+              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-app-border bg-app-surface px-3 text-sm text-app-text sm:flex-none sm:w-56"
               aria-label="Search users"
             />
           )}
-          <span className="ml-auto shrink-0 text-sm text-slate-500">
+          <span className="ml-auto shrink-0 text-sm text-app-text-muted">
             {searchQuery.trim() ? `${visibleUsers.length} of ${users.length}` : `${users.length} total`}
           </span>
         </div>
 
-        {loading && <p className="text-sm text-slate-500">Loading users...</p>}
+        {loading && <p className="text-sm text-app-text-muted">Loading users...</p>}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{error}</p>
@@ -193,7 +193,7 @@ export function UserTable() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
+                <tr className="border-b border-app-border text-app-text-muted">
                   <SortableHeader
                     label="Name"
                     sortKey="name"
@@ -249,16 +249,16 @@ export function UserTable() {
                           setSelectedUserId(user.id);
                         }
                       }}
-                      className={`cursor-pointer border-b border-slate-100 transition last:border-0 ${
-                        selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-slate-50'
+                      className={`cursor-pointer border-b border-app-border transition last:border-0 ${
+                        selected ? 'bg-brand-green/10 ring-1 ring-inset ring-brand-green/40' : 'hover:bg-app-muted'
                       }`}
                     >
                       <td className="py-3 pr-4 font-semibold">{userName(user)}</td>
-                      <td className="py-3 pr-4 text-slate-600">{user.email}</td>
-                      <td className="py-3 pr-4 text-slate-600">{formatRole(user.role)}</td>
-                      <td className="py-3 pr-4 text-slate-600">{planLabel(user.plan ?? 'starter')}</td>
-                      <td className="py-3 pr-4 text-slate-600">{coachLabel(user) || '—'}</td>
-                      <td className="py-3 pr-4 text-slate-600">
+                      <td className="py-3 pr-4 text-app-text-muted">{user.email}</td>
+                      <td className="py-3 pr-4 text-app-text-muted">{formatRole(user.role)}</td>
+                      <td className="py-3 pr-4 text-app-text-muted">{planLabel(user.plan ?? 'starter')}</td>
+                      <td className="py-3 pr-4 text-app-text-muted">{coachLabel(user) || '—'}</td>
+                      <td className="py-3 pr-4 text-app-text-muted">
                         {user.coachRequestedAt && !user.assignedCoach ? 'Coach requested' : '—'}
                       </td>
                       <td className="py-3 pr-4">
@@ -266,16 +266,16 @@ export function UserTable() {
                           {user.status}
                         </span>
                       </td>
-                      <td className="py-3 pr-4 text-slate-600">{user.phone ?? '—'}</td>
-                      <td className="py-3 text-slate-600">{formatDate(user.createdAt)}</td>
+                      <td className="py-3 pr-4 text-app-text-muted">{user.phone ?? '—'}</td>
+                      <td className="py-3 text-app-text-muted">{formatDate(user.createdAt)}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            {users.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No users found.</p>}
+            {users.length === 0 && <p className="py-6 text-center text-sm text-app-text-muted">No users found.</p>}
             {users.length > 0 && visibleUsers.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-500">No users match your search.</p>
+              <p className="py-6 text-center text-sm text-app-text-muted">No users match your search.</p>
             )}
           </div>
         )}

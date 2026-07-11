@@ -39,22 +39,24 @@ export function EditTemplateExerciseDrawer({
 
   useEffect(() => {
     if (!open) return;
-    setError('');
-    if (item) {
+    queueMicrotask(() => {
+      setError('');
+      if (item) {
+        setSelected(null);
+        setQuery('');
+        setSets(toInput(item.sets));
+        setReps(toInput(item.reps));
+        setDurationMinutes(toInput(item.durationMinutes));
+        setWeight(toInput(item.weight));
+        return;
+      }
       setSelected(null);
       setQuery('');
-      setSets(toInput(item.sets));
-      setReps(toInput(item.reps));
-      setDurationMinutes(toInput(item.durationMinutes));
-      setWeight(toInput(item.weight));
-      return;
-    }
-    setSelected(null);
-    setQuery('');
-    setSets('');
-    setReps('');
-    setDurationMinutes('');
-    setWeight('');
+      setSets('');
+      setReps('');
+      setDurationMinutes('');
+      setWeight('');
+    });
   }, [open, item]);
 
   function selectExercise(exercise: ExerciseCatalogItem) {
@@ -111,7 +113,7 @@ export function EditTemplateExerciseDrawer({
         {!isEdit && (
           <>
             <input
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2 text-sm"
               placeholder="Search exercises…"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -122,58 +124,58 @@ export function EditTemplateExerciseDrawer({
                   <button
                     type="button"
                     className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
-                      selected?.id === exercise.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
+                      selected?.id === exercise.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-app-muted'
                     }`}
                     onClick={() => selectExercise(exercise)}
                   >
                     <span className="font-medium">{exercise.name}</span>
-                    {exercise.bodyPart && <span className="ml-2 text-xs uppercase text-slate-400">{exercise.bodyPart}</span>}
+                    {exercise.bodyPart && <span className="ml-2 text-xs uppercase text-app-text-muted">{exercise.bodyPart}</span>}
                   </button>
                 </li>
               ))}
-              {!filtered.length && <li className="px-3 py-2 text-sm text-slate-500">No exercises found.</li>}
+              {!filtered.length && <li className="px-3 py-2 text-sm text-app-text-muted">No exercises found.</li>}
             </ul>
           </>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Sets</span>
+            <span className="mb-1 block font-medium text-app-text">Sets</span>
             <input
               type="number"
               min={0}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={sets}
               onChange={(event) => setSets(event.target.value)}
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Reps</span>
+            <span className="mb-1 block font-medium text-app-text">Reps</span>
             <input
               type="number"
               min={0}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={reps}
               onChange={(event) => setReps(event.target.value)}
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Duration (min)</span>
+            <span className="mb-1 block font-medium text-app-text">Duration (min)</span>
             <input
               type="number"
               min={0}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={durationMinutes}
               onChange={(event) => setDurationMinutes(event.target.value)}
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Weight (lbs)</span>
+            <span className="mb-1 block font-medium text-app-text">Weight (lbs)</span>
             <input
               type="number"
               min={0}
               step={0.5}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={weight}
               onChange={(event) => setWeight(event.target.value)}
             />
