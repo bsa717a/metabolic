@@ -25,6 +25,7 @@ import { tutorialRoutes } from './routes/tutorialRoutes.js';
 import { virtualCoachRoutes } from './routes/virtualCoachRoutes.js';
 import { billingRoutes } from './routes/billingRoutes.js';
 import { storeRoutes } from './routes/storeRoutes.js';
+import { storeAdminRoutes } from './routes/storeAdminRoutes.js';
 import { storeWebhookRoutes } from './routes/storeWebhookRoutes.js';
 
 async function main() {
@@ -64,6 +65,7 @@ async function main() {
   await app.register(virtualCoachRoutes);
   await app.register(billingRoutes);
   await app.register(storeRoutes);
+  await app.register(storeAdminRoutes);
   await app.register(storeWebhookRoutes);
   await app.register(internalRoutes);
 

@@ -10,6 +10,7 @@ import { AdminTargetsPanel } from '../components/admin/AdminTargetsPanel';
 import { UserTable } from '../components/admin/UserTable';
 import { AdminGamificationPanel } from '../components/admin/AdminGamificationPanel';
 import { AdminSettingsPanel } from '../components/admin/AdminSettingsPanel';
+import { StoreAdminPanel } from '../components/admin/StoreAdminPanel';
 
 const cards = [
   'Users',
@@ -21,6 +22,7 @@ const cards = [
   'Exercise Database',
   'Food Database',
   'AI Review Queue',
+  'Store',
   'Reports',
   'Settings',
   'Gamification'
@@ -38,6 +40,7 @@ const interactiveSections = new Set<AdminSection>([
   'Targets',
   'Exercise Plans',
   'Gamification',
+  'Store',
   'Settings'
 ]);
 
@@ -72,6 +75,7 @@ export function AdminPage() {
       {activeSection === 'Targets' && <AdminTargetsPanel />}
       {activeSection === 'Exercise Plans' && <ExerciseTemplatesTable />}
       {activeSection === 'Gamification' && <AdminGamificationPanel />}
+      {activeSection === 'Store' && <StoreAdminPanel />}
       {activeSection === 'Settings' && <AdminSettingsPanel />}
     </div>
   );

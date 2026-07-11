@@ -51,14 +51,40 @@ export type StoreCartItem = {
   lineTotalCents: number;
 };
 export type StoreCart = { items: StoreCartItem[]; totalCents: number; itemCount: number };
+export type StoreOrderStatus = 'PENDING' | 'PAID' | 'FULFILLED' | 'CANCELED';
 export type StoreOrder = {
   id: string;
-  status: 'PENDING' | 'PAID' | 'FULFILLED' | 'CANCELED';
+  status: StoreOrderStatus;
   totalCents: number;
   currency: string;
   paidAt: string | null;
   createdAt: string;
   items: Array<{ nameSnapshot: string; priceCentsSnapshot: number; quantity: number }>;
+};
+export type AdminStoreProduct = StoreProduct & {
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type AdminStoreOrder = {
+  id: string;
+  status: StoreOrderStatus;
+  totalCents: number;
+  currency: string;
+  customer: { firstName: string; lastName: string; email: string };
+  shippingName: string | null;
+  shippingAddress: Record<string, unknown> | null;
+  items: Array<{ nameSnapshot: string; priceCentsSnapshot: number; quantity: number }>;
+  paidAt: string | null;
+  createdAt: string;
+};
+export type AdminStoreOrdersPage = {
+  orders: AdminStoreOrder[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
 export type UserClientProfile = UserDemographics & {
