@@ -88,6 +88,26 @@ export type EnrichedShoppingListResult = {
   items: EnrichedShoppingListItem[];
 };
 
+export type MealPrepBatchInput = {
+  id: string;
+  label: string;
+  occurrenceCount: number;
+  cookNow: { name: string; totalQuantity: number; unit: string }[];
+  addFresh: { name: string; quantityPerServing: number; unit: string }[];
+};
+
+export type EnrichedMealPrepBatch = {
+  id: string;
+  container: string;
+  reheat: string | null;
+  storageNote: string | null;
+};
+
+export type EnrichedMealPrepResult = {
+  intro: string;
+  batches: EnrichedMealPrepBatch[];
+};
+
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export type ChatChannel = 'web' | 'sms';
@@ -236,6 +256,8 @@ export interface AiProvider {
   /** Free-form complete meals for one meal slot, itemized so they can be saved into the plan. */
   suggestItemizedMeals(input: string, context: string): Promise<ItemizedMealSuggestion[]>;
   enrichShoppingList(items: ShoppingListInputItem[], storeName?: string | null): Promise<EnrichedShoppingListResult>;
+  /** Container, reheat, and storage guidance for batch-cooked meal prep batches. */
+  enrichMealPrep(batches: MealPrepBatchInput[]): Promise<EnrichedMealPrepResult>;
   chat(messages: ChatMessage[], context: string, channel?: ChatChannel, systemAddendum?: string): Promise<string>;
   classifyNutritionIntent(message: string): Promise<NutritionIntent>;
   /** Conversational tool-calling loop for SMS — reads context + history, calls tools, returns the reply text. */
@@ -383,6 +405,18 @@ const enrichedShoppingListResponseSchema = z.object({
   items: z.array(enrichedShoppingListItemSchema).min(1)
 });
 
+const enrichedMealPrepBatchSchema = z.object({
+  id: z.string().min(1),
+  container: z.string().min(1).max(120),
+  reheat: z.union([z.string().max(200), z.null()]).optional(),
+  storageNote: z.union([z.string().max(200), z.null()]).optional()
+});
+
+const enrichedMealPrepResponseSchema = z.object({
+  intro: z.string().min(1).max(320).optional(),
+  batches: z.array(enrichedMealPrepBatchSchema).min(1)
+});
+
 const FOOD_LOOKUP_PROMPT = `Estimate nutrition for each distinct food in the input.
 Scale to the stated amount (e.g. "6 oz") using the food's realistic calorie density — most cooked foods are 30-80 cal/oz; only oils, nuts, butter, and cheese exceed ~150 cal/oz.
 For a named restaurant or brand item, use that product's actual published nutrition when you know it; otherwise estimate from the generic food type and portion.
@@ -430,9 +464,18 @@ If no store is provided, set storeLocation to null and use a sensible groceryCat
 Return JSON only: { "intro": string, "items": [ { "id": string, "groceryDescription": string, "groceryCategory": string, "storeLocation": string|null, "notes": string|null }, ... ] }
 Every input id must appear exactly once. Keep groceryDescription under 120 characters.`;
 
+const MEAL_PREP_PROMPT = `The user is batch-cooking meals ahead of time (meal prep). Each batch below is one dish they will cook once and portion into several containers.
+For each batch, recommend how to package and store it. Pick the most practical container: "microwave-safe container" for hot cooked meals, "ziplock bag" for dry, handheld, or snack-style foods, "mason jar" for salads (dressing at the bottom) and overnight oats or parfaits, "small sauce container" only when the batch is mostly condiments.
+Give a short reheat instruction for cooked meals (microwave time, stir/flip guidance) or null when the batch is eaten cold.
+Give a short storageNote with fridge life in days (most cooked meals: 3-4 days) and a freezer tip when the batch count exceeds what stays fresh; null when nothing useful applies.
+The addFresh list names ingredients kept out of the batch and added at serving — do not tell the user to cook or store those in the container.
+Return JSON only: { "intro": string, "batches": [ { "id": string, "container": string, "reheat": string|null, "storageNote": string|null }, ... ] }
+Every input id must appear exactly once. Keep intro under 220 characters, container under 60, reheat and storageNote under 160 each.`;
+
 const MEAL_SUGGESTION_TIMEOUT_MS = 7000;
 const ITEMIZED_MEALS_TIMEOUT_MS = 20000;
 const SHOPPING_LIST_TIMEOUT_MS = 12000;
+const MEAL_PREP_TIMEOUT_MS = 12000;
 const CLASSIFY_INTENT_TIMEOUT_MS = 4000;
 
 const CLASSIFY_INTENT_PROMPT = `Classify the user's text message into exactly one nutrition intent.
@@ -1006,6 +1049,85 @@ function mockGroceryDescription(item: ShoppingListInputItem, storeName: string |
   };
 }
 
+function normalizeEnrichedMealPrepBatch(parsed: z.infer<typeof enrichedMealPrepBatchSchema>): EnrichedMealPrepBatch {
+  return {
+    id: parsed.id,
+    container: parsed.container.trim(),
+    reheat: parsed.reheat?.trim() || null,
+    storageNote: parsed.storageNote?.trim() || null
+  };
+}
+
+function parseEnrichedMealPrepResponse(text: string, expectedIds: string[]): EnrichedMealPrepResult {
+  const parsed = parseModelJson(text);
+  const result = enrichedMealPrepResponseSchema.safeParse(parsed);
+  const batches = result.success
+    ? result.data.batches.map(normalizeEnrichedMealPrepBatch)
+    : (() => {
+        const looseBatches = Array.isArray(parsed?.batches) ? parsed.batches : [];
+        const normalized: EnrichedMealPrepBatch[] = [];
+        for (const batch of looseBatches) {
+          const parsedBatch = enrichedMealPrepBatchSchema.safeParse(batch);
+          if (parsedBatch.success) normalized.push(normalizeEnrichedMealPrepBatch(parsedBatch.data));
+        }
+        return normalized;
+      })();
+
+  if (!batches.length) {
+    throw result.success ? new Error('Model returned no meal prep batches') : result.error;
+  }
+
+  const byId = new Map(batches.map((batch) => [batch.id, batch]));
+  const ordered = expectedIds.map((id) => {
+    const batch = byId.get(id);
+    if (!batch) {
+      throw new Error(`Model returned ${byId.size} of ${expectedIds.length} meal prep batches`);
+    }
+    return batch;
+  });
+
+  return {
+    intro:
+      (result.success ? result.data.intro?.trim() : parsed?.intro?.trim()) ||
+      'Cook each batch once, portion it out, and label the containers by day.',
+    batches: ordered
+  };
+}
+
+export function mockMealPrepBatch(batch: MealPrepBatchInput): EnrichedMealPrepBatch {
+  const lower = batch.label.toLowerCase();
+  const coldKeywords = /salad|overnight oats|parfait|yogurt|smoothie|jar/;
+  const handheldKeywords = /wrap|sandwich|snack|bar|trail|nuts|jerky|crackers|toast/;
+
+  if (coldKeywords.test(lower)) {
+    return {
+      id: batch.id,
+      container: 'mason jar',
+      reheat: null,
+      storageNote: 'Keep dressing or wet items at the bottom of the jar. Refrigerate up to 4 days.'
+    };
+  }
+
+  if (handheldKeywords.test(lower)) {
+    return {
+      id: batch.id,
+      container: 'ziplock bag',
+      reheat: null,
+      storageNote: 'Store bags flat in the fridge (or pantry for dry snacks) up to 4 days.'
+    };
+  }
+
+  return {
+    id: batch.id,
+    container: 'microwave-safe container',
+    reheat: 'Microwave 2-3 minutes, stirring halfway, until steaming hot.',
+    storageNote:
+      batch.occurrenceCount > 4
+        ? 'Refrigerate up to 4 days; freeze the extra portions and thaw overnight before reheating.'
+        : 'Refrigerate up to 4 days.'
+  };
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
@@ -1324,6 +1446,13 @@ export class MockAiProvider implements AiProvider {
     return {
       intro,
       items: items.map((item) => mockGroceryDescription(item, storeName))
+    };
+  }
+
+  async enrichMealPrep(batches: MealPrepBatchInput[]): Promise<EnrichedMealPrepResult> {
+    return {
+      intro: 'Cook each batch once, portion it out, and label the containers by day.',
+      batches: batches.map(mockMealPrepBatch)
     };
   }
 
@@ -1814,6 +1943,30 @@ ${JSON.stringify(items)}`;
         return parseEnrichedShoppingListResponse(retry.response.text(), expectedIds);
       } catch (retryError) {
         throw wrapAiError(retryError, 'shopping list');
+      }
+    }
+  }
+
+  async enrichMealPrep(batches: MealPrepBatchInput[]): Promise<EnrichedMealPrepResult> {
+    const expectedIds = batches.map((batch) => batch.id);
+    const prompt = `${MEAL_PREP_PROMPT}
+
+Prep batches JSON:
+${JSON.stringify(batches)}`;
+
+    try {
+      const result = await withTimeout(this.foodModel().generateContent(prompt), MEAL_PREP_TIMEOUT_MS, 'Meal prep');
+      return parseEnrichedMealPrepResponse(result.response.text(), expectedIds);
+    } catch (error) {
+      try {
+        const retry = await withTimeout(
+          this.foodModel().generateContent(`${prompt}\n\nImportant: respond with valid JSON only and include every input id exactly once.`),
+          MEAL_PREP_TIMEOUT_MS,
+          'Meal prep retry'
+        );
+        return parseEnrichedMealPrepResponse(retry.response.text(), expectedIds);
+      } catch (retryError) {
+        throw wrapAiError(retryError, 'meal prep');
       }
     }
   }

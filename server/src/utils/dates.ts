@@ -94,6 +94,18 @@ export function addUtcDays(date: Date, days: number) {
   return next;
 }
 
+/** Parse and validate an inclusive date-key range, capped at maxDays. Throws user-facing errors. */
+export function parseValidatedDateRange(startDate: string, endDate: string, maxDays = 31) {
+  const start = parseDateParam(startDate);
+  const end = parseDateParam(endDate);
+  if (start > end) throw new Error('Start date must be on or before end date.');
+
+  const maxEnd = addUtcDays(start, maxDays);
+  if (end > maxEnd) throw new Error(`Date range cannot exceed ${maxDays} days.`);
+
+  return { start, end };
+}
+
 /** Monday = 0 … Sunday = 6 (matches client weekdayIndex). */
 export function weekdayIndexFromDate(date: Date) {
   return (date.getUTCDay() + 6) % 7;

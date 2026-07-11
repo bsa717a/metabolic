@@ -107,6 +107,36 @@ export type ShoppingListResult = {
   sections: GroceryListSection[];
   note: string;
 };
+export type MealPrepIngredient = { name: string; totalQuantity: number; unit: string };
+export type MealPrepFreshIngredient = {
+  name: string;
+  quantityPerServing: number;
+  unit: string;
+  servingCount: number;
+  dates: string[];
+};
+export type MealPrepBatch = {
+  id: string;
+  label: string;
+  occurrenceCount: number;
+  dates: string[];
+  cookNow: MealPrepIngredient[];
+  addFresh: MealPrepFreshIngredient[];
+  container: string;
+  reheat: string | null;
+  storageNote: string | null;
+};
+export type MealPrepPlanResult = {
+  startDate: string;
+  endDate: string;
+  plannedDayCount: number;
+  batchCount: number;
+  containerCount: number;
+  intro: string | null;
+  enriched: boolean;
+  batches: MealPrepBatch[];
+  note: string;
+};
 export type ExerciseCatalogItem = {
   id: string;
   name: string;
