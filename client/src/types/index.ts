@@ -30,6 +30,35 @@ export type AppUser = {
   nextPlanAfterCoach?: PlanSlug | null;
   assignedCoach?: UserSummary | null;
   coachRelationshipStatus?: CoachRelationshipStatusSlug | null;
+  storeEnabled?: boolean;
+};
+export type StoreProductCategory = 'SUPPLEMENT' | 'PROTEIN' | 'EQUIPMENT' | 'OTHER';
+export type StoreProduct = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  category: StoreProductCategory;
+  priceCents: number;
+  currency: string;
+};
+export type StoreCartItem = {
+  productId: string;
+  name: string;
+  imageUrl: string | null;
+  priceCents: number;
+  quantity: number;
+  lineTotalCents: number;
+};
+export type StoreCart = { items: StoreCartItem[]; totalCents: number; itemCount: number };
+export type StoreOrder = {
+  id: string;
+  status: 'PENDING' | 'PAID' | 'FULFILLED' | 'CANCELED';
+  totalCents: number;
+  currency: string;
+  paidAt: string | null;
+  createdAt: string;
+  items: Array<{ nameSnapshot: string; priceCentsSnapshot: number; quantity: number }>;
 };
 export type UserDemographics = { gender: string | null; birthDate: string | null };
 export type UserClientProfile = UserDemographics & {

@@ -1,40 +1,59 @@
 import { prisma } from '../db/prisma.js';
-import { COACH_REQUEST_NOTIFICATION_EMAIL_KEY } from './appSettings.js';
+import {
+  COACH_REQUEST_NOTIFICATION_EMAIL_KEY,
+  STORE_ENABLED_KEY,
+  STORE_ORDER_NOTIFICATION_EMAIL_KEY
+} from './appSettings.js';
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+async function upsertOrClear(key: string, value: string | null) {
+  if (value) {
+    await prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
+  } else {
+    await prisma.appSetting.deleteMany({ where: { key } });
+  }
+}
+
 export async function getAdminSettings() {
-  const setting = await prisma.appSetting.findUnique({
-    where: { key: COACH_REQUEST_NOTIFICATION_EMAIL_KEY }
+  const settings = await prisma.appSetting.findMany({
+    where: { key: { in: [COACH_REQUEST_NOTIFICATION_EMAIL_KEY, STORE_ENABLED_KEY, STORE_ORDER_NOTIFICATION_EMAIL_KEY] } }
   });
+  const byKey = new Map(settings.map((setting) => [setting.key, setting.value]));
 
   return {
-    coachRequestNotificationEmail: setting?.value ?? null
+    coachRequestNotificationEmail: byKey.get(COACH_REQUEST_NOTIFICATION_EMAIL_KEY) ?? null,
+    storeEnabled: byKey.get(STORE_ENABLED_KEY) !== 'false',
+    storeOrderNotificationEmail: byKey.get(STORE_ORDER_NOTIFICATION_EMAIL_KEY) ?? null
   };
 }
 
-export async function updateAdminSettings(input: { coachRequestNotificationEmail?: string | null }) {
-  if (input.coachRequestNotificationEmail === undefined) {
-    return getAdminSettings();
+export async function updateAdminSettings(input: {
+  coachRequestNotificationEmail?: string | null;
+  storeEnabled?: boolean;
+  storeOrderNotificationEmail?: string | null;
+}) {
+  if (input.coachRequestNotificationEmail !== undefined) {
+    const value = input.coachRequestNotificationEmail?.trim() || null;
+    if (value && !isValidEmail(value)) {
+      throw new Error('Enter a valid notification email.');
+    }
+    await upsertOrClear(COACH_REQUEST_NOTIFICATION_EMAIL_KEY, value);
   }
 
-  const value = input.coachRequestNotificationEmail?.trim() || null;
-  if (value && !isValidEmail(value)) {
-    throw new Error('Enter a valid notification email.');
+  if (input.storeEnabled !== undefined) {
+    // Store the flag only when disabling — a missing key means enabled.
+    await upsertOrClear(STORE_ENABLED_KEY, input.storeEnabled ? null : 'false');
   }
 
-  if (value) {
-    await prisma.appSetting.upsert({
-      where: { key: COACH_REQUEST_NOTIFICATION_EMAIL_KEY },
-      create: { key: COACH_REQUEST_NOTIFICATION_EMAIL_KEY, value },
-      update: { value }
-    });
-  } else {
-    await prisma.appSetting.deleteMany({
-      where: { key: COACH_REQUEST_NOTIFICATION_EMAIL_KEY }
-    });
+  if (input.storeOrderNotificationEmail !== undefined) {
+    const value = input.storeOrderNotificationEmail?.trim() || null;
+    if (value && !isValidEmail(value)) {
+      throw new Error('Enter a valid store notification email.');
+    }
+    await upsertOrClear(STORE_ORDER_NOTIFICATION_EMAIL_KEY, value);
   }
 
   return getAdminSettings();
