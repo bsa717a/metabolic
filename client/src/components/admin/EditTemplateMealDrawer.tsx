@@ -70,32 +70,32 @@ export function EditTemplateMealDrawer({
     <Drawer open={open} title={meal ? `Edit meal — ${meal.name}` : 'Edit meal'} onClose={onClose}>
       <div className="space-y-6">
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">Add food</p>
+          <p className="mb-2 text-sm font-semibold text-app-text">Add food</p>
           <FoodSearch onSelect={addFood} dropUp />
           {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">Planned foods</p>
+          <p className="mb-2 text-sm font-semibold text-app-text">Planned foods</p>
           {items.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No foods in this meal yet.</p>
+            <p className="rounded-2xl bg-app-muted p-4 text-sm text-app-text-muted">No foods in this meal yet.</p>
           ) : (
             <ul className="space-y-2">
               {items.map((item) => (
                 <li key={item.id} className="flex items-center justify-between gap-2 rounded-2xl bg-yellow-50 p-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{item.nameSnapshot}</p>
-                    <p className="text-xs text-slate-500">{formatMacros(item)}</p>
+                    <p className="text-xs text-app-text-muted">{formatMacros(item)}</p>
                   </div>
                   <input
                     type="number"
                     min={0.25}
                     step={0.25}
-                    className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                    className="w-16 rounded-lg border border-app-border px-2 py-1 text-sm"
                     value={Number(item.quantity)}
                     onChange={(event) => void updateQuantity(item, Number(event.target.value))}
                   />
-                  <button type="button" className="text-sm text-slate-500 hover:text-red-600" onClick={() => void removeItem(item.id)}>
+                  <button type="button" className="text-sm text-app-text-muted hover:text-red-600" onClick={() => void removeItem(item.id)}>
                     ×
                   </button>
                 </li>

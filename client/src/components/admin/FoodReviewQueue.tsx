@@ -84,7 +84,7 @@ function SortableHeader({
         type="button"
         onClick={() => onSort(sortKey)}
         className={`inline-flex items-center gap-1 transition ${
-          active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
+          active ? 'text-app-text' : 'text-app-text-muted hover:text-app-text'
         }`}
       >
         <span>{label}</span>
@@ -146,7 +146,7 @@ export function FoodReviewQueue() {
   }, []);
 
   useEffect(() => {
-    void loadQueue();
+    queueMicrotask(() => void loadQueue());
   }, [loadQueue]);
 
   function handleSaved(updated: ReviewFood) {
@@ -164,7 +164,7 @@ export function FoodReviewQueue() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">AI Review Queue</h2>
-            <p className="text-sm text-slate-500">Click a row to review, edit, approve, or reject AI-generated foods.</p>
+            <p className="text-sm text-app-text-muted">Click a row to review, edit, approve, or reject AI-generated foods.</p>
           </div>
           {!loading && !error && (
             <input
@@ -172,16 +172,16 @@ export function FoodReviewQueue() {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search review queue…"
-              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:flex-none sm:w-56"
+              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-app-border bg-app-surface px-3 text-sm text-app-text sm:flex-none sm:w-56"
               aria-label="Search review queue"
             />
           )}
-          <span className="ml-auto shrink-0 text-sm text-slate-500">
+          <span className="ml-auto shrink-0 text-sm text-app-text-muted">
             {searchQuery.trim() ? `${visibleFoods.length} of ${foods.length}` : `${foods.length} pending`}
           </span>
         </div>
 
-        {loading && <p className="text-sm text-slate-500">Loading review queue...</p>}
+        {loading && <p className="text-sm text-app-text-muted">Loading review queue...</p>}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{error}</p>
@@ -189,7 +189,7 @@ export function FoodReviewQueue() {
         )}
 
         {!loading && !error && foods.length === 0 && (
-          <p className="py-6 text-center text-sm text-slate-500">No AI-generated foods are waiting for review.</p>
+          <p className="py-6 text-center text-sm text-app-text-muted">No AI-generated foods are waiting for review.</p>
         )}
 
         {!loading && !error && foods.length > 0 && (
@@ -205,7 +205,7 @@ export function FoodReviewQueue() {
                 <col className="w-[10%]" />
               </colgroup>
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
+                <tr className="border-b border-app-border text-app-text-muted">
                   <SortableHeader
                     label="Food"
                     sortKey="name"
@@ -269,29 +269,29 @@ export function FoodReviewQueue() {
                           setSelectedFoodId(food.id);
                         }
                       }}
-                      className={`cursor-pointer border-b border-slate-100 transition last:border-0 ${
-                        selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-slate-50'
+                      className={`cursor-pointer border-b border-app-border transition last:border-0 ${
+                        selected ? 'bg-brand-green/10 ring-1 ring-inset ring-brand-green/40' : 'hover:bg-app-muted'
                       }`}
                     >
                       <td className="max-w-0 py-3 pr-4">
                         <div className="truncate font-semibold">{food.name}</div>
-                        {food.brand && <div className="truncate text-slate-500">{food.brand}</div>}
+                        {food.brand && <div className="truncate text-app-text-muted">{food.brand}</div>}
                       </td>
-                      <td className="max-w-0 py-3 pr-4 text-slate-600">
+                      <td className="max-w-0 py-3 pr-4 text-app-text-muted">
                         <span className="line-clamp-2">{food.inputText ?? '—'}</span>
                       </td>
-                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{formatServing(food)}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{Math.round(Number(food.calories))}</td>
-                      <td className="py-3 pr-4 text-slate-600">{formatMacros(food)}</td>
-                      <td className="max-w-0 py-3 pr-4 truncate text-slate-600">{submitterLabel(food) || '—'}</td>
-                      <td className="py-3 whitespace-nowrap text-slate-600">{formatDate(food.createdAt)}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{formatServing(food)}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{Math.round(Number(food.calories))}</td>
+                      <td className="py-3 pr-4 text-app-text-muted">{formatMacros(food)}</td>
+                      <td className="max-w-0 py-3 pr-4 truncate text-app-text-muted">{submitterLabel(food) || '—'}</td>
+                      <td className="py-3 whitespace-nowrap text-app-text-muted">{formatDate(food.createdAt)}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
             {visibleFoods.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-500">No items match your search.</p>
+              <p className="py-6 text-center text-sm text-app-text-muted">No items match your search.</p>
             )}
           </div>
         )}

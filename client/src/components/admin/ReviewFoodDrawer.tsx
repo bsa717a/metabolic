@@ -33,11 +33,11 @@ function toDraft(food: ReviewFood): FoodDraft {
 }
 
 function labelClassName() {
-  return 'mb-1 block text-sm font-medium text-slate-600';
+  return 'mb-1 block text-sm font-medium text-app-text-muted';
 }
 
 function inputClassName() {
-  return 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
+  return 'w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm text-app-text outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
 }
 
 function parseNumber(value: string, label: string) {

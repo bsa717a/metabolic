@@ -20,7 +20,7 @@ function badgeClass(kind: 'verified' | 'ai' | 'global' | 'user') {
   if (kind === 'verified') return 'bg-emerald-50 text-emerald-700';
   if (kind === 'ai') return 'bg-violet-50 text-violet-700';
   if (kind === 'global') return 'bg-blue-50 text-blue-700';
-  return 'bg-slate-100 text-slate-600';
+  return 'bg-app-muted text-app-text-muted';
 }
 
 function compareStrings(a: string, b: string, direction: SortDirection) {
@@ -74,7 +74,7 @@ function SortableHeader({
         type="button"
         onClick={() => onSort(sortKey)}
         className={`inline-flex items-center gap-1 transition ${
-          active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
+          active ? 'text-app-text' : 'text-app-text-muted hover:text-app-text'
         }`}
       >
         <span>{label}</span>
@@ -134,7 +134,7 @@ export function FoodTable() {
   }, []);
 
   useEffect(() => {
-    void loadFoods();
+    queueMicrotask(() => void loadFoods());
   }, [loadFoods]);
 
   function handleSaved(updated: AdminFood) {
@@ -147,7 +147,7 @@ export function FoodTable() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Food Database</h2>
-            <p className="text-sm text-slate-500">Click a row to edit food details.</p>
+            <p className="text-sm text-app-text-muted">Click a row to edit food details.</p>
           </div>
           {!loading && !error && (
             <input
@@ -155,16 +155,16 @@ export function FoodTable() {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search foods…"
-              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:flex-none sm:w-56"
+              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-app-border bg-app-surface px-3 text-sm text-app-text sm:flex-none sm:w-56"
               aria-label="Search foods"
             />
           )}
-          <span className="ml-auto shrink-0 text-sm text-slate-500">
+          <span className="ml-auto shrink-0 text-sm text-app-text-muted">
             {searchQuery.trim() ? `${visibleFoods.length} of ${foods.length}` : `${foods.length} total`}
           </span>
         </div>
 
-        {loading && <p className="text-sm text-slate-500">Loading foods...</p>}
+        {loading && <p className="text-sm text-app-text-muted">Loading foods...</p>}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{error}</p>
@@ -183,7 +183,7 @@ export function FoodTable() {
                 <col className="w-[16%]" />
               </colgroup>
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
+                <tr className="border-b border-app-border text-app-text-muted">
                   <SortableHeader
                     label="Food"
                     sortKey="name"
@@ -233,8 +233,8 @@ export function FoodTable() {
                           setSelectedFoodId(food.id);
                         }
                       }}
-                      className={`cursor-pointer border-b border-slate-100 transition last:border-0 ${
-                        selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-slate-50'
+                      className={`cursor-pointer border-b border-app-border transition last:border-0 ${
+                        selected ? 'bg-brand-green/10 ring-1 ring-inset ring-brand-green/40' : 'hover:bg-app-muted'
                       }`}
                     >
                       <td className="max-w-0 py-3 pr-4">
@@ -242,14 +242,14 @@ export function FoodTable() {
                           <span className="shrink-0" aria-hidden>{foodEmoji(food.name)}</span>
                           <div className="min-w-0">
                             <div className="truncate font-semibold">{food.name}</div>
-                            {food.brand && <div className="truncate text-slate-500">{food.brand}</div>}
+                            {food.brand && <div className="truncate text-app-text-muted">{food.brand}</div>}
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{formatServing(food)}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{Math.round(Number(food.calories))}</td>
-                      <td className="py-3 pr-4 text-slate-600">{formatMacros(food)}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap text-slate-600">{food.source}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{formatServing(food)}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{Math.round(Number(food.calories))}</td>
+                      <td className="py-3 pr-4 text-app-text-muted">{formatMacros(food)}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{food.source}</td>
                       <td className="py-3">
                         <div className="flex flex-wrap gap-1.5">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass(food.visibility === 'GLOBAL' ? 'global' : 'user')}`}>
@@ -272,9 +272,9 @@ export function FoodTable() {
                 })}
               </tbody>
             </table>
-            {foods.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No foods found.</p>}
+            {foods.length === 0 && <p className="py-6 text-center text-sm text-app-text-muted">No foods found.</p>}
             {foods.length > 0 && visibleFoods.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-500">No foods match your search.</p>
+              <p className="py-6 text-center text-sm text-app-text-muted">No foods match your search.</p>
             )}
           </div>
         )}

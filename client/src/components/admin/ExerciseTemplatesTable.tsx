@@ -12,7 +12,7 @@ type SortKey = 'name' | 'exercises' | 'visibility';
 type SortDirection = 'asc' | 'desc';
 
 function badgeClass(visibility: ExercisePlanTemplateSummary['visibility']) {
-  return visibility === 'GLOBAL' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600';
+  return visibility === 'GLOBAL' ? 'bg-blue-50 text-blue-700' : 'bg-app-muted text-app-text-muted';
 }
 
 function compareStrings(a: string, b: string, direction: SortDirection) {
@@ -61,7 +61,7 @@ function SortableHeader({
         type="button"
         onClick={() => onSort(sortKey)}
         className={`inline-flex items-center gap-1 transition ${
-          active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-800'
+          active ? 'text-app-text' : 'text-app-text-muted hover:text-app-text'
         }`}
       >
         <span>{label}</span>
@@ -87,7 +87,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
 
   useEffect(() => {
     const activeId = routeTemplateId ?? initialTemplateId;
-    if (activeId) setSelectedTemplateId(activeId);
+    if (activeId) queueMicrotask(() => setSelectedTemplateId(activeId));
   }, [initialTemplateId, routeTemplateId]);
 
   function closeDrawer() {
@@ -147,7 +147,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
   }, []);
 
   useEffect(() => {
-    void load();
+    queueMicrotask(() => void load());
   }, [load]);
 
   async function createTemplate() {
@@ -203,7 +203,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Exercise Plans</h2>
-            <p className="text-sm text-slate-500">Click a row to edit a plan.</p>
+            <p className="text-sm text-app-text-muted">Click a row to edit a plan.</p>
           </div>
           {!loading && !error && (
             <input
@@ -211,7 +211,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search plans…"
-              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-slate-200 px-3 text-sm sm:flex-none sm:w-56"
+              className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-app-border bg-app-surface px-3 text-sm text-app-text sm:flex-none sm:w-56"
               aria-label="Search exercise plans"
             />
           )}
@@ -226,12 +226,12 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
               </Button>
             </div>
           )}
-          <span className="ml-auto shrink-0 text-sm text-slate-500">
+          <span className="ml-auto shrink-0 text-sm text-app-text-muted">
             {searchQuery.trim() ? `${visibleTemplates.length} of ${templates.length}` : `${templates.length} total`}
           </span>
         </div>
 
-        {loading && <p className="text-sm text-slate-500">Loading plans…</p>}
+        {loading && <p className="text-sm text-app-text-muted">Loading plans…</p>}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{error}</p>
@@ -248,7 +248,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
                 <col className="w-[22%]" />
               </colgroup>
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
+                <tr className="border-b border-app-border text-app-text-muted">
                   <SortableHeader
                     label="Name"
                     sortKey="name"
@@ -289,17 +289,17 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
                         openTemplate(template.id);
                       }
                     }}
-                    className={`cursor-pointer border-b border-slate-100 transition last:border-0 ${
-                      selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-slate-50'
+                    className={`cursor-pointer border-b border-app-border transition last:border-0 ${
+                      selected ? 'bg-brand-green/10 ring-1 ring-inset ring-brand-green/40' : 'hover:bg-app-muted'
                     }`}
                   >
                     <td className="max-w-0 py-3 pr-4">
                       <div className="truncate font-semibold">{template.name}</div>
                       {template.description && (
-                        <div className="truncate text-slate-500">{template.description}</div>
+                        <div className="truncate text-app-text-muted">{template.description}</div>
                       )}
                     </td>
-                    <td className="py-3 pr-4 whitespace-nowrap text-slate-600">
+                    <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">
                       {template.exerciseCount} exercises
                     </td>
                     <td className="py-3 pr-4">
@@ -312,7 +312,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
                         <button
                           type="button"
                           title="Clone"
-                          className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 hover:bg-slate-100"
+                          className="grid h-9 w-9 place-items-center rounded-xl text-app-text-muted hover:bg-app-muted"
                           onClick={(event) => {
                             event.stopPropagation();
                             void cloneTemplate(template.id, template.name);
@@ -339,10 +339,10 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
               </tbody>
             </table>
             {templates.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-500">No plans yet. Create one to get started.</p>
+              <p className="py-6 text-center text-sm text-app-text-muted">No plans yet. Create one to get started.</p>
             )}
             {templates.length > 0 && visibleTemplates.length === 0 && (
-              <p className="py-6 text-center text-sm text-slate-500">No plans match your search.</p>
+              <p className="py-6 text-center text-sm text-app-text-muted">No plans match your search.</p>
             )}
           </div>
         )}

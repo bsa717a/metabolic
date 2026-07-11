@@ -38,11 +38,11 @@ function toDraft(food: AdminFood): FoodDraft {
 }
 
 function labelClassName() {
-  return 'mb-1 block text-sm font-medium text-slate-600';
+  return 'mb-1 block text-sm font-medium text-app-text-muted';
 }
 
 function inputClassName() {
-  return 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
+  return 'w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm text-app-text outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200';
 }
 
 function parseNumber(value: string, label: string) {
@@ -126,7 +126,7 @@ function EditFoodDrawerContent({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">Update nutrition details and database flags.</p>
+      <p className="text-sm text-app-text-muted">Update nutrition details and database flags.</p>
 
       <label className="block">
         <span className={labelClassName()}>Name</span>
@@ -190,12 +190,12 @@ function EditFoodDrawerContent({
         </select>
       </label>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <label className="flex items-center gap-2 text-sm text-app-text">
         <input type="checkbox" checked={draft.verified} onChange={(event) => updateDraft('verified', event.target.checked)} />
         Verified food
       </label>
 
-      {food.aiGenerated && <p className="text-xs text-slate-500">This food was AI-generated.</p>}
+      {food.aiGenerated && <p className="text-xs text-app-text-muted">This food was AI-generated.</p>}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

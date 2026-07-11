@@ -55,12 +55,12 @@ export function CloneExerciseDayDialog({
   return (
     <Drawer open={open} title="Clone from user day" onClose={onClose}>
       <div className="space-y-4">
-        <p className="text-sm text-slate-500">Create a plan from a user&apos;s planned exercises on a specific date.</p>
+        <p className="text-sm text-app-text-muted">Create a plan from a user&apos;s planned exercises on a specific date.</p>
 
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">User</span>
+          <span className="mb-1 block font-medium text-app-text">User</span>
           <select
-            className="w-full rounded-xl border border-slate-200 px-3 py-2"
+            className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
             value={userId}
             onChange={(event) => setUserId(event.target.value)}
           >
@@ -73,19 +73,19 @@ export function CloneExerciseDayDialog({
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Date</span>
+          <span className="mb-1 block font-medium text-app-text">Date</span>
           <input
             type="date"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2"
+            className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
             value={date}
             onChange={(event) => setDate(event.target.value)}
           />
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Plan name</span>
+          <span className="mb-1 block font-medium text-app-text">Plan name</span>
           <input
-            className="w-full rounded-xl border border-slate-200 px-3 py-2"
+            className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="e.g. Jordan's Monday workout"
