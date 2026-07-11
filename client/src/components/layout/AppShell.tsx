@@ -8,6 +8,8 @@ import { EntitlementsProvider } from '../../context/EntitlementsContext';
 import { TutorialProvider } from '../tutorial/TutorialContext';
 import { DashboardTutorial } from '../tutorial/DashboardTutorial';
 import { SmsRemindersIntroModal } from '../sms/SmsRemindersIntroModal';
+import { FeedbackWidget } from '../feedback/FeedbackWidget';
+import { recordNavigation } from '../../services/diagnostics';
 
 export function AppShell({
   user,
@@ -18,6 +20,10 @@ export function AppShell({
 }) {
   const location = useLocation();
   const nutritionMobileLayout = location.pathname === '/nutrition';
+
+  useEffect(() => {
+    recordNavigation(location.pathname);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!nutritionMobileLayout) {
@@ -62,6 +68,7 @@ export function AppShell({
         {nutritionMobileLayout && <MobileBottomHomeBar />}
         <SmsRemindersIntroModal user={user} onComplete={onTutorialComplete} />
         <DashboardTutorial />
+        <FeedbackWidget nutritionMobileLayout={nutritionMobileLayout} />
       </div>
     </TutorialProvider>
     </EntitlementsProvider>

@@ -92,7 +92,9 @@ const adminSettingsBody = z
   .object({
     coachRequestNotificationEmail: z.string().trim().email().nullable().optional(),
     storeEnabled: z.boolean().optional(),
-    storeOrderNotificationEmail: z.string().trim().email().nullable().optional()
+    storeOrderNotificationEmail: z.string().trim().email().nullable().optional(),
+    feedbackWidgetEnabled: z.boolean().optional(),
+    feedbackNotificationEmail: z.string().trim().email().nullable().optional()
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
 

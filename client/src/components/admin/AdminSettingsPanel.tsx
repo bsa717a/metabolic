@@ -7,6 +7,8 @@ type AdminSettings = {
   coachRequestNotificationEmail: string | null;
   storeEnabled: boolean;
   storeOrderNotificationEmail: string | null;
+  feedbackWidgetEnabled: boolean;
+  feedbackNotificationEmail: string | null;
 };
 
 function labelClassName() {
@@ -22,6 +24,8 @@ export function AdminSettingsPanel() {
   const [email, setEmail] = useState('');
   const [storeEnabled, setStoreEnabled] = useState(true);
   const [storeEmail, setStoreEmail] = useState('');
+  const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  const [feedbackEmail, setFeedbackEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -37,6 +41,8 @@ export function AdminSettingsPanel() {
           setEmail(data.coachRequestNotificationEmail ?? '');
           setStoreEnabled(data.storeEnabled);
           setStoreEmail(data.storeOrderNotificationEmail ?? '');
+          setFeedbackEnabled(data.feedbackWidgetEnabled);
+          setFeedbackEmail(data.feedbackNotificationEmail ?? '');
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load settings'))
         .finally(() => setLoading(false));
@@ -53,13 +59,17 @@ export function AdminSettingsPanel() {
         body: JSON.stringify({
           coachRequestNotificationEmail: email.trim() ? email.trim() : null,
           storeEnabled,
-          storeOrderNotificationEmail: storeEmail.trim() ? storeEmail.trim() : null
+          storeOrderNotificationEmail: storeEmail.trim() ? storeEmail.trim() : null,
+          feedbackWidgetEnabled: feedbackEnabled,
+          feedbackNotificationEmail: feedbackEmail.trim() ? feedbackEmail.trim() : null
         })
       });
       setSettings(saved);
       setEmail(saved.coachRequestNotificationEmail ?? '');
       setStoreEnabled(saved.storeEnabled);
       setStoreEmail(saved.storeOrderNotificationEmail ?? '');
+      setFeedbackEnabled(saved.feedbackWidgetEnabled);
+      setFeedbackEmail(saved.feedbackNotificationEmail ?? '');
       setMessage('Settings saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
@@ -119,6 +129,33 @@ export function AdminSettingsPanel() {
           />
           <span className="mt-1 block text-xs text-app-text-muted">
             Receives an email for every paid store order (for fulfillment).
+          </span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={feedbackEnabled}
+            onChange={(event) => setFeedbackEnabled(event.target.checked)}
+            className="h-4 w-4 rounded border-app-border accent-brand-green"
+          />
+          <span className="text-sm font-medium text-app-text">Beta feedback widget enabled</span>
+        </label>
+        <span className="-mt-3 block text-xs text-app-text-muted">
+          When on, the floating feedback button shows for all signed-in users.
+        </span>
+
+        <label className="block">
+          <span className={labelClassName()}>Feedback notification email</span>
+          <input
+            className={inputClassName()}
+            type="email"
+            value={feedbackEmail}
+            onChange={(event) => setFeedbackEmail(event.target.value)}
+            placeholder="feedback@example.com"
+          />
+          <span className="mt-1 block text-xs text-app-text-muted">
+            Receives an alert for blocking reports and the periodic feedback digest.
           </span>
         </label>
 

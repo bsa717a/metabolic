@@ -280,6 +280,10 @@ model User {
   virtualCoachMemory VirtualCoachMemory?
   storeCartItems StoreCartItem[]
   storeOrders StoreOrder[]
+  feedbackReports FeedbackReport[] @relation("FeedbackReporter")
+  feedbackAssignments FeedbackReport[] @relation("FeedbackAssignee")
+  feedbackNotes FeedbackNote[]
+  feedbackEvents FeedbackEvent[]
   clientProfile ClientProfile?
   defaultNutritionTemplate NutritionPlanTemplate? @relation("CoachDefaultNutritionTemplate", fields: [defaultNutritionTemplateId], references: [id], onDelete: SetNull)
   defaultExerciseTemplate ExerciseTemplate? @relation("CoachDefaultExerciseTemplate", fields: [defaultExerciseTemplateId], references: [id], onDelete: SetNull)
@@ -1376,4 +1380,90 @@ model StoreOrderItem {
   quantity Int
   order StoreOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product StoreProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+}
+
+enum FeedbackType {
+  BUG
+  CONFUSING
+  IDEA
+}
+
+enum FeedbackStatus {
+  NEW
+  REVIEWING
+  PLANNED
+  RESOLVED
+  CLOSED
+  DUPLICATE
+  CANNOT_REPRODUCE
+}
+
+enum FeedbackSeverity {
+  BLOCKING
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model FeedbackReport {
+  id String @id @default(cuid())
+  /// Human-friendly reference is derived as "FB-${seq}".
+  seq Int @unique @default(autoincrement())
+  type FeedbackType
+  status FeedbackStatus @default(NEW)
+  blocking Boolean @default(false)
+  severity FeedbackSeverity?
+  /// Tester answers.
+  goal String
+  detail String
+  /// Reporter snapshot (survives user deletion).
+  userId String?
+  reporterEmail String
+  reporterName String
+  accountType String
+  /// Safe context.
+  route String
+  screenLabel String?
+  appVersion String?
+  /// Whitelisted diagnostics blob (see sanitizeDiagnostics); nulled on retention purge.
+  diagnostics Json?
+  diagnosticsPurgedAt DateTime?
+  /// Workflow.
+  assignedToId String?
+  resolutionNote String?
+  externalRef String?
+  duplicateOfId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User? @relation("FeedbackReporter", fields: [userId], references: [id], onDelete: SetNull)
+  assignedTo User? @relation("FeedbackAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  duplicateOf FeedbackReport? @relation("FeedbackDuplicate", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates FeedbackReport[] @relation("FeedbackDuplicate")
+  notes FeedbackNote[]
+  events FeedbackEvent[]
+  @@index([status, createdAt])
+  @@index([type, blocking])
+}
+
+model FeedbackNote {
+  id String @id @default(cuid())
+  reportId String
+  authorId String?
+  body String
+  createdAt DateTime @default(now())
+  report FeedbackReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  @@index([reportId])
+}
+
+model FeedbackEvent {
+  id String @id @default(cuid())
+  reportId String
+  actorId String?
+  kind String
+  detail Json?
+  createdAt DateTime @default(now())
+  report FeedbackReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([reportId])
 }
