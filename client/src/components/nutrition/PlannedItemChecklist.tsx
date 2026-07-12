@@ -48,27 +48,29 @@ export function PlannedItemChecklist({
     return isPlannedItemLogged(plannedItem, actualItems);
   }
 
+  function clearPending(plannedItemId: string) {
+    setPendingLogged((prev) => {
+      const next = { ...prev };
+      delete next[plannedItemId];
+      return next;
+    });
+  }
+
   async function togglePlannedItem(plannedItemId: string, logged: boolean) {
     setToggleError(null);
     setTogglingId(plannedItemId);
+    // Optimistically reflect the toggle and hold it until the refreshed data agrees —
+    // clearing it before onChange() briefly re-reads the stale prop and flickers the box.
     setPendingLogged((prev) => ({ ...prev, [plannedItemId]: logged }));
     try {
       await api(`/api/meal-items/${plannedItemId}/set-logged`, {
         method: 'POST',
         body: JSON.stringify({ logged })
       });
-      setPendingLogged((prev) => {
-        const next = { ...prev };
-        delete next[plannedItemId];
-        return next;
-      });
       await onChange();
+      clearPending(plannedItemId);
     } catch (error) {
-      setPendingLogged((prev) => {
-        const next = { ...prev };
-        delete next[plannedItemId];
-        return next;
-      });
+      clearPending(plannedItemId);
       setToggleError(error instanceof Error ? error.message : 'Could not update this item.');
     } finally {
       setTogglingId(null);
