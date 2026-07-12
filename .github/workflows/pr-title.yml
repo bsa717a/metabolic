@@ -1,0 +1,30 @@
+name: PR Title Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title is a Conventional Commit
+        # Read the title from the environment (never interpolate untrusted input into the script body).
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          # type(optional-scope)optional-!: description
+          pattern='^(feat|fix|docs|chore|refactor|test|perf|build|ci|style|revert)(\([a-zA-Z0-9 ._/-]+\))?!?: .+'
+          if [[ "$PR_TITLE" =~ $pattern ]]; then
+            echo "PR title OK: $PR_TITLE"
+          else
+            echo "::error title=Invalid PR title::PR title must be a Conventional Commit."
+            echo "Got: '$PR_TITLE'"
+            echo "Expected e.g.: 'feat: add X', 'fix(sms): correct Y', 'feat(ios): add Capacitor shell', 'feat!: replace auth flow'"
+            echo "Allowed types: feat, fix, docs, chore, refactor, test, perf, build, ci, style, revert (append '!' for breaking changes)."
+            exit 1
+          fi
