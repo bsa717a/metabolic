@@ -31,7 +31,12 @@ import { feedbackRoutes } from './routes/feedbackRoutes.js';
 import { feedbackAdminRoutes } from './routes/feedbackAdminRoutes.js';
 
 async function main() {
-  const app = Fastify({ logger: true, bodyLimit: 16 * 1024 * 1024 });
+  const app = Fastify({
+    logger: true,
+    bodyLimit: 16 * 1024 * 1024,
+    // Cloud Run sits behind Google's load balancer; trust X-Forwarded-For for request.ip.
+    trustProxy: env.NODE_ENV === 'production'
+  });
 
   await app.register(cors, {
     origin: env.CLIENT_URL,

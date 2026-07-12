@@ -24,6 +24,7 @@ import { LoginPage } from './pages/LoginPage';
 import { FirstTimeSetupPage } from './pages/FirstTimeSetupPage';
 import { CampaignPolicyPage } from './pages/CampaignPolicyPage';
 import { CampaignTermsPage } from './pages/CampaignTermsPage';
+import { SupportPage } from './pages/SupportPage';
 import { SmsOptInPage } from './pages/SmsOptInPage';
 import { GamificationPage } from './pages/GamificationPage';
 import { JourneyPage } from './pages/JourneyPage';
@@ -169,6 +170,7 @@ export default function App() {
         <Route path="/sms-opt-in" element={<SmsOptInPage />} />
         <Route path="/campaign-policy" element={<CampaignPolicyPage />} />
         <Route path="/campaign-terms" element={<CampaignTermsPage />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route
           path="/setup"
           element={

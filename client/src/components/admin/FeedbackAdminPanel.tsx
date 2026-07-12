@@ -127,9 +127,10 @@ export function FeedbackAdminPanel() {
                   <td className="py-2 pr-3 font-medium text-app-text">{row.reference}</td>
                   <td className="max-w-[16rem] truncate px-3 py-2 text-app-text">{row.shortDescription}</td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
                       <Badge tone="blue">{row.type.toLowerCase()}</Badge>
                       {row.blocking && <Badge tone="red">blocking</Badge>}
+                      {row.source === 'public_support_page' && <Badge tone="yellow">support</Badge>}
                     </div>
                   </td>
                   <td className="px-3 py-2"><Badge tone={statusTone(row.status)}>{row.status.toLowerCase()}</Badge></td>
