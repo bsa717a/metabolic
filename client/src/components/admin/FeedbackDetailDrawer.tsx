@@ -178,6 +178,8 @@ export function FeedbackDetailDrawer({
               <div><span className="text-app-text-muted">Reporter</span><br />{report.reporterName}</div>
               <div><span className="text-app-text-muted">Email</span><br />{report.reporterEmail}</div>
               <div><span className="text-app-text-muted">Account</span><br />{report.accountType}</div>
+              <div><span className="text-app-text-muted">Source</span><br />{report.source === 'public_support_page' ? 'Public support page' : 'In-app feedback'}</div>
+              {report.category && <div><span className="text-app-text-muted">Category</span><br />{report.category}</div>}
               <div><span className="text-app-text-muted">Screen</span><br />{report.screenLabel ?? report.route}</div>
               <div><span className="text-app-text-muted">Route</span><br />{report.route}</div>
               <div><span className="text-app-text-muted">App version</span><br />{report.appVersion ?? '—'}</div>

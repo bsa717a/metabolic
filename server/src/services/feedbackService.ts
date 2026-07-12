@@ -153,6 +153,78 @@ export async function createReport(
   return { id: report.id, reference: referenceFor(report.seq) };
 }
 
+// --- Public support page (unauthenticated) ---
+
+export const PUBLIC_SUPPORT_SOURCE = 'public_support_page';
+
+/** Allowed issue categories from the public support form. */
+export const SUPPORT_CATEGORIES = [
+  'Sign-in or account',
+  'Billing or subscription',
+  'Nutrition plan',
+  'Coach or messaging',
+  'Technical issue',
+  'Privacy or account deletion',
+  'Other'
+] as const;
+export type SupportCategory = (typeof SUPPORT_CATEGORIES)[number];
+
+/** Coarse triage bucket for the existing type filter; the precise `category` is stored alongside. */
+function categoryToType(category: SupportCategory): FeedbackType {
+  switch (category) {
+    case 'Nutrition plan':
+    case 'Coach or messaging':
+    case 'Other':
+      return FeedbackType.CONFUSING; // questions / guidance
+    default:
+      return FeedbackType.BUG; // access, billing, technical, privacy — something not working
+  }
+}
+
+/** Strip angle-bracket tags and control chars so no HTML is ever stored. */
+function stripHtml(value: string) {
+  return value.replace(/<[^>]*>/g, "").replace(/[\u0000-\u001F\u007F]/g, " ").trim();
+}
+
+export type PublicSupportInput = {
+  name: string;
+  email: string;
+  category: string;
+  message: string;
+};
+
+function isSupportCategory(value: string): value is SupportCategory {
+  return (SUPPORT_CATEGORIES as readonly string[]).includes(value);
+}
+
+export async function createPublicSupportReport(input: PublicSupportInput) {
+  const name = stripHtml(input.name).slice(0, 120);
+  const email = stripHtml(input.email).slice(0, 200);
+  const message = stripHtml(input.message).slice(0, 4000);
+  if (!message) throw new FeedbackError('Please include a message.');
+  if (!isSupportCategory(input.category)) throw new FeedbackError('Choose a valid category.');
+  const category = input.category;
+
+  const report = await prisma.feedbackReport.create({
+    data: {
+      type: categoryToType(category),
+      goal: `Support request: ${input.category}`,
+      detail: message,
+      // No userId, no diagnostics — this is an anonymous public submission.
+      reporterEmail: email,
+      reporterName: name || 'Anonymous',
+      accountType: 'public',
+      source: PUBLIC_SUPPORT_SOURCE,
+      category,
+      route: '/support',
+      screenLabel: 'Support page',
+      events: { create: { kind: 'created' } }
+    }
+  });
+
+  return { reference: referenceFor(report.seq) };
+}
+
 // --- Admin: serializers (whitelist only — never firebaseUid or health data) ---
 
 const ROW_SELECT = {
@@ -167,6 +239,8 @@ const ROW_SELECT = {
   reporterName: true,
   reporterEmail: true,
   accountType: true,
+  source: true,
+  category: true,
   route: true,
   screenLabel: true,
   appVersion: true,
@@ -195,6 +269,8 @@ function serializeRow(r: RowPayload) {
     reporterName: r.reporterName,
     reporterEmail: r.reporterEmail,
     accountType: r.accountType,
+    source: r.source,
+    category: r.category,
     route: r.route,
     screenLabel: r.screenLabel,
     appVersion: r.appVersion,

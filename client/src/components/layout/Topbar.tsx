@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LineChart, LogOut, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LifeBuoy, LineChart, LogOut, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -259,6 +259,14 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                     onClick={() => {
                       closeProfileMenu();
                       setAccountDetailsOpen(true);
+                    }}
+                  />
+                  <ProfileMenuItem
+                    label="Support"
+                    icon={LifeBuoy}
+                    onClick={() => {
+                      closeProfileMenu();
+                      navigate('/support');
                     }}
                   />
                   <ProfileMenuItem

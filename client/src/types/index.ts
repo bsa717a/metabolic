@@ -82,6 +82,8 @@ export type FeedbackListRow = {
   reporterName: string;
   reporterEmail: string;
   accountType: string;
+  source: string;
+  category: string | null;
   route: string;
   screenLabel: string | null;
   appVersion: string | null;
