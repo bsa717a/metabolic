@@ -2,7 +2,7 @@ import { MealStatus, HydrationSource, SmsDirection } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { markAllPlannedExercisesDone, markDone } from './exerciseService.js';
-import { addMealItem, getMealsForDate, markMealEatenAsPlanned, moveMealItemsToMeal } from './nutritionService.js';
+import { addMealItem, getMealsForDate, markMealEatenAsPlanned, moveMealItemsToMeal, updateMealItem } from './nutritionService.js';
 import { chatWithSmsAssistant, suggestMealOptions } from './assistantService.js';
 import { toDateKey, userDayKey, localTimeParts, parseDateParam, addUtcDays } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
@@ -556,11 +556,12 @@ async function logLookupResultToMeal(userId: string, mealId: string, result: Foo
   const names: string[] = [];
   let calories = 0;
   let protein = 0;
+  let lastItemId: string | undefined;
 
   for (const item of result.items) {
     if (item.source === 'ai') {
       const estimate = item.estimate;
-      await addMealItem(userId, mealId, {
+      const created = await addMealItem(userId, mealId, {
         type: 'ACTUAL',
         nameSnapshot: estimate.normalizedFoodName,
         quantity: 1,
@@ -570,12 +571,13 @@ async function logLookupResultToMeal(userId: string, mealId: string, result: Foo
         carbs: estimate.carbs,
         fat: estimate.fat
       });
+      lastItemId = created.id;
       names.push(estimate.normalizedFoodName);
       calories += estimate.calories;
       protein += estimate.protein;
     } else {
       const food = item.food;
-      await addMealItem(userId, mealId, {
+      const created = await addMealItem(userId, mealId, {
         foodId: food.id,
         type: 'ACTUAL',
         nameSnapshot: food.name,
@@ -586,13 +588,14 @@ async function logLookupResultToMeal(userId: string, mealId: string, result: Foo
         carbs: n(food.carbs),
         fat: n(food.fat)
       });
+      lastItemId = created.id;
       names.push(food.name);
       calories += n(food.calories);
       protein += n(food.protein);
     }
   }
 
-  return { count: names.length, names, calories, protein };
+  return { count: names.length, names, calories, protein, lastItemId };
 }
 
 function photoEstimateItemsFromResult(result: FoodLookupResult): StoredPhotoEstimateItem[] {
@@ -947,12 +950,115 @@ export async function handlePlanTargets(userId: string, dateKey: string, timeZon
   return capSms(`Your daily targets: ${targets}.${weekPart}`);
 }
 
-export async function handleFoodLog(userId: string, dateKey: string, timeZone: string | null, foodText: string, mealNameHint?: string) {
+export type ExplicitFoodMacros = {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  foodName?: string;
+};
+
+export type FoodLogResult = { message: string; lastLoggedItemId?: string };
+
+function hasAnyExplicitMacro(explicit: ExplicitFoodMacros): boolean {
+  return [explicit.calories, explicit.protein, explicit.carbs, explicit.fat].some(
+    (v) => v != null && Number.isFinite(v)
+  );
+}
+
+/** Fill in unstated macros from a food lookup so partial label data is not saved as zero. */
+async function resolveExplicitFoodMacros(
+  userId: string,
+  foodText: string,
+  explicit: ExplicitFoodMacros
+): Promise<{ calories: number; protein: number; carbs: number; fat: number; foodName: string }> {
+  const name = (explicit.foodName?.trim() || foodText.trim()) || 'Food';
+  let calories = explicit.calories;
+  let protein = explicit.protein;
+  let carbs = explicit.carbs;
+  let fat = explicit.fat;
+
+  const needsEstimate = [calories, protein, carbs, fat].some((v) => v == null);
+  if (needsEstimate && (foodText.trim() || explicit.foodName?.trim())) {
+    const lookupText = foodText.trim() || explicit.foodName!.trim();
+    const result = await lookupFood(userId, lookupText);
+    const preview = summarizeFoodLookup(result);
+    if (preview.count) {
+      let estCal = 0;
+      let estP = 0;
+      let estC = 0;
+      let estF = 0;
+      for (const item of result.items) {
+        if (item.source === 'ai') {
+          estCal += item.estimate.calories;
+          estP += item.estimate.protein;
+          estC += item.estimate.carbs;
+          estF += item.estimate.fat;
+        } else {
+          estCal += n(item.food.calories);
+          estP += n(item.food.protein);
+          estC += n(item.food.carbs);
+          estF += n(item.food.fat);
+        }
+      }
+      calories ??= estCal;
+      protein ??= estP;
+      carbs ??= estC;
+      fat ??= estF;
+    }
+  }
+
+  return {
+    calories: calories ?? 0,
+    protein: protein ?? 0,
+    carbs: carbs ?? 0,
+    fat: fat ?? 0,
+    foodName: name
+  };
+}
+
+export async function handleFoodLog(
+  userId: string,
+  dateKey: string,
+  timeZone: string | null,
+  foodText: string,
+  mealNameHint?: string,
+  explicit?: ExplicitFoodMacros
+): Promise<FoodLogResult> {
   const cleaned = foodText.trim();
-  if (!cleaned) {
-    return capSms(
-      `Tell me what you ate with amounts, like "6 oz chicken and a cup of rice". ${smsLogFoodExamples(mealNameHint)}`
-    );
+  if (!cleaned && !explicit?.foodName?.trim()) {
+    return {
+      message: capSms(
+        `Tell me what you ate with amounts, like "6 oz chicken and a cup of rice". ${smsLogFoodExamples(mealNameHint)}`
+      )
+    };
+  }
+
+  // The user gave exact numbers — log stated macros verbatim; estimate any they omitted.
+  if (explicit && hasAnyExplicitMacro(explicit)) {
+    const meal = await resolveTargetMeal(userId, dateKey, mealNameHint, timeZone);
+    const resolved = await resolveExplicitFoodMacros(userId, cleaned, explicit);
+    const created = await addMealItem(userId, meal.id, {
+      type: 'ACTUAL',
+      nameSnapshot: resolved.foodName,
+      quantity: 1,
+      unit: 'serving',
+      calories: resolved.calories,
+      protein: resolved.protein,
+      carbs: resolved.carbs,
+      fat: resolved.fat
+    });
+    const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+    const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+    const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+    return {
+      message: capSms(
+        `Logged to ${meal.name}: ${resolved.foodName} — ${Math.round(resolved.calories)} cal and ${Math.round(
+          resolved.protein
+        )}g protein. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+      ),
+      lastLoggedItemId: created.id
+    };
   }
 
   const result = await lookupFood(userId, cleaned);
@@ -960,13 +1066,15 @@ export async function handleFoodLog(userId: string, dateKey: string, timeZone: s
   const preview = summarizeFoodLookup(result);
 
   if (!preview.count) {
-    return capSms(
-      'I could not pin down the macros on that. Try naming the foods and rough amounts, like "2 eggs and a slice of toast".'
-    );
+    return {
+      message: capSms(
+        'I could not pin down the macros on that. Try naming the foods and rough amounts, like "2 eggs and a slice of toast".'
+      )
+    };
   }
 
   if (isEffectivelyZeroCalories(preview.calories, preview.protein)) {
-    return capSms(smsZeroCalorieCheckResponse(preview.names.join(', ') || cleaned, meal.name));
+    return { message: capSms(smsZeroCalorieCheckResponse(preview.names.join(', ') || cleaned, meal.name)) };
   }
 
   const logged = await logLookupResultToMeal(userId, meal.id, result);
@@ -979,10 +1087,74 @@ export async function handleFoodLog(userId: string, dateKey: string, timeZone: s
     ? ' That’s a rough estimate — reply with the right calories or amount to correct it.'
     : '';
 
+  return {
+    message: capSms(
+      `Logged to ${meal.name}: ${foodList} — about ${Math.round(logged.calories)} cal and ${Math.round(
+        logged.protein
+      )}g protein.${roughNote} You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+    ),
+    lastLoggedItemId: logged.lastItemId
+  };
+}
+
+/** The single most recently logged ACTUAL food item today — DB-based so it works even when
+ *  agent mode paraphrases the "Logged to…" reply (which text-parsing lookups depend on). */
+async function findLastLoggedActualItem(userId: string, dateKey: string) {
+  const log = await ensureDailyLogByUserId(userId, dateKey);
+  if (!log) return null;
+  return prisma.mealItem.findFirst({
+    where: { type: 'ACTUAL', meal: { dailyLogId: log.id } },
+    orderBy: { createdAt: 'desc' },
+    include: { meal: true }
+  });
+}
+
+/** Correct the macros of the last-logged food in place (e.g. "here are the actual macros for that:
+ *  190 cal, 4g protein") instead of logging a duplicate with a fresh estimate. */
+export async function handleFoodMacroCorrection(
+  userId: string,
+  dateKey: string,
+  timeZone: string | null,
+  macros: { calories?: number; protein?: number; carbs?: number; fat?: number; foodName?: string },
+  itemId?: string
+) {
+  let item =
+    itemId != null
+      ? await prisma.mealItem.findFirst({
+          where: {
+            id: itemId,
+            type: 'ACTUAL',
+            meal: { userId, dailyLog: { date: parseDateParam(dateKey) } }
+          },
+          include: { meal: true }
+        })
+      : null;
+  if (!item) item = await findLastLoggedActualItem(userId, dateKey);
+  if (!item) {
+    return capSms("I don't see a recent food log to correct. Tell me what you ate and I'll log it.");
+  }
+
+  const data: Record<string, unknown> = {};
+  if (macros.calories != null && Number.isFinite(macros.calories)) data.calories = macros.calories;
+  if (macros.protein != null && Number.isFinite(macros.protein)) data.protein = macros.protein;
+  if (macros.carbs != null && Number.isFinite(macros.carbs)) data.carbs = macros.carbs;
+  if (macros.fat != null && Number.isFinite(macros.fat)) data.fat = macros.fat;
+  if (macros.foodName?.trim()) data.nameSnapshot = macros.foodName.trim();
+
+  if (data.calories == null && data.protein == null && data.carbs == null && data.fat == null) {
+    return capSms('Tell me the corrected calories or macros, like "190 cal, 4g protein".');
+  }
+
+  await updateMealItem(userId, item.id, data);
+
+  const name = macros.foodName?.trim() || item.nameSnapshot;
+  const cal = data.calories != null ? Math.round(Number(data.calories)) : Math.round(n(item.calories));
+  const protein = data.protein != null ? Math.round(Number(data.protein)) : Math.round(n(item.protein));
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+  const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+  const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
   return capSms(
-    `Logged to ${meal.name}: ${foodList} — about ${Math.round(logged.calories)} cal and ${Math.round(
-      logged.protein
-    )}g protein.${roughNote} You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+    `Updated ${name} in ${item.meal.name} to ${cal} cal and ${protein}g protein. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
   );
 }
 
@@ -1615,7 +1787,7 @@ export async function handleSms(
     } else if (infoDomain?.domain === 'plan') {
       response = await handlePlanTargets(user.id, dateKey, user.timezone);
     } else if (action.intent === 'LOG_FOOD') {
-      response = await handleFoodLog(user.id, dateKey, user.timezone, action.foodText, action.mealName);
+      response = (await handleFoodLog(user.id, dateKey, user.timezone, action.foodText, action.mealName)).message;
     } else if (action.intent === 'LOG_PHOTO_ESTIMATE') {
       response = await handleLogLastPhotoEstimate(user.id, phone, dateKey, user.timezone, action.mealName);
     } else if (action.intent === 'MEAL_CORRECTION') {
@@ -1632,7 +1804,7 @@ export async function handleSms(
       response = await handleWriteAction(user.id, dateKey, user.timezone, action);
     } else if (freeformRoute === 'LOG_FOOD') {
       const resolved = resolveFreeformFoodLog(message, recentContext);
-      response = await handleFoodLog(user.id, dateKey, user.timezone, resolved.foodText, resolved.mealName);
+      response = (await handleFoodLog(user.id, dateKey, user.timezone, resolved.foodText, resolved.mealName)).message;
     } else if (freeformRoute === 'MEAL_SUGGESTION') {
       response = await handleMealSuggestion(user.id, message);
     } else {
