@@ -46,6 +46,8 @@ export type SmsToolContext = {
   pendingAction?: PendingActionRequest;
   /** Audit log of tool calls made this turn. */
   toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  /** ACTUAL item logged by log_food this turn — correct_last_food targets this, not newest DB row. */
+  lastLoggedItemId?: string;
 };
 
 const MEAL_PARAM_DESC = 'Meal name: breakfast, lunch, dinner, snack, or brunch. Omit to use the current/next meal.';
@@ -301,22 +303,37 @@ export async function executeSmsTool(
         const foodText = str(args.foodText);
         if (!foodText) return { error: 'I need the food and amount to log it.' };
         const calories = num(args.calories);
-        const explicit =
-          calories != null && calories > 0
-            ? { calories, protein: num(args.protein), carbs: num(args.carbs), fat: num(args.fat) }
-            : undefined;
-        const result = await handleFoodLog(ctx.userId, ctx.dateKey, ctx.timeZone, foodText, str(args.mealName) || undefined, explicit);
-        return { result };
+        const protein = num(args.protein);
+        const carbs = num(args.carbs);
+        const fat = num(args.fat);
+        const hasExplicit = [calories, protein, carbs, fat].some((v) => v != null);
+        const explicit = hasExplicit ? { calories, protein, carbs, fat } : undefined;
+        const { message, lastLoggedItemId } = await handleFoodLog(
+          ctx.userId,
+          ctx.dateKey,
+          ctx.timeZone,
+          foodText,
+          str(args.mealName) || undefined,
+          explicit
+        );
+        if (lastLoggedItemId) ctx.lastLoggedItemId = lastLoggedItemId;
+        return { result: message };
       }
       case 'correct_last_food': {
         if (signal?.aborted) return { error: 'Request cancelled.' };
-        const result = await handleFoodMacroCorrection(ctx.userId, ctx.dateKey, ctx.timeZone, {
-          calories: num(args.calories),
-          protein: num(args.protein),
-          carbs: num(args.carbs),
-          fat: num(args.fat),
-          foodName: str(args.foodName) || undefined
-        });
+        const result = await handleFoodMacroCorrection(
+          ctx.userId,
+          ctx.dateKey,
+          ctx.timeZone,
+          {
+            calories: num(args.calories),
+            protein: num(args.protein),
+            carbs: num(args.carbs),
+            fat: num(args.fat),
+            foodName: str(args.foodName) || undefined
+          },
+          ctx.lastLoggedItemId
+        );
         return { result };
       }
       case 'analyze_meal_photo': {
