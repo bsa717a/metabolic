@@ -20,6 +20,12 @@ const envSchema = z.object({
   FIREBASE_STORAGE_BUCKET: z.string().optional().default(""),
   AI_PROVIDER: z.enum(["mock", "openai", "gemini"]).default("mock"),
   SMS_AGENT_MODE: z.enum(["tree", "agent"]).default("agent"),
+  // Plan tier assigned to newly created accounts. Defaults to "plus" during Beta so
+  // new signups get Metabolic Plus; set to "starter" when Beta ends.
+  BETA_SIGNUP_PLAN: z.enum(["starter", "self_guided", "plus", "coach_led"]).default("plus"),
+  // Phone number that receives an SMS alert whenever a new account is created.
+  // Leave empty to disable signup alerts.
+  SIGNUP_ALERT_PHONE: z.string().optional().default(""),
   OPENAI_API_KEY: z.string().optional().default(""),
   GEMINI_API_KEY: z.string().optional().default(""),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
