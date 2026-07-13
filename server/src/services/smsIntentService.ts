@@ -2,7 +2,7 @@ import { MealStatus, HydrationSource, SmsDirection } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { markAllPlannedExercisesDone, markDone } from './exerciseService.js';
-import { addMealItem, getMealsForDate, markMealEatenAsPlanned, moveMealItemsToMeal } from './nutritionService.js';
+import { addMealItem, getMealsForDate, markMealEatenAsPlanned, moveMealItemsToMeal, updateMealItem } from './nutritionService.js';
 import { chatWithSmsAssistant, suggestMealOptions } from './assistantService.js';
 import { toDateKey, userDayKey, localTimeParts, parseDateParam, addUtcDays } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
@@ -947,11 +947,50 @@ export async function handlePlanTargets(userId: string, dateKey: string, timeZon
   return capSms(`Your daily targets: ${targets}.${weekPart}`);
 }
 
-export async function handleFoodLog(userId: string, dateKey: string, timeZone: string | null, foodText: string, mealNameHint?: string) {
+export type ExplicitFoodMacros = {
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  foodName?: string;
+};
+
+export async function handleFoodLog(
+  userId: string,
+  dateKey: string,
+  timeZone: string | null,
+  foodText: string,
+  mealNameHint?: string,
+  explicit?: ExplicitFoodMacros
+) {
   const cleaned = foodText.trim();
-  if (!cleaned) {
+  if (!cleaned && !explicit?.foodName?.trim()) {
     return capSms(
       `Tell me what you ate with amounts, like "6 oz chicken and a cup of rice". ${smsLogFoodExamples(mealNameHint)}`
+    );
+  }
+
+  // The user gave exact numbers — log them verbatim instead of AI-estimating from the name.
+  if (explicit && Number.isFinite(explicit.calories) && explicit.calories > 0) {
+    const meal = await resolveTargetMeal(userId, dateKey, mealNameHint, timeZone);
+    const name = (explicit.foodName?.trim() || cleaned) || 'Food';
+    await addMealItem(userId, meal.id, {
+      type: 'ACTUAL',
+      nameSnapshot: name,
+      quantity: 1,
+      unit: 'serving',
+      calories: explicit.calories,
+      protein: explicit.protein ?? 0,
+      carbs: explicit.carbs ?? 0,
+      fat: explicit.fat ?? 0
+    });
+    const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+    const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+    const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+    return capSms(
+      `Logged to ${meal.name}: ${name} — ${Math.round(explicit.calories)} cal and ${Math.round(
+        explicit.protein ?? 0
+      )}g protein. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
     );
   }
 
@@ -983,6 +1022,55 @@ export async function handleFoodLog(userId: string, dateKey: string, timeZone: s
     `Logged to ${meal.name}: ${foodList} — about ${Math.round(logged.calories)} cal and ${Math.round(
       logged.protein
     )}g protein.${roughNote} You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
+  );
+}
+
+/** The single most recently logged ACTUAL food item today — DB-based so it works even when
+ *  agent mode paraphrases the "Logged to…" reply (which text-parsing lookups depend on). */
+async function findLastLoggedActualItem(userId: string, dateKey: string) {
+  const log = await ensureDailyLogByUserId(userId, dateKey);
+  if (!log) return null;
+  return prisma.mealItem.findFirst({
+    where: { type: 'ACTUAL', meal: { dailyLogId: log.id } },
+    orderBy: { createdAt: 'desc' },
+    include: { meal: true }
+  });
+}
+
+/** Correct the macros of the last-logged food in place (e.g. "here are the actual macros for that:
+ *  190 cal, 4g protein") instead of logging a duplicate with a fresh estimate. */
+export async function handleFoodMacroCorrection(
+  userId: string,
+  dateKey: string,
+  timeZone: string | null,
+  macros: { calories?: number; protein?: number; carbs?: number; fat?: number; foodName?: string }
+) {
+  const item = await findLastLoggedActualItem(userId, dateKey);
+  if (!item) {
+    return capSms("I don't see a recent food log to correct. Tell me what you ate and I'll log it.");
+  }
+
+  const data: Record<string, unknown> = {};
+  if (macros.calories != null && Number.isFinite(macros.calories)) data.calories = macros.calories;
+  if (macros.protein != null && Number.isFinite(macros.protein)) data.protein = macros.protein;
+  if (macros.carbs != null && Number.isFinite(macros.carbs)) data.carbs = macros.carbs;
+  if (macros.fat != null && Number.isFinite(macros.fat)) data.fat = macros.fat;
+  if (macros.foodName?.trim()) data.nameSnapshot = macros.foodName.trim();
+
+  if (data.calories == null && data.protein == null && data.carbs == null && data.fat == null) {
+    return capSms('Tell me the corrected calories or macros, like "190 cal, 4g protein".');
+  }
+
+  await updateMealItem(userId, item.id, data);
+
+  const name = macros.foodName?.trim() || item.nameSnapshot;
+  const cal = data.calories != null ? Math.round(Number(data.calories)) : Math.round(n(item.calories));
+  const protein = data.protein != null ? Math.round(Number(data.protein)) : Math.round(n(item.protein));
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+  const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
+  const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+  return capSms(
+    `Updated ${name} in ${item.meal.name} to ${cal} cal and ${protein}g protein. You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today. ${pickEncouragement()}`
   );
 }
 

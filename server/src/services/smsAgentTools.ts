@@ -3,6 +3,7 @@ import { SchemaType, type FunctionDeclaration } from '@google/generative-ai';
 import {
   SmsResponseError,
   handleFoodLog,
+  handleFoodMacroCorrection,
   handleFoodPhoto,
   handleLogLastPhotoEstimate,
   handleMacroStatus,
@@ -96,7 +97,7 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
     {
       name: 'log_food',
       description:
-        'Log food the user already ate or is eating now. Provide the food(s) with amounts. Use for "had 6 oz chicken and rice", "add 2 oz peanuts to breakfast".',
+        'Log food the user already ate or is eating now. Provide the food(s) with amounts. Use for "had 6 oz chicken and rice", "add 2 oz peanuts to breakfast". If the user states exact calories/macros for the food (e.g. "log the sorbet, 190 cal 28g carbs 6g fat 4g protein"), pass them in calories/protein/carbs/fat so they are recorded verbatim instead of estimated.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
@@ -104,9 +105,28 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
             type: SchemaType.STRING,
             description: 'The food(s) and amounts, e.g. "6 oz chicken and a cup of rice".'
           },
-          mealName: { type: SchemaType.STRING, description: MEAL_PARAM_DESC }
+          mealName: { type: SchemaType.STRING, description: MEAL_PARAM_DESC },
+          calories: { type: SchemaType.NUMBER, description: 'Exact calories if the user stated them. Omit to let the app estimate.' },
+          protein: { type: SchemaType.NUMBER, description: 'Exact protein grams if stated.' },
+          carbs: { type: SchemaType.NUMBER, description: 'Exact carb grams if stated.' },
+          fat: { type: SchemaType.NUMBER, description: 'Exact fat grams if stated.' }
         },
         required: ['foodText']
+      }
+    },
+    {
+      name: 'correct_last_food',
+      description:
+        "Correct the macros of the food most recently logged, updating it in place (never logs a new item). Use when the user gives the real numbers for something just logged — e.g. \"here are the actual macros for that: 190 cal, 28g carbs, 6g fat, 4g protein\" or \"it was actually 190 calories\". At least one of calories/protein/carbs/fat is required.",
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          calories: { type: SchemaType.NUMBER, description: 'Corrected calories.' },
+          protein: { type: SchemaType.NUMBER, description: 'Corrected protein grams.' },
+          carbs: { type: SchemaType.NUMBER, description: 'Corrected carb grams.' },
+          fat: { type: SchemaType.NUMBER, description: 'Corrected fat grams.' },
+          foodName: { type: SchemaType.STRING, description: 'Optional corrected name for the item.' }
+        }
       }
     },
     {
@@ -222,6 +242,13 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/** Coerce a model-supplied numeric arg; returns undefined for missing/non-finite values. */
+function num(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
 /** Runs a tool the model called and returns a JSON-serializable result/error the model can read. */
 export async function executeSmsTool(
   ctx: SmsToolContext,
@@ -273,7 +300,23 @@ export async function executeSmsTool(
         if (signal?.aborted) return { error: 'Request cancelled.' };
         const foodText = str(args.foodText);
         if (!foodText) return { error: 'I need the food and amount to log it.' };
-        const result = await handleFoodLog(ctx.userId, ctx.dateKey, ctx.timeZone, foodText, str(args.mealName) || undefined);
+        const calories = num(args.calories);
+        const explicit =
+          calories != null && calories > 0
+            ? { calories, protein: num(args.protein), carbs: num(args.carbs), fat: num(args.fat) }
+            : undefined;
+        const result = await handleFoodLog(ctx.userId, ctx.dateKey, ctx.timeZone, foodText, str(args.mealName) || undefined, explicit);
+        return { result };
+      }
+      case 'correct_last_food': {
+        if (signal?.aborted) return { error: 'Request cancelled.' };
+        const result = await handleFoodMacroCorrection(ctx.userId, ctx.dateKey, ctx.timeZone, {
+          calories: num(args.calories),
+          protein: num(args.protein),
+          carbs: num(args.carbs),
+          fat: num(args.fat),
+          foodName: str(args.foodName) || undefined
+        });
         return { result };
       }
       case 'analyze_meal_photo': {
