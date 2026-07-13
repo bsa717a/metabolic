@@ -2,6 +2,8 @@ import type { DecodedIdToken } from "firebase-admin/auth";
 import type { User } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
+import { env } from "../config/env.js";
+import { slugToPlan } from "../services/entitlements.js";
 
 function splitName(firebaseUser: DecodedIdToken) {
   const [firstName = "Metabolic", ...lastNameParts] = (firebaseUser.name || firebaseUser.email?.split("@")[0] || "User")
@@ -78,6 +80,9 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
 
   const { firstName, lastName } = splitName(firebaseUser);
 
+  // During Beta, new accounts are provisioned at the BETA_SIGNUP_PLAN tier (default: Plus).
+  const signupPlan = slugToPlan(env.BETA_SIGNUP_PLAN) ?? undefined;
+
   try {
     return await prisma.user.create({
       data: {
@@ -86,7 +91,8 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
         firstName,
         lastName,
         role: "USER",
-        status: "ACTIVE"
+        status: "ACTIVE",
+        ...(signupPlan ? { plan: signupPlan } : {})
       }
     });
   } catch (error) {
