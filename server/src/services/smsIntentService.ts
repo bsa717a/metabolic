@@ -528,8 +528,8 @@ async function resolveTargetMeal(userId: string, dateKey: string, mealNameHint?:
     const normalized = normalizeMealNameHint(mealNameHint) ?? mealNameHint;
     const named = meals.find((meal) => meal.name.toLowerCase().includes(normalized.toLowerCase()));
     if (named) return named;
-    // Slot words (breakfast/lunch/dinner) that don't match a dish-named meal — resolve by time.
-    const slotMatch = matchMealForRead(meals, mealNameHint);
+    // Slot words (breakfast/lunch/dinner) that don't match a dish-named meal — resolve by time only.
+    const slotMatch = matchMealForRead(meals, mealNameHint, { strictSlot: true });
     if (slotMatch) return slotMatch;
     throw new SmsResponseError(smsMealLookupFailureResponse(normalized, meals, 'log'));
   }
@@ -777,7 +777,11 @@ const SLOT_WINDOWS: Array<{ re: RegExp; window: [number, number]; pos: 'first' |
 
 /** Resolve a meal from a hint by name, then meal number, then slot-word time window. Generic so
  * both the read path (display meals) and the write path (prisma meals) can reuse it. */
-function matchMealForRead<T extends MealForMatch>(meals: T[], hint: string): T | null {
+function matchMealForRead<T extends MealForMatch>(
+  meals: T[],
+  hint: string,
+  options?: { strictSlot?: boolean }
+): T | null {
   const normalized = (normalizeMealNameHint(hint) ?? hint).toLowerCase().trim();
   const byName = meals.find((meal) => meal.name.toLowerCase().includes(normalized));
   if (byName) return byName;
@@ -796,6 +800,7 @@ function matchMealForRead<T extends MealForMatch>(meals: T[], hint: string): T |
       .filter((entry) => entry.min >= slot.window[0] && entry.min <= slot.window[1])
       .sort((a, b) => a.min - b.min);
     if (timed.length) return timed[0].meal;
+    if (options?.strictSlot) return null;
     if (slot.pos === 'first') return meals[0] ?? null;
     if (slot.pos === 'last') return meals[meals.length - 1] ?? null;
     return meals[Math.floor(meals.length / 2)] ?? null;
@@ -900,13 +905,19 @@ export async function handleExerciseDetails(userId: string, todayKey: string, _t
   return capSms(`Workout for ${label}: ${exercises.length} exercise${exercises.length === 1 ? '' : 's'}, ${done} done. ${lines.join('; ')}.`);
 }
 
-/** Water intake vs goal for today. */
-export async function handleHydrationStatus(userId: string, dateKey: string, timeZone: string | null) {
+/** Water intake vs goal for a given day (defaults to today). */
+export async function handleHydrationStatus(
+  userId: string,
+  todayKey: string,
+  timeZone: string | null,
+  dateArg?: string
+) {
+  const { dateKey, label } = resolveReadDate(dateArg, todayKey);
   const summary = await getHydrationSummary(userId, dateKey, timeZone);
   const remaining = Math.max(0, summary.targetOz - summary.actualOz);
   const goalPart = summary.goalMet ? "You've hit your water goal!" : `${remaining} oz to go.`;
   const streakPart = summary.currentStreak > 0 ? ` ${summary.currentStreak}-day water streak.` : '';
-  return capSms(`Water today: ${summary.actualOz} of ${summary.targetOz} oz. ${goalPart}${streakPart}`);
+  return capSms(`Water ${label}: ${summary.actualOz} of ${summary.targetOz} oz. ${goalPart}${streakPart}`);
 }
 
 /** Current weight vs start/goal and direction of change. */
@@ -1598,7 +1609,7 @@ export async function handleSms(
     } else if (infoDomain?.domain === 'exercise') {
       response = await handleExerciseDetails(user.id, dateKey, user.timezone, infoDomain.date);
     } else if (infoDomain?.domain === 'hydration') {
-      response = await handleHydrationStatus(user.id, dateKey, user.timezone);
+      response = await handleHydrationStatus(user.id, dateKey, user.timezone, infoDomain.date);
     } else if (infoDomain?.domain === 'progress') {
       response = await handleProgressStatus(user.id, dateKey, user.timezone);
     } else if (infoDomain?.domain === 'plan') {

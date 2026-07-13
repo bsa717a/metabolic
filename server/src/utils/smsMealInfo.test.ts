@@ -16,7 +16,7 @@ describe('parseMealInfoQuery — routes meal/macro lookups', () => {
 
   it('matches whole-day plan questions', () => {
     assert.ok(parseMealInfoQuery('whats my whole plan for the day with macros'));
-    assert.equal(parseMealInfoQuery('what are my macros for tomorrow?')?.date, undefined); // no meal/plan word → null
+    assert.equal(parseMealInfoQuery('what are my macros for tomorrow?')?.date, 'tomorrow');
   });
 
   it('captures relative dates', () => {

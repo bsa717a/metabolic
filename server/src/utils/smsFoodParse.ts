@@ -116,7 +116,7 @@ export function parseMealInfoQuery(message: string): { meal?: string; date?: str
   const dateWord = /\b(today|tonight|tomorrow|yesterday)\b/.exec(text)?.[1] ?? /\b(\d{4}-\d{2}-\d{2})\b/.exec(text)?.[1];
   const date = dateWord === 'tonight' ? 'today' : dateWord;
 
-  if (nutritionAsk && (meal || planAsk)) return { meal: meal ?? undefined, date };
+  if (nutritionAsk && (meal || planAsk || date)) return { meal: meal ?? undefined, date };
   if (meal && /\bwhat'?s?\s+(in|for)\b|\bwhat is\s+(in|for)\b|\bshow me\b|\btell me about\b/.test(text)) {
     return { meal, date };
   }

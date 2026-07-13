@@ -2097,6 +2097,7 @@ ${JSON.stringify(batches)}`;
       // gemini-2.5-flash intermittently returns an empty candidate on the first turn
       // (finishReason STOP, zero output tokens — no function call and no text). Retrying
       // the opening turn reliably recovers; without it the user gets a useless "Got it!".
+      let chat = model.startChat({ history });
       const isEmptyTurn = (r: Awaited<ReturnType<typeof chat.sendMessage>>): boolean => {
         if (r.response.functionCalls()?.length) return false;
         let text = '';
@@ -2107,7 +2108,6 @@ ${JSON.stringify(batches)}`;
         }
         return !text.trim();
       };
-      let chat = model.startChat({ history });
       let result = await chat.sendMessage(last.content);
       for (let attempt = 0; attempt < 2 && isEmptyTurn(result); attempt += 1) {
         chat = model.startChat({ history });
