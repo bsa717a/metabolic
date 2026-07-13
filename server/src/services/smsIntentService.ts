@@ -2,9 +2,9 @@ import { MealStatus, HydrationSource, SmsDirection } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { markAllPlannedExercisesDone, markDone } from './exerciseService.js';
-import { addMealItem, markMealEatenAsPlanned, moveMealItemsToMeal } from './nutritionService.js';
+import { addMealItem, getMealsForDate, markMealEatenAsPlanned, moveMealItemsToMeal } from './nutritionService.js';
 import { chatWithSmsAssistant, suggestMealOptions } from './assistantService.js';
-import { toDateKey, userDayKey, localTimeParts } from '../utils/dates.js';
+import { toDateKey, userDayKey, localTimeParts, parseDateParam, addUtcDays } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
 import { getAiProvider, type ChatMessage, type MealSuggestionResult } from './aiService.js';
 import { lookupFood, lookupFoodFromImage, lookupHasRoughEstimate, summarizeFoodLookup, type FoodLookupResult } from './foodLookupService.js';
@@ -12,9 +12,10 @@ import { env } from '../config/env.js';
 import { sendOutboundMessage, isTwilioConfigured, type TwilioMessageChannel } from './twilioOutboundService.js';
 import { runSmsAgentEntry } from './smsAgentService.js';
 import { ensureDailyLogByUserId, ensureSelfDirectedProgram } from './dailyLogService.js';
-import { logWater } from './hydrationService.js';
+import { logWater, getHydrationSummary } from './hydrationService.js';
+import { getPlanStatus } from './planStatusService.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
-import { n } from '../utils/numbers.js';
+import { n, round } from '../utils/numbers.js';
 import { normalizePhone, phonesMatch } from '../utils/phone.js';
 import {
   assistantResponseLooksLikeMealFailure,
@@ -26,6 +27,8 @@ import {
   looksLikeFoodLogRetry,
   mergeFoodLogFollowUp,
   normalizeMealNameHint,
+  parseMealInfoQuery,
+  parseInfoDomain,
   parseFoodLogAction,
   parsePhotoEstimateFoodNames,
   parseLoggedFoodFromAssistantResponse,
@@ -525,6 +528,9 @@ async function resolveTargetMeal(userId: string, dateKey: string, mealNameHint?:
     const normalized = normalizeMealNameHint(mealNameHint) ?? mealNameHint;
     const named = meals.find((meal) => meal.name.toLowerCase().includes(normalized.toLowerCase()));
     if (named) return named;
+    // Slot words (breakfast/lunch/dinner) that don't match a dish-named meal — resolve by time.
+    const slotMatch = matchMealForRead(meals, mealNameHint);
+    if (slotMatch) return slotMatch;
     throw new SmsResponseError(smsMealLookupFailureResponse(normalized, meals, 'log'));
   }
 
@@ -734,6 +740,200 @@ export async function handleMacroStatus(userId: string, dateKey: string, timeZon
     : '';
 
   return capSms(`You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today.${nextPart}`);
+}
+
+// --- Read-only lookups so the coach can answer questions about the user's own data ---
+
+function resolveReadDate(dateArg: string | undefined, todayKey: string): { dateKey: string; label: string } {
+  const today = parseDateParam(todayKey);
+  const lower = dateArg?.trim().toLowerCase() ?? '';
+  if (!lower || lower === 'today') return { dateKey: todayKey, label: 'today' };
+  if (lower === 'yesterday') return { dateKey: toDateKey(addUtcDays(today, -1)), label: 'yesterday' };
+  if (lower === 'tomorrow') return { dateKey: toDateKey(addUtcDays(today, 1)), label: 'tomorrow' };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(lower)) return { dateKey: lower, label: lower === todayKey ? 'today' : lower };
+  return { dateKey: todayKey, label: 'today' };
+}
+
+function fullMacros(cal: number, protein: number, carbs: number, fat: number) {
+  return `${Math.round(cal)} cal, ${Math.round(protein)}g protein, ${Math.round(carbs)}g carbs, ${Math.round(fat)}g fat`;
+}
+
+type ReadMeal = Awaited<ReturnType<typeof getMealsForDate>>[number];
+
+type MealForMatch = { name: string; mealNumber: number; plannedTime: string | null };
+
+function mealMinutes(meal: MealForMatch): number | null {
+  const m = (meal.plannedTime ?? '').match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+// Slot words → typical time window, with a positional fallback when meals are dish-named.
+const SLOT_WINDOWS: Array<{ re: RegExp; window: [number, number]; pos: 'first' | 'middle' | 'last' }> = [
+  { re: /breakfast/, window: [240, 630], pos: 'first' },
+  { re: /brunch/, window: [540, 720], pos: 'first' },
+  { re: /lunch/, window: [630, 900], pos: 'middle' },
+  { re: /dinner|supper/, window: [960, 1320], pos: 'last' }
+];
+
+/** Resolve a meal from a hint by name, then meal number, then slot-word time window. Generic so
+ * both the read path (display meals) and the write path (prisma meals) can reuse it. */
+function matchMealForRead<T extends MealForMatch>(meals: T[], hint: string): T | null {
+  const normalized = (normalizeMealNameHint(hint) ?? hint).toLowerCase().trim();
+  const byName = meals.find((meal) => meal.name.toLowerCase().includes(normalized));
+  if (byName) return byName;
+  const numMatch = hint.match(/\b(?:meal\s*)?([1-9])\b/i);
+  if (numMatch) {
+    const target = Number(numMatch[1]);
+    const byNumber = meals.find((meal) => meal.mealNumber === target);
+    if (byNumber) return byNumber;
+  }
+  // Slot word (breakfast/lunch/dinner) that didn't match a meal name — use planned time, then position.
+  const slot = SLOT_WINDOWS.find((entry) => entry.re.test(normalized));
+  if (slot) {
+    const timed = meals
+      .map((meal) => ({ meal, min: mealMinutes(meal) }))
+      .filter((entry): entry is { meal: T; min: number } => entry.min !== null)
+      .filter((entry) => entry.min >= slot.window[0] && entry.min <= slot.window[1])
+      .sort((a, b) => a.min - b.min);
+    if (timed.length) return timed[0].meal;
+    if (slot.pos === 'first') return meals[0] ?? null;
+    if (slot.pos === 'last') return meals[meals.length - 1] ?? null;
+    return meals[Math.floor(meals.length / 2)] ?? null;
+  }
+  return null;
+}
+
+function formatMealDetail(meal: ReadMeal, label: string): string {
+  const planned = meal.items.filter((item) => item.type === 'PLANNED');
+  const actual = meal.items.filter((item) => item.type === 'ACTUAL');
+  const parts = [
+    `${meal.name} (${label}) — planned: ${fullMacros(n(meal.plannedCalories), n(meal.plannedProtein), n(meal.plannedCarbs), n(meal.plannedFat))}.`
+  ];
+  if (planned.length) {
+    parts.push(
+      'Items: ' +
+        planned
+          .map(
+            (item) =>
+              `${item.nameSnapshot} (${Math.round(n(item.calories))} cal, ${Math.round(n(item.protein))}P/${Math.round(n(item.carbs))}C/${Math.round(n(item.fat))}F)`
+          )
+          .join('; ') +
+        '.'
+    );
+  }
+  if (actual.length) {
+    parts.push(
+      `Logged so far: ${fullMacros(n(meal.actualCalories), n(meal.actualProtein), n(meal.actualCarbs), n(meal.actualFat))}.`
+    );
+  }
+  return parts.join(' ');
+}
+
+function formatDayNutrition(meals: ReadMeal[], label: string): string {
+  const totals = meals.reduce(
+    (acc, meal) => {
+      acc.cal += n(meal.plannedCalories);
+      acc.protein += n(meal.plannedProtein);
+      acc.carbs += n(meal.plannedCarbs);
+      acc.fat += n(meal.plannedFat);
+      return acc;
+    },
+    { cal: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+  const perMeal = meals
+    .map(
+      (meal) =>
+        `${meal.mealNumber}. ${meal.name}: ${Math.round(n(meal.plannedCalories))} cal, ${Math.round(n(meal.plannedProtein))}P/${Math.round(n(meal.plannedCarbs))}C/${Math.round(n(meal.plannedFat))}F`
+    )
+    .join('; ');
+  return `${label} plan total: ${fullMacros(totals.cal, totals.protein, totals.carbs, totals.fat)} across ${meals.length} meal${meals.length === 1 ? '' : 's'}. ${perMeal}.`;
+}
+
+/**
+ * Answers questions about the user's meals and macros. With a meal name → that meal's full
+ * macros + item breakdown; without → the whole day's plan totals and per-meal macros.
+ */
+export async function handleMealDetails(
+  userId: string,
+  todayKey: string,
+  _timeZone: string | null,
+  mealName?: string,
+  dateArg?: string
+) {
+  const { dateKey, label } = resolveReadDate(dateArg, todayKey);
+  const meals = await getMealsForDate(userId, dateKey);
+  if (!meals.length) return capSms(`No meals are planned or logged for ${label}.`);
+
+  if (mealName?.trim()) {
+    const meal = matchMealForRead(meals, mealName);
+    if (!meal) {
+      const list = meals.map((m) => `${m.mealNumber}. ${m.name}`).join(', ');
+      return capSms(`I don't see "${mealName.trim()}" for ${label}. Your meals: ${list}. Which one?`);
+    }
+    return capSms(formatMealDetail(meal, label));
+  }
+
+  return capSms(formatDayNutrition(meals, label));
+}
+
+/** Today's (or another day's) scheduled workout with sets/reps and completion status. */
+export async function handleExerciseDetails(userId: string, todayKey: string, _timeZone: string | null, dateArg?: string) {
+  const { dateKey, label } = resolveReadDate(dateArg, todayKey);
+  const exercises = await prisma.scheduledExercise.findMany({
+    where: { userId, scheduledDate: parseDateParam(dateKey) },
+    include: { exercise: true },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
+  });
+  if (!exercises.length) return capSms(`No workout is scheduled for ${label}.`);
+
+  const done = exercises.filter((ex) => ex.status === 'DONE').length;
+  const lines = exercises.map((ex, index) => {
+    const bits: string[] = [];
+    if (ex.sets != null && ex.reps != null) bits.push(`${ex.sets}x${ex.reps}`);
+    else if (ex.durationMinutes != null) bits.push(`${ex.durationMinutes} min`);
+    if (ex.weight != null) bits.push(`${n(ex.weight)} lb`);
+    if (ex.distance != null) bits.push(`${n(ex.distance)} mi`);
+    const detail = bits.length ? ` (${bits.join(', ')})` : '';
+    const mark = ex.status === 'DONE' ? ' — done' : ex.status === 'SKIPPED' ? ' — skipped' : '';
+    return `${index + 1}. ${ex.exercise.name}${detail}${mark}`;
+  });
+  return capSms(`Workout for ${label}: ${exercises.length} exercise${exercises.length === 1 ? '' : 's'}, ${done} done. ${lines.join('; ')}.`);
+}
+
+/** Water intake vs goal for today. */
+export async function handleHydrationStatus(userId: string, dateKey: string, timeZone: string | null) {
+  const summary = await getHydrationSummary(userId, dateKey, timeZone);
+  const remaining = Math.max(0, summary.targetOz - summary.actualOz);
+  const goalPart = summary.goalMet ? "You've hit your water goal!" : `${remaining} oz to go.`;
+  const streakPart = summary.currentStreak > 0 ? ` ${summary.currentStreak}-day water streak.` : '';
+  return capSms(`Water today: ${summary.actualOz} of ${summary.targetOz} oz. ${goalPart}${streakPart}`);
+}
+
+/** Current weight vs start/goal and direction of change. */
+export async function handleProgressStatus(userId: string, dateKey: string, timeZone: string | null) {
+  const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
+  if (!dashboard.program) return capSms("You don't have an active program yet.");
+  const weightMetric = dashboard.program.metrics.find((metric) => metric.metricType === 'WEIGHT');
+  if (!weightMetric) return capSms('No weight goal is set up yet.');
+  const start = n(weightMetric.startValue);
+  const current = n(weightMetric.currentValue);
+  const goal = n(weightMetric.goalValue);
+  const changed = round(start - current, 1);
+  const dir = changed > 0 ? `down ${changed} lb` : changed < 0 ? `up ${Math.abs(changed)} lb` : 'holding steady';
+  return capSms(`Weight: ${current} lb (started ${start}, goal ${goal}). You're ${dir} since the start. Keep going!`);
+}
+
+/** Daily macro/calorie targets and current plan week. */
+export async function handlePlanTargets(userId: string, dateKey: string, timeZone: string | null) {
+  const [dashboard, status] = await Promise.all([
+    getTodayDashboard(userId, dateKey, timeZone),
+    getPlanStatus(userId).catch(() => null)
+  ]);
+  if (!dashboard.dailyLog) return capSms('No plan targets are set for today yet.');
+  const dl = dashboard.dailyLog;
+  const targets = fullMacros(n(dl.calorieTarget), n(dl.proteinTarget), n(dl.carbTarget), n(dl.fatTarget));
+  const weekPart = status?.weekNumber ? ` You're on week ${status.weekNumber} of your plan.` : '';
+  return capSms(`Your daily targets: ${targets}.${weekPart}`);
 }
 
 export async function handleFoodLog(userId: string, dateKey: string, timeZone: string | null, foodText: string, mealNameHint?: string) {
@@ -1349,11 +1549,19 @@ export async function handleSms(
       freeformRoute = await classifyFreeformFood(message);
     }
   }
+  // Read-only info questions — answered directly so the tree classifier doesn't misroute them.
+  // Nutrition/meal questions first, then other domains (workout, water, weight, plan targets).
+  const mealInfo = isFoodPhoto || !hasTextBody ? null : parseMealInfoQuery(message);
+  const infoDomain = isFoodPhoto || !hasTextBody || mealInfo ? null : parseInfoDomain(message);
   const intent = isFoodPhoto
     ? 'FOOD_PHOTO'
     : mediaMissing && !hasTextBody
       ? 'FOOD_PHOTO_MISSING'
-      : action.intent ?? freeformRoute ?? 'AI_CHAT';
+      : mealInfo
+        ? 'MEAL_DETAILS'
+        : infoDomain
+          ? `INFO_${infoDomain.domain.toUpperCase()}`
+          : action.intent ?? freeformRoute ?? 'AI_CHAT';
   const inboundMessage = message.trim() || (isFoodPhoto || mediaMissing ? '[Meal photo]' : '');
 
   const inbound = await prisma.smsMessage.create({
@@ -1385,7 +1593,17 @@ export async function handleSms(
   const dateKey = userDayKey(user.timezone);
   let response: string;
   try {
-    if (action.intent === 'LOG_FOOD') {
+    if (mealInfo) {
+      response = await handleMealDetails(user.id, dateKey, user.timezone, mealInfo.meal, mealInfo.date);
+    } else if (infoDomain?.domain === 'exercise') {
+      response = await handleExerciseDetails(user.id, dateKey, user.timezone, infoDomain.date);
+    } else if (infoDomain?.domain === 'hydration') {
+      response = await handleHydrationStatus(user.id, dateKey, user.timezone);
+    } else if (infoDomain?.domain === 'progress') {
+      response = await handleProgressStatus(user.id, dateKey, user.timezone);
+    } else if (infoDomain?.domain === 'plan') {
+      response = await handlePlanTargets(user.id, dateKey, user.timezone);
+    } else if (action.intent === 'LOG_FOOD') {
       response = await handleFoodLog(user.id, dateKey, user.timezone, action.foodText, action.mealName);
     } else if (action.intent === 'LOG_PHOTO_ESTIMATE') {
       response = await handleLogLastPhotoEstimate(user.id, phone, dateKey, user.timezone, action.mealName);

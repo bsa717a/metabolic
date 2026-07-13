@@ -19,7 +19,7 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string().optional().default(""),
   FIREBASE_STORAGE_BUCKET: z.string().optional().default(""),
   AI_PROVIDER: z.enum(["mock", "openai", "gemini"]).default("mock"),
-  SMS_AGENT_MODE: z.enum(["tree", "agent"]).default("tree"),
+  SMS_AGENT_MODE: z.enum(["tree", "agent"]).default("agent"),
   OPENAI_API_KEY: z.string().optional().default(""),
   GEMINI_API_KEY: z.string().optional().default(""),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
