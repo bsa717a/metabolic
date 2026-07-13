@@ -4,6 +4,20 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
 import { slugToPlan } from "../services/entitlements.js";
+import { isTwilioConfigured, sendOutboundMessage } from "../services/twilioOutboundService.js";
+
+/** Best-effort SMS alert to the owner when a new account is created. Never throws — a
+ *  failed/unconfigured alert must not break signup. */
+async function notifyNewSignup(user: User) {
+  const to = env.SIGNUP_ALERT_PHONE.trim();
+  if (!to || !isTwilioConfigured()) return;
+  try {
+    const name = `${user.firstName} ${user.lastName}`.trim() || "New user";
+    await sendOutboundMessage(to, `New Metabolic signup: ${name} (${user.email}).`);
+  } catch (error) {
+    console.error("Failed to send new-signup SMS alert", error);
+  }
+}
 
 function splitName(firebaseUser: DecodedIdToken) {
   const [firstName = "Metabolic", ...lastNameParts] = (firebaseUser.name || firebaseUser.email?.split("@")[0] || "User")
@@ -84,7 +98,7 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
   const signupPlan = slugToPlan(env.BETA_SIGNUP_PLAN) ?? undefined;
 
   try {
-    return await prisma.user.create({
+    const createdUser = await prisma.user.create({
       data: {
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email.toLowerCase(),
@@ -95,6 +109,8 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
         ...(signupPlan ? { plan: signupPlan } : {})
       }
     });
+    await notifyNewSignup(createdUser);
+    return createdUser;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const existing = await prisma.user.findUnique({ where: { firebaseUid: firebaseUser.uid } });
