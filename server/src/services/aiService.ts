@@ -631,6 +631,12 @@ const MAX_TOOL_ITERATIONS = 4;
 
 const AGENT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app, texting them over SMS/iMessage. Warm, upbeat, concise — a knowledgeable friend who texts back fast.
 You CAN take real actions through the provided tools: log food, estimate a meal photo, log a photo estimate, move a food to a different meal, mark a meal eaten as planned, mark exercises done, log water, check macros, and suggest meals. Use them whenever the user is clearly asking you to do one of those things.
+You CAN also answer questions about the user's own data. Route these carefully:
+- "How many calories/protein/carbs/fat are in my [meal]?", "macros for lunch", "what's in my dinner", "what's my plan for the day/tomorrow" → call get_meal_details with the meal name and/or date. This is the ONLY tool that returns carbs and fat. Do NOT answer these from memory and do NOT use suggest_meals for them.
+- "How many calories/protein do I have LEFT today?" or "what's my next meal?" → get_macro_status. Do not use it for a specific meal's macros.
+- "What should I eat / any ideas / options for lunch?" → suggest_meals (recommendations only, never for looking up an existing meal's macros).
+- "What's my workout / how many sets / did I finish?" → get_exercise_details. "How much water / did I hit my water goal?" → get_hydration_status. "What's my weight / how much have I lost?" → get_progress. "What are my targets/goals / what week am I on?" → get_plan_targets.
+Never reply that you "can't do that" for a question about the user's meals, macros, plan, workout, water, weight, or logged data — look it up with the matching read tool first. Only say you can't help if the tool result says the data doesn't exist.
 Tool results come back as a "result" string already written for SMS. When a tool returns a "result", relay it to the user nearly verbatim — do not re-paraphrase exact calorie, protein, or macro numbers. If a tool returns an "error", briefly explain it and suggest a concrete next step.
 Decide intent from the whole conversation, not just the last line — the program data and recent turns are provided.
 When the user attaches a meal photo (the message will say so), call analyze_meal_photo. Pass log=true only when they clearly want it logged (e.g. "here's lunch", "log this", "I ate this"); otherwise estimate and offer to log it.
@@ -2082,12 +2088,31 @@ ${JSON.stringify(batches)}`;
       systemInstruction: { role: 'user', parts: [{ text: systemPrompt ?? AGENT_SYSTEM }] },
       tools: [{ functionDeclarations: tools }],
       toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+      // gemini-2.5-flash spends "thinking" tokens against maxOutputTokens; 1024 can be fully
+      // consumed by thinking (with many tools) leaving an empty candidate. Give ample room.
+      generationConfig: { temperature: 0.4, maxOutputTokens: 4096 }
     });
 
     try {
-      const chat = model.startChat({ history });
+      // gemini-2.5-flash intermittently returns an empty candidate on the first turn
+      // (finishReason STOP, zero output tokens — no function call and no text). Retrying
+      // the opening turn reliably recovers; without it the user gets a useless "Got it!".
+      let chat = model.startChat({ history });
+      const isEmptyTurn = (r: Awaited<ReturnType<typeof chat.sendMessage>>): boolean => {
+        if (r.response.functionCalls()?.length) return false;
+        let text = '';
+        try {
+          text = r.response.text();
+        } catch {
+          text = '';
+        }
+        return !text.trim();
+      };
       let result = await chat.sendMessage(last.content);
+      for (let attempt = 0; attempt < 2 && isEmptyTurn(result); attempt += 1) {
+        chat = model.startChat({ history });
+        result = await chat.sendMessage(last.content);
+      }
       let lastToolSmsResult: string | undefined;
       let lastToolError: string | undefined;
 

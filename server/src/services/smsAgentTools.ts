@@ -6,6 +6,11 @@ import {
   handleFoodPhoto,
   handleLogLastPhotoEstimate,
   handleMacroStatus,
+  handleMealDetails,
+  handleExerciseDetails,
+  handleHydrationStatus,
+  handleProgressStatus,
+  handlePlanTargets,
   handleMealCorrection,
   handleMealSuggestion,
   handleWriteAction,
@@ -43,12 +48,50 @@ export type SmsToolContext = {
 };
 
 const MEAL_PARAM_DESC = 'Meal name: breakfast, lunch, dinner, snack, or brunch. Omit to use the current/next meal.';
+const DATE_PARAM_DESC = 'Which day: "today" (default), "yesterday", "tomorrow", or a YYYY-MM-DD date.';
 
 export function buildSmsToolDeclarations(): FunctionDeclaration[] {
   return [
     {
       name: 'get_macro_status',
-      description: "Report how many calories and grams of protein the user has left today and their next meal. Read-only."
+      description:
+        "Report how many calories and protein the user has LEFT/remaining today and their next meal. Read-only. Do NOT use this for the macros of a specific meal — use get_meal_details for that."
+    },
+    {
+      name: 'get_meal_details',
+      description:
+        "Look up the user's own planned/logged foods and full macros — calories, protein, carbs, AND fat. With a meal name, returns that meal's macros and item breakdown; with no meal, returns the whole day's plan totals and per-meal macros. Use for any question about their meals, calories, carbs, or fat (e.g. \"macros for lunch\", \"how many carbs in dinner\", \"what's my plan tomorrow\", \"calories I ate yesterday\"). Read-only.",
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          meal: { type: SchemaType.STRING, description: MEAL_PARAM_DESC },
+          date: { type: SchemaType.STRING, description: DATE_PARAM_DESC }
+        }
+      }
+    },
+    {
+      name: 'get_exercise_details',
+      description:
+        "Look up the user's scheduled workout — exercises, sets/reps, and which are done. Use for \"what's my workout\", \"how many sets of X\", \"did I finish my workout\". Read-only.",
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: { date: { type: SchemaType.STRING, description: DATE_PARAM_DESC } }
+      }
+    },
+    {
+      name: 'get_hydration_status',
+      description:
+        'Report the user\'s water intake vs their goal today, and their water streak. Use for "how much water have I had", "did I hit my water goal". Read-only.'
+    },
+    {
+      name: 'get_progress',
+      description:
+        'Report the user\'s current weight vs their start and goal and how much they\'ve changed. Use for "what\'s my weight", "how much have I lost", "my progress". Read-only.'
+    },
+    {
+      name: 'get_plan_targets',
+      description:
+        'Report the user\'s daily calorie and macro TARGETS (calories, protein, carbs, fat) and current plan week. Use for "what are my targets/goals", "what week am I on". Read-only. (For remaining amounts use get_macro_status.)'
     },
     {
       name: 'log_food',
@@ -140,7 +183,7 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
     {
       name: 'suggest_meals',
       description:
-        'Suggest meal or restaurant options that fit the user\'s macros. Use when they ask what/where to eat. Read-only — does not log anything.',
+        'Suggest NEW meal or restaurant options that fit the user\'s macros. Use only when they ask what or where to eat (recommendations). Do NOT use to report the macros of a meal they already have — that is get_meal_details. Read-only.',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
@@ -193,6 +236,37 @@ export async function executeSmsTool(
       case 'get_macro_status': {
         if (signal?.aborted) return { error: 'Request cancelled.' };
         const result = await handleMacroStatus(ctx.userId, ctx.dateKey, ctx.timeZone);
+        return { result };
+      }
+      case 'get_meal_details': {
+        if (signal?.aborted) return { error: 'Request cancelled.' };
+        const result = await handleMealDetails(
+          ctx.userId,
+          ctx.dateKey,
+          ctx.timeZone,
+          str(args.meal) || undefined,
+          str(args.date) || undefined
+        );
+        return { result };
+      }
+      case 'get_exercise_details': {
+        if (signal?.aborted) return { error: 'Request cancelled.' };
+        const result = await handleExerciseDetails(ctx.userId, ctx.dateKey, ctx.timeZone, str(args.date) || undefined);
+        return { result };
+      }
+      case 'get_hydration_status': {
+        if (signal?.aborted) return { error: 'Request cancelled.' };
+        const result = await handleHydrationStatus(ctx.userId, ctx.dateKey, ctx.timeZone);
+        return { result };
+      }
+      case 'get_progress': {
+        if (signal?.aborted) return { error: 'Request cancelled.' };
+        const result = await handleProgressStatus(ctx.userId, ctx.dateKey, ctx.timeZone);
+        return { result };
+      }
+      case 'get_plan_targets': {
+        if (signal?.aborted) return { error: 'Request cancelled.' };
+        const result = await handlePlanTargets(ctx.userId, ctx.dateKey, ctx.timeZone);
         return { result };
       }
       case 'log_food': {

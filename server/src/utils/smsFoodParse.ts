@@ -91,6 +91,77 @@ export function wantsMacroStatus(text: string) {
   return MACRO_STATUS_PATTERN.test(text);
 }
 
+/**
+ * Detects a question asking for the macros/nutrition of an existing meal or the day's plan
+ * ("macros for lunch", "how many carbs in my dinner", "what's my plan tomorrow"). Returns the
+ * meal name and/or relative date to look up, or null. Excludes logging statements and
+ * "how much do I have left" (which is remaining-macro status, not a meal lookup).
+ */
+export function parseMealInfoQuery(message: string): { meal?: string; date?: string } | null {
+  const text = message.toLowerCase().trim();
+  if (!text) return null;
+  // Logging / actions and remaining-status are handled elsewhere.
+  if (/\b(i ate|i had|just ate|\blog\b|\badd\b|drank|mark\b|move\b)\b/.test(text)) return null;
+  if (/\b(left|remaining|do i have left|have i got left)\b/.test(text)) return null;
+
+  const nutritionAsk =
+    /\b(macros?|calories?|cals?|carbs?|carbohydrates?|protein|fats?|nutrition|how many|what'?s? in|what is in|breakdown)\b/.test(
+      text
+    );
+  const meal = parseTargetMealFromText(message);
+  const planAsk =
+    /\b(my|the)\s+plan\b|\bplan for\b|\bmeals?\s+(for\s+)?(today|tomorrow|the day|yesterday)\b|\bwhole (day|plan)\b|\bfull (day|plan)\b|\bmy day\b/.test(
+      text
+    );
+  const dateWord = /\b(today|tonight|tomorrow|yesterday)\b/.exec(text)?.[1] ?? /\b(\d{4}-\d{2}-\d{2})\b/.exec(text)?.[1];
+  const date = dateWord === 'tonight' ? 'today' : dateWord;
+
+  if (nutritionAsk && (meal || planAsk || date)) return { meal: meal ?? undefined, date };
+  if (meal && /\bwhat'?s?\s+(in|for)\b|\bwhat is\s+(in|for)\b|\bshow me\b|\btell me about\b/.test(text)) {
+    return { meal, date };
+  }
+  return null;
+}
+
+/**
+ * Detects an informational question about a non-nutrition domain (workout, water, weight,
+ * or plan targets) so the tree path can answer it directly instead of misrouting. Nutrition
+ * questions are handled by parseMealInfoQuery (checked first). Returns null for actions.
+ */
+export function parseInfoDomain(
+  message: string
+): { domain: 'exercise' | 'hydration' | 'progress' | 'plan'; date?: string } | null {
+  const text = message.toLowerCase().trim();
+  if (!text) return null;
+  // Actions/logging are handled elsewhere. Keep this narrow so questions like
+  // "how much water have I had today?" are NOT excluded.
+  if (/\b(\blog\b|\badd\b|\bmark\b|\bmove\b|set my)\b/.test(text)) return null;
+  if (/\bi (ate|drank|logged)\b/.test(text)) return null;
+  if (/\b(did|finished|completed)\s+(my\s+)?(workout|exercise|training|it)\b/.test(text)) return null;
+
+  const dateWord = /\b(today|tonight|tomorrow|yesterday)\b/.exec(text)?.[1] ?? /\b(\d{4}-\d{2}-\d{2})\b/.exec(text)?.[1];
+  const date = dateWord === 'tonight' ? 'today' : dateWord;
+
+  // A signal that this is a QUESTION, not a log/statement (e.g. "16 oz water" must still log).
+  const isQuestion =
+    text.includes('?') || /\b(how much|how many|what'?s?|whats|what is|did i|have i|do i|show|tell me|hit|reach|on)\b/.test(text);
+  if (!isQuestion) return null;
+
+  if (/\b(workout|exercise|exercises|training|routine|lifting|cardio|reps?|sets?)\b/.test(text)) {
+    return { domain: 'exercise', date };
+  }
+  if (/\b(water|hydration|fluids?)\b/.test(text)) {
+    return { domain: 'hydration', date };
+  }
+  if (/\b(weight|weigh|weighed|lost|body fat|bodyfat|measurements?|how much have i lost)\b/.test(text)) {
+    return { domain: 'progress', date };
+  }
+  if (/\b(targets?|calorie goal|macro goals?|what plan|which plan|what week|which week|on week)\b/.test(text)) {
+    return { domain: 'plan', date };
+  }
+  return null;
+}
+
 export function isMealCorrectionMessage(text: string) {
   if (!META_CORRECTION_PATTERN.test(text)) return false;
   return Boolean(parseTargetMealFromText(text));
