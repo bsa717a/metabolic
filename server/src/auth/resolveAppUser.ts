@@ -109,7 +109,7 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
         ...(signupPlan ? { plan: signupPlan } : {})
       }
     });
-    await notifyNewSignup(createdUser);
+    void notifyNewSignup(createdUser);
     return createdUser;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
