@@ -320,9 +320,9 @@ export async function markScheduledExercise(userId: string, id: string, status: 
 }
 
 export async function markDone(userId: string, id: string) {
-  return prisma.$transaction(async (tx) => {
+  const { scheduled, scheduledDate } = await prisma.$transaction(async (tx) => {
     const existing = await tx.scheduledExercise.findFirstOrThrow({ where: { id, userId } });
-    const scheduled = await tx.scheduledExercise.update({
+    const updated = await tx.scheduledExercise.update({
       where: { id },
       data: { status: ExerciseStatus.DONE },
       include: { exercise: true, log: true }
@@ -336,10 +336,13 @@ export async function markDone(userId: string, id: string) {
       where: { userId_date: { userId, date: existing.scheduledDate } }
     });
     if (log) await recalculateDailyLogTotals(log.id, tx);
-    const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
-    await markExercisesManuallyEdited(userId, toDateKey(existing.scheduledDate));
-    return scheduled;
+    return { scheduled: updated, scheduledDate: existing.scheduledDate };
   });
+  // Run outside the transaction: markExercisesManuallyEdited writes the same dailyLog row on
+  // the global client, which would deadlock against the transaction's lock and time out (P2028).
+  const { markExercisesManuallyEdited } = await import('./exerciseRoutineService.js');
+  await markExercisesManuallyEdited(userId, toDateKey(scheduledDate));
+  return scheduled;
 }
 
 export async function markAllPlannedExercisesDone(userId: string, date: string) {
