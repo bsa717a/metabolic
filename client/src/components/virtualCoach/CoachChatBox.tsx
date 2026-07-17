@@ -9,6 +9,7 @@ import {
   formatMealDetailForChat,
   MEAL_PICKER_PROMPT,
   mealPickerQuickReplies,
+  quickReplyDisplayLabel,
   type CoachWelcomeQuickReply
 } from './coachWelcomeMealFlow';
 
@@ -94,8 +95,9 @@ export function CoachChatBox({
   }
 
   async function startMealReviewFlow(reply: CoachChatQuickReply) {
-    appendMessages([{ role: 'user', content: reply.label }]);
-    onUserMessage?.(reply.label);
+    const label = quickReplyDisplayLabel(reply);
+    appendMessages([{ role: 'user', content: label }]);
+    onUserMessage?.(label);
     setError(undefined);
     setLoading(true);
 
@@ -202,8 +204,8 @@ export function CoachChatBox({
   return (
     <div
       className={clsx(
-        'flex h-[32.5rem] flex-col overflow-hidden rounded-3xl border border-app-border bg-app-surface shadow-sm',
-        className
+        'flex min-h-0 flex-col overflow-hidden rounded-3xl border border-app-border bg-app-surface shadow-sm',
+        className ?? 'h-[min(32.5rem,calc(90vh-6rem))] sm:h-[min(46rem,calc(90vh-6rem))]'
       )}
     >
       <div className="flex items-center gap-3 border-b border-app-border px-4 py-3">
@@ -278,7 +280,14 @@ export function CoachChatBox({
               onClick={() => void handleQuickReply(reply)}
               className="rounded-full border border-app-border bg-app-bg px-3 py-2 text-left text-sm font-medium text-app-text transition hover:border-brand-green/50 hover:bg-brand-green/10"
             >
-              {reply.label}
+              {reply.mobileLabel ? (
+                <>
+                  <span className="sm:hidden">{reply.mobileLabel}</span>
+                  <span className="hidden sm:inline">{reply.label}</span>
+                </>
+              ) : (
+                reply.label
+              )}
             </button>
           ))}
         </div>

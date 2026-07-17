@@ -1,11 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
-import {
-  OnboardingGoalSummary,
-  OnboardingPersonalFields,
-  OnboardingWeightFields
-} from './OnboardingFields';
+import { OnboardingGoalSummary, OnboardingPersonalFields } from './OnboardingFields';
 import { OnboardingCoachPicker } from './OnboardingCoachPicker';
 import { OnboardingPrimaryButton, OnboardingStepHeader } from './OnboardingUi';
 import { OnboardingShell } from './OnboardingShell';
@@ -67,9 +63,13 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  function validateBaselineStep() {
+  function validateTargetStep() {
     if (!hasValidCurrentWeight(Number(form.weight))) {
       setError('Enter your current weight.');
+      return false;
+    }
+    if (!hasValidCurrentWeight(Number(form.goalWeight))) {
+      setError('Enter your goal weight.');
       return false;
     }
     const feet = Number(form.heightFeet);
@@ -81,40 +81,6 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
       const inches = Number(form.heightInches);
       if (!Number.isInteger(inches) || inches < 0 || inches > 11) {
         setError('Height inches must be a whole number from 0 to 11.');
-        return false;
-      }
-    }
-    if (form.bodyFat.trim()) {
-      const bodyFat = Number(form.bodyFat);
-      if (!Number.isFinite(bodyFat) || bodyFat <= 0) {
-        setError('Enter a valid current body fat percentage.');
-        return false;
-      }
-    }
-    setError('');
-    return true;
-  }
-
-  function validateTargetStep() {
-    if (!hasValidCurrentWeight(Number(form.weight))) {
-      setError('Enter your current weight.');
-      return false;
-    }
-    if (!hasValidCurrentWeight(Number(form.goalWeight))) {
-      setError('Enter your goal weight.');
-      return false;
-    }
-    if (form.bodyFat.trim()) {
-      const bodyFat = Number(form.bodyFat);
-      if (!Number.isFinite(bodyFat) || bodyFat <= 0) {
-        setError('Enter a valid current body fat percentage.');
-        return false;
-      }
-    }
-    if (form.goalBodyFat.trim()) {
-      const goalBodyFat = Number(form.goalBodyFat);
-      if (!Number.isFinite(goalBodyFat) || goalBodyFat <= 0) {
-        setError('Enter a valid goal body fat percentage.');
         return false;
       }
     }
@@ -176,7 +142,7 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
   function continueFromPersonalize() {
     if (!validatePersonalizeStep()) return;
     if (needsVirtualCoachSelection(form)) {
-      setStep(3);
+      setStep(2);
       return;
     }
     void handleFinish();
@@ -215,41 +181,6 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
 
   if (step === 0) {
     return (
-      <OnboardingShell footer="This is quick — just a baseline to get started.">
-        <OnboardingStepHeader
-          headline="Start where you are."
-          subheadline={
-            form.trackingOnly
-              ? 'A quick baseline helps us track your progress.'
-              : 'A quick baseline helps us build your starter plan.'
-          }
-        />
-
-        <div className="space-y-5">
-          <OnboardingWeightFields
-            form={form}
-            onChange={onChange}
-            showGoalWeight={false}
-            showGoalBodyFat={false}
-            showHeight
-          />
-
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
-
-          <OnboardingPrimaryButton
-            onClick={() => {
-              if (validateBaselineStep()) setStep(1);
-            }}
-          >
-            Next: Set My Target →
-          </OnboardingPrimaryButton>
-        </div>
-      </OnboardingShell>
-    );
-  }
-
-  if (step === 1) {
-    return (
       <OnboardingShell footer="You can adjust your targets anytime.">
         <OnboardingStepHeader
           headline="Choose the target."
@@ -263,7 +194,7 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
 
           <OnboardingPrimaryButton
             onClick={() => {
-              if (validateTargetStep()) setStep(2);
+              if (validateTargetStep()) setStep(1);
             }}
           >
             Next: Personalize It →
@@ -273,7 +204,7 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
     );
   }
 
-  if (step === 2) {
+  if (step === 1) {
     return (
       <OnboardingShell footer="One last step, then your dashboard is ready.">
         <OnboardingStepHeader

@@ -207,6 +207,21 @@ export function OnboardingPersonalFields({
         </div>
       ) : null}
 
+      <div>
+        <label htmlFor="phone" className="mb-2 block text-sm font-medium text-app-text">
+          Mobile phone
+        </label>
+        <input
+          id="phone"
+          className={onboardingInputClass}
+          value={form.phone}
+          onChange={(e) => onChange('phone', e.target.value)}
+          placeholder="Optional — for text reminders from your coach"
+          inputMode="tel"
+          autoComplete="tel"
+        />
+      </div>
+
       <div className={onboardingCardClass}>
         <p className="text-sm font-semibold text-app-text">Personal details</p>
         <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-start">
@@ -252,23 +267,12 @@ export function OnboardingPersonalFields({
         </div>
         {showActivityHelp ? (
           <p className="mb-3 text-xs leading-relaxed text-app-text-muted">
-            These help us gauge how active your typical day is — both your job and your time outside
-            it — so we can pick targets and a plan that fit your routine.
+            This helps us gauge how active your typical day is so we can pick targets and a plan that
+            fit your routine.
           </p>
         ) : null}
-        <label htmlFor="occupation" className="mb-1 block text-sm font-medium text-app-text">
-          What do you do for a living?
-        </label>
-        <input
-          id="occupation"
-          className={onboardingInputClass}
-          value={form.occupation}
-          onChange={(e) => onChange('occupation', e.target.value)}
-          placeholder="e.g. nurse, software developer, teacher"
-          maxLength={200}
-        />
-        <label htmlFor="activity-level" className="mb-1 mt-3 block text-sm font-medium text-app-text">
-          How active are you outside of work?
+        <label htmlFor="activity-level" className="mb-1 block text-sm font-medium text-app-text">
+          How active are you day to day?
         </label>
         <select
           id="activity-level"
@@ -324,8 +328,6 @@ export function OnboardingGoalSummary({
   form: SetupFormState;
   onChange: (key: FieldKey, value: string | boolean) => void;
 }) {
-  if (!form.weight.trim() && !form.goalWeight.trim()) return null;
-
   return (
     <div className={`${onboardingCardClass} text-sm text-app-text`}>
       <p className="font-medium text-app-text-muted">Your journey</p>
@@ -362,34 +364,35 @@ export function OnboardingGoalSummary({
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-medium text-app-text">Body fat (%) — optional</p>
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <label htmlFor="target-height-feet" className="mb-2 block text-sm font-medium text-app-text">
+            Height
+          </label>
+          <div className="grid grid-cols-2 gap-3">
             <input
+              id="target-height-feet"
               className={onboardingInputClass}
-              value={form.bodyFat}
-              onChange={(e) => onChange('bodyFat', e.target.value)}
-              placeholder="Current"
-              inputMode="decimal"
+              value={form.heightFeet}
+              onChange={(e) => onChange('heightFeet', e.target.value)}
+              placeholder="Feet"
+              inputMode="numeric"
               type="number"
               min="1"
-              max="75"
-              step="0.1"
-              aria-label="Current body fat percentage"
+              max="8"
+              step="1"
+              aria-label="Height in feet"
             />
-            <span className="text-app-text-muted" aria-hidden>
-              →
-            </span>
             <input
+              id="target-height-inches"
               className={onboardingInputClass}
-              value={form.goalBodyFat}
-              onChange={(e) => onChange('goalBodyFat', e.target.value)}
-              placeholder="Goal"
-              inputMode="decimal"
+              value={form.heightInches}
+              onChange={(e) => onChange('heightInches', e.target.value)}
+              placeholder="Inches"
+              inputMode="numeric"
               type="number"
-              min="1"
-              max="75"
-              step="0.1"
-              aria-label="Goal body fat percentage"
+              min="0"
+              max="11"
+              step="1"
+              aria-label="Height in inches"
             />
           </div>
         </div>

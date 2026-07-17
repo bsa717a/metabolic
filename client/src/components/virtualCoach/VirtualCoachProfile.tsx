@@ -26,7 +26,8 @@ export function VirtualCoachProfile({
   selected,
   primaryAction,
   layout = 'split',
-  showTextAction = true
+  showTextAction = true,
+  emphasizeDownloadContact = false
 }: {
   coach: VirtualCoach;
   selected: boolean;
@@ -34,6 +35,7 @@ export function VirtualCoachProfile({
   /** `poster` shows only the coach card graphic with actions underneath. */
   layout?: 'split' | 'poster';
   showTextAction?: boolean;
+  emphasizeDownloadContact?: boolean;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
@@ -54,13 +56,32 @@ export function VirtualCoachProfile({
 
   const actionButtons = (
     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      {emphasizeDownloadContact ? (
+        <div className="w-full rounded-xl border border-brand-green/30 bg-brand-green/10 p-4">
+          <p className="text-sm font-medium text-app-text">
+            Save {coach.name} to your contacts so their texts show up with their name.
+          </p>
+          <Button
+            variant="primary"
+            className="mt-3 w-full sm:w-auto"
+            onClick={downloadContact}
+            disabled={downloading}
+          >
+            <span className="inline-flex items-center gap-2">
+              <Download size={16} aria-hidden /> {downloading ? 'Preparing…' : 'Download contact'}
+            </span>
+          </Button>
+        </div>
+      ) : null}
       {primaryAction}
-      <Button variant="secondary" onClick={downloadContact} disabled={downloading}>
-        <span className="inline-flex items-center gap-2">
-          <Download size={16} aria-hidden /> {downloading ? 'Preparing…' : 'Download contact'}
-        </span>
-      </Button>
-      {showTextAction ? (
+      {!emphasizeDownloadContact ? (
+        <Button variant="secondary" onClick={downloadContact} disabled={downloading}>
+          <span className="inline-flex items-center gap-2">
+            <Download size={16} aria-hidden /> {downloading ? 'Preparing…' : 'Download contact'}
+          </span>
+        </Button>
+      ) : null}
+      {!emphasizeDownloadContact && showTextAction ? (
         <a
           href={smsHref}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"

@@ -22,7 +22,8 @@ const setupBody = z.object({
   activityLevel: z.number().int().min(1).max(5).optional(),
   gender: z.enum(['m', 'f', 'male', 'female']).optional(),
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  timezone: z.string().trim().min(1).max(100).optional()
+  timezone: z.string().trim().min(1).max(100).optional(),
+  phone: z.string().trim().max(30).optional()
 });
 
 export async function onboardingRoutes(app: FastifyInstance) {
