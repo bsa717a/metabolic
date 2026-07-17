@@ -26,4 +26,5 @@ export type SetupFormState = {
   gender: '' | 'm' | 'f';
   birthDate: string;
   timezone: string;
+  phone: string;
 };

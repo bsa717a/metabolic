@@ -2,10 +2,16 @@ import type { Meal } from '../../types';
 
 export type CoachWelcomeQuickReply = {
   label: string;
+  mobileLabel?: string;
   message: string;
   action?: 'review-meals' | 'show-meal';
   mealId?: string;
 };
+
+export function quickReplyDisplayLabel(reply: CoachWelcomeQuickReply) {
+  const mobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
+  return mobile && reply.mobileLabel ? reply.mobileLabel : reply.label;
+}
 
 export const MEAL_PICKER_PROMPT =
   'What meal would you like to review?\n\nAnytime on the Nutrition page, tap the pencil on a meal to edit foods, adjust portions, or log what you ate.';

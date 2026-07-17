@@ -74,6 +74,7 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(form.trackingOnly ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
+    ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
     timezone
   };
 }
@@ -106,7 +107,8 @@ export function createEmptySetupForm(): SetupFormState {
     trackingOnly: false,
     gender: '',
     birthDate: '',
-    timezone: ''
+    timezone: '',
+    phone: ''
   };
 }
 
@@ -122,12 +124,23 @@ export function applyDraftToForm(
     timezone: string;
     wantsCoach: boolean;
   }>,
-  profile?: { gender?: string | null; birthDate?: string | null; timezone?: string | null } | null,
-  user?: { gender?: string | null; birthDate?: string | null; timezone?: string | null } | null
+  profile?: {
+    gender?: string | null;
+    birthDate?: string | null;
+    timezone?: string | null;
+    phone?: string | null;
+  } | null,
+  user?: {
+    gender?: string | null;
+    birthDate?: string | null;
+    timezone?: string | null;
+    phone?: string | null;
+  } | null
 ): SetupFormState {
   const genderValue = normalizeSetupGender(draft.gender || profile?.gender || user?.gender);
   const birthDateValue = normalizeBirthDateKey(draft.birthDate || profile?.birthDate || user?.birthDate);
   const timezoneValue = draft.timezone || profile?.timezone || user?.timezone || form.timezone;
+  const phoneValue = profile?.phone?.trim() || user?.phone?.trim() || form.phone;
 
   return {
     ...form,
@@ -138,6 +151,7 @@ export function applyDraftToForm(
     gender: genderValue || form.gender,
     birthDate: birthDateValue || form.birthDate,
     timezone: timezoneValue,
+    phone: phoneValue,
     wantsCoach: draft.wantsCoach ?? form.wantsCoach
   };
 }

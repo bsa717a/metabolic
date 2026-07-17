@@ -77,6 +77,7 @@ export function OnboardingCoachPicker({
           selected={isSelected}
           layout="poster"
           showTextAction={false}
+          emphasizeDownloadContact
           primaryAction={
             <Button onClick={() => chooseCoach(viewingCoach.id)} disabled={isSelected}>
               {isSelected ? `${viewingCoach.name} is your coach` : `Choose ${viewingCoach.name}`}

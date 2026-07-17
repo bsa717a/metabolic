@@ -82,12 +82,26 @@ const APP_PROMPT =
 export const COACH_WELCOME_QUICK_REPLIES = [
   {
     label: 'How to setup SMS',
+    mobileLabel: 'SMS',
     message:
       'Check my SMS texting setup with you — is my phone and timezone configured, and how do I text you from the contact I downloaded during setup?'
   },
-  { label: 'Reviewing my meals', message: 'Reviewing my meals', action: 'review-meals' as const },
-  { label: 'Reviewing my exercises', message: 'How do I review and complete my exercises in the app?' },
-  { label: 'How do I log hydration', message: 'How do I log hydration in the app?' }
+  {
+    label: 'Reviewing my meals',
+    mobileLabel: 'Meals',
+    message: 'Reviewing my meals',
+    action: 'review-meals' as const
+  },
+  {
+    label: 'Reviewing my exercises',
+    mobileLabel: 'Exercises',
+    message: 'How do I review and complete my exercises in the app?'
+  },
+  {
+    label: 'How do I log hydration',
+    mobileLabel: 'Hydration',
+    message: 'How do I log hydration in the app?'
+  }
 ] as const;
 
 export function buildCoachWelcomeMessage(
