@@ -18,6 +18,7 @@ import {
   type DownloadedSmsImage,
   type SmsMedia
 } from './smsIntentService.js';
+import { setWaterGoal } from './hydrationService.js';
 import type { StoredPhotoEstimateItem } from '../utils/smsFoodParse.js';
 
 /** A clarification the model wants before it can finish an action (createdAt is stamped at persist time). */
@@ -84,7 +85,7 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
     {
       name: 'get_hydration_status',
       description:
-        'Report the user\'s water intake vs their goal today, and their water streak. Use for "how much water have I had", "did I hit my water goal". Read-only.'
+        'Report water intake vs goal today, water streak, and personalized typical daily intake from height/weight. Use for hydration goal questions, how much water they should drink, and progress checks. Read-only.'
     },
     {
       name: 'get_progress',
@@ -200,6 +201,18 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
           text: { type: SchemaType.STRING, description: 'Original phrasing, optional.' }
         },
         required: ['amountOz']
+      }
+    },
+    {
+      name: 'set_hydration_goal',
+      description:
+        'Set the user\'s daily water goal in ounces. Use when they ask to change, raise, lower, or set their hydration/water goal.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          goalOz: { type: SchemaType.NUMBER, description: 'Daily water goal in ounces (1–512).' }
+        },
+        required: ['goalOz']
       }
     },
     {
@@ -404,6 +417,17 @@ export async function executeSmsTool(
           text: str(args.text) || ctx.message
         });
         return { result };
+      }
+      case 'set_hydration_goal': {
+        if (signal?.aborted) return { error: 'Request cancelled.' };
+        const goalOz = Number(args.goalOz);
+        if (!Number.isFinite(goalOz)) return { error: 'How many ounces should your daily water goal be?' };
+        try {
+          const summary = await setWaterGoal(ctx.userId, goalOz, ctx.dateKey, ctx.timeZone);
+          return { result: `Your daily water goal is now ${summary.goalOz} oz.` };
+        } catch (error) {
+          return { error: error instanceof Error ? error.message : 'Could not update your water goal.' };
+        }
       }
       case 'suggest_meals': {
         const result = await handleMealSuggestion(ctx.userId, str(args.request) || ctx.message);

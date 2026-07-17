@@ -10,6 +10,9 @@ export type PresenterKeyframe = {
 
 export const PRESENTER_VIDEO_SRC = '/tutorial/presenter.mp4';
 
+/** Flip to true to auto-play the dashboard presenter video for new users on first login. */
+export const AUTO_START_DASHBOARD_TUTORIAL = false;
+
 export const PRESENTER_TIMELINE: PresenterKeyframe[] = [
   { at: 0, slot: 'center', size: 'large' },
   { at: 22, slot: 'exercise', size: 'small' },

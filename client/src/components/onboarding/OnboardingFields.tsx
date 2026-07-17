@@ -317,24 +317,82 @@ export function OnboardingPersonalFields({
   );
 }
 
-export function OnboardingGoalSummary({ form }: { form: SetupFormState }) {
-  const hasBodyFat = Boolean(form.bodyFat.trim() && form.goalBodyFat.trim());
+export function OnboardingGoalSummary({
+  form,
+  onChange
+}: {
+  form: SetupFormState;
+  onChange: (key: FieldKey, value: string | boolean) => void;
+}) {
   if (!form.weight.trim() && !form.goalWeight.trim()) return null;
 
   return (
     <div className={`${onboardingCardClass} text-sm text-app-text`}>
       <p className="font-medium text-app-text-muted">Your journey</p>
-      <div className="mt-3 space-y-2">
-        {form.weight && form.goalWeight ? (
-          <p>
-            <span className="text-app-text-muted">Weight:</span> {form.weight} lbs → {form.goalWeight} lbs
-          </p>
-        ) : null}
-        {hasBodyFat ? (
-          <p>
-            <span className="text-app-text-muted">Body fat:</span> {form.bodyFat}% → {form.goalBodyFat}%
-          </p>
-        ) : null}
+      <div className="mt-3 space-y-4">
+        <div>
+          <p className="mb-2 text-sm font-medium text-app-text">Weight (lbs)</p>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <input
+              className={onboardingInputClass}
+              value={form.weight}
+              onChange={(e) => onChange('weight', e.target.value)}
+              placeholder="Current"
+              inputMode="decimal"
+              type="number"
+              min="1"
+              step="0.1"
+              aria-label="Current weight in pounds"
+            />
+            <span className="text-app-text-muted" aria-hidden>
+              →
+            </span>
+            <input
+              className={onboardingInputClass}
+              value={form.goalWeight}
+              onChange={(e) => onChange('goalWeight', e.target.value)}
+              placeholder="Goal"
+              inputMode="decimal"
+              type="number"
+              min="1"
+              step="0.1"
+              aria-label="Goal weight in pounds"
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-sm font-medium text-app-text">Body fat (%) — optional</p>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <input
+              className={onboardingInputClass}
+              value={form.bodyFat}
+              onChange={(e) => onChange('bodyFat', e.target.value)}
+              placeholder="Current"
+              inputMode="decimal"
+              type="number"
+              min="1"
+              max="75"
+              step="0.1"
+              aria-label="Current body fat percentage"
+            />
+            <span className="text-app-text-muted" aria-hidden>
+              →
+            </span>
+            <input
+              className={onboardingInputClass}
+              value={form.goalBodyFat}
+              onChange={(e) => onChange('goalBodyFat', e.target.value)}
+              placeholder="Goal"
+              inputMode="decimal"
+              type="number"
+              min="1"
+              max="75"
+              step="0.1"
+              aria-label="Goal body fat percentage"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

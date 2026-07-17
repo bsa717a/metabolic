@@ -12,6 +12,9 @@ import {
   wantsMacroStatus
 } from '../utils/smsFoodParse.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
+import { buildCoachNameUsageInstruction, resolveCoachNameUsage } from './coachNameUsage.js';
+import { extractPhoneFromUserText } from './smsSetupService.js';
+import type { VirtualCoachId } from '../data/virtualCoachPersonas.js';
 
 export type FoodEstimate = {
   normalizedFoodName: string;
@@ -595,7 +598,7 @@ On recap, message is spoken aloud as your goodbye — warm, conversational, and 
 Include recap.motivation (their core "why" as one sentence) only on a kickoff call.`;
 
 const ASSISTANT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
-Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Use profile.firstName from context when greeting or when a personal touch helps; after the opening message, use their name sparingly.
+Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Follow the per-turn Name usage instruction exactly — do not use profile.firstName on turns where you are told not to.
 Answer using the user's live program data, macros, meals, allergies, and dietary preferences when relevant. Be practical and specific.
 Never recommend foods that conflict with the user's stated allergies or dietary preferences.
 Keep responses short unless they ask for detail. Use plain language, not markdown headers.
@@ -605,16 +608,19 @@ If they ask you to change their plan or log something, say plainly that you can'
 Celebrate real wins — meals logged, workouts done, protein hit, consistency — and keep encouragement genuine and tied to their actual progress, never generic hype.`;
 
 export const WEB_AGENT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
-Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Use profile.firstName from context when greeting or when a personal touch helps; after the opening message, use their name sparingly.
-You CAN take real actions through the provided tools: update planned meals for today or a future day, log food they ate, mark meals eaten as planned, mark exercises done, log water, check macros, and suggest meals. Use them when the user clearly asks for one of those things.
-Only claim an action happened when the tool call returned a result — never say you changed, logged, or updated something otherwise. If a tool returns an "error", explain it briefly and suggest a concrete next step. If they ask for something outside your tools (editing past days, changing targets, workouts planning), say you can't do that from chat yet and point them to the right page.
+Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Follow the per-turn Name usage instruction exactly — do not use profile.firstName on turns where you are told not to.
+You CAN take real actions through the provided tools: update planned meals for today or a future day, save SMS setup (mobile phone, timezone, text reminders) with update_sms_setup, log food they ate, mark meals eaten as planned, mark exercises done, log water, set their daily water goal with set_hydration_goal, check hydration progress with get_hydration_status, check macros, and suggest meals. Use them when the user clearly asks for one of those things.
+Only claim an action happened when the tool call returned a result — never say you changed, logged, or updated something otherwise. Never say you updated their water/hydration goal unless set_hydration_goal returned a result this turn. If a tool returns an "error", explain it briefly and suggest a concrete next step. If they ask for something outside your tools (editing past days, changing calorie/macro targets, workouts planning), say you can't do that from chat yet and point them to the right page.
 Tool result strings are the source of truth. Relay a successful tool's "result" nearly verbatim, especially calorie, protein, macro, meal, date, and quantity details; do not paraphrase those facts or substitute values from your own estimate.
 Before replacing meals the user already has planned, confirm once — unless they just gave you the exact list of what they want, in which case act on it.
 When updating planned meals, estimate realistic per-item macros like a nutritionist (about 4 cal per gram of protein and carbs, 9 per gram of fat) and honor any calorie or macro totals the user states.
 Answer using the user's live program data, macros, meals, allergies, and dietary preferences. Never recommend or plan foods that conflict with their stated allergies or dietary preferences.
 Keep responses short unless they ask for detail. Use plain language, not markdown headers.
 If data is missing, say what you would need rather than inventing numbers.
-Celebrate real wins — meals logged, workouts done, protein hit, consistency — and keep encouragement genuine and tied to their actual progress, never generic hype.`;
+Celebrate real wins — meals logged, workouts done, protein hit, consistency — and keep encouragement genuine and tied to their actual progress, never generic hype.
+When smsSupport is in context, use it for SMS/texting questions. Report smsSupport.setupSummary honestly. Follow smsSupport.nextStepOnly for this turn — do not jump ahead. If smsSupport.isReadyForTexting is false, do NOT mention saved coach contacts, texting the coach number, or START; only resolve what setupSummary says is missing (usually their cell number first). If smsSupport.isReadyForTexting is true, use smsSupport.textingInstructions. Follow smsSupport.chatSetupActions and call update_sms_setup when they give you a number. Never say you cannot update their phone from chat.
+When hydrationSupport is in context, use it for water and hydration-goal questions. Follow hydrationSupport.chatActions — you CAN change their daily water goal in chat. When they ask about changing, setting, or choosing a hydration goal, call get_hydration_status first and lead with the personalized typical intake for their size before explaining how to set a new goal. hydrationSupport.personalizedGoalGuidance is a ready-to-use summary if you already have context. Point them to the top-bar water jug (hydrationSupport.waterJugUi), not a separate Hydration page.
+When appGuide is in context, use it for "how do I use the app" questions about meals, exercise, hydration, or account setup.`;
 
 const SMS_ASSISTANT_ADDENDUM = `You are texting the user like a nutritionist friend over SMS or iMessage. Sound human, warm, and concise — a friend who texts back fast.
 Keep answers under 320 characters when you can. Hard limit 1500 characters.
@@ -826,12 +832,10 @@ function buildCoachCheckInPrompt(input: CoachCheckInTurnInput) {
     .join('\n');
   const userLine = input.userMessage ? `\nUser just said: ${input.userMessage.trim()}` : '\nThis is the opening coach line — no user reply yet.';
   const coachMessageNumber = input.coachMessageNumber ?? input.transcript.filter((entry) => entry.role === 'coach').length + 1;
-  const nameInstruction =
-    coachMessageNumber === 1
-      ? 'Name usage: this is your opening line — greet them by first name.'
-      : coachMessageNumber % 2 === 1
-        ? 'Name usage: include their first name naturally in this message.'
-        : 'Name usage: do not use their first name in this message.';
+  const namePolicy = resolveCoachNameUsage(input.coachId as VirtualCoachId);
+  const nameInstruction = buildCoachNameUsageInstruction(coachMessageNumber, input.userFirstName, namePolicy, {
+    isRecapClosing: input.stage === 'recap'
+  });
 
   // Kickoff calls have no week behind them: goals on file replace the weekly data section.
   const contextSection =
@@ -1522,6 +1526,12 @@ export class MockAiProvider implements AiProvider {
   async runAgent(input: AgentRunInput): Promise<string> {
     const { messages, toolExecutor } = input;
     const last = messages.at(-1)?.content ?? '';
+    const transcript = messages.map((message) => message.content).join('\n');
+    const sharedPhone = extractPhoneFromUserText(last);
+    if (sharedPhone && /sms|text|phone|number|reminder|setup|cell|mobile|contact/i.test(transcript)) {
+      const out = await toolExecutor('update_sms_setup', { phone: sharedPhone });
+      return String(out.result ?? out.error ?? 'Saved your phone.');
+    }
 
     if (/\[the user attached a meal photo/i.test(last)) {
       const wantsLog = /\b(log|ate|had|here'?s|finished|eating)\b/i.test(last);

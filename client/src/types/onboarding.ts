@@ -21,6 +21,7 @@ export type SetupFormState = {
   activityLevel: string;
   coachCode: string;
   wantsCoach: boolean;
+  selectedVirtualCoachId: string;
   trackingOnly: boolean;
   gender: '' | 'm' | 'f';
   birthDate: string;

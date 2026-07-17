@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LifeBuoy, LineChart, LogOut, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LifeBuoy, LineChart, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -57,7 +57,13 @@ function ProfileMenuItem({
   );
 }
 
-export function Topbar({ user }: { user?: AppUser | null }) {
+export function Topbar({
+  user,
+  onOpenCoachIntro
+}: {
+  user?: AppUser | null;
+  onOpenCoachIntro?: () => void;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
@@ -277,6 +283,16 @@ export function Topbar({ user }: { user?: AppUser | null }) {
                       navigate('/virtual-coach/choose');
                     }}
                   />
+                  {user.selectedVirtualCoachId && onOpenCoachIntro ? (
+                    <ProfileMenuItem
+                      label="Coach intro"
+                      icon={MessageCircle}
+                      onClick={() => {
+                        closeProfileMenu();
+                        onOpenCoachIntro();
+                      }}
+                    />
+                  ) : null}
                   {isAdminRole(user.role) ? (
                     <ProfileMenuItem
                       label="Admin"

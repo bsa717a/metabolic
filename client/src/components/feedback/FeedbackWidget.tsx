@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { AlertTriangle, HelpCircle, Lightbulb, MessageSquarePlus, X } from 'lucide-react';
 import { api } from '../../services/api';
 import { collectDiagnostics, type SelectedRecord } from '../../services/diagnostics';
+import { feedbackFabBottom } from '../../utils/floatingActionLayout';
 import { useEntitlements } from '../../context/EntitlementsContext';
 import { FEATURE_MATRIX, type FeatureKey } from '../../utils/entitlements';
 import { Button } from '../ui/Button';
@@ -120,9 +121,7 @@ export function FeedbackWidget({ nutritionMobileLayout }: { nutritionMobileLayou
   }
 
   // FAB sits above the /nutrition mobile home bar and respects the safe area.
-  const fabBottom = nutritionMobileLayout
-    ? 'calc(5.25rem + env(safe-area-inset-bottom))'
-    : 'calc(1.25rem + env(safe-area-inset-bottom))';
+  const fabBottom = feedbackFabBottom(nutritionMobileLayout);
 
   return (
     <>

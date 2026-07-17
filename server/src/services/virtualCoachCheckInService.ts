@@ -4,6 +4,7 @@ import { isVirtualCoachId, type VirtualCoachId } from '../data/virtualCoachPerso
 import { addUtcDays, parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
 import { getAiProvider } from './aiService.js';
 import { buildCoachCheckInSystemPrompt } from './coachPersona.js';
+import { applyCoachNameUsage, resolveCoachNameUsage } from './coachNameUsage.js';
 import { getWeeklyReview, startOfWeekMonday } from './weeklyReviewService.js';
 import { advancePlanForCheckIn } from './planAdvancement.js';
 import { n } from '../utils/numbers.js';
@@ -279,54 +280,6 @@ export async function setCheckInDay(userId: string, day: number) {
   return getCheckInState(userId);
 }
 
-function messageIncludesName(message: string, firstName: string) {
-  const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`\\b${escaped}\\b`, 'i').test(message);
-}
-
-function stripCoachName(message: string, firstName: string): string {
-  const escaped = firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  let out = message;
-  out = out.replace(new RegExp(`\\b(hey|hi|hello|okay|ok|alright|well|so|oh)\\s+${escaped}\\b`, 'gi'), '$1');
-  out = out.replace(new RegExp(`\\s*,\\s*${escaped}\\b(?!['’]s)`, 'gi'), '');
-  out = out.replace(new RegExp(`\\b${escaped}\\b(?!['’]s)\\s*,\\s*`, 'gi'), '');
-  out = out.replace(new RegExp(`\\b${escaped}\\b(?!['’]s)[!.]?`, 'gi'), '');
-  out = out
-    .replace(/\(\s*\)/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([,.!?])/g, '$1')
-    .replace(/^[\s,]+/, '')
-    .trim();
-  if (out) out = out.charAt(0).toUpperCase() + out.slice(1);
-  return out || message;
-}
-
-function ensureCoachUsesName(message: string, firstName: string, isOpening: boolean): string {
-  if (messageIncludesName(message, firstName)) return message;
-  const trimmed = message.trim();
-  if (isOpening) {
-    return `Hi ${firstName}. ${trimmed}`;
-  }
-  return `${firstName}, ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
-}
-
-/** Opening line always uses their name; every other coach message alternates name on/off. Recap sign-off always keeps it. */
-export function applyCoachNameUsage(
-  message: string,
-  firstName?: string | null,
-  coachMessageNumber = 1,
-  isRecapClosing = false
-): string {
-  const name = firstName?.trim();
-  if (!message || !name) return message;
-
-  const keepName = isRecapClosing || coachMessageNumber % 2 === 1;
-  if (keepName) {
-    return ensureCoachUsesName(message, name, coachMessageNumber === 1);
-  }
-  return stripCoachName(message, name);
-}
-
 const GOAL_METRIC_LABELS: Record<string, string> = {
   WEIGHT: 'Weight',
   BODY_FAT: 'Body fat',
@@ -395,7 +348,12 @@ async function runCoachTurn(
     coachMessageNumber
   });
 
-  return { ...turn, message: applyCoachNameUsage(turn.message, user.firstName, coachMessageNumber, stage === 'recap') };
+  return {
+    ...turn,
+    message: applyCoachNameUsage(turn.message, user.firstName, coachMessageNumber, resolveCoachNameUsage(coachId), {
+      isRecapClosing: stage === 'recap'
+    })
+  };
 }
 
 /** Persisting the kickoff "why" must never fail the check-in itself. */

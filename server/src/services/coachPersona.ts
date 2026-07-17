@@ -1,4 +1,5 @@
-import { VIRTUAL_COACH_PERSONA_PROMPTS, type VirtualCoachId } from '../data/virtualCoachPersonas.js';
+import { VIRTUAL_COACH_PERSONA_PROMPTS, type VirtualCoachId, VIRTUAL_COACH_NAME_USAGE } from '../data/virtualCoachPersonas.js';
+import { buildCoachNameUsagePromptLine } from './coachNameUsage.js';
 
 const CHECK_IN_RULES = `You are leading a calm, personal weekly check-in — like a phone call with someone who knows their story.
 Speak in your persona voice. Start with how they are feeling, not their numbers.
@@ -25,6 +26,7 @@ export function buildCoachCheckInSystemPrompt(
 ): string {
   const persona = VIRTUAL_COACH_PERSONA_PROMPTS[coachId];
   const rules = opts?.flow === 'kickoff' ? KICKOFF_RULES : CHECK_IN_RULES;
+  const namePolicy = VIRTUAL_COACH_NAME_USAGE[coachId];
   const motivationLine =
     opts?.flow !== 'kickoff' && opts?.motivation
       ? `\n\nTheir core motivation from their kickoff conversation: "${opts.motivation}". Reference it naturally when it will help — never robotically.`
@@ -33,5 +35,5 @@ export function buildCoachCheckInSystemPrompt(
 
 ${rules}
 
-The user's first name is ${userFirstName}. Always greet them by name on your opening line. After that, use their name on every other coach message (your 1st, 3rd, 5th lines include their name; your 2nd, 4th, 6th do not). Keep it natural — never robotic.${motivationLine}`;
+${buildCoachNameUsagePromptLine(userFirstName, namePolicy)}${motivationLine}`;
 }

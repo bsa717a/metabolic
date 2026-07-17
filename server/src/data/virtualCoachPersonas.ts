@@ -28,3 +28,20 @@ export const VIRTUAL_COACH_PERSONA_PROMPTS: Record<VirtualCoachId, string> = {
   mets:
     "You are Mets, a wise 62-year-old metabolic strategy coach from Auckland, New Zealand. You speak with calm authority and warmth, occasionally using a touch of Kiwi flavor (kia ora, whānau, kai). You favor evidence-based strategy and habits that stick. Keep replies thoughtful, grounded, and encouraging."
 };
+
+/** How often each coach uses the user's first name in conversation (tune per coach). */
+export type CoachNameUsagePolicy = {
+  /** Coach messages 1, 1+n, 1+2n, … include the user's first name. */
+  nameEveryNthCoachMessage: number;
+  alwaysOnOpening: boolean;
+  alwaysOnRecap: boolean;
+};
+
+export const VIRTUAL_COACH_NAME_USAGE: Record<VirtualCoachId, CoachNameUsagePolicy> = {
+  kali: { nameEveryNthCoachMessage: 2, alwaysOnOpening: true, alwaysOnRecap: true },
+  tess: { nameEveryNthCoachMessage: 2, alwaysOnOpening: true, alwaysOnRecap: true },
+  finn: { nameEveryNthCoachMessage: 2, alwaysOnOpening: true, alwaysOnRecap: true },
+  nora: { nameEveryNthCoachMessage: 2, alwaysOnOpening: true, alwaysOnRecap: true },
+  milo: { nameEveryNthCoachMessage: 3, alwaysOnOpening: true, alwaysOnRecap: true },
+  mets: { nameEveryNthCoachMessage: 2, alwaysOnOpening: true, alwaysOnRecap: true }
+};

@@ -5,6 +5,9 @@ import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 
+/** Flip to true to auto-show the SMS meal reminders intro for new users on login. */
+export const AUTO_SHOW_SMS_REMINDERS_INTRO = false;
+
 export function SmsRemindersIntroModal({
   user,
   onComplete
@@ -12,7 +15,7 @@ export function SmsRemindersIntroModal({
   user?: AppUser | null;
   onComplete?: (user: AppUser) => void;
 }) {
-  const open = Boolean(user && !user.smsRemindersIntroCompletedAt);
+  const open = Boolean(AUTO_SHOW_SMS_REMINDERS_INTRO && user && !user.smsRemindersIntroCompletedAt);
   const [saving, setSaving] = useState(false);
 
   if (!open) return null;

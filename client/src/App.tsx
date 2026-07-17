@@ -72,7 +72,8 @@ function SetupRoute({
   authChecked,
   onboardingChecked,
   needsSetup,
-  onComplete
+  onComplete,
+  refreshOnboardingStatus
 }: {
   firebaseUser: User | null;
   appUser: AppUser | null;
@@ -80,8 +81,15 @@ function SetupRoute({
   onboardingChecked: boolean;
   needsSetup: boolean;
   onComplete: () => void;
+  refreshOnboardingStatus: () => Promise<void>;
 }) {
-  if (!authChecked) return <LoadingScreen />;
+  const [refreshing, setRefreshing] = useState(true);
+
+  useEffect(() => {
+    void refreshOnboardingStatus().finally(() => setRefreshing(false));
+  }, [refreshOnboardingStatus]);
+
+  if (!authChecked || refreshing) return <LoadingScreen />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
   if (!onboardingChecked) return <LoadingScreen />;
   if (!needsSetup) return <Navigate to="/" replace />;
@@ -159,6 +167,12 @@ export default function App() {
 
   const handleSetupComplete = useCallback(async () => {
     setNeedsSetup(false);
+    try {
+      const me = await api<{ user: AppUser }>('/api/me');
+      setAppUser(me.user);
+    } catch {
+      // Keep existing app user if refresh fails.
+    }
     await refreshOnboardingStatus();
   }, [refreshOnboardingStatus]);
 
@@ -180,6 +194,7 @@ export default function App() {
               authChecked={authChecked}
               onboardingChecked={onboardingChecked}
               needsSetup={needsSetup}
+              refreshOnboardingStatus={refreshOnboardingStatus}
               onComplete={() => {
                 void handleSetupComplete();
               }}

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { VIRTUAL_COACH_IDS } from '../data/virtualCoachPersonas.js';
 import { getSetupDraft, setupFirstProgram, userNeedsSetup } from '../services/onboardingService.js';
 
 const setupBody = z.object({
@@ -13,6 +14,7 @@ const setupBody = z.object({
   proteinTarget: z.number().finite().positive().max(1000).optional(),
   coachCode: z.string().trim().max(20).optional(),
   wantsCoach: z.boolean().optional(),
+  selectedVirtualCoachId: z.enum(VIRTUAL_COACH_IDS).optional(),
   trackingOnly: z.boolean().optional(),
   heightFeet: z.number().int().min(0).max(8).optional(),
   heightInches: z.number().int().min(0).max(11).optional(),

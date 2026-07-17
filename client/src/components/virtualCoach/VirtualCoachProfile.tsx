@@ -24,11 +24,16 @@ function TraitRow({ icon: Icon, label, value }: { icon: typeof Cake; label: stri
 export function VirtualCoachProfile({
   coach,
   selected,
-  primaryAction
+  primaryAction,
+  layout = 'split',
+  showTextAction = true
 }: {
   coach: VirtualCoach;
   selected: boolean;
   primaryAction?: ReactNode;
+  /** `poster` shows only the coach card graphic with actions underneath. */
+  layout?: 'split' | 'poster';
+  showTextAction?: boolean;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
@@ -46,6 +51,48 @@ export function VirtualCoachProfile({
   }
 
   const smsHref = `sms:${coach.phone}?body=${encodeURIComponent(`Hi ${coach.name}!`)}`;
+
+  const actionButtons = (
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      {primaryAction}
+      <Button variant="secondary" onClick={downloadContact} disabled={downloading}>
+        <span className="inline-flex items-center gap-2">
+          <Download size={16} aria-hidden /> {downloading ? 'Preparing…' : 'Download contact'}
+        </span>
+      </Button>
+      {showTextAction ? (
+        <a
+          href={smsHref}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
+        >
+          <MessageCircle size={16} aria-hidden /> Text {coach.name}
+        </a>
+      ) : null}
+    </div>
+  );
+
+  if (layout === 'poster') {
+    return (
+      <div className="mx-auto max-w-md space-y-5">
+        <div
+          className="overflow-hidden rounded-2xl border-2 bg-app-surface shadow-sm"
+          style={{ borderColor: coach.accent }}
+        >
+          <img src={coach.image} alt={`${coach.name} — ${coach.role}`} className="block w-full" />
+        </div>
+
+        {actionButtons}
+
+        {showTextAction ? (
+          <p className="text-center text-xs text-app-text-muted">
+            All virtual coaches text from {formatSmsPhoneDisplay(coach.phone)}. Save the contact so their replies show up
+            under their name. Message and data rates may apply.
+          </p>
+        ) : null}
+        {error && <p className="text-center text-sm text-red-600">{error}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
@@ -77,24 +124,15 @@ export function VirtualCoachProfile({
         </div>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          {primaryAction}
-          <Button variant="secondary" onClick={downloadContact} disabled={downloading}>
-            <span className="inline-flex items-center gap-2">
-              <Download size={16} aria-hidden /> {downloading ? 'Preparing…' : 'Download contact'}
-            </span>
-          </Button>
-          <a
-            href={smsHref}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-app-surface px-4 py-2 text-sm font-semibold text-app-text ring-1 ring-inset ring-app-border transition hover:bg-app-muted"
-          >
-            <MessageCircle size={16} aria-hidden /> Text {coach.name}
-          </a>
+          {actionButtons}
         </div>
 
-        <p className="mt-3 text-xs text-app-text-muted">
-          All virtual coaches text from {formatSmsPhoneDisplay(coach.phone)}. Save the contact so their replies show up
-          under their name. Message and data rates may apply.
-        </p>
+        {showTextAction ? (
+          <p className="mt-3 text-xs text-app-text-muted">
+            All virtual coaches text from {formatSmsPhoneDisplay(coach.phone)}. Save the contact so their replies show up
+            under their name. Message and data rates may apply.
+          </p>
+        ) : null}
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </div>
     </div>

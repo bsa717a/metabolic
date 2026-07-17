@@ -6,6 +6,7 @@
 import { SchemaType, type FunctionDeclaration } from '@google/generative-ai';
 import { buildSmsToolDeclarations, executeSmsTool, type SmsToolContext } from './smsAgentTools.js';
 import { applyPlannedMealUpdate, PlanEditError } from './planEditService.js';
+import { updateUserSmsSetup } from './smsSetupService.js';
 
 export type WebCoachToolContext = {
   userId: string;
@@ -19,11 +20,13 @@ export type WebCoachToolContext = {
 
 const SHARED_SMS_TOOLS = new Set([
   'get_macro_status',
+  'get_hydration_status',
   'log_food',
   'mark_meal_complete',
   'mark_exercise_done',
   'mark_all_exercises_done',
   'log_water',
+  'set_hydration_goal',
   'suggest_meals'
 ]);
 
@@ -74,6 +77,30 @@ export function buildWebCoachToolDeclarations(): FunctionDeclaration[] {
         },
         required: ['date', 'meals']
       }
+    },
+    {
+      name: 'update_sms_setup',
+      description:
+        'Save the user\'s personal mobile phone and/or SMS reminder settings for text coaching. Use when they give you their cell number or ask you to turn on meal/evening text reminders. Phone must be their personal cell — never the coach texting number from smsSupport.virtualCoachSmsNumber. When saving a new phone, meal and evening reminders are turned on automatically unless they say otherwise.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          phone: {
+            type: SchemaType.STRING,
+            description: 'Personal mobile phone number, e.g. "510-375-9360" or "+1 510 375 9360".'
+          },
+          timezone: {
+            type: SchemaType.STRING,
+            description: 'IANA timezone, e.g. "America/Denver". Only set when the user provides it.'
+          },
+          enableReminders: {
+            type: SchemaType.BOOLEAN,
+            description: 'When true, turn on meal reminders and evening recap texts.'
+          },
+          smsMealRemindersEnabled: { type: SchemaType.BOOLEAN },
+          smsEveningRecapEnabled: { type: SchemaType.BOOLEAN }
+        }
+      }
     }
   ];
 }
@@ -92,6 +119,29 @@ export async function executeWebCoachTool(
     } catch (error) {
       if (error instanceof PlanEditError) return { error: error.message };
       return { error: error instanceof Error ? error.message : 'Could not update the planned meals.' };
+    }
+  }
+
+  if (name === 'update_sms_setup') {
+    ctx.toolCalls.push({ name, args });
+    try {
+      const phone = typeof args.phone === 'string' ? args.phone : undefined;
+      const timezone = typeof args.timezone === 'string' ? args.timezone : undefined;
+      const enableReminders = args.enableReminders === true;
+      const smsMealRemindersEnabled =
+        typeof args.smsMealRemindersEnabled === 'boolean' ? args.smsMealRemindersEnabled : undefined;
+      const smsEveningRecapEnabled =
+        typeof args.smsEveningRecapEnabled === 'boolean' ? args.smsEveningRecapEnabled : undefined;
+      const { result } = await updateUserSmsSetup(ctx.userId, {
+        phone,
+        timezone,
+        enableReminders,
+        smsMealRemindersEnabled,
+        smsEveningRecapEnabled
+      });
+      return { result };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Could not update SMS setup.' };
     }
   }
 

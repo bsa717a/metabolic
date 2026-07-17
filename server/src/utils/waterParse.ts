@@ -95,3 +95,55 @@ export function isWaterOnlySmsCommand(text: string): boolean {
     return !OTHER_SMS_ACTION.test(trimmed) && !/\b(log|logged|logging|ate|eaten|had)\b/.test(trimmed);
   });
 }
+
+function clampHydrationGoalOz(value: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  if (rounded < 1 || rounded > 512) return null;
+  return rounded;
+}
+
+/** Recent chat is about setting/changing a daily water goal (not logging a drink). */
+export function isHydrationGoalThread(messages: Array<{ content: string }>): boolean {
+  const recent = messages
+    .slice(-6)
+    .map((message) => message.content)
+    .join('\n');
+  return /(?:hydration|water)\s*goal|(?:daily|typical)\s*(?:water|intake)|typical.*(?:oz|ounce)|about\s+\d+\s*oz|tell me.*(?:goal|ounces)|set.*(?:goal|target).*(?:water|hydration)|new\s*(?:goal|target)|change.*(?:water|hydration)|(?:your|current)\s*goal\s*is\s*\d+\s*oz|how\s+(?:do|can)\s+i.*(?:change|set).*(?:water|hydration)|how\s+much.*(?:water|hydration).*should\s+i\s+drink/i.test(
+    recent
+  );
+}
+
+/** Parse a daily water goal in oz from chat — not a one-off drink log. */
+export function parseHydrationGoalOz(
+  text: string,
+  options?: { allowBareNumber?: boolean }
+): number | null {
+  const trimmed = text.trim();
+  if (!trimmed || looksLikeWaterLogCommand(trimmed)) return null;
+
+  const normalized = trimmed.toLowerCase();
+
+  const goalVerbMatch = normalized.match(
+    /(?:set|make|change|update|switch|move|raise|lower|increase|decrease|want|need|try|do|go\s+with|let'?s\s+(?:do|go\s+with|make)|please\s+set)\s*(?:it\s+to\s+|my\s+(?:water|hydration)?\s*(?:goal|target)\s+(?:to\s+)?)?(\d+(?:\.\d+)?)\s*(?:fl\.?\s*)?(?:oz|ounce|ounces)?\b/
+  );
+  if (goalVerbMatch) return clampHydrationGoalOz(Number(goalVerbMatch[1]));
+
+  const ozMatch = normalized.match(
+    /\b(\d+(?:\.\d+)?)\s*(?:fl\.?\s*)?(?:oz|ounce|ounces)\b(?:\s*(?:per\s+day|daily|a\s+day|for\s+my\s+(?:goal|target)|goal|target))?/
+  );
+  if (ozMatch && !/\b(drank|drink|log|logged|had|add|glass|bottle|cup)\b/.test(normalized)) {
+    return clampHydrationGoalOz(Number(ozMatch[1]));
+  }
+
+  if (options?.allowBareNumber) {
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+      return clampHydrationGoalOz(Number(trimmed));
+    }
+    const numbers = [...normalized.matchAll(/\b(\d+(?:\.\d+)?)\b/g)].map((match) => Number(match[1]));
+    const plausible = numbers.filter((value) => value >= 1 && value <= 512);
+    if (plausible.length === 1) return clampHydrationGoalOz(plausible[0]!);
+  }
+
+  return null;
+}
