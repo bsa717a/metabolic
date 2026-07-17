@@ -47,7 +47,7 @@ type AuthMode = 'login' | 'signup' | 'reset';
 
 export function LoginPage({ authenticated }: { authenticated: boolean; appUser?: AppUser | null }) {
   const [mode, setMode] = useState<AuthMode>('login');
-  const [email, setEmail] = useState('user@metabolic.local');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -161,7 +161,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
                 className={inputClass}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@metabolic.local"
+                placeholder="you@example.com"
                 type="email"
                 autoComplete="email"
               />
@@ -246,7 +246,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
                   className={inputClass}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@metabolic.local"
+                  placeholder="you@example.com"
                   type="email"
                   autoComplete="email"
                 />

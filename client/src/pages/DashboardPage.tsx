@@ -14,6 +14,7 @@ import { WeightTrendChart } from '../components/dashboard/WeightTrendChart';
 import { UpcomingCheckInsCard } from '../components/dashboard/UpcomingCheckInsCard';
 import { isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
+import { AUTO_START_DASHBOARD_TUTORIAL } from '../components/tutorial/tutorialPresenterTimeline';
 import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
 
 function MacroDonut({
@@ -138,6 +139,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
   }, [location.pathname, loadDashboard]);
 
   useEffect(() => {
+    if (!AUTO_START_DASHBOARD_TUTORIAL) return;
     if (loading || error || !data?.program || user?.dashboardTutorialCompletedAt || hasAutoStarted || isActive) {
       return;
     }

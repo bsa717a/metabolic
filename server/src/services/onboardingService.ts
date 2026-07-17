@@ -9,6 +9,7 @@ import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
 import { applyStructureMealsToLog } from './structureMealsApply.js';
 import { freezeTargetsOnPeriod } from './targetService.js';
 import { notifyCoachRequest } from './coachRequestNotificationService.js';
+import { isVirtualCoachId } from '../data/virtualCoachPersonas.js';
 
 const DEFAULT_PROGRAM_NAME = 'Master Your Metabolic';
 
@@ -145,11 +146,19 @@ type SetupInput = {
   gender?: string;
   birthDate?: string;
   timezone?: string;
+  selectedVirtualCoachId?: string;
 };
 
 function normalizeCoachCode(value?: string) {
   const normalized = value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   return normalized || null;
+}
+
+function virtualCoachProfileFields(input: SetupInput) {
+  if (input.selectedVirtualCoachId && isVirtualCoachId(input.selectedVirtualCoachId)) {
+    return { selectedVirtualCoachId: input.selectedVirtualCoachId };
+  }
+  return {};
 }
 
 function buildClientProfileData(input: SetupInput) {
@@ -359,7 +368,8 @@ async function updateActiveProgramFromSetup(
     };
   }
 
-  const profileUpdate: { timezone?: string; gender?: string | null; birthDate?: Date | null } = {};
+  const profileUpdate: { timezone?: string; gender?: string | null; birthDate?: Date | null; selectedVirtualCoachId?: string } =
+    {};
   if (input.timezone?.trim()) {
     profileUpdate.timezone = input.timezone.trim();
   }
@@ -369,6 +379,7 @@ async function updateActiveProgramFromSetup(
   if (input.birthDate) {
     profileUpdate.birthDate = parseDateParam(input.birthDate);
   }
+  Object.assign(profileUpdate, virtualCoachProfileFields(input));
 
   await prisma.$transaction(async (tx) => {
     if (Object.keys(profileUpdate).length) {
@@ -514,7 +525,8 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
   const targetEndDate = new Date(today.getTime() + 16 * 7 * 86400000);
 
   const program = await prisma.$transaction(async (tx) => {
-    const profileUpdate: { gender?: string | null; birthDate?: Date | null; timezone?: string } = {};
+    const profileUpdate: { gender?: string | null; birthDate?: Date | null; timezone?: string; selectedVirtualCoachId?: string } =
+      {};
     if (input.gender) {
       profileUpdate.gender = normalizeGender(input.gender);
     }
@@ -524,6 +536,7 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     if (input.timezone?.trim()) {
       profileUpdate.timezone = input.timezone.trim();
     }
+    Object.assign(profileUpdate, virtualCoachProfileFields(input));
     if (Object.keys(profileUpdate).length) {
       await tx.user.update({ where: { id: userId }, data: profileUpdate });
     }

@@ -1,3 +1,4 @@
+import type { VirtualCoachId } from '../../data/virtualCoaches';
 import { api } from '../../services/api';
 import { detectedTimezone } from '../../utils/timezoneOptions';
 import { hasValidCurrentWeight } from '../../utils/onboardingWeight';
@@ -65,6 +66,11 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(form.activityLevel ? { activityLevel: Number(form.activityLevel) } : {}),
     ...(form.trackingOnly ? {} : form.coachCode.trim() ? { coachCode: form.coachCode.trim() } : {}),
     ...(form.trackingOnly ? {} : form.wantsCoach ? { wantsCoach: true } : {}),
+    ...(form.trackingOnly || form.coachCode.trim() || form.wantsCoach
+      ? {}
+      : form.selectedVirtualCoachId
+        ? { selectedVirtualCoachId: form.selectedVirtualCoachId as VirtualCoachId }
+        : {}),
     ...(form.trackingOnly ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
@@ -96,6 +102,7 @@ export function createEmptySetupForm(): SetupFormState {
     activityLevel: '',
     coachCode: '',
     wantsCoach: false,
+    selectedVirtualCoachId: '',
     trackingOnly: false,
     gender: '',
     birthDate: '',

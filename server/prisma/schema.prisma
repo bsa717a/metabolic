@@ -225,6 +225,7 @@ model User {
   smsEveningRecapEnabled Boolean @default(true)
   dashboardTutorialCompletedAt DateTime?
   smsRemindersIntroCompletedAt DateTime?
+  coachWelcomeCompletedAt DateTime?
   selectedVirtualCoachId String?
   virtualCoachCheckInDay Int?
   plan PlanTier @default(STARTER)

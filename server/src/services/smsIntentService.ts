@@ -13,6 +13,7 @@ import { sendOutboundMessage, isTwilioConfigured, type TwilioMessageChannel } fr
 import { runSmsAgentEntry } from './smsAgentService.js';
 import { ensureDailyLogByUserId, ensureSelfDirectedProgram } from './dailyLogService.js';
 import { logWater, getHydrationSummary } from './hydrationService.js';
+import { loadPersonalizedHydrationGuidance } from './hydrationGuidance.js';
 import { getPlanStatus } from './planStatusService.js';
 import { parseWaterAmountOz } from '../utils/waterParse.js';
 import { n, round } from '../utils/numbers.js';
@@ -916,11 +917,17 @@ export async function handleHydrationStatus(
   dateArg?: string
 ) {
   const { dateKey, label } = resolveReadDate(dateArg, todayKey);
-  const summary = await getHydrationSummary(userId, dateKey, timeZone);
+  const [summary, guidance] = await Promise.all([
+    getHydrationSummary(userId, dateKey, timeZone),
+    loadPersonalizedHydrationGuidance(userId)
+  ]);
   const remaining = Math.max(0, summary.targetOz - summary.actualOz);
   const goalPart = summary.goalMet ? "You've hit your water goal!" : `${remaining} oz to go.`;
   const streakPart = summary.currentStreak > 0 ? ` ${summary.currentStreak}-day water streak.` : '';
-  return capSms(`Water ${label}: ${summary.actualOz} of ${summary.targetOz} oz. ${goalPart}${streakPart}`);
+  const typicalPart = guidance.typicalIntake
+    ? ` Typical for your size: about ${guidance.typicalIntake.suggestedOz} oz/day (often ${guidance.typicalIntake.lowOz}–${guidance.typicalIntake.highOz} oz).`
+    : '';
+  return capSms(`Water ${label}: ${summary.actualOz} of ${summary.targetOz} oz. ${goalPart}${streakPart}${typicalPart}`);
 }
 
 /** Current weight vs start/goal and direction of change. */

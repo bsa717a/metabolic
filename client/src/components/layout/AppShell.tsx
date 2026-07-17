@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Topbar } from './Topbar';
 import { MobileBottomHomeBar } from './MobileBottomHomeBar';
 import type { AppUser } from '../../types';
@@ -9,6 +9,8 @@ import { TutorialProvider } from '../tutorial/TutorialContext';
 import { DashboardTutorial } from '../tutorial/DashboardTutorial';
 import { SmsRemindersIntroModal } from '../sms/SmsRemindersIntroModal';
 import { FeedbackWidget } from '../feedback/FeedbackWidget';
+import { CoachChatFab } from '../virtualCoach/CoachChatFab';
+import { CoachWelcomeGate } from '../virtualCoach/CoachWelcomeGate';
 import { recordNavigation } from '../../services/diagnostics';
 
 export function AppShell({
@@ -20,6 +22,7 @@ export function AppShell({
 }) {
   const location = useLocation();
   const nutritionMobileLayout = location.pathname === '/nutrition';
+  const [coachIntroRequest, setCoachIntroRequest] = useState(0);
 
   useEffect(() => {
     recordNavigation(location.pathname);
@@ -55,7 +58,7 @@ export function AppShell({
     <TutorialProvider user={user} onComplete={onTutorialComplete}>
       <div className="min-h-screen bg-app-bg flex flex-col transition-colors duration-200">
         <div className={nutritionMobileLayout ? 'hidden sm:block' : undefined}>
-          <Topbar user={user} />
+          <Topbar user={user} onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)} />
         </div>
         <main
           className={clsx(
@@ -68,6 +71,12 @@ export function AppShell({
         {nutritionMobileLayout && <MobileBottomHomeBar />}
         <SmsRemindersIntroModal user={user} onComplete={onTutorialComplete} />
         <DashboardTutorial />
+        <CoachWelcomeGate
+          user={user}
+          onComplete={onTutorialComplete}
+          introRequest={coachIntroRequest}
+        />
+        <CoachChatFab user={user} nutritionMobileLayout={nutritionMobileLayout} />
         <FeedbackWidget nutritionMobileLayout={nutritionMobileLayout} />
       </div>
     </TutorialProvider>

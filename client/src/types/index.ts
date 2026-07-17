@@ -21,6 +21,7 @@ export type AppUser = {
   timezone?: string | null;
   dashboardTutorialCompletedAt?: string | null;
   smsRemindersIntroCompletedAt?: string | null;
+  coachWelcomeCompletedAt?: string | null;
   selectedVirtualCoachId?: string | null;
   plan: PlanSlug;
   subscriptionStatus: SubscriptionStatusSlug;
