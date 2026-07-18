@@ -132,6 +132,8 @@ function EditUserDrawerContent({
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sendingWelcomeEmail, setSendingWelcomeEmail] = useState(false);
+  const [welcomeEmailStatus, setWelcomeEmailStatus] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -161,6 +163,22 @@ function EditUserDrawerContent({
 
   function updateProfile<K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) {
     setProfileDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  async function sendWelcomeEmail() {
+    setSendingWelcomeEmail(true);
+    setWelcomeEmailStatus('');
+    setError('');
+    try {
+      const result = await api<{ sent: boolean; to: string }>(`/api/admin/users/${user.id}/send-welcome-email`, {
+        method: 'POST'
+      });
+      setWelcomeEmailStatus(`Welcome email sent to ${result.to}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send welcome email');
+    } finally {
+      setSendingWelcomeEmail(false);
+    }
   }
 
   async function endCoachLed() {
@@ -435,6 +453,22 @@ function EditUserDrawerContent({
       ) : (
         <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />
       )}
+
+      <div className="space-y-2 rounded-xl border border-app-border bg-app-muted p-4">
+        <p className="text-sm font-semibold text-app-text">Email</p>
+        <p className="text-sm text-app-text-muted">
+          Send the Metabolic OS welcome email to this user&apos;s saved account address ({user.email}).
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={sendingWelcomeEmail || !user.email}
+          onClick={() => void sendWelcomeEmail()}
+        >
+          {sendingWelcomeEmail ? 'Sending…' : 'Send welcome email'}
+        </Button>
+        {welcomeEmailStatus ? <p className="text-sm text-emerald-700">{welcomeEmailStatus}</p> : null}
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>

@@ -2,6 +2,7 @@ import { FoodSource, PlanTier, Role, SubscriptionStatus, UserStatus, Visibility,
 import { prisma } from '../db/prisma.js';
 import { normalizePhone } from '../utils/phone.js';
 import { deleteExerciseHowToVideos } from './exerciseVideoStorageService.js';
+import { isEmailConfigured, sendWelcomeEmail } from './emailService.js';
 import { serializeAdminUserExtended } from './userSerialization.js';
 import { countActiveCoachLedLicenses } from './coachLedService.js';
 import { archiveActiveCoachAssignments, upsertCoachAssignment } from './coachAssignmentHelpers.js';
@@ -150,6 +151,19 @@ export async function listAdminFoodReviewQueue() {
     },
     orderBy: { createdAt: 'desc' }
   });
+}
+
+export async function sendAdminWelcomeEmail(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, firstName: true, status: true }
+  });
+  if (!user) throw new Error('User not found');
+  if (!user.email?.trim()) throw new Error('User does not have an email address');
+  if (!isEmailConfigured()) throw new Error('Email is not configured');
+
+  await sendWelcomeEmail({ to: user.email, firstName: user.firstName });
+  return { sent: true, to: user.email };
 }
 
 export async function updateAdminUser(id: string, data: AdminUserUpdate) {

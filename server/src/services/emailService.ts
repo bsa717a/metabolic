@@ -1,9 +1,88 @@
+import { existsSync, readFileSync } from 'fs';
+import path from 'path';
 import sgMail from '@sendgrid/mail';
 import { env } from '../config/env.js';
 import type { ResultsReadyLinks } from './resultsReadyNotification.js';
 
 export function isEmailConfigured() {
   return Boolean(env.SENDGRID_API_KEY && env.SENDGRID_FROM_EMAIL);
+}
+
+function resolveEmailAsset(filename: string) {
+  const candidates = [
+    path.join(__dirname, '../emails', filename),
+    path.join(process.cwd(), 'src/emails', filename),
+    path.join(process.cwd(), 'emails', filename)
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`Missing email asset: ${filename}`);
+}
+
+/** Welcome email for brand-new signups. Requires SendGrid to be configured. */
+export async function sendWelcomeEmail(options: { to: string; firstName?: string | null }) {
+  if (!isEmailConfigured()) {
+    throw new Error('Email is not configured.');
+  }
+
+  const firstName = options.firstName?.trim();
+  const nameSuffix =
+    firstName && firstName.toLowerCase() !== 'metabolic' && firstName.toLowerCase() !== 'user'
+      ? `, ${firstName}`
+      : '';
+  const appUrl = env.CLIENT_URL.replace(/\/$/, '');
+
+  const html = readFileSync(resolveEmailAsset('welcome.html'), 'utf8')
+    .replaceAll('{{nameSuffix}}', escapeHtml(nameSuffix))
+    .replaceAll('{{appUrl}}', escapeHtml(appUrl));
+  const image = readFileSync(resolveEmailAsset('welcome-dashboard.png'));
+  const text = [
+    `Welcome${nameSuffix} — your whole plan lives here.`,
+    '',
+    'Nutrition, training, body-comp tracking and coaching, all in one place.',
+    '',
+    '1. Coach & log by text — text START to opt in',
+    '2. Your daily dashboard — macros, meals, workouts, weight trend',
+    '3. Metabolic Blueprint — metrics, check-ins, progress photos',
+    '4. Personalized nutrition — meal plan, logging, AI food lookup',
+    '5. Guided training — daily/weekly workouts with how-to videos',
+    '',
+    `Open your dashboard: ${appUrl}`,
+    '',
+    '— Metabolic OS'
+  ].join('\n');
+
+  sgMail.setApiKey(env.SENDGRID_API_KEY);
+  try {
+    await sgMail.send({
+      to: options.to,
+      from: {
+        email: env.SENDGRID_FROM_EMAIL,
+        name: env.SENDGRID_FROM_NAME
+      },
+      subject: 'Welcome to Metabolic OS',
+      text,
+      html,
+      attachments: [
+        {
+          content: image.toString('base64'),
+          filename: 'welcome-dashboard.png',
+          type: 'image/png',
+          disposition: 'inline',
+          contentId: 'welcome-dashboard'
+        }
+      ]
+    });
+  } catch (error) {
+    const detail =
+      error && typeof error === 'object' && 'response' in error
+        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
+        : error instanceof Error
+          ? error.message
+          : 'Unknown SendGrid error';
+    throw new Error(`Could not send welcome email: ${detail.slice(0, 300)}`);
+  }
 }
 
 export type { ResultsReadyLinks };

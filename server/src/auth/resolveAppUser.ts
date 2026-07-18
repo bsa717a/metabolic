@@ -3,12 +3,21 @@ import type { User } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
+import { isEmailConfigured, sendWelcomeEmail } from "../services/emailService.js";
 import { slugToPlan } from "../services/entitlements.js";
 import { isTwilioConfigured, sendOutboundMessage } from "../services/twilioOutboundService.js";
 
-/** Best-effort SMS alert to the owner when a new account is created. Never throws — a
- *  failed/unconfigured alert must not break signup. */
+/** Best-effort alerts when a new account is created. Never throws — failed/unconfigured
+ *  alerts must not break signup. */
 async function notifyNewSignup(user: User) {
+  if (isEmailConfigured()) {
+    try {
+      await sendWelcomeEmail({ to: user.email, firstName: user.firstName });
+    } catch (error) {
+      console.error("Failed to send welcome email", error);
+    }
+  }
+
   const to = env.SIGNUP_ALERT_PHONE.trim();
   if (!to || !isTwilioConfigured()) return;
   try {

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "prisma generate && tsx watch src/index.ts",
     "postinstall": "prisma generate",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/src/emails && cp -R src/emails/. dist/src/emails/",
     "start": "node dist/src/index.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts",
