@@ -27,4 +27,5 @@ export type SetupFormState = {
   birthDate: string;
   timezone: string;
   phone: string;
+  foodAllergies: string;
 };

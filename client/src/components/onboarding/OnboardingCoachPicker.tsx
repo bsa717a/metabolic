@@ -56,7 +56,6 @@ export function OnboardingCoachPicker({
 
   function chooseCoach(id: VirtualCoachId) {
     onSelect(id);
-    setViewingId(null);
   }
 
   if (viewingCoach) {

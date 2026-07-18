@@ -148,6 +148,7 @@ type SetupInput = {
   birthDate?: string;
   timezone?: string;
   phone?: string;
+  foodAllergies?: string;
   selectedVirtualCoachId?: string;
 };
 
@@ -175,6 +176,7 @@ function buildClientProfileData(input: SetupInput) {
     heightRaw?: string;
     occupation?: string;
     activityLevel?: number;
+    foodConditions?: string | null;
   } = {};
   if (input.heightFeet !== undefined || input.heightInches !== undefined) {
     const feet = input.heightFeet ?? 0;
@@ -187,6 +189,10 @@ function buildClientProfileData(input: SetupInput) {
   }
   if (input.activityLevel !== undefined) {
     clientProfileData.activityLevel = input.activityLevel;
+  }
+  if (input.foodAllergies !== undefined) {
+    const trimmed = input.foodAllergies.trim();
+    clientProfileData.foodConditions = trimmed || null;
   }
   return clientProfileData;
 }

@@ -79,5 +79,12 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
     );
   }
 
-  return <NewUserOnboardingFlow form={form} onChange={handleChange} onComplete={onComplete} />;
+  return (
+    <NewUserOnboardingFlow
+      form={form}
+      onChange={handleChange}
+      onComplete={onComplete}
+      firstName={user?.firstName}
+    />
+  );
 }
