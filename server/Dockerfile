@@ -20,6 +20,7 @@ ENV NODE_ENV=production
 COPY --from=build /app/server/dist ./dist
 COPY --from=build /app/server/package.json ./package.json
 COPY --from=build /app/server/prisma ./prisma
+COPY --from=build /app/server/src/emails ./src/emails
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/server/node_modules ./node_modules
 COPY server/docker-entrypoint.sh ./docker-entrypoint.sh

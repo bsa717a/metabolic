@@ -17,6 +17,7 @@ import {
   serializeReviewFood,
   approveAdminFood,
   rejectAdminFood,
+  sendAdminWelcomeEmail,
   unassignPrimaryCoach,
   updateAdminExercise,
   updateAdminFood,
@@ -269,6 +270,16 @@ export async function adminRoutes(app: FastifyInstance) {
     } catch (error) {
       request.log.error({ err: error }, 'Failed to update user');
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update user' });
+    }
+  });
+
+  app.post('/api/admin/users/:id/send-welcome-email', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return await sendAdminWelcomeEmail(id);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to send welcome email');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to send welcome email' });
     }
   });
 
