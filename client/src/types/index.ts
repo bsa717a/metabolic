@@ -429,6 +429,8 @@ export type Dashboard = {
   meals: Meal[];
   allMeals?: Meal[];
   exercises: Exercise[];
+  /** User's calendar day for this dashboard payload (YYYY-MM-DD). */
+  date?: string;
   summary: {
     currentWeight: number;
     caloriesRemaining: number;

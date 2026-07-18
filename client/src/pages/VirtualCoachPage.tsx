@@ -21,6 +21,7 @@ import { FeatureGate } from '../components/entitlements/FeatureGate';
 import { CheckInRecap } from '../components/virtualCoach/CheckInRecap';
 import { CoachCheckInCall } from '../components/virtualCoach/CoachCheckInCall';
 import { CoachChatBox } from '../components/virtualCoach/CoachChatBox';
+import { COACH_CHAT_QUICK_REPLIES } from '../components/virtualCoach/coachWelcomeMessage';
 import { CoachWeekStatsModal } from '../components/virtualCoach/CoachWeekStats';
 import { VirtualCoachProfile } from '../components/virtualCoach/VirtualCoachProfile';
 
@@ -338,7 +339,12 @@ function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: App
       {error && <p className="text-center text-sm text-red-600">{error}</p>}
 
       <div className="space-y-3">
-        <CoachChatBox coach={coach} />
+        <CoachChatBox
+          coach={coach}
+          autoGreeting
+          userFirstName={user?.firstName}
+          quickReplies={[...COACH_CHAT_QUICK_REPLIES]}
+        />
         <CoachHelpSection coach={coach} />
         {latestRecap && (latestRecap.win || latestRecap.focus) ? (
           <CheckInRecap recap={latestRecap} coachName={coach.name} kind={latestRecap.kind ?? 'WEEKLY'} />

@@ -8,6 +8,13 @@ import { buildSmsToolDeclarations, executeSmsTool, type SmsToolContext } from '.
 import { applyPlannedMealUpdate, PlanEditError } from './planEditService.js';
 import { updateUserSmsSetup } from './smsSetupService.js';
 
+export type MealEditFocus = {
+  mealName: string;
+  mealId?: string;
+  date: string;
+  targetCalories?: number;
+};
+
 export type WebCoachToolContext = {
   userId: string;
   dateKey: string;
@@ -16,6 +23,8 @@ export type WebCoachToolContext = {
   message: string;
   /** Audit log of tool calls made this turn. */
   toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  /** When set, the user is editing one planned meal — block logging tools. */
+  mealEditFocus?: MealEditFocus;
 };
 
 const SHARED_SMS_TOOLS = new Set([
@@ -30,9 +39,12 @@ const SHARED_SMS_TOOLS = new Set([
   'suggest_meals'
 ]);
 
-export function buildWebCoachToolDeclarations(): FunctionDeclaration[] {
+/** Tools allowed while the client has an active meal-edit session. */
+const MEAL_EDIT_TOOLS = new Set(['update_planned_meals', 'suggest_meals', 'get_macro_status']);
+
+export function buildWebCoachToolDeclarations(options?: { mealEditFocus?: MealEditFocus }): FunctionDeclaration[] {
   const shared = buildSmsToolDeclarations().filter((tool) => SHARED_SMS_TOOLS.has(tool.name));
-  return [
+  const all = [
     ...shared,
     {
       name: 'update_planned_meals',
@@ -103,6 +115,9 @@ export function buildWebCoachToolDeclarations(): FunctionDeclaration[] {
       }
     }
   ];
+
+  if (!options?.mealEditFocus) return all as FunctionDeclaration[];
+  return all.filter((tool) => MEAL_EDIT_TOOLS.has(tool.name)) as FunctionDeclaration[];
 }
 
 /** Runs a tool the web coach agent called and returns a JSON-serializable result/error. */
@@ -111,10 +126,40 @@ export async function executeWebCoachTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
+  if (ctx.mealEditFocus && !MEAL_EDIT_TOOLS.has(name) && name !== 'update_sms_setup') {
+    return {
+      error: `While editing ${ctx.mealEditFocus.mealName}, only planned-meal changes are allowed — not logging food or other day actions.`
+    };
+  }
+
   if (name === 'update_planned_meals') {
-    ctx.toolCalls.push({ name, args });
     try {
-      const result = await applyPlannedMealUpdate(ctx.userId, ctx.timeZone, args);
+      let focusedArgs = args;
+      if (ctx.mealEditFocus) {
+        const focusName = ctx.mealEditFocus.mealName.trim().toLowerCase();
+        const rawMeals = Array.isArray(args.meals) ? args.meals : [];
+        const matchedMeal =
+          rawMeals.find((meal) => {
+            if (!meal || typeof meal !== 'object') return false;
+            const mealName = (meal as Record<string, unknown>).mealName;
+            return typeof mealName === 'string' && mealName.trim().toLowerCase() === focusName;
+          }) ?? rawMeals.find((meal) => meal && typeof meal === 'object') ??
+          null;
+        const entry =
+          matchedMeal && typeof matchedMeal === 'object' ? (matchedMeal as Record<string, unknown>) : null;
+        focusedArgs = {
+          date: ctx.mealEditFocus.date,
+          meals: [
+            {
+              mealName: ctx.mealEditFocus.mealName,
+              ...(typeof entry?.plannedTime === 'string' ? { plannedTime: entry.plannedTime } : {}),
+              items: Array.isArray(entry?.items) ? entry.items : []
+            }
+          ]
+        };
+      }
+      const result = await applyPlannedMealUpdate(ctx.userId, ctx.timeZone, focusedArgs);
+      ctx.toolCalls.push({ name, args: focusedArgs });
       return { result };
     } catch (error) {
       if (error instanceof PlanEditError) return { error: error.message };

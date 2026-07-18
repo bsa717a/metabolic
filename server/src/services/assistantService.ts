@@ -1,6 +1,11 @@
 import { getTodayDashboard } from './dashboardService.js';
 import { getAiProvider, WEB_AGENT_SYSTEM, type ChatMessage } from './aiService.js';
-import { buildWebCoachToolDeclarations, executeWebCoachTool, type WebCoachToolContext } from './webCoachTools.js';
+import {
+  buildWebCoachToolDeclarations,
+  executeWebCoachTool,
+  type MealEditFocus,
+  type WebCoachToolContext
+} from './webCoachTools.js';
 import { prisma } from '../db/prisma.js';
 import { env } from '../config/env.js';
 import { userDayKey } from '../utils/dates.js';
@@ -348,7 +353,28 @@ export async function buildSmsAssistantContext(userId: string) {
   });
 }
 
-export async function chatWithAssistant(userId: string, messages: ChatMessage[]) {
+function buildMealEditFocusInstruction(focus: MealEditFocus) {
+  const targetLine =
+    focus.targetCalories && focus.targetCalories > 0
+      ? `This meal's calorie target is about ${Math.round(focus.targetCalories)} kcal (±10% is fine).`
+      : `Stay close to this meal's planned calorie target from context.`;
+  return `MEAL EDIT MODE is active for "${focus.mealName}" on ${focus.date} only.
+The user is changing the PLANNED foods for that one meal — not logging what they already ate, and not editing the rest of the day.
+- For any add, remove, swap, or portion change, call update_planned_meals with the FULL updated planned item list for "${focus.mealName}" (keep existing items they did not ask to change).
+- NEVER call log_food, mark_meal_complete, log_water, or other day-logging tools.
+- Do not report leftover daily calories unless they ask — stay on this meal.
+- ${targetLine}
+- After a successful plan update, briefly confirm what changed and the new planned totals. If calories are outside ±10% of the target, ask if they want help getting this meal back in balance (adjust items/portions or use suggest_meals).
+- Stay on this meal until they clearly say they are done.
+`;
+}
+
+export async function chatWithAssistant(
+  userId: string,
+  messages: ChatMessage[],
+  options?: { mealEditFocus?: MealEditFocus }
+) {
+  const mealEditFocus = options?.mealEditFocus;
   const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content.trim() ?? '';
   let memoryView = await getVirtualCoachMemoryView(userId);
 
@@ -442,18 +468,22 @@ export async function chatWithAssistant(userId: string, messages: ChatMessage[])
     dateKey: userDayKey(personalization.timezone),
     timeZone: personalization.timezone,
     message: lastUserMessage,
-    toolCalls: []
+    toolCalls: [],
+    mealEditFocus
   };
+  const mealEditInstruction = mealEditFocus ? `${buildMealEditFocusInstruction(mealEditFocus)}\n\n` : '';
   const rawReply = await getAiProvider().runAgent({
     messages,
     context,
-    tools: buildWebCoachToolDeclarations(),
+    tools: buildWebCoachToolDeclarations({ mealEditFocus }),
     toolExecutor: (name, args) => executeWebCoachTool(toolCtx, name, args),
-    systemPrompt: `${WEB_AGENT_SYSTEM}\n\n${memoryInstruction}${phoneSaveInstruction}${hydrationGoalInstruction}${hydrationGoalSetInstruction}${nameInstruction ? `${nameInstruction}\n\n` : ''}${personaPrefix}`.trim()
+    systemPrompt: `${WEB_AGENT_SYSTEM}\n\n${mealEditInstruction}${memoryInstruction}${phoneSaveInstruction}${hydrationGoalInstruction}${hydrationGoalSetInstruction}${nameInstruction ? `${nameInstruction}\n\n` : ''}${personaPrefix}`.trim()
   });
 
+  const plannedMealsUpdated = toolCtx.toolCalls.some((call) => call.name === 'update_planned_meals');
   const goalWasSetByTool = toolCtx.toolCalls.some((call) => call.name === 'set_hydration_goal');
   const claimedGoalChange =
+    !mealEditFocus &&
     !goalWasSetByTool &&
     /(?:goal|target).*(?:now|updated|changed|set)|(?:set|updated|changed).*(?:goal|target)/i.test(rawReply);
   if (claimedGoalChange) {
@@ -486,7 +516,12 @@ export async function chatWithAssistant(userId: string, messages: ChatMessage[])
     scheduleMemoryExtraction(userId, 'web_chat', memoryMessages);
   }
 
-  return { reply, contextUsed: true, ...(goalWasSetByTool ? { hydrationGoalUpdated: true } : {}) };
+  return {
+    reply,
+    contextUsed: true,
+    ...(goalWasSetByTool ? { hydrationGoalUpdated: true } : {}),
+    ...(plannedMealsUpdated ? { plannedMealsUpdated: true } : {})
+  };
 }
 
 function toMemoryMessages(messages: ChatMessage[]): MemoryConversationMessage[] {

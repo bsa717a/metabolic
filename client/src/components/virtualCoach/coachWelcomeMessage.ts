@@ -79,23 +79,36 @@ const JOURNEY_SUPPORT =
 const APP_PROMPT =
   "You should probably get to know the app a little. What would you like to know about?";
 
+/** Shared meal-review entry — welcome intro and ongoing coach chat. */
+export const REVIEW_MEALS_QUICK_REPLY = {
+  label: 'Review meals',
+  mobileLabel: 'Meals',
+  message: 'Review meals',
+  action: 'review-meals' as const
+};
+
+/** Quick replies for regular coach chat (FAB / Virtual Coach page). */
+export const COACH_CHAT_QUICK_REPLIES = [
+  REVIEW_MEALS_QUICK_REPLY,
+  {
+    label: 'Review exercises',
+    mobileLabel: 'Exercises',
+    message: 'Review exercises'
+  }
+] as const;
+
 export const COACH_WELCOME_QUICK_REPLIES = [
   {
-    label: 'How to setup SMS',
+    label: 'How to use SMS',
     mobileLabel: 'SMS',
     message:
-      'Check my SMS texting setup with you — is my phone and timezone configured, and how do I text you from the contact I downloaded during setup?'
+      'How do I use SMS texting with you — is my phone and timezone configured, and how do I text you from the contact I downloaded during setup?'
   },
+  REVIEW_MEALS_QUICK_REPLY,
   {
-    label: 'Reviewing my meals',
-    mobileLabel: 'Meals',
-    message: 'Reviewing my meals',
-    action: 'review-meals' as const
-  },
-  {
-    label: 'Reviewing my exercises',
+    label: 'Review exercises',
     mobileLabel: 'Exercises',
-    message: 'How do I review and complete my exercises in the app?'
+    message: 'Review exercises'
   },
   {
     label: 'How do I log hydration',

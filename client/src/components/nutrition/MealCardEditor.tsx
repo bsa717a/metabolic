@@ -55,6 +55,13 @@ function toLocalItems(items: MealItem[]) {
   return items.filter((item) => item.type === 'PLANNED').map(toLocalItem);
 }
 
+const CALORIE_BAND = 0.1;
+
+function isOutOfBalance(calories: number, targetCalories: number | undefined) {
+  if (!targetCalories || targetCalories <= 0) return false;
+  return Math.abs(calories - targetCalories) > targetCalories * CALORIE_BAND;
+}
+
 export function MealCardEditor({
   meal,
   macroTargets,
@@ -62,6 +69,7 @@ export function MealCardEditor({
   onSaved,
   onCancel,
   onRefresh,
+  onRequestRebalance,
 }: {
   meal: Meal;
   macroTargets?: MealMacroTargets;
@@ -69,6 +77,7 @@ export function MealCardEditor({
   onSaved: () => void;
   onCancel: () => void;
   onRefresh: () => void | Promise<void>;
+  onRequestRebalance?: () => void;
 }) {
   const [baseline] = useState(() => ({
     name: meal.name,
@@ -83,6 +92,8 @@ export function MealCardEditor({
   const [undoItem, setUndoItem] = useState<LocalEditItem | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [rebalanceAsk, setRebalanceAsk] = useState(false);
+  const rebalanceDismissedRef = useRef(false);
 
   const [recentFoods, setRecentFoods] = useState<Food[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,7 +165,19 @@ export function MealCardEditor({
     fat: localItems.reduce((s, i) => s + i.fat, 0),
   };
 
+  function maybeAskRebalance(nextCalories: number) {
+    const target = macroTargets?.calories;
+    if (!isOutOfBalance(nextCalories, target)) {
+      rebalanceDismissedRef.current = false;
+      setRebalanceAsk(false);
+      return;
+    }
+    if (rebalanceDismissedRef.current || !onRequestRebalance) return;
+    setRebalanceAsk(true);
+  }
+
   function removeItem(item: LocalEditItem) {
+    const nextCalories = totals.calories - item.calories;
     setLocalItems((prev) => prev.filter((i) => i !== item));
     setUndoItem(item);
     setToast(`Removed ${item.nameSnapshot}. Undo?`);
@@ -163,25 +186,30 @@ export function MealCardEditor({
       setUndoItem(null);
       setToast(null);
     }, 5000);
+    maybeAskRebalance(nextCalories);
   }
 
   function undoRemove() {
     if (!undoItem) return;
+    const nextCalories = totals.calories + undoItem.calories;
     setLocalItems((prev) => [...prev, undoItem]);
     setUndoItem(null);
     setToast(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    maybeAskRebalance(nextCalories);
   }
 
   function updateQuantity(item: LocalEditItem, newQty: number) {
     if (newQty <= 0) return;
+    const factor = newQty / item.quantity;
+    const nextCalories = totals.calories - item.calories + item.calories * factor;
     setLocalItems((prev) =>
       prev.map((i) => {
         if (i !== item) return i;
-        const factor = newQty / i.quantity;
         return { ...i, quantity: newQty, calories: i.calories * factor, protein: i.protein * factor, carbs: i.carbs * factor, fat: i.fat * factor };
       })
     );
+    maybeAskRebalance(nextCalories);
   }
 
   function addFood(food: Food) {
@@ -201,6 +229,12 @@ export function MealCardEditor({
     resetAi();
     setSelectedIndex(-1);
     setSearchFocused(true);
+    maybeAskRebalance(totals.calories + newItem.calories);
+  }
+
+  function dismissRebalanceAsk() {
+    rebalanceDismissedRef.current = true;
+    setRebalanceAsk(false);
   }
 
   async function selectEntry(entry: DropdownEntry) {
@@ -246,7 +280,7 @@ export function MealCardEditor({
     }
   }
 
-  async function handleSave() {
+  async function handleSave(options?: { thenRebalance?: boolean }) {
     setSaving(true);
     setSaveError(null);
     if (!localTime.trim()) {
@@ -314,7 +348,9 @@ export function MealCardEditor({
         await api(`/api/meals/${meal.id}/apply-forward`, { method: 'POST' });
       }
 
+      setRebalanceAsk(false);
       onSaved();
+      if (options?.thenRebalance) onRequestRebalance?.();
     } catch (err) {
       await onRefresh();
       setSaveError(
@@ -563,6 +599,29 @@ export function MealCardEditor({
           <button type="button" className="font-semibold text-emerald-400 hover:text-emerald-300" onClick={undoRemove}>
             Undo
           </button>
+        </div>
+      )}
+
+      {rebalanceAsk && onRequestRebalance && (
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            This meal is outside its calorie target
+            {macroTargets ? ` (${Math.round(totals.calories)} vs ${Math.round(macroTargets.calories)} kcal)` : ''}.
+            Want to try to get it back in balance?
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button type="button" variant="secondary" onClick={dismissRebalanceAsk} disabled={saving}>
+              Not now
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={() => void handleSave({ thenRebalance: true })}
+              disabled={saving}
+            >
+              {saving ? 'Saving…' : 'Yes, help me'}
+            </Button>
+          </div>
         </div>
       )}
     </div>
