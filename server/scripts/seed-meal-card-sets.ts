@@ -64,8 +64,18 @@ type FoodSeed = {
 };
 
 const FOODS: FoodSeed[] = [
-  // breakfast proteins
-  { name: 'Eggs', servingSize: 1, servingUnit: 'egg', calories: 70, protein: 6, carbs: 0, fat: 5, role: 'PROTEIN' },
+  // breakfast proteins — 1 egg per serving so discrete scaling can land on 2/3/4 eggs
+  // (do not use the catalog "Eggs" item; that serving is 2 eggs / 140 kcal)
+  {
+    name: 'Egg - Whole with Yoke Cooked',
+    servingSize: 1,
+    servingUnit: 'egg',
+    calories: 75,
+    protein: 6,
+    carbs: 0.6,
+    fat: 5,
+    role: 'PROTEIN'
+  },
   { name: 'Turkey sausage', servingSize: 2, servingUnit: 'oz', calories: 90, protein: 12, carbs: 1, fat: 4, role: 'PROTEIN' },
   { name: 'Bacon', servingSize: 1, servingUnit: 'slice', calories: 45, protein: 3, carbs: 0, fat: 3.5, role: 'PROTEIN' },
   { name: 'Greek yogurt, plain', servingSize: 0.5, servingUnit: 'cup', calories: 65, protein: 11, carbs: 4, fat: 0, role: 'PROTEIN' },
@@ -100,9 +110,29 @@ const FOODS: FoodSeed[] = [
   { name: 'Whole grain crackers', servingSize: 6, servingUnit: 'crackers', calories: 80, protein: 2, carbs: 13, fat: 2.5, role: 'CARB' },
   { name: 'Rice cakes', servingSize: 1, servingUnit: 'cake', calories: 35, protein: 1, carbs: 7, fat: 0, role: 'CARB' },
   { name: 'Gluten-free crackers', servingSize: 6, servingUnit: 'crackers', calories: 80, protein: 1, carbs: 14, fat: 2, role: 'CARB' },
-  // boosters (fixed small amounts)
-  { name: 'Chia seeds', servingSize: 1, servingUnit: 'tsp', calories: 20, protein: 1, carbs: 2, fat: 1.5, role: 'FREE' },
-  { name: 'Cacao nibs', servingSize: 1, servingUnit: 'tsp', calories: 15, protein: 0.5, carbs: 1, fat: 1, role: 'FREE' },
+  // boosters (fixed small amounts) — unique names so we don't bind to larger tbsp catalog items
+  {
+    name: 'Chia seeds (tsp)',
+    servingSize: 1,
+    servingUnit: 'tsp',
+    calories: 20,
+    protein: 1,
+    carbs: 2,
+    fat: 1.5,
+    role: 'FREE',
+    isFreeFood: true
+  },
+  {
+    name: 'Cacao nibs (tsp)',
+    servingSize: 1,
+    servingUnit: 'tsp',
+    calories: 15,
+    protein: 0.5,
+    carbs: 1,
+    fat: 1,
+    role: 'FREE',
+    isFreeFood: true
+  },
   { name: 'Coconut flakes', servingSize: 1, servingUnit: 'tbsp', calories: 33, protein: 0.5, carbs: 1.5, fat: 3, role: 'FREE' },
   { name: 'Flax seeds', servingSize: 1, servingUnit: 'tsp', calories: 18, protein: 0.5, carbs: 1, fat: 1.5, role: 'FREE' },
   // lunch proteins/carbs
@@ -168,7 +198,12 @@ const SETS: SetSeed[] = [
       {
         role: 'PROTEIN', name: 'Choose protein', pickRule: 'Pick 1', required: true, maxSelect: 1,
         options: [
-          { name: 'Eggs', icon: '🥚', isDefault: true, foods: [{ food: 'Eggs', baseServings: 3, discrete: true }] },
+          {
+            name: 'Eggs',
+            icon: '🥚',
+            isDefault: true,
+            foods: [{ food: 'Egg - Whole with Yoke Cooked', baseServings: 3, discrete: true }]
+          },
           { name: 'Turkey sausage', icon: '🌭', foods: [{ food: 'Turkey sausage', baseServings: 2.3 }] },
           { name: 'Bacon', icon: '🥓', foods: [{ food: 'Bacon', baseServings: 4, discrete: true }] },
           { name: 'Greek yogurt', icon: '🥛', foods: [{ food: 'Greek yogurt, plain', baseServings: 3 }] },
@@ -231,7 +266,8 @@ const SETS: SetSeed[] = [
       {
         role: 'PROTEIN', name: 'Choose protein', pickRule: 'Pick 1', required: true, maxSelect: 1,
         options: [
-          { name: 'String cheese', icon: '🧀', isDefault: true, foods: [{ food: 'String cheese', baseServings: 2, discrete: true }] },
+          // 1 stick at reference so discrete scaling can land on 1 (not stuck at 2×80 kcal)
+          { name: 'String cheese', icon: '🧀', isDefault: true, foods: [{ food: 'String cheese', baseServings: 1, discrete: true }] },
           { name: 'Greek yogurt', icon: '🥛', foods: [{ food: 'Greek yogurt, plain', baseServings: 2.5 }] },
           { name: 'Cottage cheese', icon: '🥣', foods: [{ food: 'Cottage cheese', baseServings: 1.8 }] },
           { name: 'Tuna salad', icon: '🐟', foods: [{ food: 'Tuna salad', baseServings: 0.9 }] },
@@ -258,11 +294,12 @@ const SETS: SetSeed[] = [
         ]
       },
       {
-        role: 'FREE', name: 'Add boosters', pickRule: 'Pick 1 or more — small fixed amounts', required: false, maxSelect: 5,
+        // Not default — fixed boosters sit outside referenceCalories and would overshoot every snack
+        role: 'FREE', name: 'Add boosters', pickRule: 'Optional — small fixed amounts', required: false, maxSelect: 5,
         options: [
-          { name: 'Chia seeds', icon: '🌱', isDefault: true, foods: [{ food: 'Chia seeds', baseServings: 1, scalable: false }] },
+          { name: 'Chia seeds', icon: '🌱', foods: [{ food: 'Chia seeds (tsp)', baseServings: 1, scalable: false }] },
           { name: 'Berries', icon: '🫐', foods: [{ food: 'Mixed berries', baseServings: 0.33, scalable: false }] },
-          { name: 'Cacao nibs', icon: '🍫', foods: [{ food: 'Cacao nibs', baseServings: 1, scalable: false }] },
+          { name: 'Cacao nibs', icon: '🍫', foods: [{ food: 'Cacao nibs (tsp)', baseServings: 1, scalable: false }] },
           { name: 'Coconut flakes', icon: '🥥', foods: [{ food: 'Coconut flakes', baseServings: 1, scalable: false }] },
           { name: 'Flax seeds', icon: '🌾', foods: [{ food: 'Flax seeds', baseServings: 1, scalable: false }] }
         ]

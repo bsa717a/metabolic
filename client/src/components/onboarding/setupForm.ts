@@ -75,6 +75,8 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
     ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
+    // Only send when set — empty string would wipe allergies on migrated profiles.
+    ...(form.foodAllergies.trim() ? { foodAllergies: form.foodAllergies.trim() } : {}),
     timezone
   };
 }
@@ -108,7 +110,8 @@ export function createEmptySetupForm(): SetupFormState {
     gender: '',
     birthDate: '',
     timezone: '',
-    phone: ''
+    phone: '',
+    foodAllergies: ''
   };
 }
 

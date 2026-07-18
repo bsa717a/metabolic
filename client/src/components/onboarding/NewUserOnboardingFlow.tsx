@@ -1,126 +1,75 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
-import { OnboardingGoalSummary, OnboardingPersonalFields } from './OnboardingFields';
 import { OnboardingCoachPicker } from './OnboardingCoachPicker';
+import { CoachOnboardingChat } from './CoachOnboardingChat';
 import { OnboardingPrimaryButton, OnboardingStepHeader } from './OnboardingUi';
 import { OnboardingShell } from './OnboardingShell';
-import { onboardingCardClass } from './onboardingStyles';
-import { submitSetupForm, validateSetupForm } from './setupForm';
+import { submitSetupForm } from './setupForm';
+import { ThemeToggle } from '../layout/ThemeToggle';
 import { coachWelcomeGoalsFromForm } from '../virtualCoach/coachWelcomeMessage';
 import { setPendingCoachWelcome } from '../virtualCoach/coachWelcomePending';
+import { getVirtualCoach, type VirtualCoachId } from '../../data/virtualCoaches';
+import { detectedTimezone } from '../../utils/timezoneOptions';
 import type { SetupFormState } from '../../types/onboarding';
-import { hasValidCurrentWeight } from '../../utils/onboardingWeight';
-import type { VirtualCoachId } from '../../data/virtualCoaches';
-
-function needsVirtualCoachSelection(form: SetupFormState) {
-  return !form.trackingOnly && !form.coachCode.trim() && !form.wantsCoach;
-}
-
-function ModeCard({
-  title,
-  description,
-  recommended,
-  onClick
-}: {
-  title: string;
-  description: string;
-  recommended?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`${onboardingCardClass} flex w-full items-center justify-between gap-4 text-left transition hover:border-brand-green/60 hover:bg-app-muted/60`}
-    >
-      <span>
-        <span className="flex items-center gap-2">
-          <span className="font-semibold text-brand-navy dark:text-brand-off-white">{title}</span>
-          {recommended ? (
-            <span className="rounded-full bg-brand-green/15 px-2 py-0.5 text-xs font-medium text-brand-green">
-              Recommended
-            </span>
-          ) : null}
-        </span>
-        <span className="mt-1 block text-sm text-app-text-muted">{description}</span>
-      </span>
-      <ArrowRight size={18} className="shrink-0 text-app-text-muted" aria-hidden />
-    </button>
-  );
-}
 
 type NewUserOnboardingFlowProps = {
   form: SetupFormState;
   onChange: (key: keyof SetupFormState, value: string | boolean) => void;
   onComplete: () => void;
+  firstName?: string | null;
 };
 
-export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnboardingFlowProps) {
+export function NewUserOnboardingFlow({
+  form,
+  onChange,
+  onComplete,
+  firstName
+}: NewUserOnboardingFlowProps) {
   const navigate = useNavigate();
-  const [modeChosen, setModeChosen] = useState(false);
-  const [step, setStep] = useState(0);
+  const [phase, setPhase] = useState<'pickCoach' | 'chat'>('pickCoach');
+  const [selectedCoachId, setSelectedCoachId] = useState<VirtualCoachId | ''>(
+    (form.selectedVirtualCoachId as VirtualCoachId) || ''
+  );
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const formRef = useRef(form);
 
-  function validateTargetStep() {
-    if (!hasValidCurrentWeight(Number(form.weight))) {
-      setError('Enter your current weight.');
-      return false;
-    }
-    if (!hasValidCurrentWeight(Number(form.goalWeight))) {
-      setError('Enter your goal weight.');
-      return false;
-    }
-    const feet = Number(form.heightFeet);
-    if (!form.heightFeet.trim() || !Number.isInteger(feet) || feet < 1 || feet > 8) {
-      setError('Enter your height.');
-      return false;
-    }
-    if (form.heightInches.trim()) {
-      const inches = Number(form.heightInches);
-      if (!Number.isInteger(inches) || inches < 0 || inches > 11) {
-        setError('Height inches must be a whole number from 0 to 11.');
-        return false;
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+
+  const coach = getVirtualCoach(selectedCoachId || form.selectedVirtualCoachId);
+
+  function handleFormPatch(patch: Partial<SetupFormState>) {
+    formRef.current = { ...formRef.current, ...patch };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== undefined) {
+        onChange(key as keyof SetupFormState, value as string | boolean);
       }
     }
-    setError('');
-    return true;
   }
 
-  function validatePersonalizeStep() {
-    const message = validateSetupForm(form, { requireGoalWeight: true, requireTimezone: true });
-    if (message) {
-      setError(message);
-      return false;
-    }
-    setError('');
-    return true;
-  }
-
-  function validateCoachStep() {
-    if (!form.selectedVirtualCoachId) {
-      setError('Choose a virtual coach to continue.');
-      return false;
-    }
-    setError('');
-    return true;
-  }
-
-  async function handleFinish() {
-    if (!validatePersonalizeStep()) return;
-    if (needsVirtualCoachSelection(form) && !validateCoachStep()) return;
-
+  async function handleSubmit() {
     setSubmitting(true);
+    setError('');
     try {
-      await submitSetupForm(form);
-      const coachId = form.selectedVirtualCoachId.trim() || undefined;
+      const latest = formRef.current;
+      const timezone = latest.timezone.trim() || detectedTimezone();
+      const coachId = latest.trackingOnly ? undefined : latest.selectedVirtualCoachId.trim() || undefined;
+
+      await submitSetupForm({
+        ...latest,
+        timezone: timezone || latest.timezone,
+        selectedVirtualCoachId: latest.trackingOnly ? '' : latest.selectedVirtualCoachId
+      });
+
       if (coachId) {
         setPendingCoachWelcome({
           coachId,
-          welcomeGoals: coachWelcomeGoalsFromForm(form)
+          welcomeGoals: coachWelcomeGoalsFromForm(latest)
         });
       }
+
       onComplete();
       navigate('/', {
         replace: true,
@@ -128,7 +77,7 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
           ? {
               showCoachWelcome: true,
               coachId,
-              welcomeGoals: coachWelcomeGoalsFromForm(form)
+              welcomeGoals: coachWelcomeGoalsFromForm(latest)
             }
           : undefined
       });
@@ -139,129 +88,69 @@ export function NewUserOnboardingFlow({ form, onChange, onComplete }: NewUserOnb
     }
   }
 
-  function continueFromPersonalize() {
-    if (!validatePersonalizeStep()) return;
-    if (needsVirtualCoachSelection(form)) {
-      setStep(2);
-      return;
-    }
-    void handleFinish();
-  }
-
-  if (!modeChosen) {
+  if (phase === 'pickCoach') {
     return (
-      <OnboardingShell footer="You can switch to a coached plan anytime.">
+      <OnboardingShell footer="You can switch coaches anytime from Virtual Coach.">
         <OnboardingStepHeader
-          headline="How do you want to start?"
-          subheadline="Pick what fits you right now — you can change this later."
+          headline="Choose your virtual coach"
+          subheadline="Tap a coach to read their bio, then choose them — they'll walk you through the rest."
         />
 
-        <div className="space-y-3">
-          <ModeCard
-            title="Get on a plan"
-            description="A structured weekly plan with meals, targets, and coach support."
-            recommended
-            onClick={() => {
-              onChange('trackingOnly', false);
-              setModeChosen(true);
+        <div className="space-y-5">
+          <OnboardingCoachPicker
+            selectedId={selectedCoachId || form.selectedVirtualCoachId}
+            onSelect={(id: VirtualCoachId) => {
+              setSelectedCoachId(id);
+              formRef.current = { ...formRef.current, selectedVirtualCoachId: id };
+              onChange('selectedVirtualCoachId', id);
+              setError('');
+              setPhase('chat');
             }}
           />
-          <ModeCard
-            title="Just track my food"
-            description="Log meals freely and set your own calorie and protein goals — no plan or coach."
-            onClick={() => {
-              onChange('trackingOnly', true);
-              setModeChosen(true);
-            }}
-          />
+
+          {error ? <p className="text-sm text-red-500">{error}</p> : null}
         </div>
       </OnboardingShell>
     );
   }
 
-  if (step === 0) {
+  if (!coach) {
     return (
-      <OnboardingShell footer="You can adjust your targets anytime.">
+      <OnboardingShell>
         <OnboardingStepHeader
-          headline="Choose the target."
-          subheadline="We'll use this to shape the journey. You can adjust it later."
+          headline="Coach not found"
+          subheadline="Pick a coach again to continue setup."
         />
-
-        <div className="space-y-5">
-          <OnboardingGoalSummary form={form} onChange={onChange} />
-
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
-
-          <OnboardingPrimaryButton
-            onClick={() => {
-              if (validateTargetStep()) setStep(1);
-            }}
-          >
-            Next: Personalize It →
-          </OnboardingPrimaryButton>
-        </div>
-      </OnboardingShell>
-    );
-  }
-
-  if (step === 1) {
-    return (
-      <OnboardingShell footer="One last step, then your dashboard is ready.">
-        <OnboardingStepHeader
-          headline={form.trackingOnly ? 'Personalize tracking.' : 'Personalize the plan.'}
-          subheadline={
-            form.trackingOnly
-              ? 'Final details help tune reminders and age-based calculations.'
-              : 'Final details help tune reminders, age-based calculations, and coach support.'
-          }
-        />
-
-        <div className="space-y-5">
-          <OnboardingPersonalFields form={form} onChange={onChange} showCoach={!form.trackingOnly} />
-
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
-
-          <OnboardingPrimaryButton
-            type="button"
-            loading={submitting && !needsVirtualCoachSelection(form)}
-            loadingLabel={form.trackingOnly ? 'Setting up tracking…' : 'Creating your starter plan…'}
-            onClick={() => continueFromPersonalize()}
-          >
-            {form.trackingOnly
-              ? 'Start Tracking'
-              : needsVirtualCoachSelection(form)
-                ? 'Next: Choose Your Coach →'
-                : 'Create My Starter Plan →'}
-          </OnboardingPrimaryButton>
-        </div>
+        <OnboardingPrimaryButton type="button" onClick={() => setPhase('pickCoach')}>
+          Back to coaches
+        </OnboardingPrimaryButton>
       </OnboardingShell>
     );
   }
 
   return (
-    <OnboardingShell footer="You can switch coaches anytime from Virtual Coach.">
-      <OnboardingStepHeader
-        headline="Choose your virtual coach"
-        subheadline="Tap a coach to read their bio, then choose the one that fits you — you can change later."
-      />
-
-      <div className="space-y-5">
-        <OnboardingCoachPicker
-          selectedId={form.selectedVirtualCoachId}
-          onSelect={(id: VirtualCoachId) => onChange('selectedVirtualCoachId', id)}
-        />
-
-        {error ? <p className="text-sm text-red-500">{error}</p> : null}
-
-        <OnboardingPrimaryButton
-          type="button"
-          loading={submitting}
-          loadingLabel="Creating your starter plan…"
-          onClick={() => void handleFinish()}
-        >
-          Create My Starter Plan →
-        </OnboardingPrimaryButton>
+    <main className="relative flex min-h-screen flex-col items-center bg-app-bg px-4 py-3 text-app-text sm:py-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
       </div>
-    </OnboardingShell>
+      <div className="mb-2 w-full max-w-xl">
+        <p className="text-center text-sm text-app-text-muted">
+          Chat with <span className="font-medium text-app-text">{coach.name}</span> to set up your plan
+        </p>
+      </div>
+
+      <div className="w-full max-w-xl">
+        <CoachOnboardingChat
+          coach={coach}
+          form={form}
+          firstName={firstName}
+          onFormPatch={handleFormPatch}
+          onSubmit={handleSubmit}
+          submitting={submitting}
+        />
+      </div>
+
+      {error ? <p className="mt-3 max-w-xl text-center text-sm text-red-500">{error}</p> : null}
+    </main>
   );
 }
