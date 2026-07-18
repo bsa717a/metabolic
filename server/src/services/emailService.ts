@@ -64,14 +64,15 @@ export async function sendWelcomeEmail(options: { to: string; firstName?: string
       subject: 'Welcome to Metabolic OS',
       text,
       html,
+      // SendGrid API expects content_id; @sendgrid/mail leaves camelCase contentId unconverted.
       attachments: [
         {
           content: image.toString('base64'),
           filename: 'welcome-dashboard.png',
           type: 'image/png',
           disposition: 'inline',
-          contentId: 'welcome-dashboard'
-        }
+          content_id: 'welcome-dashboard'
+        } as { content: string; filename: string; type: string; disposition: string; content_id: string }
       ]
     });
   } catch (error) {
