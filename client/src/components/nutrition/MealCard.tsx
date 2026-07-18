@@ -253,6 +253,7 @@ export function MealCard({
           }}
           onCancel={onExitEditMode}
           onRefresh={refreshAfterSaveFailure}
+          onRequestRebalance={() => onAiSuggestions(meal)}
         />
       ) : (
         <>

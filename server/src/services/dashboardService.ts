@@ -36,7 +36,17 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
     where: { userId, status: ProgramStatus.ACTIVE },
     include: { metrics: true }
   });
-  if (!program) return { program: null, dailyLog: null, meals: [], exercises: [], summary: null, weightTrend: [] };
+  if (!program) {
+    return {
+      program: null,
+      dailyLog: null,
+      meals: [],
+      exercises: [],
+      summary: null,
+      weightTrend: [],
+      date: resolvedDateKey
+    };
+  }
 
   const dailyLog = await ensureDailyLog(userId, program, today);
   const [meals, rawExercises, weightTrend] = await Promise.all([
@@ -61,6 +71,7 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
     meals: nutritionMeals,
     allMeals: meals,
     exercises,
+    date: resolvedDateKey,
     nextMeal: nextMeal
       ? {
           name: nextMeal.name,

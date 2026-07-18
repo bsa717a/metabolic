@@ -86,8 +86,22 @@ export async function aiRoutes(app: FastifyInstance) {
   );
   app.post('/api/ai/chat', { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] }, async (request, reply) => {
     try {
-      const body = z.object({ messages: z.array(chatMessageSchema).min(1).max(20) }).parse(request.body);
-      return await chatWithAssistant(request.appUser!.id, body.messages);
+      const body = z
+        .object({
+          messages: z.array(chatMessageSchema).min(1).max(20),
+          mealEditFocus: z
+            .object({
+              mealName: z.string().min(1).max(60),
+              mealId: z.string().min(1).max(64).optional(),
+              date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+              targetCalories: z.number().positive().max(5000).optional()
+            })
+            .optional()
+        })
+        .parse(request.body);
+      return await chatWithAssistant(request.appUser!.id, body.messages, {
+        mealEditFocus: body.mealEditFocus
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI chat failed';
       request.log.error({ err: error }, 'AI chat failed');

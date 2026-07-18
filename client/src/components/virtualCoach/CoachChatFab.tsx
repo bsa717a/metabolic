@@ -4,6 +4,7 @@ import type { AppUser } from '../../types';
 import { getVirtualCoach } from '../../data/virtualCoaches';
 import { coachFabBottom } from '../../utils/floatingActionLayout';
 import { CoachChatModal } from './CoachChatModal';
+import { COACH_CHAT_QUICK_REPLIES } from './coachWelcomeMessage';
 
 export function CoachChatFab({
   user,
@@ -50,6 +51,7 @@ export function CoachChatFab({
         autoGreeting
         userFirstName={user?.firstName}
         chatSessionKey={chatSessionKey}
+        quickReplies={[...COACH_CHAT_QUICK_REPLIES]}
         onClose={() => setOpen(false)}
       />
     </>
