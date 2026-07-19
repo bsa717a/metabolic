@@ -29,6 +29,11 @@ import { storeAdminRoutes } from './routes/storeAdminRoutes.js';
 import { storeWebhookRoutes } from './routes/storeWebhookRoutes.js';
 import { feedbackRoutes } from './routes/feedbackRoutes.js';
 import { feedbackAdminRoutes } from './routes/feedbackAdminRoutes.js';
+import {
+  communicationAdminRoutes,
+  communicationAssetRoutes
+} from './routes/communicationAdminRoutes.js';
+import { unsubscribeRoutes } from './routes/unsubscribeRoutes.js';
 
 async function main() {
   const app = Fastify({
@@ -76,6 +81,9 @@ async function main() {
   await app.register(storeWebhookRoutes);
   await app.register(feedbackRoutes);
   await app.register(feedbackAdminRoutes);
+  await app.register(communicationAdminRoutes);
+  await app.register(communicationAssetRoutes);
+  await app.register(unsubscribeRoutes);
   await app.register(internalRoutes);
 
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

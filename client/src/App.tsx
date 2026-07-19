@@ -17,6 +17,8 @@ import { AdminNutritionTemplateEditorPage } from './pages/AdminNutritionTemplate
 import { AdminMealCardSetEditorPage } from './pages/AdminMealCardSetEditorPage';
 import { AdminExerciseTemplatesPage } from './pages/AdminExerciseTemplatesPage';
 import { AdminExerciseTemplateEditorPage } from './pages/AdminExerciseTemplateEditorPage';
+import { AdminCommunicationsPage } from './pages/AdminCommunicationsPage';
+import { UnsubscribePage } from './pages/UnsubscribePage';
 import { CoachPage } from './pages/CoachPage';
 import { VirtualCoachPage } from './pages/VirtualCoachPage';
 import { VirtualCoachDetailPage } from './pages/VirtualCoachDetailPage';
@@ -185,6 +187,7 @@ export default function App() {
         <Route path="/campaign-policy" element={<CampaignPolicyPage />} />
         <Route path="/campaign-terms" element={<CampaignTermsPage />} />
         <Route path="/support" element={<SupportPage />} />
+        <Route path="/unsubscribe" element={<UnsubscribePage />} />
         <Route
           path="/setup"
           element={
@@ -249,6 +252,7 @@ export default function App() {
             <Route path="admin/meal-cards/:id" element={<AdminRoute appUser={appUser}><AdminMealCardSetEditorPage /></AdminRoute>} />
             <Route path="admin/exercise-templates" element={<AdminRoute appUser={appUser}><AdminExerciseTemplatesPage /></AdminRoute>} />
             <Route path="admin/exercise-templates/:id" element={<AdminRoute appUser={appUser}><AdminExerciseTemplateEditorPage /></AdminRoute>} />
+            <Route path="admin/communications" element={<AdminRoute appUser={appUser}><AdminCommunicationsPage /></AdminRoute>} />
           </Route>
         </Route>
       </Routes>
