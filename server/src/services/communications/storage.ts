@@ -15,9 +15,13 @@ const EXT_BY_TYPE: Record<string, string> = {
 };
 const MAX_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Public base URL of the API (not the SPA). Email image srcs and Unlayer
+ * uploads must hit Cloud Run — Firebase Hosting has no /api proxy.
+ */
 export function getApiPublicUrl(): string {
   if (env.API_PUBLIC_URL) return env.API_PUBLIC_URL.replace(/\/$/, '');
-  if (env.NODE_ENV === 'production') return env.CLIENT_URL.replace(/\/$/, '');
+  // Local/dev default. Never fall back to CLIENT_URL — that returns the SPA HTML.
   return `http://localhost:${env.PORT}`;
 }
 
