@@ -48,7 +48,10 @@ async function main() {
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
-  await app.register(helmet);
+  // cross-origin so the SPA can load Message Center assets / Unlayer embed from the API host.
+  await app.register(helmet, {
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  });
   await app.register(formbody);
   await app.register(multipart, {
     limits: {

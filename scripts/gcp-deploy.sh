@@ -80,10 +80,10 @@ echo "==> Ensure Cloud Scheduler job for proactive SMS reminders (best-effort)"
 # deploy when scheduler setup fails; run ./scripts/setup-sms-scheduler.sh once as admin.
 API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-sms-scheduler.sh" || true
 
-echo "==> Enable Twilio webhook signature validation"
+echo "==> Set API_PUBLIC_URL + Twilio webhook validation (stable Cloud Run URL)"
 gcloud run services update "$SERVICE_NAME" \
   --region "$REGION" \
-  --update-env-vars "TWILIO_VALIDATE_SIGNATURE=true,TWILIO_WEBHOOK_URL=${API_URL}/api/sms/webhook"
+  --update-env-vars "API_PUBLIC_URL=${API_URL},TWILIO_VALIDATE_SIGNATURE=true,TWILIO_WEBHOOK_URL=${API_URL}/api/sms/webhook"
 
 has_client_env=false
 if [[ -n "${VITE_FIREBASE_API_KEY:-}" ]]; then
