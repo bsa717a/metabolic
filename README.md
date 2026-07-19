@@ -53,6 +53,8 @@ gcloud secrets create FIREBASE_PRIVATE_KEY --data-file=-
 gcloud secrets create FIREBASE_CLIENT_EMAIL --data-file=-
 echo -n metabolic-v1 | gcloud secrets create FIREBASE_PROJECT_ID --data-file=-
 echo -n YOUR_GEMINI_KEY | gcloud secrets create GEMINI_API_KEY --data-file=-
+echo -n YOUR_OPENAI_KEY | gcloud secrets create OPENAI_API_KEY --data-file=-
+echo -n "$(openssl rand -hex 32)" | gcloud secrets create UNSUBSCRIBE_TOKEN_SECRET --data-file=-
 echo -n https://metabolic-v1.web.app | gcloud secrets create CLIENT_URL --data-file=-
 echo -n YOUR_TWILIO_ACCOUNT_SID | gcloud secrets create TWILIO_ACCOUNT_SID --data-file=-
 echo -n YOUR_TWILIO_AUTH_TOKEN | gcloud secrets create TWILIO_AUTH_TOKEN --data-file=-
@@ -75,7 +77,7 @@ Grant the Cloud Run service account access after first deploy:
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe metabolic-v1 --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME CRON_SECRET; do
+for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY OPENAI_API_KEY UNSUBSCRIBE_TOKEN_SECRET CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME CRON_SECRET; do
   gcloud secrets add-iam-policy-binding "$s" \
     --member="serviceAccount:${SA}" \
     --role="roles/secretmanager.secretAccessor"
