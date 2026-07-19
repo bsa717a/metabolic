@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminCard } from '../components/admin/AdminCard';
 import { FoodReviewQueue } from '../components/admin/FoodReviewQueue';
 import { ExerciseTable } from '../components/admin/ExerciseTable';
@@ -23,6 +24,7 @@ const cards = [
   'Exercise Database',
   'Food Database',
   'AI Review Queue',
+  'Email',
   'Store',
   'Feedback',
   'Reports',
@@ -42,16 +44,22 @@ const interactiveSections = new Set<AdminSection>([
   'Targets',
   'Exercise Plans',
   'Gamification',
+  'Email',
   'Store',
   'Feedback',
   'Settings'
 ]);
 
 export function AdminPage() {
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<AdminSection | null>('Users');
 
   function toggleSection(section: AdminSection) {
     if (!interactiveSections.has(section)) return;
+    if (section === 'Email') {
+      navigate('/admin/communications');
+      return;
+    }
     setActiveSection((current) => (current === section ? null : section));
   }
 

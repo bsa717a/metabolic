@@ -45,7 +45,11 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   STORE_NOTIFY_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   GIT_SHA: z.string().optional().default("dev"),
-  CRON_SECRET: z.string().optional().default("")
+  CRON_SECRET: z.string().optional().default(""),
+  UNSUBSCRIBE_TOKEN_SECRET: z.string().optional().default(""),
+  OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
+  OPENAI_IMAGE_MODEL: z.string().optional().default("gpt-image-1"),
+  API_PUBLIC_URL: z.string().url().optional().or(z.literal("")).default("")
 });
 
 export const env = envSchema.parse(process.env);
