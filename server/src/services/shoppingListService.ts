@@ -2,7 +2,7 @@ import { MealItemType } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getAiProvider, MockAiProvider, type EnrichedShoppingListResult, type ShoppingListInputItem } from './aiService.js';
 import { parseValidatedDateRange, toDateKey } from '../utils/dates.js';
-import { formatGroceryDescription, isPoorGroceryDescription } from '../utils/groceryConversion.js';
+import { consolidateShoppingListItems, formatGroceryDescription } from '../utils/groceryConversion.js';
 import { n, round } from '../utils/numbers.js';
 
 export type GroceryListItem = {
@@ -35,9 +35,9 @@ export type ShoppingListResult = {
 };
 
 const BASE_NOTE =
-  'Planned portions are combined only when the food name and unit match exactly.';
+  'Same foods with convertible units (for example eggs counted individually and by the dozen) are combined into one line.';
 const ENRICHED_NOTE =
-  'Grocery amounts are AI estimates for typical packages. Adjust based on what you already have at home.';
+  'Grocery amounts are estimated typical US store packages. Adjust based on what you already have at home.';
 const STORE_NOTE = ' Aisle and section hints are approximate and can vary by store location.';
 
 function groupGroceryItems(items: GroceryListItem[], storeName: string | null): GroceryListSection[] {
@@ -59,16 +59,12 @@ function groupGroceryItems(items: GroceryListItem[], storeName: string | null): 
     }));
 }
 
-function mergeEnrichment(inputItems: ShoppingListInputItem[], enriched: EnrichedShoppingListResult): GroceryListItem[] {
+/** Exported for tests — AI supplies aisle/category only; buy amounts stay deterministic. */
+export function mergeEnrichment(inputItems: ShoppingListInputItem[], enriched: EnrichedShoppingListResult): GroceryListItem[] {
   const byId = new Map(enriched.items.map((item) => [item.id, item]));
 
   return inputItems.map((item) => {
     const match = byId.get(item.id);
-    const aiDescription = match?.groceryDescription;
-    const groceryDescription =
-      aiDescription && !isPoorGroceryDescription(aiDescription, item)
-        ? aiDescription
-        : formatGroceryDescription(item.name, item.quantity, item.unit);
 
     return {
       id: item.id,
@@ -76,7 +72,7 @@ function mergeEnrichment(inputItems: ShoppingListInputItem[], enriched: Enriched
       plannedQuantity: item.quantity,
       plannedUnit: item.unit,
       occurrenceCount: item.occurrenceCount,
-      groceryDescription,
+      groceryDescription: formatGroceryDescription(item.name, item.quantity, item.unit),
       groceryCategory: match?.groceryCategory ?? 'Other',
       storeLocation: match?.storeLocation ?? null,
       notes: match?.notes ?? null
@@ -135,9 +131,9 @@ async function aggregatePlannedItems(userId: string, startDate: string, endDate:
     });
   }
 
-  const inputItems = [...aggregates.values()]
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.unit.localeCompare(b.unit, undefined, { sensitivity: 'base' }))
-    .map((item, index) => ({ ...item, id: String(index) }));
+  const inputItems = consolidateShoppingListItems(
+    [...aggregates.values()].map((item, index) => ({ ...item, id: String(index) }))
+  );
 
   return {
     startDate: toDateKey(start),

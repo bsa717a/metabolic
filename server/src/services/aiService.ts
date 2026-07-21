@@ -461,16 +461,14 @@ If the user request expresses a craving or exclusion, honor it.
 Return JSON only: { "options": [ { "name": string, "description": string, "items": [ { "name": string, "quantity": number, "unit": string, "calories": number, "protein": grams, "carbs": grams, "fat": grams, "role": string }, ... ] }, ... ] }
 Keep names appetizing and under 40 characters, descriptions under 140 characters, 3-7 items per meal.`;
 
-const SHOPPING_LIST_PROMPT = `Convert planned meal items into practical grocery-store shopping quantities.
-Use packages, weights, counts, bunches, bags, and other units shoppers actually buy.
-When planned unit is "serving", read the portion size from the food name (e.g. "1 cup almond milk" × 12 servings = 1 gallon almond milk).
-When the planned amount is in cups, ounces, milliliters, or servings of liquids, convert to store sizes such as quart, half gallon, gallon, loaf, lb block, or bottle — never output "12 grocery portion(s)" or repeat the per-serving amount.
-Do not repeat the meal-plan portion in groceryDescription (e.g. avoid "1 cup" in the product name).
-Round up slightly when needed so the shopper has enough for the planned amount.
+const SHOPPING_LIST_PROMPT = `You are labeling grocery list rows for aisle/section hints only.
+Do NOT invent, change, or merge package sizes or quantities — the app already computed buy amounts.
+For each input item, copy the food identity into groceryDescription using the item name only (no quantities), and set groceryCategory plus storeLocation.
 If a store name is provided, include a typical aisle or section for that chain. Approximate is fine.
 If no store is provided, set storeLocation to null and use a sensible groceryCategory such as Produce, Meat & Seafood, Dairy & Eggs, Bakery, Pantry, Frozen, Beverages, or Other.
+Optional notes may mention brand swaps or shelf tips; do not restate amounts.
 Return JSON only: { "intro": string, "items": [ { "id": string, "groceryDescription": string, "groceryCategory": string, "storeLocation": string|null, "notes": string|null }, ... ] }
-Every input id must appear exactly once. Keep groceryDescription under 120 characters.`;
+Every input id must appear exactly once. Keep groceryDescription under 120 characters. Do not merge or drop items.`;
 
 const MEAL_PREP_PROMPT = `The user is batch-cooking meals ahead of time (meal prep). Each batch below is one dish they will cook once and portion into several containers.
 For each batch, recommend how to package and store it. Pick the most practical container: "microwave-safe container" for hot cooked meals, "ziplock bag" for dry, handheld, or snack-style foods, "mason jar" for salads (dressing at the bottom) and overnight oats or parfaits, "small sauce container" only when the batch is mostly condiments.
