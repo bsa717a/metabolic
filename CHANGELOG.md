@@ -7,6 +7,26 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.3.0](https://github.com/bsa717a/metabolic/compare/v0.2.0...v0.3.0) (2026-07-21)
+
+
+### Features
+
+* **admin:** add Message Center email builder ([3c576a5](https://github.com/bsa717a/metabolic/commit/3c576a50ac6c33db54e69b059ae3d04cb923276b))
+* **admin:** Message Center email builder ([c4d1416](https://github.com/bsa717a/metabolic/commit/c4d1416176edc6d4301c2e6373668f779141f476))
+
+
+### Bug Fixes
+
+* **deploy:** mount OPENAI_API_KEY and unsubscribe secret on Cloud Run ([94a3e33](https://github.com/bsa717a/metabolic/commit/94a3e33196bf11baf71effbe7381e9a6a92f159d))
+* **deploy:** mount OPENAI_API_KEY on Cloud Run ([e05c94d](https://github.com/bsa717a/metabolic/commit/e05c94d0adcccd208a359442f5703ae4922a9393))
+* **email:** send SendGrid inline image content_id ([89f5bf3](https://github.com/bsa717a/metabolic/commit/89f5bf361c93d740190dc96e8a8f329fa74de7b8))
+* **email:** SendGrid inline image content_id ([504dd52](https://github.com/bsa717a/metabolic/commit/504dd52b0e1a0e539b81950bcda468a9e0e95adc))
+* **email:** serve Message Center images from API host ([9ff9594](https://github.com/bsa717a/metabolic/commit/9ff95946393c0af4930e1515ee229d5b8e54f748))
+* **email:** serve Message Center images from the API host ([b1f91fe](https://github.com/bsa717a/metabolic/commit/b1f91fe5f46cb3ec052c50c71ff2de14dc446918))
+* **shopping-list:** show US buy amounts and merge duplicate foods ([e7d9151](https://github.com/bsa717a/metabolic/commit/e7d9151eb8eade7eb85f29cc2461fe3099ea49fc))
+* **shopping-list:** US buy amounts and food dedupe ([86ab407](https://github.com/bsa717a/metabolic/commit/86ab407b58fad4c36e98aa1625e42d9fdf74e3a2))
+
 ## [0.2.0](https://github.com/bsa717a/metabolic/compare/v0.1.0...v0.2.0) (2026-07-18)
 
 
