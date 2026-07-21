@@ -4,17 +4,56 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional PAT (contents + pull-requests) makes the release PR look like a
+          # human push so CI runs without maintainer approval. Without it we fall
+          # back to GITHUB_TOKEN and still auto-merge below.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # Auto-approve + merge the open release PR so version bumps publish without a
+      # manual click. Merge with GITHUB_TOKEN does not re-trigger push workflows, so
+      # we explicitly dispatch release-please (to cut the tag/release) and Deploy.
+      - name: Auto-merge release PR
+        if: ${{ steps.release.outputs.release_created != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          pr="$(gh pr list --repo "${{ github.repository }}" --label 'autorelease: pending' --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$pr" ]; then
+            echo "No open release PR to auto-merge."
+            exit 0
+          fi
+
+          echo "Auto-merging release PR #$pr"
+          gh pr review "$pr" --repo "${{ github.repository }}" --approve \
+            --body "Automated approval — release-please version bump + changelog only." || true
+
+          if [ -n "${RELEASE_PAT:-}" ]; then
+            # PAT merge attributes the push to a user identity so follow-up
+            # push workflows (release tag + Deploy) run normally.
+            GH_TOKEN="$RELEASE_PAT" gh pr merge "$pr" --repo "${{ github.repository }}" --merge
+            echo "Merged with RELEASE_PLEASE_TOKEN; push workflows will continue."
+            exit 0
+          fi
+
+          gh pr merge "$pr" --repo "${{ github.repository }}" --merge
+          echo "Merged with GITHUB_TOKEN; dispatching follow-up workflows."
+          gh workflow run release-please.yml --repo "${{ github.repository }}" --ref main
+          gh workflow run deploy.yml --repo "${{ github.repository }}" --ref main

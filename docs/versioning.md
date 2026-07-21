@@ -11,22 +11,35 @@ versions, the changelog, Git tags, and GitHub Releases automatically from
 - **Manifest:** [`.release-please-manifest.json`](../.release-please-manifest.json) — tracks
   the current version (`0.1.0`).
 - **Workflow:** [`.github/workflows/release-please.yml`](../.github/workflows/release-please.yml)
-  — runs on every push to `main`.
+  — runs on every push to `main`, then **auto-merges** the open release PR and publishes
+  the tag / GitHub Release (and kicks Deploy when no PAT is configured).
 
 ## One-time GitHub settings (repository owner must verify)
 
-Release Please opens and updates pull requests on your behalf, which requires two settings.
-In the GitHub repository:
+Release Please opens, approves, and merges pull requests on your behalf. In the GitHub
+repository:
 
 **Settings → Actions → General → Workflow permissions:**
 
 1. Select **Read and write permissions**.
 2. Check **Allow GitHub Actions to create and approve pull requests**.
 
-Without these, the workflow runs but cannot create the release pull request.
+**Settings → General → Pull Requests:**
+
+1. Check **Allow auto-merge**.
+
+Without these, the workflow runs but cannot create or auto-merge the release pull request.
 
 > These are account/repo settings that can only be changed in the GitHub UI — they are not
 > something a workflow file can grant.
+
+### Optional: `RELEASE_PLEASE_TOKEN`
+
+Add a fine-grained PAT (contents + pull requests on this repo) as the
+`RELEASE_PLEASE_TOKEN` Actions secret. Then Release Please PRs are authored by your
+account (CI runs without a maintainer “approve workflow” click) and the merge push
+naturally re-triggers Deploy. Without the secret, the workflow still auto-merges using
+`GITHUB_TOKEN` and explicitly dispatches `release-please` + `Deploy`.
 
 ## Normal release flow
 
@@ -36,13 +49,14 @@ Without these, the workflow runs but cannot create the release pull request.
    `chore(main): release metabolic 0.2.0`.
 3. As more `feat:` / `fix:` PRs land, changes **accumulate** in that release PR and its
    proposed version and changelog update automatically.
-4. When you're ready to ship, **merge the release pull request**. Release Please then:
+4. On the next `release-please` run, that PR is **approved and merged automatically**.
+   Release Please then:
    - bumps the `version` in the root `package.json`,
    - finalizes the `CHANGELOG.md` entry,
    - creates the Git tag (e.g. `v0.2.0`),
    - publishes the corresponding **GitHub Release**.
 
-Nothing is published to npm.
+Nothing is published to npm. You do not need to open or merge the release PR by hand.
 
 ### How commits map to versions (starting from 0.1.0)
 
