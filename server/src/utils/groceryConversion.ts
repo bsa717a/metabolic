@@ -57,8 +57,25 @@ const COUNT_UNITS = new Set([
   'slice',
   'slices',
   'clove',
-  'cloves'
+  'cloves',
+  'egg',
+  'eggs'
 ]);
+
+export type ShoppingListAggregateItem = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  occurrenceCount: number;
+};
+
+type CanonicalMerge = {
+  mergeKey: string;
+  name: string;
+  quantity: number;
+  unit: string;
+};
 
 function parseFraction(value: string) {
   const trimmed = value.trim();
@@ -97,6 +114,18 @@ function normalizeUnit(unit: string) {
 function isServingUnit(unit: string) {
   const normalized = normalizeUnit(unit);
   return normalized === 'serving' || normalized === 'servings' || normalized === 'serving(s)';
+}
+
+function normalizeCleanName(name: string) {
+  return stripPortionFromName(name).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Whole shell eggs only — not egg whites, eggplant, substitutes, etc. */
+export function isWholeEggFood(name: string) {
+  const cleaned = normalizeCleanName(name);
+  if (!cleaned) return false;
+  if (/white|plant|noodle|roll|wash|substitute|liquid|beater|eggplant|drop/.test(cleaned)) return false;
+  return /^(large |medium |small |jumbo |grade [a-z] )?eggs?$/.test(cleaned);
 }
 
 function resolvePlannedAmount(name: string, quantity: number, unit: string) {
@@ -294,11 +323,188 @@ function formatProduce(amount: number, unit: string, cleanName: string, name: st
   return formatCountPackages(Math.max(1, Math.ceil(amount)), cleanName);
 }
 
+function formatButterPackages(amount: number, unit: string, cleanName: string) {
+  // US stick = 8 tbsp = 1/2 cup = 4 oz
+  const cups = toCups(amount, unit);
+  let sticks: number | null = null;
+  if (cups !== null) {
+    sticks = cups * 2;
+  } else {
+    const pounds = toPounds(amount, unit);
+    if (pounds !== null) sticks = pounds * 4;
+  }
+
+  if (sticks === null) return null;
+
+  const count = Math.max(1, Math.ceil(sticks));
+  if (count >= 4) {
+    const pounds = Math.ceil(count / 4);
+    return pounds === 1 ? `1 lb ${cleanName}` : `${pounds} lb ${cleanName}`;
+  }
+  return count === 1 ? `1 stick ${cleanName}` : `${count} sticks ${cleanName}`;
+}
+
+function formatPantryPackage(amount: number, unit: string, cleanName: string, name: string) {
+  const lower = name.toLowerCase();
+  const normalizedUnit = normalizeUnit(unit);
+
+  if (/protein(\s+powder)?|whey|casein/.test(lower)) {
+    const scoops =
+      normalizedUnit === 'scoop' || normalizedUnit === 'scoops'
+        ? amount
+        : isServingUnit(unit)
+          ? amount
+          : null;
+    if (scoops !== null) {
+      const containers = Math.max(1, Math.ceil(scoops / 30));
+      return containers === 1 ? `1 container ${cleanName}` : `${containers} containers ${cleanName}`;
+    }
+  }
+
+  if (/cracker/.test(lower)) {
+    const count =
+      COUNT_UNITS.has(normalizedUnit) || normalizedUnit === 'cracker' || normalizedUnit === 'crackers'
+        ? amount
+        : null;
+    if (count !== null || isServingUnit(unit)) {
+      // Typical cracker box ~40–50 pieces; round up so the shopper has enough.
+      const boxes = Math.max(1, Math.ceil((count ?? amount) / 45));
+      return boxes === 1 ? `1 box ${cleanName}` : `${boxes} boxes ${cleanName}`;
+    }
+  }
+
+  if (/\bolives?\b/.test(lower)) {
+    const cups = toCups(amount, unit);
+    if (cups !== null) {
+      // Typical can holds ~1.5–2 cups drained olives.
+      const cans = Math.max(1, Math.ceil(cups / 2));
+      return cans === 1 ? `1 can ${cleanName}` : `${cans} cans ${cleanName}`;
+    }
+    if (COUNT_UNITS.has(normalizedUnit) || isServingUnit(unit)) {
+      return `1 can ${cleanName}`;
+    }
+  }
+
+  if (/peanut butter|almond butter|cashew butter|nut butter/.test(lower)) {
+    return `1 jar ${cleanName}`;
+  }
+
+  if (/rice|oats|pasta|quinoa|bean|lentil|flour|sugar|cereal/.test(lower)) {
+    const cups = toCups(amount, unit);
+    if (cups !== null) return formatDryGoods(cups, cleanName, name);
+    const pounds = toPounds(amount, unit);
+    if (pounds !== null) return formatWeightPackages(pounds, cleanName);
+    if (isServingUnit(unit)) {
+      return `1 lb bag ${cleanName}`;
+    }
+  }
+
+  return null;
+}
+
+function toEggCount(amount: number, unit: string) {
+  const normalized = normalizeUnit(unit);
+  if (normalized === 'dozen' || normalized === 'dozens') {
+    return amount * 12;
+  }
+  return amount;
+}
+
+function canonicalizeForMerge(item: { name: string; quantity: number; unit: string }): CanonicalMerge {
+  const resolved = resolvePlannedAmount(item.name, item.quantity, item.unit);
+  const clean = normalizeCleanName(item.name);
+
+  if (isWholeEggFood(item.name) || isWholeEggFood(resolved.cleanName)) {
+    return {
+      mergeKey: 'eggs',
+      name: 'eggs',
+      quantity: toEggCount(resolved.amount, resolved.unit),
+      unit: 'egg'
+    };
+  }
+
+  const cups = toCups(resolved.amount, resolved.unit);
+  if (cups !== null && isLikelyLiquid(resolved.cleanName, resolved.unit)) {
+    return {
+      mergeKey: `${clean}\0volume`,
+      name: resolved.cleanName,
+      quantity: cups,
+      unit: 'cup'
+    };
+  }
+
+  const pounds = toPounds(resolved.amount, resolved.unit);
+  if (pounds !== null) {
+    return {
+      mergeKey: `${clean}\0weight`,
+      name: resolved.cleanName,
+      quantity: pounds,
+      unit: 'lb'
+    };
+  }
+
+  const normalizedUnit = normalizeUnit(resolved.unit);
+  if (COUNT_UNITS.has(normalizedUnit)) {
+    return {
+      mergeKey: `${clean}\0count`,
+      name: resolved.cleanName,
+      quantity: resolved.amount,
+      unit: normalizedUnit === 'eggs' ? 'egg' : normalizedUnit.replace(/s$/, '') || resolved.unit
+    };
+  }
+
+  return {
+    mergeKey: `${clean}\0${normalizedUnit || 'unit'}`,
+    name: resolved.cleanName,
+    quantity: resolved.amount,
+    unit: resolved.unit
+  };
+}
+
+function roundQuantity(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Merge same foods that differ only by convertible units (e.g. 6 eggs + 2 dozen eggs).
+ * Re-assigns ids to 0..n-1 for downstream AI enrichment.
+ */
+export function consolidateShoppingListItems(items: ShoppingListAggregateItem[]): ShoppingListAggregateItem[] {
+  const grouped = new Map<string, ShoppingListAggregateItem>();
+
+  for (const item of items) {
+    const canonical = canonicalizeForMerge(item);
+    const existing = grouped.get(canonical.mergeKey);
+
+    if (existing) {
+      existing.quantity = roundQuantity(existing.quantity + canonical.quantity);
+      existing.occurrenceCount += item.occurrenceCount;
+      continue;
+    }
+
+    grouped.set(canonical.mergeKey, {
+      id: '',
+      name: canonical.name,
+      quantity: roundQuantity(canonical.quantity),
+      unit: canonical.unit,
+      occurrenceCount: item.occurrenceCount
+    });
+  }
+
+  return [...grouped.values()]
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+        a.unit.localeCompare(b.unit, undefined, { sensitivity: 'base' })
+    )
+    .map((item, index) => ({ ...item, id: String(index) }));
+}
+
 function formatFromResolvedAmount(name: string, amount: number, unit: string, cleanName: string) {
   const lower = name.toLowerCase();
   const normalizedUnit = normalizeUnit(unit);
 
-  if (/egg/.test(lower)) {
+  if (isWholeEggFood(name) || isWholeEggFood(cleanName)) {
     return formatEggPackages(amount, unit);
   }
 
@@ -310,7 +516,12 @@ function formatFromResolvedAmount(name: string, amount: number, unit: string, cl
     return formatOilPackage(amount, unit, cleanName);
   }
 
-  if (/cheese|butter|cream cheese/.test(lower)) {
+  if (/\bbutter\b/.test(lower) && !/peanut|almond|cashew|nut butter/.test(lower)) {
+    const butter = formatButterPackages(amount, unit, cleanName);
+    if (butter) return butter;
+  }
+
+  if (/cheese|cream cheese/.test(lower)) {
     const pounds = toPounds(amount, unit);
     if (pounds !== null) {
       return formatWeightPackages(pounds, cleanName);
@@ -324,12 +535,8 @@ function formatFromResolvedAmount(name: string, amount: number, unit: string, cl
     }
   }
 
-  if (/rice|oats|pasta|quinoa|bean|lentil|flour|sugar|cereal/.test(lower)) {
-    const cups = toCups(amount, unit);
-    if (cups !== null) return formatDryGoods(cups, cleanName, name);
-    const pounds = toPounds(amount, unit);
-    if (pounds !== null) return formatWeightPackages(pounds, cleanName);
-  }
+  const pantry = formatPantryPackage(amount, unit, cleanName, name);
+  if (pantry) return pantry;
 
   if (/spinach|lettuce|broccoli|asparagus|pepper|tomato|onion|garlic|avocado|banana|apple|berry|fruit|veget|carrot|celery|zucchini|mushroom|cucumber/.test(lower)) {
     return formatProduce(amount, unit, cleanName, name);
