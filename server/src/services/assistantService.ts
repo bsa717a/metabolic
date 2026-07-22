@@ -1,8 +1,14 @@
+import { CoachChannel } from '@prisma/client';
 import { getTodayDashboard } from './dashboardService.js';
 import { getAiProvider, WEB_AGENT_SYSTEM, type ChatMessage } from './aiService.js';
 import {
+  recordCoachExchange,
+  type CoachToolCallMeta
+} from './coachConversationService.js';
+import {
   buildWebCoachToolDeclarations,
   executeWebCoachTool,
+  type ActiveMealContext,
   type MealEditFocus,
   type WebCoachToolContext
 } from './webCoachTools.js';
@@ -11,9 +17,9 @@ import { env } from '../config/env.js';
 import { userDayKey } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
 import { isVirtualCoachId, VIRTUAL_COACH_PERSONA_PROMPTS } from '../data/virtualCoachPersonas.js';
-import { getHydrationSummary, tryAutoSetHydrationGoalFromChat } from './hydrationService.js';
+import { getHydrationSummary } from './hydrationService.js';
 import { loadPersonalizedHydrationGuidance } from './hydrationGuidance.js';
-import { isHydrationGoalThread, parseHydrationGoalOz } from '../utils/waterParse.js';
+import { parseHydrationGoalOz } from '../utils/waterParse.js';
 import {
   applyCoachNameUsage,
   buildCoachNameUsageInstruction,
@@ -77,6 +83,54 @@ function mealSummary(meals: Awaited<ReturnType<typeof getTodayDashboard>>['meals
       protein: n(item.protein)
     }))
   }));
+}
+
+/**
+ * Sums the day's PLANNED meals and compares them to the daily targets so the coach can proactively
+ * flag when the plan doesn't add up to the goals ("you're 300 cal under — let's tweak a meal") instead
+ * of cheerleading. `offTargets` lists only macros off by a meaningful margin; empty means the plan hits.
+ */
+function buildPlanBalance(dashboard: Awaited<ReturnType<typeof getTodayDashboard>>) {
+  const dl = dashboard.dailyLog;
+  if (!dl) return null;
+  const planned = dashboard.meals.reduce(
+    (acc, meal) => ({
+      calories: acc.calories + n(meal.plannedCalories),
+      protein: acc.protein + n(meal.plannedProtein),
+      carbs: acc.carbs + n(meal.plannedCarbs),
+      fat: acc.fat + n(meal.plannedFat)
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+  const target = {
+    calories: n(dl.calorieTarget),
+    protein: n(dl.proteinTarget),
+    carbs: n(dl.carbTarget),
+    fat: n(dl.fatTarget)
+  };
+  const gap = {
+    calories: Math.round(planned.calories - target.calories),
+    protein: Math.round(planned.protein - target.protein),
+    carbs: Math.round(planned.carbs - target.carbs),
+    fat: Math.round(planned.fat - target.fat)
+  };
+  const tolerance: Record<keyof typeof gap, number> = { calories: 100, protein: 15, carbs: 20, fat: 10 };
+  const unit: Record<keyof typeof gap, string> = { calories: ' cal', protein: 'g protein', carbs: 'g carbs', fat: 'g fat' };
+  const offTargets = (Object.keys(gap) as Array<keyof typeof gap>)
+    .filter((macro) => Math.abs(gap[macro]) > tolerance[macro])
+    .map((macro) => `${gap[macro] > 0 ? 'over' : 'under'} by ${Math.abs(gap[macro])}${unit[macro]}`);
+  return {
+    plannedTotals: {
+      calories: Math.round(planned.calories),
+      protein: Math.round(planned.protein),
+      carbs: Math.round(planned.carbs),
+      fat: Math.round(planned.fat)
+    },
+    target,
+    gap,
+    offTargets,
+    plannedHitsTargets: offTargets.length === 0
+  };
 }
 
 function exerciseSummary(exercises: Awaited<ReturnType<typeof getTodayDashboard>>['exercises']) {
@@ -251,9 +305,14 @@ export async function buildAssistantContext(userId: string) {
           caloriesActual: n(dashboard.dailyLog.caloriesActual),
           proteinTarget: n(dashboard.dailyLog.proteinTarget),
           proteinActual: n(dashboard.dailyLog.proteinActual),
+          carbTarget: n(dashboard.dailyLog.carbTarget),
+          carbsActual: n(dashboard.dailyLog.carbsActual),
+          fatTarget: n(dashboard.dailyLog.fatTarget),
+          fatActual: n(dashboard.dailyLog.fatActual),
           complianceScore: n(dashboard.dailyLog.complianceScore)
         }
       : null,
+    planBalance: buildPlanBalance(dashboard),
     summary: dashboard.summary,
     nextMeal: dashboard.nextMeal,
     meals: mealSummary(dashboard.meals),
@@ -304,9 +363,14 @@ export async function buildSmsAssistantContext(userId: string) {
           calorieTarget: n(dashboard.dailyLog.calorieTarget),
           caloriesActual: n(dashboard.dailyLog.caloriesActual),
           proteinTarget: n(dashboard.dailyLog.proteinTarget),
-          proteinActual: n(dashboard.dailyLog.proteinActual)
+          proteinActual: n(dashboard.dailyLog.proteinActual),
+          carbTarget: n(dashboard.dailyLog.carbTarget),
+          carbsActual: n(dashboard.dailyLog.carbsActual),
+          fatTarget: n(dashboard.dailyLog.fatTarget),
+          fatActual: n(dashboard.dailyLog.fatActual)
         }
       : null,
+    planBalance: buildPlanBalance(dashboard),
     summary: dashboard.summary,
     nextMeal: dashboard.nextMeal,
     mealsToday: dashboard.meals.map((meal) => ({
@@ -358,23 +422,129 @@ function buildMealEditFocusInstruction(focus: MealEditFocus) {
     focus.targetCalories && focus.targetCalories > 0
       ? `This meal's calorie target is about ${Math.round(focus.targetCalories)} kcal (±10% is fine).`
       : `Stay close to this meal's planned calorie target from context.`;
-  return `MEAL EDIT MODE is active for "${focus.mealName}" on ${focus.date} only.
+  return `MEAL EDIT MODE is active for "${focus.mealName}" on ${focus.date} only${focus.mealId ? ` (mealId "${focus.mealId}")` : ''}.
 The user is changing the PLANNED foods for that one meal — not logging what they already ate, and not editing the rest of the day.
-- For any add, remove, swap, or portion change, call update_planned_meals with the FULL updated planned item list for "${focus.mealName}" (keep existing items they did not ask to change).
-- NEVER call log_food, mark_meal_complete, log_water, or other day-logging tools.
+- To add one food, call add_meal_item. To change one food's portion/macros, call update_meal_item. To remove one food, call remove_meal_item. Use these for single-item changes instead of replacing the whole meal.
+- Only when the user gives a whole new list (or picks a numbered suggestion), call update_planned_meals with that meal's full itemized foods (name, quantity, unit, calories, protein, carbs, fat per item).
+- To rename this meal only, call rename_meal with newName. To change only its clock time, call update_meal_time. Never use update_planned_meals just to change the title or time.
+- When unsure of the current items or their ids, call get_meal_details first.
+- NEVER call log_food, mark_meal_complete, log_water, or other day-logging tools here.
 - Do not report leftover daily calories unless they ask — stay on this meal.
 - ${targetLine}
-- After a successful plan update, briefly confirm what changed and the new planned totals. If calories are outside ±10% of the target, ask if they want help getting this meal back in balance (adjust items/portions or use suggest_meals).
+- Never claim a change happened unless the matching tool returned a result this turn. After a successful change, briefly confirm what changed and the new planned totals. If calories are outside ±10% of the target, offer to rebalance (adjust items/portions or use suggest_meals).
 - Stay on this meal until they clearly say they are done.
 `;
+}
+
+/** Meal tools that mutate the plan — used to detect real changes and trigger client refresh. */
+const MEAL_MUTATION_TOOLS = new Set([
+  'update_planned_meals',
+  'add_meal_item',
+  'update_meal_item',
+  'remove_meal_item',
+  'create_meal',
+  'delete_meal',
+  'rename_meal',
+  'update_meal_time',
+  'copy_meal_to_days'
+]);
+
+function claimsMealRename(reply: string) {
+  return (
+    /(?:updated|changed|renamed|set)\b.{0,40}\b(?:meal\s+)?name\b/i.test(reply) ||
+    /\bmeal name\b.{0,40}\b(?:to|as|is now)\b/i.test(reply) ||
+    /\brenamed\b.{0,40}\bto\b/i.test(reply)
+  );
+}
+
+/** Detects replies that claim a planned-meal food update happened. */
+export function claimsMealPlanUpdate(reply: string) {
+  return (
+    /\bi(?:'ve| have)\s+(?:updated|changed|swapped|replaced|applied|saved)\b.{0,80}\bmeal\b/i.test(reply) ||
+    /\b(?:updated|changed|swapped|replaced|applied)\s+(?:your|the)\s+(?:\w+\s+){0,4}meal\b/i.test(reply) ||
+    /\b(?:your|the)\s+(?:\w+\s+){0,3}meal\s+(?:is|was)\s+now\b/i.test(reply)
+  );
+}
+
+/**
+ * A short reply that reads like the coach finished an action — a bare "Got it!", "Done", "All set",
+ * or a past-tense "added/created/updated…". Deliberately narrow: skips questions, negations, and
+ * long substantive answers so it only flags hollow completion claims.
+ */
+export function claimsCompletion(reply: string) {
+  const r = reply.trim();
+  if (!r || r.length > 240) return false;
+  if (/\?\s*$/.test(r)) return false;
+  if (/\b(can'?t|cannot|couldn'?t|didn'?t|haven'?t|hasn'?t|won'?t|wasn'?t|weren'?t|isn'?t|unable|not able)\b/i.test(r)) {
+    return false;
+  }
+  return /\b(got it|all set|done|taken care of|added|created|updated|changed|renamed|swapped|removed|deleted|moved (?:your|the)|set (?:your|the))\b/i.test(
+    r
+  );
+}
+
+/**
+ * A reply that CLAIMS the water goal was already changed — "your water goal is now 120 oz",
+ * "I've set your goal to 120 oz", "updated your water goal to 120". Deliberately excludes questions,
+ * offers ("want me to set it?"), future/conditional ("I'll set it", "let's"), ability ("I can set"),
+ * and negations, so advisory hydration answers are never clobbered into the canned message.
+ */
+export function claimsHydrationGoalSet(reply: string) {
+  const r = reply.trim();
+  if (/\?\s*$/.test(r)) return false;
+  if (
+    /\b(can'?t|cannot|couldn'?t|haven'?t|hasn'?t|didn'?t|won'?t|unable|not able|want me to|would you|should i|do you want|i'?ll|i will|let'?s|going to|happy to|i can|i could|you can|you could)\b/i.test(
+      r
+    )
+  ) {
+    return false;
+  }
+  return (
+    /\b(?:water|hydration)\s+goal\s+(?:is\s+now|has\s+been\s+(?:set|updated|changed)|(?:updated|changed|set)\s+to)\b/i.test(
+      r
+    ) ||
+    /\bi(?:'ve| have)\s+(?:set|updated|changed|adjusted)\b[^.?!]{0,50}\bgoal\b/i.test(r) ||
+    /\b(?:set|updated|changed)\s+your\s+(?:daily\s+)?(?:water|hydration)\s+goal\s+to\b/i.test(r)
+  );
+}
+
+/**
+ * The user's message plausibly asks the coach to change or build the plan (verb + a meal/plan
+ * target). Used only as a post-hoc gate for {@link claimsCompletion} — not a pre-model short-circuit.
+ */
+export function userRequestedMealAction(text: string) {
+  return (
+    /\b(add|added|adding|remove|delete|drop|change|swap|replace|rename|move|set|create|make|build|update|pick|choose|use|do|let'?s do)\b/i.test(
+      text
+    ) &&
+    /\b(meal|breakfast|lunch|dinner|snack|option|number\s*\d|food|item|portion|time|\d\s*(?:am|pm)|it|that|this one|number one|first one|second one|third one)\b/i.test(
+      text
+    )
+  );
+}
+
+/** User picking a numbered suggestion: "2", "option 2", "#1". */
+export function parseMealOptionPick(text: string): number | null {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^(?:option\s*|choice\s*|#\s*)?([1-5])(?:\s*[.)])?$/i);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) ? n : null;
 }
 
 export async function chatWithAssistant(
   userId: string,
   messages: ChatMessage[],
-  options?: { mealEditFocus?: MealEditFocus }
+  options?: { mealEditFocus?: MealEditFocus; activeMeal?: ActiveMealContext }
 ) {
   const mealEditFocus = options?.mealEditFocus;
+  const activeMeal = options?.activeMeal ?? (mealEditFocus?.mealId
+    ? {
+        mealId: mealEditFocus.mealId,
+        mealName: mealEditFocus.mealName,
+        date: mealEditFocus.date
+      }
+    : undefined);
   const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content.trim() ?? '';
   let memoryView = await getVirtualCoachMemoryView(userId);
 
@@ -413,9 +583,8 @@ export async function chatWithAssistant(
       ? `The user's latest message includes a phone number (${sharedPhone}). Call update_sms_setup with that phone before you reply — do not tell them to enter it in Account details.\n\n`
       : '';
   const hydrationGoalInstruction = buildHydrationGoalInstruction(context, lastUserMessage);
-  const hydrationGoalOz = parseHydrationGoalOz(lastUserMessage, {
-    allowBareNumber: isHydrationGoalThread(messages)
-  });
+  // Only treat an explicit ounce amount as a goal — a bare number like "2" is a meal-option pick, not a goal.
+  const hydrationGoalOz = parseHydrationGoalOz(lastUserMessage, { allowBareNumber: false });
   const hydrationGoalSetInstruction =
     hydrationGoalOz != null
       ? `The user's message sets their hydration goal to ${hydrationGoalOz} oz. You MUST call set_hydration_goal with goalOz ${hydrationGoalOz} before you reply — do not claim it is updated otherwise.\n\n`
@@ -440,73 +609,91 @@ export async function chatWithAssistant(
     return { reply, contextUsed: true };
   }
 
-  const autoHydrationGoalSave = await tryAutoSetHydrationGoalFromChat(
-    userId,
-    lastUserMessage,
-    messages,
-    personalization.timezone
-  );
-  if (autoHydrationGoalSave) {
-    const rawReply = autoHydrationGoalSave.ok ? autoHydrationGoalSave.result : autoHydrationGoalSave.error;
-    const reply = applyCoachNameUsage(rawReply, personalization.firstName, coachMessageNumber, namePolicy);
-    const memoryMessages: MemoryConversationMessage[] = [
-      ...toMemoryMessages(messages),
-      { role: 'assistant', content: reply }
-    ];
-    if (memoryMessages.length >= 2) {
-      scheduleMemoryExtraction(userId, 'web_chat', memoryMessages);
-    }
-    return {
-      reply,
-      contextUsed: true,
-      ...(autoHydrationGoalSave.ok ? { hydrationGoalUpdated: true, hydrationGoalOz: autoHydrationGoalSave.goalOz } : {})
-    };
-  }
-
   const toolCtx: WebCoachToolContext = {
     userId,
     dateKey: userDayKey(personalization.timezone),
     timeZone: personalization.timezone,
     message: lastUserMessage,
     toolCalls: [],
-    mealEditFocus
+    mealEditFocus,
+    activeMeal
   };
   const mealEditInstruction = mealEditFocus ? `${buildMealEditFocusInstruction(mealEditFocus)}\n\n` : '';
+  const systemPrompt =
+    `${WEB_AGENT_SYSTEM}\n\n${mealEditInstruction}${memoryInstruction}${phoneSaveInstruction}${hydrationGoalInstruction}${hydrationGoalSetInstruction}${nameInstruction ? `${nameInstruction}\n\n` : ''}${personaPrefix}`.trim();
+
+  // The client transcript is the source of context for this turn: on open it is hydrated from the
+  // unified server history (see /coach-history), so it already carries prior web + SMS turns plus
+  // the local-only turns (meal picker prompts, meal detail cards, quick replies) the model needs.
+  // We persist the exchange below only after the model succeeds, so a failed run never leaves an
+  // orphaned user turn that a retry would duplicate.
+  const conversation = messages;
+
+  // Let the model drive: it picks the right meal tool (add/update/remove item, create/delete/rename/
+  // retime meal, replace items, copy days) and the tool results are the source of truth. We only
+  // verify afterward that any claimed change actually ran.
   const rawReply = await getAiProvider().runAgent({
-    messages,
+    messages: conversation,
     context,
     tools: buildWebCoachToolDeclarations({ mealEditFocus }),
     toolExecutor: (name, args) => executeWebCoachTool(toolCtx, name, args),
-    systemPrompt: `${WEB_AGENT_SYSTEM}\n\n${mealEditInstruction}${memoryInstruction}${phoneSaveInstruction}${hydrationGoalInstruction}${hydrationGoalSetInstruction}${nameInstruction ? `${nameInstruction}\n\n` : ''}${personaPrefix}`.trim()
+    systemPrompt
   });
 
-  const plannedMealsUpdated = toolCtx.toolCalls.some((call) => call.name === 'update_planned_meals');
+  const mealMutated = toolCtx.toolCalls.some((call) => MEAL_MUTATION_TOOLS.has(call.name));
+  const renameCall = toolCtx.toolCalls.find((call) => call.name === 'rename_meal');
+  const timeCall = toolCtx.toolCalls.find((call) => call.name === 'update_meal_time');
   const goalWasSetByTool = toolCtx.toolCalls.some((call) => call.name === 'set_hydration_goal');
-  const claimedGoalChange =
-    !mealEditFocus &&
-    !goalWasSetByTool &&
-    /(?:goal|target).*(?:now|updated|changed|set)|(?:set|updated|changed).*(?:goal|target)/i.test(rawReply);
-  if (claimedGoalChange) {
-    const fallbackGoalSave = await tryAutoSetHydrationGoalFromChat(
-      userId,
-      lastUserMessage,
-      messages,
-      personalization.timezone
-    );
-    if (fallbackGoalSave?.ok) {
-      const reply = applyCoachNameUsage(fallbackGoalSave.result, personalization.firstName, coachMessageNumber, namePolicy);
-      const memoryMessages: MemoryConversationMessage[] = [
-        ...toMemoryMessages(messages),
-        { role: 'assistant', content: reply }
-      ];
-      if (memoryMessages.length >= 2) {
-        scheduleMemoryExtraction(userId, 'web_chat', memoryMessages);
-      }
-      return { reply, contextUsed: true, hydrationGoalUpdated: true, hydrationGoalOz: fallbackGoalSave.goalOz };
-    }
+
+  let effectiveReply = rawReply;
+
+  // Post-hoc verification: if the reply claims a change but no matching tool actually ran, tell the
+  // truth instead of confirming a phantom change. The completion-claim branch catches generic
+  // acknowledgments ("Got it!", "Derek, got it!") when the user clearly asked for a plan change.
+  if (
+    !mealMutated &&
+    (claimsMealRename(rawReply) ||
+      claimsMealPlanUpdate(rawReply) ||
+      (userRequestedMealAction(lastUserMessage) && claimsCompletion(rawReply)))
+  ) {
+    effectiveReply =
+      "I haven't actually changed your plan yet — tell me exactly what to change (which meal and how) and I'll make it for real.";
+  } else if (!mealEditFocus && !goalWasSetByTool && claimsHydrationGoalSet(rawReply)) {
+    effectiveReply =
+      "I haven't updated your water goal yet — tell me the number of ounces you want and I'll set it for real.";
   }
 
-  const reply = applyCoachNameUsage(rawReply, personalization.firstName, coachMessageNumber, namePolicy);
+  const mealRenamed =
+    renameCall && typeof renameCall.args.mealId === 'string' && typeof renameCall.args.newName === 'string'
+      ? {
+          mealId: renameCall.args.mealId,
+          newName: renameCall.args.newName,
+          ...(typeof renameCall.args.previousName === 'string' ? { previousName: renameCall.args.previousName } : {}),
+          ...(typeof renameCall.args.date === 'string' ? { date: renameCall.args.date } : {})
+        }
+      : undefined;
+
+  const mealTimeUpdate =
+    timeCall && typeof timeCall.args.mealId === 'string' && typeof timeCall.args.plannedTime === 'string'
+      ? {
+          mealId: timeCall.args.mealId,
+          mealName: typeof timeCall.args.mealName === 'string' ? timeCall.args.mealName : '',
+          plannedTime: timeCall.args.plannedTime,
+          ...(typeof timeCall.args.date === 'string' ? { date: timeCall.args.date } : {})
+        }
+      : undefined;
+
+  const reply = applyCoachNameUsage(effectiveReply, personalization.firstName, coachMessageNumber, namePolicy);
+
+  // Record the exchange (user turn + assistant reply with its tool audit) now that the run
+  // succeeded, so the unified thread stays in sync and a failed run leaves nothing half-written.
+  await recordCoachExchange(
+    userId,
+    CoachChannel.WEB,
+    lastUserMessage,
+    reply,
+    toolCtx.toolCalls as CoachToolCallMeta[]
+  );
 
   const memoryMessages: MemoryConversationMessage[] = [
     ...toMemoryMessages(messages),
@@ -520,7 +707,10 @@ export async function chatWithAssistant(
     reply,
     contextUsed: true,
     ...(goalWasSetByTool ? { hydrationGoalUpdated: true } : {}),
-    ...(plannedMealsUpdated ? { plannedMealsUpdated: true } : {})
+    // Any meal mutation triggers a client refresh of the plan.
+    ...(mealMutated ? { plannedMealsUpdated: true } : {}),
+    ...(mealRenamed ? { mealRenamed: true, mealRename: mealRenamed } : {}),
+    ...(mealTimeUpdate ? { mealTimeUpdated: true, mealTimeUpdate } : {})
   };
 }
 
@@ -534,10 +724,17 @@ function toMemoryMessages(messages: ChatMessage[]): MemoryConversationMessage[] 
 }
 
 function isHydrationGoalQuestion(text: string) {
+  const t = text.toLowerCase();
+  const mentionsWater = /(hydration|water|fluid)/.test(t);
   return (
-    /(?:hydration|water)\s*goal/i.test(text) ||
-    /(?:change|set|update|adjust|modify|choose|pick).*(?:hydration|water)/i.test(text) ||
-    /how\s+(?:do\s+i|can\s+i|to).*(?:change|set|update).*(?:hydration|water)/i.test(text)
+    /(?:hydration|water)\s*goal/.test(t) ||
+    /(?:change|set|update|adjust|modify|choose|pick)\b[^.]*\b(?:hydration|water)/.test(t) ||
+    // Advisory questions: "what should my hydration be", "how much water should I drink",
+    // "how many ounces should I have", "hydration recommendation for my weight".
+    (mentionsWater &&
+      /(what\s+should|how\s+much|how\s+many|should\s+i\s+drink|recommend|intake|per\s+day|daily|for\s+my\s+weight|be\??$)/.test(
+        t
+      ))
   );
 }
 

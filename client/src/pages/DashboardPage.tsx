@@ -139,6 +139,14 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
   }, [location.pathname, loadDashboard]);
 
   useEffect(() => {
+    function handleMealsUpdated() {
+      void loadDashboard({ silent: true });
+    }
+    window.addEventListener('nutrition-meals-updated', handleMealsUpdated);
+    return () => window.removeEventListener('nutrition-meals-updated', handleMealsUpdated);
+  }, [loadDashboard]);
+
+  useEffect(() => {
     if (!AUTO_START_DASHBOARD_TUTORIAL) return;
     if (loading || error || !data?.program || user?.dashboardTutorialCompletedAt || hasAutoStarted || isActive) {
       return;

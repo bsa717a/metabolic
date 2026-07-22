@@ -1,32 +1,26 @@
 /**
- * Tool catalog for the web coach chat agent. Reuses the channel-agnostic SMS tools
- * (macros, food logging, completions, water, suggestions) and adds planned-meal editing.
- * Phone-keyed SMS tools (photo estimates, move-last-food) are intentionally excluded.
+ * Tool catalog for the web coach chat agent. Composes the shared meal-management tools (build,
+ * maintain, and edit meals) with the channel-agnostic SMS read/log tools (macros, food logging,
+ * completions, water, suggestions) plus web-only SMS setup. Phone-keyed SMS tools (photo estimates,
+ * move-last-food) are intentionally excluded.
  */
-import { SchemaType, type FunctionDeclaration } from '@google/generative-ai';
+import { Type, type FunctionDeclaration } from '@google/genai';
 import { buildSmsToolDeclarations, executeSmsTool, type SmsToolContext } from './smsAgentTools.js';
-import { applyPlannedMealUpdate, PlanEditError } from './planEditService.js';
+import {
+  buildMealToolDeclarations,
+  executeMealTool,
+  MEAL_EDIT_TOOLS,
+  MEAL_MANAGEMENT_TOOLS,
+  type ActiveMealContext,
+  type MealEditFocus,
+  type MealToolContext
+} from './mealTools.js';
 import { updateUserSmsSetup } from './smsSetupService.js';
 
-export type MealEditFocus = {
-  mealName: string;
-  mealId?: string;
-  date: string;
-  targetCalories?: number;
-};
+export type { ActiveMealContext, MealEditFocus } from './mealTools.js';
+export type WebCoachToolContext = MealToolContext;
 
-export type WebCoachToolContext = {
-  userId: string;
-  dateKey: string;
-  timeZone: string | null;
-  /** The user's current chat message. */
-  message: string;
-  /** Audit log of tool calls made this turn. */
-  toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
-  /** When set, the user is editing one planned meal — block logging tools. */
-  mealEditFocus?: MealEditFocus;
-};
-
+/** SMS read/log tools the web coach reuses (everything meal-plan-editing comes from mealTools). */
 const SHARED_SMS_TOOLS = new Set([
   'get_macro_status',
   'get_hydration_status',
@@ -39,85 +33,36 @@ const SHARED_SMS_TOOLS = new Set([
   'suggest_meals'
 ]);
 
-/** Tools allowed while the client has an active meal-edit session. */
-const MEAL_EDIT_TOOLS = new Set(['update_planned_meals', 'suggest_meals', 'get_macro_status']);
+/** Tools allowed while the client has an active meal-edit session. Computed at call time to avoid
+ *  a module-load circular reference into mealTools. */
+function isMealEditSessionTool(name: string): boolean {
+  return MEAL_EDIT_TOOLS.has(name) || name === 'suggest_meals' || name === 'get_macro_status';
+}
 
 export function buildWebCoachToolDeclarations(options?: { mealEditFocus?: MealEditFocus }): FunctionDeclaration[] {
-  const shared = buildSmsToolDeclarations().filter((tool) => SHARED_SMS_TOOLS.has(tool.name));
-  const all = [
+  const shared = buildSmsToolDeclarations().filter((tool) => SHARED_SMS_TOOLS.has(tool.name ?? ''));
+  const all: FunctionDeclaration[] = [
     ...shared,
-    {
-      name: 'update_planned_meals',
-      description:
-        'Replace the PLANNED items of one or more meals on a specific day (today or up to 31 days ahead). Meals are matched to the day\'s existing meals by name; a name that does not exist creates a new meal. Food the user already logged as eaten is never touched. Use when the user asks to set up, change, or swap planned meals — e.g. "swap out tomorrow\'s meals with this list". Resolve relative dates like "tomorrow" from context.today.date. If the user already has meals planned that day and did NOT give you an explicit replacement list, confirm once before calling this. Estimate realistic per-item macros; honor any totals the user stated.',
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          date: { type: SchemaType.STRING, description: 'Target day, YYYY-MM-DD. Today or future only.' },
-          meals: {
-            type: SchemaType.ARRAY,
-            description: 'Meals to set. Only the meals listed here are changed; other meals on the day stay as they are.',
-            items: {
-              type: SchemaType.OBJECT,
-              properties: {
-                mealName: {
-                  type: SchemaType.STRING,
-                  description: 'Meal to target, e.g. "Breakfast", "Lunch", "Dinner", "Snack". Matches the day\'s existing meal by name, otherwise creates a new meal.'
-                },
-                plannedTime: { type: SchemaType.STRING, description: 'Optional 24h time, e.g. "13:00".' },
-                items: {
-                  type: SchemaType.ARRAY,
-                  description: 'The planned foods for this meal, replacing whatever was planned before.',
-                  items: {
-                    type: SchemaType.OBJECT,
-                    properties: {
-                      name: { type: SchemaType.STRING, description: 'Food name, e.g. "Banana" or "2 eggs scrambled".' },
-                      quantity: { type: SchemaType.NUMBER, description: 'Amount, default 1.' },
-                      unit: { type: SchemaType.STRING, description: 'Unit, e.g. "serving", "cup", "oz". Default "serving".' },
-                      calories: { type: SchemaType.NUMBER, description: 'Calories for this quantity.' },
-                      protein: { type: SchemaType.NUMBER, description: 'Protein grams for this quantity.' },
-                      carbs: { type: SchemaType.NUMBER, description: 'Carb grams for this quantity.' },
-                      fat: { type: SchemaType.NUMBER, description: 'Fat grams for this quantity.' }
-                    },
-                    required: ['name', 'calories', 'protein', 'carbs', 'fat']
-                  }
-                }
-              },
-              required: ['mealName', 'items']
-            }
-          }
-        },
-        required: ['date', 'meals']
-      }
-    },
+    ...buildMealToolDeclarations(),
     {
       name: 'update_sms_setup',
       description:
         'Save the user\'s personal mobile phone and/or SMS reminder settings for text coaching. Use when they give you their cell number or ask you to turn on meal/evening text reminders. Phone must be their personal cell — never the coach texting number from smsSupport.virtualCoachSmsNumber. When saving a new phone, meal and evening reminders are turned on automatically unless they say otherwise.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          phone: {
-            type: SchemaType.STRING,
-            description: 'Personal mobile phone number, e.g. "510-375-9360" or "+1 510 375 9360".'
-          },
-          timezone: {
-            type: SchemaType.STRING,
-            description: 'IANA timezone, e.g. "America/Denver". Only set when the user provides it.'
-          },
-          enableReminders: {
-            type: SchemaType.BOOLEAN,
-            description: 'When true, turn on meal reminders and evening recap texts.'
-          },
-          smsMealRemindersEnabled: { type: SchemaType.BOOLEAN },
-          smsEveningRecapEnabled: { type: SchemaType.BOOLEAN }
+          phone: { type: Type.STRING, description: 'Personal mobile phone number, e.g. "510-375-9360" or "+1 510 375 9360".' },
+          timezone: { type: Type.STRING, description: 'IANA timezone, e.g. "America/Denver". Only set when the user provides it.' },
+          enableReminders: { type: Type.BOOLEAN, description: 'When true, turn on meal reminders and evening recap texts.' },
+          smsMealRemindersEnabled: { type: Type.BOOLEAN },
+          smsEveningRecapEnabled: { type: Type.BOOLEAN }
         }
       }
     }
   ];
 
-  if (!options?.mealEditFocus) return all as FunctionDeclaration[];
-  return all.filter((tool) => MEAL_EDIT_TOOLS.has(tool.name)) as FunctionDeclaration[];
+  if (!options?.mealEditFocus) return all;
+  return all.filter((tool) => isMealEditSessionTool(tool.name ?? ''));
 }
 
 /** Runs a tool the web coach agent called and returns a JSON-serializable result/error. */
@@ -126,46 +71,14 @@ export async function executeWebCoachTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  if (ctx.mealEditFocus && !MEAL_EDIT_TOOLS.has(name) && name !== 'update_sms_setup') {
+  if (ctx.mealEditFocus && !isMealEditSessionTool(name) && name !== 'update_sms_setup') {
     return {
       error: `While editing ${ctx.mealEditFocus.mealName}, only planned-meal changes are allowed — not logging food or other day actions.`
     };
   }
 
-  if (name === 'update_planned_meals') {
-    try {
-      let focusedArgs = args;
-      if (ctx.mealEditFocus) {
-        const focusName = ctx.mealEditFocus.mealName.trim().toLowerCase();
-        const rawMeals = Array.isArray(args.meals) ? args.meals : [];
-        const matchedMeal =
-          rawMeals.find((meal) => {
-            if (!meal || typeof meal !== 'object') return false;
-            const mealName = (meal as Record<string, unknown>).mealName;
-            return typeof mealName === 'string' && mealName.trim().toLowerCase() === focusName;
-          }) ?? rawMeals.find((meal) => meal && typeof meal === 'object') ??
-          null;
-        const entry =
-          matchedMeal && typeof matchedMeal === 'object' ? (matchedMeal as Record<string, unknown>) : null;
-        focusedArgs = {
-          date: ctx.mealEditFocus.date,
-          meals: [
-            {
-              mealName: ctx.mealEditFocus.mealName,
-              ...(typeof entry?.plannedTime === 'string' ? { plannedTime: entry.plannedTime } : {}),
-              items: Array.isArray(entry?.items) ? entry.items : []
-            }
-          ]
-        };
-      }
-      const result = await applyPlannedMealUpdate(ctx.userId, ctx.timeZone, focusedArgs);
-      ctx.toolCalls.push({ name, args: focusedArgs });
-      return { result };
-    } catch (error) {
-      if (error instanceof PlanEditError) return { error: error.message };
-      return { error: error instanceof Error ? error.message : 'Could not update the planned meals.' };
-    }
-  }
+  const mealResult = await executeMealTool(ctx, name, args);
+  if (mealResult) return mealResult;
 
   if (name === 'update_sms_setup') {
     ctx.toolCalls.push({ name, args });
@@ -202,3 +115,5 @@ export async function executeWebCoachTool(
   };
   return executeSmsTool(smsCtx, name, args);
 }
+
+export { MEAL_MANAGEMENT_TOOLS };

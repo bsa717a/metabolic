@@ -7,11 +7,16 @@
  * the work exceeds the budget do we defer: return immediately and deliver the reply via the
  * outbound REST API once it's ready (with a "still working" ACK for photos, which run vision).
  */
-import { SmsDirection } from '@prisma/client';
+import { CoachChannel, SmsDirection } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { userDayKey } from '../utils/dates.js';
 import { getAiProvider, type ChatMessage } from './aiService.js';
 import { buildSmsAssistantContext } from './assistantService.js';
+import {
+  loadCoachConversation,
+  recordCoachMessage,
+  type CoachToolCallMeta
+} from './coachConversationService.js';
 import { isTwilioConfigured, sendOutboundMessage, type TwilioMessageChannel } from './twilioOutboundService.js';
 import {
   SmsResponseError,
@@ -128,6 +133,8 @@ async function persistAgentReply({ inboundId, user, phone, reply, toolCtx, resum
   await prisma.smsMessage.create({
     data: { phone, userId: user.id, direction: 'OUTBOUND', message: reply, response: reply, intent, status: 'PROCESSED' }
   });
+  // Mirror the reply into the unified thread so the web coach sees this SMS turn too.
+  await recordCoachMessage(user.id, CoachChannel.SMS, 'assistant', reply, toolCtx.toolCalls as CoachToolCallMeta[]);
   if (resumedPendingId && pendingWasResolved(toolCtx, resumedPending)) {
     await prisma.smsMessage
       .update({ where: { id: resumedPendingId }, data: { intent: PENDING_ACTION_DONE_INTENT } })
@@ -149,6 +156,8 @@ export async function runSmsAgentEntry(
   const inbound = await prisma.smsMessage.create({
     data: { phone, userId: user.id, direction: 'INBOUND', message: inboundMessage, intent: 'AGENT' }
   });
+  // Mirror the inbound text into the unified thread before loading history so this turn is included.
+  await recordCoachMessage(user.id, CoachChannel.SMS, 'user', inboundMessage);
 
   const lastOutbound = await prisma.smsMessage.findFirst({
     where: { userId: user.id, phone, direction: SmsDirection.OUTBOUND },
@@ -157,7 +166,10 @@ export async function runSmsAgentEntry(
   const pending = parsePendingAction(lastOutbound?.intent ?? null);
   const activePending = pending && isPendingActionFresh(pending, Date.now()) ? { id: lastOutbound!.id, pending } : null;
 
-  const history = await loadSmsChatHistory(user.id, phone);
+  // Read the unified thread (web + SMS) so texting continues a conversation started on the web and
+  // vice versa. Fall back to the SMS-only log for users who have no unified history yet.
+  const unified = await loadCoachConversation(user.id, 16);
+  const history = unified.length ? unified : await loadSmsChatHistory(user.id, phone);
   const priorTurns = history.at(-1)?.role === 'user' ? history.slice(0, -1) : history;
   const agentMessage = buildAgentMessage(trimmed, isPhoto, mediaMissing);
   const messages: ChatMessage[] = [...priorTurns, { role: 'user', content: agentMessage }];

@@ -1,7 +1,7 @@
 import { HydrationSource, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { addUtcDays, parseDateKeyParam, parseDateParam, startOfUtcDay, userDayKey } from '../utils/dates.js';
-import { parseWaterAmountOz, parseHydrationGoalOz, isHydrationGoalThread } from '../utils/waterParse.js';
+import { parseWaterAmountOz } from '../utils/waterParse.js';
 import { ensureDailyLogByUserId, userTodayDate } from './dailyLogService.js';
 import { recordWaterGoalDay, revertWaterGoalDay } from '../gamification/progressionEngine.js';
 
@@ -264,28 +264,3 @@ export async function getCoachHydrationStats(userId: string) {
   };
 }
 
-export async function tryAutoSetHydrationGoalFromChat(
-  userId: string,
-  lastUserMessage: string,
-  messages: Array<{ content: string }>,
-  timeZone: string | null
-): Promise<{ ok: true; result: string; goalOz: number } | { ok: false; error: string } | null> {
-  const inGoalThread = isHydrationGoalThread(messages);
-  const goalOz = parseHydrationGoalOz(lastUserMessage, { allowBareNumber: inGoalThread });
-  if (goalOz == null) return null;
-  if (!inGoalThread && !/(?:goal|target|daily|per\s+day)/i.test(lastUserMessage)) return null;
-
-  try {
-    const summary = await setWaterGoal(userId, goalOz, userDayKey(timeZone), timeZone);
-    return {
-      ok: true,
-      goalOz: summary.goalOz,
-      result: `Done — your daily water goal is now ${summary.goalOz} oz.`
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : 'Could not update your water goal.'
-    };
-  }
-}

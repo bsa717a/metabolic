@@ -36,7 +36,7 @@ export function AssistantPage() {
     try {
       const result = await api<{ reply: string }>('/api/ai/chat', {
         method: 'POST',
-        body: JSON.stringify({ messages: nextMessages })
+        body: JSON.stringify({ messages: nextMessages.slice(-24) })
       });
       setMessages([...nextMessages, { role: 'assistant', content: result.reply }]);
     } catch (err) {

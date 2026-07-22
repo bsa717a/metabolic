@@ -12,11 +12,11 @@ export function parsePlannedMinutes(plannedTime: string | null): number | null {
     return hour * 60 + minute;
   }
 
-  const h12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*([ap]m)$/i);
+  const h12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)$/i);
   if (h12) {
     let hour = Number(h12[1]);
     const minute = Number(h12[2]);
-    const meridiem = h12[3].toLowerCase();
+    const meridiem = h12[3].toLowerCase().replace(/\./g, '');
     if (hour < 1 || hour > 12 || minute > 59) return null;
     if (meridiem === 'am') {
       if (hour === 12) hour = 0;
@@ -25,6 +25,23 @@ export function parsePlannedMinutes(plannedTime: string | null): number | null {
     }
     return hour * 60 + minute;
   }
+
+  // "10am", "10 am", "10a.m."
+  const h12bare = trimmed.match(/^(\d{1,2})\s*([ap]\.?m\.?)$/i);
+  if (h12bare) {
+    let hour = Number(h12bare[1]);
+    const meridiem = h12bare[2].toLowerCase().replace(/\./g, '');
+    if (hour < 1 || hour > 12) return null;
+    if (meridiem === 'am') {
+      if (hour === 12) hour = 0;
+    } else if (hour !== 12) {
+      hour += 12;
+    }
+    return hour * 60;
+  }
+
+  if (/^noon$/i.test(trimmed)) return 12 * 60;
+  if (/^midnight$/i.test(trimmed)) return 0;
 
   return null;
 }

@@ -735,15 +735,25 @@ export async function handleMealCorrection(
 export async function handleMacroStatus(userId: string, dateKey: string, timeZone: string | null) {
   const dashboard = await getTodayDashboard(userId, dateKey, timeZone);
   if (!dashboard.dailyLog) return 'No nutrition log found for today yet.';
+  const dl = dashboard.dailyLog;
 
-  const caloriesRemaining = Math.max(0, Math.round(dashboard.summary?.caloriesRemaining ?? 0));
-  const proteinRemaining = Math.max(0, Math.round(dashboard.summary?.proteinRemaining ?? 0));
+  // Report ALL FOUR macros (calories, protein, carbs, fat) — remaining plus the daily target — so a
+  // "what are my macros/goals" question is answered in full, never just calories and protein.
+  const remaining = (target: unknown, actual: unknown) => Math.max(0, Math.round(n(target) - n(actual)));
+  const calRem = remaining(dl.calorieTarget, dl.caloriesActual);
+  const proteinRem = remaining(dl.proteinTarget, dl.proteinActual);
+  const carbRem = remaining(dl.carbTarget, dl.carbsActual);
+  const fatRem = remaining(dl.fatTarget, dl.fatActual);
+
   const nextMeal = dashboard.nextMeal;
   const nextPart = nextMeal
     ? ` Next up: ${nextMeal.name}${nextMeal.plannedTime ? ` at ${nextMeal.plannedTime}` : ''}.`
     : '';
 
-  return capSms(`You have ${caloriesRemaining} cal and ${proteinRemaining}g protein left today.${nextPart}`);
+  return capSms(
+    `You have ${calRem} cal, ${proteinRem}g protein, ${carbRem}g carbs, and ${fatRem}g fat left today ` +
+      `(daily targets: ${fullMacros(n(dl.calorieTarget), n(dl.proteinTarget), n(dl.carbTarget), n(dl.fatTarget))}).${nextPart}`
+  );
 }
 
 // --- Read-only lookups so the coach can answer questions about the user's own data ---
