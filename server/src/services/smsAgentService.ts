@@ -248,7 +248,9 @@ export async function runSmsAgentEntry(
         'SMS assistant',
         abort
       );
-      return capSms(raw) || 'Got it!';
+      // runAgent already returns an honest message when the model produces nothing, so never
+      // fabricate a bare "Got it!" that reads like we acted or answered when we didn't.
+      return capSms(raw) || "Sorry, I didn't catch that — mind sending it again?";
     } catch (error) {
       abort.abort();
       return agentErrorReply(error);
