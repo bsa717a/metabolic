@@ -28,8 +28,8 @@ function ex(id: string, status: string, presc: Partial<ScheduledExercise> = {}):
   };
 }
 
-const REST_SET_MS = 60 * 1000;
-const REST_EX_MS = 90 * 1000;
+const REST_SET_MS = 45 * 1000;
+const REST_EX_MS = 45 * 1000;
 
 describe('startSession', () => {
   it('captures PLANNED-only order and starts on the first exercise', () => {
@@ -108,16 +108,34 @@ describe('rest timers', () => {
     expect(resumed.restEndsAtMs).toBe(20_000 + (2000 + REST_SET_MS - 12_000));
   });
 
-  it('ADJUST_REST_15 +1 extends the timer and raises the between-set interval', () => {
+  it('ADJUST_REST_15 +1 extends the timer and raises set + exercise intervals', () => {
     const ext = sessionReducer(rest, { type: 'ADJUST_REST_15', delta: 1, nowMs: 5000 });
     expect(ext.restEndsAtMs).toBe(rest.restEndsAtMs! + 15_000);
-    expect(ext.settings.restSetSec).toBe(75);
+    expect(ext.settings.restSetSec).toBe(60);
+    expect(ext.settings.restExerciseSec).toBe(60);
   });
 
-  it('ADJUST_REST_15 -1 shortens the timer and lowers the between-set interval', () => {
+  it('ADJUST_REST_15 -1 shortens the timer and lowers set + exercise intervals', () => {
     const shortened = sessionReducer(rest, { type: 'ADJUST_REST_15', delta: -1, nowMs: 5000 });
     expect(shortened.restEndsAtMs).toBe(rest.restEndsAtMs! - 15_000);
-    expect(shortened.settings.restSetSec).toBe(45);
+    expect(shortened.settings.restSetSec).toBe(30);
+    expect(shortened.settings.restExerciseSec).toBe(30);
+  });
+
+  it('adjusted rest carries from between-set into between-exercise rest', () => {
+    let s = startSession(
+      'd',
+      [ex('a', 'PLANNED', { sets: 2 }), ex('b', 'PLANNED', { sets: 1 })],
+      1000
+    );
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 2000 }); // between-set rest
+    s = sessionReducer(s, { type: 'ADJUST_REST_15', delta: 1, nowMs: 3000 }); // 45 → 60
+    s = sessionReducer(s, { type: 'SKIP_REST', nowMs: 4000 });
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 5000 }); // finish exercise a → between-exercise rest
+    expect(s.phase).toBe('rest');
+    expect(s.currentSet).toBe(1);
+    expect(s.settings.restExerciseSec).toBe(60);
+    expect(s.restEndsAtMs).toBe(5000 + 60_000);
   });
 
   it('SKIP_REST resumes the exercise at the pending set', () => {

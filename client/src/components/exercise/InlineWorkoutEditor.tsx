@@ -68,12 +68,6 @@ export function InlineWorkoutEditor({
     api<ExerciseCatalogItem[]>('/api/exercises').then(setCatalog).catch(() => setCatalog([]));
   }, [load]);
 
-  useEffect(() => {
-    if (!loading && workout) {
-      searchRef.current?.focus();
-    }
-  }, [loading, workout?.id]);
-
   const inWorkoutIds = useMemo(
     () => new Set(workout?.items.map((item) => item.exerciseId) ?? []),
     [workout]
@@ -246,7 +240,7 @@ export function InlineWorkoutEditor({
         </div>
 
         {searchOpen && (
-          <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-2xl border border-app-border bg-app-surface shadow-lg">
+          <ul className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-2xl border border-app-border bg-app-surface shadow-lg">
             {searchResults.length === 0 ? (
               <li className="px-3 py-3 text-sm text-app-text-muted">
                 {query.trim() ? 'No matching exercises.' : 'All catalog exercises are already in this workout.'}

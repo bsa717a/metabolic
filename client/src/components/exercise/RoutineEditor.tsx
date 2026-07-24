@@ -245,8 +245,10 @@ export function RoutineEditorContent({
                 return (
                   <li
                     key={workout.id}
-                    className={`overflow-hidden rounded-2xl border transition ${
-                      expanded ? 'border-brand-green/40 bg-app-surface shadow-sm' : 'border-app-border'
+                    className={`rounded-2xl border transition ${
+                      expanded
+                        ? 'relative z-20 overflow-visible border-brand-green/40 bg-app-surface shadow-sm'
+                        : 'overflow-hidden border-app-border'
                     }`}
                   >
                     <button
@@ -255,7 +257,9 @@ export function RoutineEditorContent({
                       onClick={() =>
                         setEditingWorkoutId((current) => (current === workout.id ? null : workout.id))
                       }
-                      className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-app-muted/50"
+                      className={`flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-app-muted/50 ${
+                        expanded ? 'rounded-t-2xl' : 'rounded-2xl'
+                      }`}
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold text-app-text">{workout.name}</span>
