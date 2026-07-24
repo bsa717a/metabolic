@@ -7,6 +7,19 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.4.0](https://github.com/bsa717a/metabolic/compare/v0.3.0...v0.4.0) (2026-07-24)
+
+
+### Features
+
+* **coach:** make the virtual coach the reliable meal-management front end ([4909584](https://github.com/bsa717a/metabolic/commit/4909584a850defcb359c75e3dc2dc5fabcb8ddb6))
+
+
+### Bug Fixes
+
+* **sms:** route restaurant questions to suggest_meals ([655e0ff](https://github.com/bsa717a/metabolic/commit/655e0ff0b1768df3d4ebcb8bf46d5cf03e84c13c))
+* **sms:** route restaurant questions to suggest_meals and drop misleading Got it! ([aca6ff6](https://github.com/bsa717a/metabolic/commit/aca6ff6e75abf796c789f0e11c4c953858b4b2c1))
+
 ## [0.3.0](https://github.com/bsa717a/metabolic/compare/v0.2.0...v0.3.0) (2026-07-21)
 
 
