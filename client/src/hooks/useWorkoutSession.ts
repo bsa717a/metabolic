@@ -179,13 +179,51 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     if (!anyPending) setSyncError(null);
   }, [state, syncTick]);
 
-  // Fire the rest-over cue once per rest period.
+  // End cue + between-set auto-start. Prefer a precise setTimeout, but also
+  // re-check from absolute remaining via `now` so a backgrounded/throttled tab
+  // still fires when the deadline has passed (useNow refreshes on focus).
   useEffect(() => {
-    if (!state || state.phase !== 'rest') return;
-    if (remainingMs(state, now) === 0 && cueFiredRef.current !== state.phaseStartedAtMs) {
-      cueFiredRef.current = state.phaseStartedAtMs;
-      restEndCue(state.settings.sound);
+    if (!state || state.phase === 'summary') return;
+    if (state.pausedRemainingMs != null) return;
+
+    const endsAtMs =
+      state.phase === 'rest'
+        ? state.restEndsAtMs
+        : state.durationEndsAtMs;
+    if (endsAtMs == null) return;
+
+    const phaseKey = state.phaseStartedAtMs;
+    const sound = state.settings.sound;
+    const autoStartNextSet = state.phase === 'rest' && state.currentSet > 1;
+
+    const fire = () => {
+      if (cueFiredRef.current === phaseKey) return;
+      cueFiredRef.current = phaseKey;
+      restEndCue(sound);
+      if (autoStartNextSet) {
+        setState((prev) => {
+          if (!prev || prev.phase !== 'rest') return prev;
+          if (prev.phaseStartedAtMs !== phaseKey) return prev;
+          if (prev.currentSet <= 1) return prev;
+          return sessionReducer(prev, { type: 'SKIP_REST', nowMs: Date.now() });
+        });
+      }
+    };
+
+    // Absolute check covers backgrounded tabs where setTimeout was frozen.
+    if (remainingMs(state, now) === 0) {
+      fire();
+      return;
     }
+
+    const delay = endsAtMs - Date.now();
+    if (delay <= 0) {
+      fire();
+      return;
+    }
+
+    const id = window.setTimeout(fire, delay);
+    return () => window.clearTimeout(id);
   }, [state, now]);
 
   const dispatch = useCallback((action: Parameters<typeof sessionReducer>[1]) => {

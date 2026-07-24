@@ -82,15 +82,23 @@ export function SessionExerciseCard({
       ? Math.min(1, Math.max(0, 1 - durationRemainingMs / durationTotalMs))
       : 0;
 
+  const completeLabel = durationBased
+    ? 'Done'
+    : setBased
+      ? currentSet >= total
+        ? 'Complete exercise'
+        : 'Complete set'
+      : 'Mark complete';
+
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-start justify-between gap-3">
         <div className="min-w-0">
           {meta.bodyPart && (
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">{meta.bodyPart}</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-300">{meta.bodyPart}</p>
           )}
-          <h2 className="mt-1 text-2xl font-bold text-white">{meta.name}</h2>
-          <p className="mt-1 text-sm text-white/60">
+          <h2 className="mt-1 text-4xl font-bold leading-tight text-white sm:text-5xl">{meta.name}</h2>
+          <p className="mt-2 text-lg font-medium text-white/70">
             {setBased ? `Set ${currentSet} of ${total} · ` : ''}
             {formatPlan(meta)}
           </p>
@@ -103,16 +111,14 @@ export function SessionExerciseCard({
       </div>
 
       {meta.description && (
-        <p className="mt-3 rounded-2xl bg-white/5 p-3 text-sm leading-relaxed text-white/70">
+        <p className="shrink-0 rounded-2xl bg-white/5 p-3 text-sm leading-relaxed text-white/70">
           {meta.description}
         </p>
       )}
 
-      <div className="flex-1" />
-
       {durationBased ? (
-        <div className="mb-6 flex flex-col items-center gap-4">
-          <div className="text-6xl font-bold tabular-nums text-white">
+        <div className="flex shrink-0 flex-col items-center gap-3">
+          <div className="text-6xl font-bold tabular-nums text-white sm:text-7xl">
             {formatClock(durationRemainingMs ?? durationTotalMs)}
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -131,7 +137,7 @@ export function SessionExerciseCard({
           </button>
         </div>
       ) : setBased ? (
-        <div className="mb-6 flex gap-3">
+        <div className="flex shrink-0 gap-3">
           <Stepper label="Reps" value={reps} onChange={(next) => onAdjust({ reps: next })} />
           <Stepper
             label="Weight"
@@ -143,29 +149,22 @@ export function SessionExerciseCard({
         </div>
       ) : null}
 
-      <div className="space-y-3">
-        <button
-          type="button"
-          className="w-full rounded-2xl bg-emerald-500 py-5 text-lg font-bold text-white shadow-lg active:bg-emerald-600"
-          onClick={onCompleteSet}
-        >
-          {durationBased
-            ? 'Done'
-            : setBased
-              ? currentSet >= total
-                ? 'Complete exercise'
-                : 'Complete set'
-              : 'Mark complete'}
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-white/70 active:bg-white/10"
-          onClick={onSkip}
-        >
-          <SkipForward className="h-4 w-4" />
-          Skip exercise
-        </button>
-      </div>
+      <button
+        type="button"
+        className="flex min-h-[12rem] w-full flex-1 items-center justify-center rounded-3xl bg-emerald-500 px-4 py-8 text-3xl font-bold text-white shadow-lg active:bg-emerald-600 sm:min-h-[16rem] sm:text-4xl"
+        onClick={onCompleteSet}
+      >
+        {completeLabel}
+      </button>
+
+      <button
+        type="button"
+        className="flex w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-white/70 active:bg-white/10"
+        onClick={onSkip}
+      >
+        <SkipForward className="h-4 w-4" />
+        Skip exercise
+      </button>
     </div>
   );
 }

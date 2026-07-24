@@ -11,8 +11,8 @@ export const SESSION_STORAGE_KEY = 'metabolic.exerciseSession.v1';
 export const SESSION_VERSION = 1;
 
 export const DEFAULT_SESSION_SETTINGS: WorkoutSessionSettings = {
-  restSetSec: 60,
-  restExerciseSec: 90,
+  restSetSec: 45,
+  restExerciseSec: 45,
   sound: true
 };
 
@@ -331,10 +331,13 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
       if (state.phase !== 'rest') return state;
       const deltaMs = action.delta * REST_STEP_SEC * 1000;
       // Between-set rest has currentSet > 1; between-exercise rest resets to set 1.
+      // Keep both intervals in sync so ±15 applies to future set AND exercise rests.
       const settingKey = state.currentSet > 1 ? 'restSetSec' : 'restExerciseSec';
+      const nextSec = clampRestSec(state.settings[settingKey] + action.delta * REST_STEP_SEC);
       const nextSettings = {
         ...state.settings,
-        [settingKey]: clampRestSec(state.settings[settingKey] + action.delta * REST_STEP_SEC)
+        restSetSec: nextSec,
+        restExerciseSec: nextSec
       };
 
       if (state.pausedRemainingMs != null) {
