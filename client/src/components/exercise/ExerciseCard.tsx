@@ -2,18 +2,9 @@ import type { ReactNode } from 'react';
 import { Check, CircleX, Pencil } from 'lucide-react';
 import type { ScheduledExercise } from '../../types';
 import { api, isFuture } from '../../services/api';
+import { formatPlan } from '../../utils/exerciseFormat';
 import { Badge } from '../ui/Badge';
 import { ExerciseHowToVideoButton } from './ExerciseHowToVideoButton';
-
-function formatPlan(item: ScheduledExercise) {
-  if (item.sets != null) {
-    const weight = item.weight != null ? ` @ ${item.weight} lbs` : '';
-    return `${item.sets} sets × ${item.reps ?? '—'} reps${weight}`;
-  }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min`;
-  if (item.weight != null) return `${item.weight} lbs`;
-  return 'No prescription set';
-}
 
 function ExerciseTitle({
   name,

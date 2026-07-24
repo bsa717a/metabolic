@@ -8,7 +8,11 @@ import { AppShell } from './components/layout/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProgramPage } from './pages/ProgramPage';
 import { NutritionPage } from './pages/NutritionPage';
-import { ExercisePage } from './pages/ExercisePage';
+import { ExerciseAreaLayout } from './pages/exercise/ExerciseAreaLayout';
+import { TodayTab } from './pages/exercise/TodayTab';
+import { PlanTab } from './pages/exercise/PlanTab';
+import { ManageTab } from './pages/exercise/ManageTab';
+import { WorkoutSessionPage } from './pages/WorkoutSessionPage';
 import { ProgressPage } from './pages/ProgressPage';
 import { AssistantPage } from './pages/AssistantPage';
 import { AdminPage } from './pages/AdminPage';
@@ -217,6 +221,7 @@ export default function App() {
           <Route path="nutrition/export" element={<NutritionExportPage />} />
           <Route path="nutrition/shopping-list/export" element={<ShoppingListExportPage />} />
           <Route path="exercise/export" element={<ExerciseExportPage />} />
+          <Route path="exercise/session" element={<WorkoutSessionPage />} />
           <Route path="progress/export" element={<ProgressExportPage />} />
           <Route element={<AppShell user={appUser} onTutorialComplete={setAppUser} />}>
             <Route path="upgrade" element={<UpgradePage user={appUser} />} />
@@ -224,7 +229,11 @@ export default function App() {
             <Route index element={<DashboardPage user={appUser} />} />
             <Route path="program" element={<ProgramPage user={appUser} />} />
             <Route path="nutrition" element={<NutritionPage />} />
-            <Route path="exercise" element={<ExercisePage />} />
+            <Route path="exercise" element={<ExerciseAreaLayout />}>
+              <Route index element={<TodayTab />} />
+              <Route path="plan" element={<PlanTab />} />
+              <Route path="manage" element={<ManageTab />} />
+            </Route>
             <Route path="progress" element={<ProgressPage />} />
             <Route path="hydration" element={<HydrationPage />} />
             <Route path="level-up" element={<GamificationPage />} />

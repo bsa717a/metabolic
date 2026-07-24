@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Pencil } from 'lucide-react';
+import { Pencil, Play } from 'lucide-react';
 import type { Exercise } from '../../types';
 import { todayKey } from '../../services/api';
+import { primeAudio } from '../../utils/sessionCues';
 import { ExerciseCard } from '../exercise/ExerciseCard';
 import { Card } from '../ui/Card';
 
@@ -47,6 +48,19 @@ export function TodayExercise({
         <p className="text-sm text-app-text-muted">No exercises planned today.</p>
       ) : (
         <div className="space-y-4">
+          {todo.length > 0 && (
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-navy py-3 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+              onClick={() => {
+                primeAudio();
+                navigate('/exercise/session');
+              }}
+            >
+              <Play className="h-4 w-4" />
+              Start workout
+            </button>
+          )}
           {todo.length > 0 && (
             <div className="space-y-2">
               {todo.map((item) => (

@@ -1,4 +1,4 @@
-import { ExerciseStatus, ProgramStatus } from '@prisma/client';
+import { type Difficulty, ExerciseStatus, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey } from '../utils/dates.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
@@ -319,7 +319,17 @@ export async function markScheduledExercise(userId: string, id: string, status: 
   return scheduled;
 }
 
-export async function markDone(userId: string, id: string) {
+export type ExerciseActuals = {
+  actualSets?: number | null;
+  actualReps?: number | null;
+  actualDurationMinutes?: number | null;
+  actualDistance?: number | null;
+  actualWeight?: number | null;
+  difficulty?: Difficulty | null;
+  notes?: string | null;
+};
+
+export async function markDone(userId: string, id: string, actuals: ExerciseActuals = {}) {
   const { scheduled, scheduledDate } = await prisma.$transaction(async (tx) => {
     const existing = await tx.scheduledExercise.findFirstOrThrow({ where: { id, userId } });
     const updated = await tx.scheduledExercise.update({
@@ -329,8 +339,8 @@ export async function markDone(userId: string, id: string) {
     });
     await tx.exerciseLog.upsert({
       where: { scheduledExerciseId: id },
-      update: { completed: true, completedAt: new Date() },
-      create: { scheduledExerciseId: id, userId, completed: true, completedAt: new Date() }
+      update: { completed: true, completedAt: new Date(), ...actuals },
+      create: { scheduledExerciseId: id, userId, completed: true, completedAt: new Date(), ...actuals }
     });
     const log = await tx.dailyLog.findUnique({
       where: { userId_date: { userId, date: existing.scheduledDate } }

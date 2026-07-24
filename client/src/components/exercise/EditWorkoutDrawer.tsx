@@ -2,21 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ExerciseCatalogItem, ExercisePlanTemplate, ExerciseTemplateItem } from '../../types';
 import { api } from '../../services/api';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
+import { formatPlan } from '../../utils/exerciseFormat';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
-}
-
-function formatPlan(item: ExerciseTemplateItem) {
-  if (item.sets != null) {
-    const weight = item.weight != null ? ` @ ${item.weight} lbs` : '';
-    return `${item.sets} sets × ${item.reps ?? '—'} reps${weight}`;
-  }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min`;
-  if (item.weight != null) return `${item.weight} lbs`;
-  return 'No prescription set';
 }
 
 export function EditWorkoutDrawer({

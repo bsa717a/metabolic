@@ -1,0 +1,171 @@
+import { Minus, Pause, Play, Plus, SkipForward } from 'lucide-react';
+import { ExerciseHowToVideoButton } from '../ExerciseHowToVideoButton';
+import { formatPlan } from '../../../utils/exerciseFormat';
+import type { PerExerciseState, SessionExerciseMeta } from '../../../utils/workoutSession';
+import { hasSets, isDurationBased, totalSets } from '../../../utils/workoutSession';
+import { formatClock } from './format';
+
+function Stepper({
+  label,
+  value,
+  suffix,
+  step = 1,
+  onChange
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+  step?: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center gap-2 rounded-2xl bg-white/5 p-3">
+      <span className="text-xs font-semibold uppercase tracking-wide text-white/50">{label}</span>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-label={`Decrease ${label}`}
+          className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white active:bg-white/20"
+          onClick={() => onChange(Math.max(0, value - step))}
+        >
+          <Minus className="h-5 w-5" />
+        </button>
+        <span className="min-w-[3ch] text-center text-2xl font-bold tabular-nums text-white">
+          {value}
+          {suffix ? <span className="ml-0.5 text-sm font-medium text-white/50">{suffix}</span> : null}
+        </span>
+        <button
+          type="button"
+          aria-label={`Increase ${label}`}
+          className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white active:bg-white/20"
+          onClick={() => onChange(value + step)}
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function SessionExerciseCard({
+  meta,
+  currentSet,
+  per,
+  durationRemainingMs,
+  paused,
+  onCompleteSet,
+  onAdjust,
+  onSkip,
+  onPause,
+  onResume
+}: {
+  meta: SessionExerciseMeta;
+  currentSet: number;
+  per: PerExerciseState;
+  durationRemainingMs: number | null;
+  paused: boolean;
+  onCompleteSet: () => void;
+  onAdjust: (patch: { reps?: number; weight?: number }) => void;
+  onSkip: () => void;
+  onPause: () => void;
+  onResume: () => void;
+}) {
+  const setBased = hasSets(meta);
+  const durationBased = isDurationBased(meta);
+  const total = totalSets(meta);
+
+  const reps = per.actualReps ?? meta.reps ?? 0;
+  const weight = per.actualWeight ?? meta.weight ?? 0;
+  const durationTotalMs = (meta.durationMinutes ?? 0) * 60_000;
+  const durationElapsedFrac =
+    durationRemainingMs != null && durationTotalMs > 0
+      ? Math.min(1, Math.max(0, 1 - durationRemainingMs / durationTotalMs))
+      : 0;
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {meta.bodyPart && (
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">{meta.bodyPart}</p>
+          )}
+          <h2 className="mt-1 text-2xl font-bold text-white">{meta.name}</h2>
+          <p className="mt-1 text-sm text-white/60">
+            {setBased ? `Set ${currentSet} of ${total} · ` : ''}
+            {formatPlan(meta)}
+          </p>
+        </div>
+        {meta.howToVideoUrl && (
+          <div className="shrink-0 rounded-xl bg-white/10">
+            <ExerciseHowToVideoButton name={meta.name} videoUrl={meta.howToVideoUrl} variant="primary" />
+          </div>
+        )}
+      </div>
+
+      {meta.description && (
+        <p className="mt-3 rounded-2xl bg-white/5 p-3 text-sm leading-relaxed text-white/70">
+          {meta.description}
+        </p>
+      )}
+
+      <div className="flex-1" />
+
+      {durationBased ? (
+        <div className="mb-6 flex flex-col items-center gap-4">
+          <div className="text-6xl font-bold tabular-nums text-white">
+            {formatClock(durationRemainingMs ?? durationTotalMs)}
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-emerald-400 transition-all"
+              style={{ width: `${durationElapsedFrac * 100}%` }}
+            />
+          </div>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white active:bg-white/20"
+            onClick={paused ? onResume : onPause}
+          >
+            {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            {paused ? 'Resume' : 'Pause'}
+          </button>
+        </div>
+      ) : setBased ? (
+        <div className="mb-6 flex gap-3">
+          <Stepper label="Reps" value={reps} onChange={(next) => onAdjust({ reps: next })} />
+          <Stepper
+            label="Weight"
+            value={weight}
+            suffix="lb"
+            step={5}
+            onChange={(next) => onAdjust({ weight: next })}
+          />
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
+        <button
+          type="button"
+          className="w-full rounded-2xl bg-emerald-500 py-5 text-lg font-bold text-white shadow-lg active:bg-emerald-600"
+          onClick={onCompleteSet}
+        >
+          {durationBased
+            ? 'Done'
+            : setBased
+              ? currentSet >= total
+                ? 'Complete exercise'
+                : 'Complete set'
+              : 'Mark complete'}
+        </button>
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-white/70 active:bg-white/10"
+          onClick={onSkip}
+        >
+          <SkipForward className="h-4 w-4" />
+          Skip exercise
+        </button>
+      </div>
+    </div>
+  );
+}

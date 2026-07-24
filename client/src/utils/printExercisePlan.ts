@@ -1,19 +1,12 @@
 import type { ScheduledExercise } from '../types';
 import type { DayExercises } from './planExportData';
+import { formatPlan } from './exerciseFormat';
 import { escapeHtml, formatExportDate, formatShortDayLabel } from './exportFormat';
 import { printHtmlDocument } from './printDocument';
 import { LANDSCAPE_PAGE_CSS } from './printStyles';
 
-export function formatExercisePlan(item: ScheduledExercise) {
-  if (item.sets != null) {
-    const weight = item.weight != null ? ` @ ${item.weight} lbs` : '';
-    return `${item.sets} sets × ${item.reps ?? '—'} reps${weight}`;
-  }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min`;
-  if (item.distance != null) return `${item.distance} mi`;
-  if (item.weight != null) return `${item.weight} lbs`;
-  return 'No prescription set';
-}
+/** @deprecated Use `formatPlan` from `utils/exerciseFormat`. Kept as an alias for existing importers. */
+export const formatExercisePlan = (item: ScheduledExercise) => formatPlan(item);
 
 const DAY_PRINT_STYLES = `
   :root {

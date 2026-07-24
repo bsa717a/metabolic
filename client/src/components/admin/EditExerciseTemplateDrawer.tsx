@@ -2,19 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 import type { ExercisePlanTemplate, ExercisePlanTemplateSummary, ExerciseTemplateItem } from '../../types';
+import { formatPlan } from '../../utils/exerciseFormat';
 import { EditTemplateExerciseDrawer } from './EditTemplateExerciseDrawer';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
-
-function formatPlan(item: ExerciseTemplateItem) {
-  if (item.sets != null) {
-    const weight = item.weight != null ? ` @ ${item.weight} lbs` : '';
-    return `${item.sets} sets × ${item.reps ?? '—'} reps${weight}`;
-  }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min`;
-  if (item.weight != null) return `${item.weight} lbs`;
-  return 'No prescription set';
-}
 
 function reorderIds(ids: string[], fromId: string, toId: string) {
   const fromIndex = ids.indexOf(fromId);
