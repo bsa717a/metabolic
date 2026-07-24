@@ -68,6 +68,15 @@ export function ExerciseAreaLayout() {
     void reloadRoutine();
   }, [reloadRoutine]);
 
+  // Coach chat (and other surfaces) dispatch this after mutating the day plan.
+  useEffect(() => {
+    const handleUpdated = () => {
+      void reloadWeek();
+    };
+    window.addEventListener('exercise-plan-updated', handleUpdated);
+    return () => window.removeEventListener('exercise-plan-updated', handleUpdated);
+  }, [reloadWeek]);
+
   const selectDate = useCallback(
     (date: string) => {
       setSelectedDate(date);

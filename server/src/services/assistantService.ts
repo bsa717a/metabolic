@@ -12,6 +12,7 @@ import {
   type MealEditFocus,
   type WebCoachToolContext
 } from './webCoachTools.js';
+import { EXERCISE_MUTATION_TOOLS } from './exerciseTools.js';
 import { prisma } from '../db/prisma.js';
 import { env } from '../config/env.js';
 import { userDayKey } from '../utils/dates.js';
@@ -135,8 +136,13 @@ function buildPlanBalance(dashboard: Awaited<ReturnType<typeof getTodayDashboard
 
 function exerciseSummary(exercises: Awaited<ReturnType<typeof getTodayDashboard>>['exercises']) {
   return exercises.map((entry) => ({
+    id: entry.id,
     name: entry.exercise.name,
     status: entry.status,
+    sets: entry.sets,
+    reps: entry.reps,
+    durationMinutes: entry.durationMinutes,
+    weight: entry.weight == null ? null : Number(entry.weight),
     scheduledDate: entry.scheduledDate.toISOString().slice(0, 10)
   }));
 }
@@ -215,7 +221,7 @@ function buildAppGuide() {
   return {
     accountDetails: 'Top right → their name → Account details (phone, timezone, text reminder toggles).',
     meals: 'Nutrition page — review today\'s meals, log what they ate, and edit the plan.',
-    exercise: 'Exercise page — review today\'s workout and mark exercises done.',
+    exercise: 'Exercise page — review today\'s workout, start a guided session, or ask me in chat to add/change exercises.',
     hydration:
       'Water jug in the top bar on every page — tap it to log water, see today\'s progress, and change their daily goal. They can also log water or change their goal in this chat.'
   };
@@ -523,6 +529,34 @@ export function userRequestedMealAction(text: string) {
   );
 }
 
+/** Detects replies that claim an exercise/workout plan change happened. */
+export function claimsExercisePlanUpdate(reply: string) {
+  return (
+    /\bi(?:'ve| have)\s+(?:added|updated|changed|removed|skipped|marked)\b.{0,80}\b(?:exercise|workout|set|rep)\b/i.test(
+      reply
+    ) ||
+    /\b(?:added|updated|changed|removed|skipped|marked)\s+(?:your|the|that|this)\s+(?:\w+\s+){0,4}(?:exercise|workout)\b/i.test(
+      reply
+    ) ||
+    /\b(?:exercise|workout)\s+(?:is|was)\s+now\b/i.test(reply)
+  );
+}
+
+/**
+ * The user's message plausibly asks to change today's workout (verb + exercise/workout target).
+ * Post-hoc gate for {@link claimsCompletion} only.
+ */
+export function userRequestedExerciseAction(text: string) {
+  return (
+    /\b(add|added|adding|remove|delete|drop|change|swap|replace|skip|mark|update|create|make|build|suggest|pick|choose|use|do|let'?s do)\b/i.test(
+      text
+    ) &&
+    /\b(exercise|workout|sets?|reps?|squat|push-?up|pull-?up|deadlift|bench|run|walk|lift|cardio|option|number\s*\d|it|that|this one)\b/i.test(
+      text
+    )
+  );
+}
+
 /** User picking a numbered suggestion: "2", "option 2", "#1". */
 export function parseMealOptionPick(text: string): number | null {
   const trimmed = text.trim();
@@ -641,6 +675,7 @@ export async function chatWithAssistant(
   });
 
   const mealMutated = toolCtx.toolCalls.some((call) => MEAL_MUTATION_TOOLS.has(call.name));
+  const exerciseMutated = toolCtx.toolCalls.some((call) => EXERCISE_MUTATION_TOOLS.has(call.name));
   const renameCall = toolCtx.toolCalls.find((call) => call.name === 'rename_meal');
   const timeCall = toolCtx.toolCalls.find((call) => call.name === 'update_meal_time');
   const goalWasSetByTool = toolCtx.toolCalls.some((call) => call.name === 'set_hydration_goal');
@@ -658,6 +693,13 @@ export async function chatWithAssistant(
   ) {
     effectiveReply =
       "I haven't actually changed your plan yet — tell me exactly what to change (which meal and how) and I'll make it for real.";
+  } else if (
+    !exerciseMutated &&
+    (claimsExercisePlanUpdate(rawReply) ||
+      (userRequestedExerciseAction(lastUserMessage) && claimsCompletion(rawReply)))
+  ) {
+    effectiveReply =
+      "I haven't actually changed your workout yet — tell me exactly what to change (which exercise and how) and I'll make it for real.";
   } else if (!mealEditFocus && !goalWasSetByTool && claimsHydrationGoalSet(rawReply)) {
     effectiveReply =
       "I haven't updated your water goal yet — tell me the number of ounces you want and I'll set it for real.";
@@ -709,6 +751,8 @@ export async function chatWithAssistant(
     ...(goalWasSetByTool ? { hydrationGoalUpdated: true } : {}),
     // Any meal mutation triggers a client refresh of the plan.
     ...(mealMutated ? { plannedMealsUpdated: true } : {}),
+    // Any exercise mutation triggers a client refresh of the workout plan.
+    ...(exerciseMutated ? { exercisesUpdated: true } : {}),
     ...(mealRenamed ? { mealRenamed: true, mealRename: mealRenamed } : {}),
     ...(mealTimeUpdate ? { mealTimeUpdated: true, mealTimeUpdate } : {})
   };

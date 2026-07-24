@@ -7,7 +7,6 @@ import {
   handleFoodPhoto,
   handleLogLastPhotoEstimate,
   handleMacroStatus,
-  handleExerciseDetails,
   handleHydrationStatus,
   handleProgressStatus,
   handlePlanTargets,
@@ -19,6 +18,11 @@ import {
 } from './smsIntentService.js';
 import { setWaterGoal } from './hydrationService.js';
 import { buildMealToolDeclarations, executeMealTool, MEAL_MANAGEMENT_TOOLS } from './mealTools.js';
+import {
+  buildExerciseToolDeclarations,
+  executeExerciseTool,
+  EXERCISE_MANAGEMENT_TOOLS
+} from './exerciseTools.js';
 import type { StoredPhotoEstimateItem } from '../utils/smsFoodParse.js';
 
 /** A clarification the model wants before it can finish an action (createdAt is stamped at persist time). */
@@ -60,15 +64,6 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       name: 'get_macro_status',
       description:
         "Report the user's FULL macro status for today — calories, protein, carbs, AND fat remaining, plus their daily targets and next meal. Use for \"what are my macros/goals\", \"how am I doing today\", \"what do I have left\". Always relay all four macros. Read-only. Do NOT use this for the macros of a specific meal — use get_meal_details for that."
-    },
-    {
-      name: 'get_exercise_details',
-      description:
-        "Look up the user's scheduled workout — exercises, sets/reps, and which are done. Use for \"what's my workout\", \"how many sets of X\", \"did I finish my workout\". Read-only.",
-      parameters: {
-        type: Type.OBJECT,
-        properties: { date: { type: Type.STRING, description: DATE_PARAM_DESC } }
-      }
     },
     {
       name: 'get_hydration_status',
@@ -166,20 +161,6 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       }
     },
     {
-      name: 'mark_exercise_done',
-      description: 'Mark a single planned exercise done. Optionally name it; omit to use the next planned exercise.',
-      parameters: {
-        type: Type.OBJECT,
-        properties: {
-          exerciseName: { type: Type.STRING, description: 'Name of the exercise to mark done.' }
-        }
-      }
-    },
-    {
-      name: 'mark_all_exercises_done',
-      description: "Mark all of today's planned exercises done. Use for \"mark all exercises done\" or \"workout done\"."
-    },
-    {
       name: 'log_water',
       description: 'Log water intake in ounces. Use for "16 oz water" or "drank a glass of water" (~8 oz).',
       parameters: {
@@ -240,7 +221,9 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
     },
     // Shared meal-management tools: read a meal, add/update/remove one item, create/delete a meal,
     // rename it, change its time, replace all items, or copy across days.
-    ...buildMealToolDeclarations()
+    ...buildMealToolDeclarations(),
+    // Shared exercise-management tools: read/suggest/add/update/remove/skip/mark-done for a day.
+    ...buildExerciseToolDeclarations()
   ];
 }
 
@@ -270,17 +253,18 @@ export async function executeSmsTool(
     if (mealResult) return mealResult;
   }
 
+  // Shared exercise-management tools live in exerciseTools; they push their own audit entry.
+  if (EXERCISE_MANAGEMENT_TOOLS.has(name)) {
+    const exerciseResult = await executeExerciseTool(ctx, name, args);
+    if (exerciseResult) return exerciseResult;
+  }
+
   ctx.toolCalls.push({ name, args });
   try {
     switch (name) {
       case 'get_macro_status': {
         if (signal?.aborted) return { error: 'Request cancelled.' };
         const result = await handleMacroStatus(ctx.userId, ctx.dateKey, ctx.timeZone);
-        return { result };
-      }
-      case 'get_exercise_details': {
-        if (signal?.aborted) return { error: 'Request cancelled.' };
-        const result = await handleExerciseDetails(ctx.userId, ctx.dateKey, ctx.timeZone, str(args.date) || undefined);
         return { result };
       }
       case 'get_hydration_status': {
@@ -376,21 +360,6 @@ export async function executeSmsTool(
         const result = await handleWriteAction(ctx.userId, ctx.dateKey, ctx.timeZone, {
           intent: 'MARK_MEAL_COMPLETE',
           mealName: str(args.mealName) || undefined
-        });
-        return { result };
-      }
-      case 'mark_exercise_done': {
-        if (signal?.aborted) return { error: 'Request cancelled.' };
-        const result = await handleWriteAction(ctx.userId, ctx.dateKey, ctx.timeZone, {
-          intent: 'MARK_EXERCISE_DONE',
-          exerciseName: str(args.exerciseName) || undefined
-        });
-        return { result };
-      }
-      case 'mark_all_exercises_done': {
-        if (signal?.aborted) return { error: 'Request cancelled.' };
-        const result = await handleWriteAction(ctx.userId, ctx.dateKey, ctx.timeZone, {
-          intent: 'MARK_ALL_EXERCISES_DONE'
         });
         return { result };
       }

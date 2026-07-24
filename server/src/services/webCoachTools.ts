@@ -15,19 +15,22 @@ import {
   type MealEditFocus,
   type MealToolContext
 } from './mealTools.js';
+import {
+  buildExerciseToolDeclarations,
+  executeExerciseTool,
+  EXERCISE_MANAGEMENT_TOOLS
+} from './exerciseTools.js';
 import { updateUserSmsSetup } from './smsSetupService.js';
 
 export type { ActiveMealContext, MealEditFocus } from './mealTools.js';
 export type WebCoachToolContext = MealToolContext;
 
-/** SMS read/log tools the web coach reuses (everything meal-plan-editing comes from mealTools). */
+/** SMS read/log tools the web coach reuses (meal + exercise plan editing come from shared catalogs). */
 const SHARED_SMS_TOOLS = new Set([
   'get_macro_status',
   'get_hydration_status',
   'log_food',
   'mark_meal_complete',
-  'mark_exercise_done',
-  'mark_all_exercises_done',
   'log_water',
   'set_hydration_goal',
   'suggest_meals'
@@ -44,6 +47,7 @@ export function buildWebCoachToolDeclarations(options?: { mealEditFocus?: MealEd
   const all: FunctionDeclaration[] = [
     ...shared,
     ...buildMealToolDeclarations(),
+    ...buildExerciseToolDeclarations(),
     {
       name: 'update_sms_setup',
       description:
@@ -79,6 +83,11 @@ export async function executeWebCoachTool(
 
   const mealResult = await executeMealTool(ctx, name, args);
   if (mealResult) return mealResult;
+
+  if (EXERCISE_MANAGEMENT_TOOLS.has(name)) {
+    const exerciseResult = await executeExerciseTool(ctx, name, args);
+    if (exerciseResult) return exerciseResult;
+  }
 
   if (name === 'update_sms_setup') {
     ctx.toolCalls.push({ name, args });
@@ -116,4 +125,4 @@ export async function executeWebCoachTool(
   return executeSmsTool(smsCtx, name, args);
 }
 
-export { MEAL_MANAGEMENT_TOOLS };
+export { MEAL_MANAGEMENT_TOOLS, EXERCISE_MANAGEMENT_TOOLS };

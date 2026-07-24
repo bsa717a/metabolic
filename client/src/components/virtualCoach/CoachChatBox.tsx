@@ -356,6 +356,7 @@ export function CoachChatBox({
         reply: string;
         hydrationGoalUpdated?: boolean;
         plannedMealsUpdated?: boolean;
+        exercisesUpdated?: boolean;
         mealRenamed?: boolean;
         mealRename?: { mealId: string; newName: string; previousName?: string; date?: string };
         mealTimeUpdated?: boolean;
@@ -409,6 +410,9 @@ export function CoachChatBox({
       }
       if (result.plannedMealsUpdated) {
         window.dispatchEvent(new Event('nutrition-meals-updated'));
+      }
+      if (result.exercisesUpdated) {
+        window.dispatchEvent(new Event('exercise-plan-updated'));
       }
       if (focus || result.mealRenamed || result.mealTimeUpdated || result.plannedMealsUpdated) {
         await refreshMealAfterEdit({
