@@ -293,6 +293,16 @@ export function Topbar({
                       }}
                     />
                   ) : null}
+                  {isCoachRole(user.role) ? (
+                    <ProfileMenuItem
+                      label="Coach"
+                      icon={Users}
+                      onClick={() => {
+                        closeProfileMenu();
+                        navigate('/coach');
+                      }}
+                    />
+                  ) : null}
                   {isAdminRole(user.role) ? (
                     <ProfileMenuItem
                       label="Admin"

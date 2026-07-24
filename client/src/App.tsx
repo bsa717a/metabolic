@@ -102,14 +102,42 @@ function SetupRoute({
   return <FirstTimeSetupPage user={appUser} onComplete={onComplete} />;
 }
 
-function AdminRoute({ appUser, children }: { appUser: AppUser | null; children?: React.ReactNode }) {
+function AdminRoute({
+  appUser,
+  refreshAppUser,
+  children
+}: {
+  appUser: AppUser | null;
+  refreshAppUser: () => Promise<AppUser | null>;
+  children?: React.ReactNode;
+}) {
+  // Gate on live appUser.role so focus-refresh demotions revoke access immediately.
+  // When role is not yet admin, re-fetch /api/me once in case it was just promoted.
+  const allowed = isAdminRole(appUser?.role);
+  const [revalidated, setRevalidated] = useState(allowed);
+
+  useEffect(() => {
+    if (allowed) {
+      setRevalidated(true);
+      return;
+    }
+    let cancelled = false;
+    setRevalidated(false);
+    void refreshAppUser().finally(() => {
+      if (!cancelled) setRevalidated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [appUser?.id, appUser?.role, allowed, refreshAppUser]);
+
+  if (!revalidated && !allowed) return <LoadingScreen />;
   if (!isAdminRole(appUser?.role)) {
     return (
       <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-6 text-brand-navy dark:text-brand-off-white">
         <h1 className="text-xl font-bold">Admin access required</h1>
         <p className="mt-2 text-sm text-app-text-muted">
-          Your account does not have permission to view admin tools. Sign in as{' '}
-          <code>admin@metabolic.local</code> to manage users.
+          Your account does not have permission to view admin tools. Ask a super admin to grant you admin access.
         </p>
       </div>
     );
@@ -117,8 +145,33 @@ function AdminRoute({ appUser, children }: { appUser: AppUser | null; children?:
   return children ?? <AdminPage />;
 }
 
-function CoachRoute({ appUser }: { appUser: AppUser | null }) {
-  if (!isCoachRole(appUser?.role)) {
+function CoachRoute({
+  appUser,
+  refreshAppUser
+}: {
+  appUser: AppUser | null;
+  refreshAppUser: () => Promise<AppUser | null>;
+}) {
+  const allowed = isCoachRole(appUser?.role);
+  const [revalidated, setRevalidated] = useState(allowed);
+
+  useEffect(() => {
+    if (allowed) {
+      setRevalidated(true);
+      return;
+    }
+    let cancelled = false;
+    setRevalidated(false);
+    void refreshAppUser().finally(() => {
+      if (!cancelled) setRevalidated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [appUser?.id, appUser?.role, allowed, refreshAppUser]);
+
+  if (!revalidated && !allowed) return <LoadingScreen />;
+  if (!isCoachRole(appUser?.role) || !appUser?.id) {
     return (
       <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-6 text-brand-navy dark:text-brand-off-white">
         <h1 className="text-xl font-bold">Coach access required</h1>
@@ -126,7 +179,7 @@ function CoachRoute({ appUser }: { appUser: AppUser | null }) {
       </div>
     );
   }
-  return <CoachPage coachUserId={appUser!.id} />;
+  return <CoachPage coachUserId={appUser.id} />;
 }
 
 export default function App() {
@@ -144,6 +197,16 @@ export default function App() {
       setNeedsSetup(false);
     } finally {
       setOnboardingChecked(true);
+    }
+  }, []);
+
+  const refreshAppUser = useCallback(async () => {
+    try {
+      const me = await api<{ user: AppUser }>('/api/me');
+      setAppUser(me.user);
+      return me.user;
+    } catch {
+      return null;
     }
   }, []);
 
@@ -171,16 +234,26 @@ export default function App() {
     [refreshOnboardingStatus]
   );
 
+  // Role changes are admin-side DB updates; re-fetch /api/me when the tab is focused
+  // so coach/admin access appears without requiring sign-out.
+  useEffect(() => {
+    if (!firebaseUser) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshAppUser();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [firebaseUser, refreshAppUser]);
+
   const handleSetupComplete = useCallback(async () => {
     setNeedsSetup(false);
-    try {
-      const me = await api<{ user: AppUser }>('/api/me');
-      setAppUser(me.user);
-    } catch {
-      // Keep existing app user if refresh fails.
-    }
+    await refreshAppUser();
     await refreshOnboardingStatus();
-  }, [refreshOnboardingStatus]);
+  }, [refreshAppUser, refreshOnboardingStatus]);
 
   return (
     <BrowserRouter>
@@ -254,14 +327,56 @@ export default function App() {
                 />
               }
             />
-            <Route path="coach" element={<CoachRoute appUser={appUser} />} />
-            <Route path="admin" element={<AdminRoute appUser={appUser} />} />
-            <Route path="admin/nutrition-templates" element={<AdminRoute appUser={appUser}><AdminNutritionTemplatesPage /></AdminRoute>} />
-            <Route path="admin/nutrition-templates/:id" element={<AdminRoute appUser={appUser}><AdminNutritionTemplateEditorPage /></AdminRoute>} />
-            <Route path="admin/meal-cards/:id" element={<AdminRoute appUser={appUser}><AdminMealCardSetEditorPage /></AdminRoute>} />
-            <Route path="admin/exercise-templates" element={<AdminRoute appUser={appUser}><AdminExerciseTemplatesPage /></AdminRoute>} />
-            <Route path="admin/exercise-templates/:id" element={<AdminRoute appUser={appUser}><AdminExerciseTemplateEditorPage /></AdminRoute>} />
-            <Route path="admin/communications" element={<AdminRoute appUser={appUser}><AdminCommunicationsPage /></AdminRoute>} />
+            <Route path="coach" element={<CoachRoute appUser={appUser} refreshAppUser={refreshAppUser} />} />
+            <Route path="admin" element={<AdminRoute appUser={appUser} refreshAppUser={refreshAppUser} />} />
+            <Route
+              path="admin/nutrition-templates"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminNutritionTemplatesPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/nutrition-templates/:id"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminNutritionTemplateEditorPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/meal-cards/:id"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminMealCardSetEditorPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/exercise-templates"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminExerciseTemplatesPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/exercise-templates/:id"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminExerciseTemplateEditorPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/communications"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminCommunicationsPage />
+                </AdminRoute>
+              }
+            />
           </Route>
         </Route>
       </Routes>

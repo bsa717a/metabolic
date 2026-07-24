@@ -232,7 +232,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
       </div>
 
       {isCoachRole(user?.role) && (
-        <section className="hidden sm:block">
+        <section>
           <UpcomingCheckInsCard />
         </section>
       )}
