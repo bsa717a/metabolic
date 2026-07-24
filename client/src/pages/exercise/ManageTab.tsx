@@ -7,7 +7,7 @@ export function ManageTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-app-text-muted">
-        Set which workout runs on each weekday and manage your reusable workouts.
+        Manage your reusable workouts, then choose which one runs on each weekday.
       </p>
       <RoutineEditorContent
         active

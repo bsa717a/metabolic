@@ -1,21 +1,24 @@
-import { Plus, SkipForward } from 'lucide-react';
+import { Minus, Plus, SkipForward } from 'lucide-react';
 import { formatPlan } from '../../../utils/exerciseFormat';
-import type { SessionExerciseMeta } from '../../../utils/workoutSession';
+import { REST_STEP_SEC, type SessionExerciseMeta } from '../../../utils/workoutSession';
 import { formatClock } from './format';
 
 /** Between-set / between-exercise rest with an up-next preview. */
 export function SessionRestTimer({
   remainingMs,
+  restIntervalSec,
   upNext,
   upNextIsSameExercise,
   onSkip,
-  onExtend
+  onAdjustRest
 }: {
   remainingMs: number;
+  /** Current default for this kind of rest (set vs between-exercise), shown so ±15 is clear. */
+  restIntervalSec: number;
   upNext: SessionExerciseMeta | null;
   upNextIsSameExercise: boolean;
   onSkip: () => void;
-  onExtend: () => void;
+  onAdjustRest: (delta: 1 | -1) => void;
 }) {
   const over = remainingMs <= 0;
 
@@ -26,6 +29,9 @@ export function SessionRestTimer({
           {over ? 'Rest complete' : 'Rest'}
         </p>
         <div className="mt-2 text-7xl font-bold tabular-nums text-white">{formatClock(remainingMs)}</div>
+        <p className="mt-2 text-xs text-white/45">
+          {upNextIsSameExercise ? 'Between sets' : 'Between exercises'}: {restIntervalSec}s
+        </p>
       </div>
 
       {upNext && (
@@ -47,19 +53,29 @@ export function SessionRestTimer({
           {over ? 'Start' : 'Skip rest'}
         </button>
         {!over && (
-          <button
-            type="button"
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-white/70 active:bg-white/10"
-            onClick={onExtend}
-          >
-            <Plus className="h-4 w-4" />
-            Add 15s
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-white/70 active:bg-white/10"
+              onClick={() => onAdjustRest(-1)}
+            >
+              <Minus className="h-4 w-4" />
+              {REST_STEP_SEC}s
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold text-white/70 active:bg-white/10"
+              onClick={() => onAdjustRest(1)}
+            >
+              <Plus className="h-4 w-4" />
+              {REST_STEP_SEC}s
+            </button>
+          </div>
         )}
       </div>
       {!over && (
         <p className="flex items-center gap-1 text-xs text-white/40">
-          <SkipForward className="h-3 w-3" /> Tap Skip rest to begin early
+          <SkipForward className="h-3 w-3" /> ±{REST_STEP_SEC}s adjusts this rest and future ones
         </p>
       )}
     </div>

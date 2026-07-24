@@ -108,9 +108,16 @@ describe('rest timers', () => {
     expect(resumed.restEndsAtMs).toBe(20_000 + (2000 + REST_SET_MS - 12_000));
   });
 
-  it('EXTEND_REST_15 pushes the deadline out', () => {
-    const ext = sessionReducer(rest, { type: 'EXTEND_REST_15', nowMs: 5000 });
+  it('ADJUST_REST_15 +1 extends the timer and raises the between-set interval', () => {
+    const ext = sessionReducer(rest, { type: 'ADJUST_REST_15', delta: 1, nowMs: 5000 });
     expect(ext.restEndsAtMs).toBe(rest.restEndsAtMs! + 15_000);
+    expect(ext.settings.restSetSec).toBe(75);
+  });
+
+  it('ADJUST_REST_15 -1 shortens the timer and lowers the between-set interval', () => {
+    const shortened = sessionReducer(rest, { type: 'ADJUST_REST_15', delta: -1, nowMs: 5000 });
+    expect(shortened.restEndsAtMs).toBe(rest.restEndsAtMs! - 15_000);
+    expect(shortened.settings.restSetSec).toBe(45);
   });
 
   it('SKIP_REST resumes the exercise at the pending set', () => {
@@ -168,10 +175,28 @@ describe('RECONCILE', () => {
 });
 
 describe('actualsForExercise', () => {
-  it('sends duration minutes only for duration-based exercises', () => {
+  it('logs elapsed duration minutes (not only the prescription)', () => {
     let s = startSession('d', [ex('c', 'PLANNED', { durationMinutes: 20 })], 1000);
+    // ~10 minutes into a 20-minute block
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 1000 + 10 * 60_000 });
+    expect(actualsForExercise(s, 'c')).toEqual({ actualDurationMinutes: 10 });
+  });
+
+  it('keeps a manually adjusted duration when completing', () => {
+    let s = startSession('d', [ex('c', 'PLANNED', { durationMinutes: 20 })], 1000);
+    s = sessionReducer(s, {
+      type: 'ADJUST_ACTUALS',
+      patch: { durationMinutes: 12 },
+      nowMs: 1500
+    });
     s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 2000 });
-    expect(actualsForExercise(s, 'c')).toEqual({ actualDurationMinutes: 20 });
+    expect(actualsForExercise(s, 'c')).toEqual({ actualDurationMinutes: 12 });
+  });
+
+  it('sends actualDistance for distance-based exercises', () => {
+    let s = startSession('d', [ex('run', 'PLANNED', { distance: 3.1 })], 1000);
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 2000 });
+    expect(actualsForExercise(s, 'run')).toEqual({ actualDistance: 3.1 });
   });
 
   it('sends set/rep actuals for set-based exercises', () => {
@@ -201,40 +226,74 @@ describe('persistence', () => {
     return {
       getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
       setItem: (k: string, v: string) => void map.set(k, v),
-      removeItem: (k: string) => void map.delete(k)
+      removeItem: (k: string) => void map.delete(k),
+      get length() {
+        return map.size;
+      },
+      key: (i: number) => [...map.keys()][i] ?? null
     };
   }
 
   let sample: WorkoutSessionState;
+  let otherDay: WorkoutSessionState;
 
   beforeAll(() => {
     (globalThis as unknown as { window: unknown }).window = { localStorage: makeStorage() };
     sample = startSession('2026-07-20', [ex('a', 'PLANNED', { sets: 2, reps: 10 })], 1000);
+    otherDay = startSession('2026-07-21', [ex('b', 'PLANNED', { sets: 1 })], 1000);
   });
 
   afterAll(() => {
     delete (globalThis as unknown as { window?: unknown }).window;
   });
 
-  it('round-trips a session and honors the date filter', () => {
+  it('round-trips a session and keeps days isolated', () => {
     saveSession(sample);
+    saveSession(otherDay);
     expect(loadSession('2026-07-20')).toEqual(sample);
-    expect(loadSession('2026-07-21')).toBeNull();
+    expect(loadSession('2026-07-21')).toEqual(otherDay);
     expect(hasStoredSessionForDate('2026-07-20')).toBe(true);
   });
 
   it('rejects a mismatched version', () => {
-    (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage.setItem(
-      SESSION_STORAGE_KEY,
+    const storage = (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage;
+    storage.setItem(
+      `${SESSION_STORAGE_KEY}:2026-07-20`,
       JSON.stringify({ ...sample, version: 99 })
     );
     expect(loadSession('2026-07-20')).toBeNull();
   });
 
-  it('clears stored sessions', () => {
+  it('clears one date without wiping another', () => {
     saveSession(sample);
+    saveSession(otherDay);
+    clearSession('2026-07-20');
+    expect(loadSession('2026-07-20')).toBeNull();
+    expect(loadSession('2026-07-21')).toEqual(otherDay);
+  });
+
+  it('reads the legacy single-slot key when the date matches', () => {
     clearSession();
-    expect(loadSession()).toBeNull();
-    expect(hasStoredSessionForDate('2026-07-20')).toBe(false);
+    const storage = (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage;
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sample));
+    expect(loadSession('2026-07-20')).toEqual(sample);
+    expect(loadSession('2026-07-21')).toBeNull();
+  });
+});
+
+describe('empty plan', () => {
+  it('starts in summary with an empty order', () => {
+    const s = startSession('2026-07-20', [], 1000);
+    expect(s.phase).toBe('summary');
+    expect(s.order).toEqual([]);
+  });
+});
+
+describe('MARK_SYNCED', () => {
+  it('records outcomes so remounts will not re-toggle skip', () => {
+    let s = startSession('d', [ex('a', 'PLANNED', { sets: 1 })], 1000);
+    s = sessionReducer(s, { type: 'SKIP_EXERCISE', nowMs: 2000 });
+    s = sessionReducer(s, { type: 'MARK_SYNCED', id: 'a', outcome: 'skipped' });
+    expect(s.syncedOutcomes.a).toBe('skipped');
   });
 });

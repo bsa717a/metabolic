@@ -16,6 +16,16 @@ export const DEFAULT_SESSION_SETTINGS: WorkoutSessionSettings = {
   sound: true
 };
 
+/** Rest timer / default interval adjustments move in this step. */
+export const REST_STEP_SEC = 15;
+export const MIN_REST_SEC = 15;
+export const MAX_REST_SEC = 5 * 60;
+
+function clampRestSec(seconds: number): number {
+  const stepped = Math.round(seconds / REST_STEP_SEC) * REST_STEP_SEC;
+  return Math.min(MAX_REST_SEC, Math.max(MIN_REST_SEC, stepped));
+}
+
 export type SessionPhase = 'exercise' | 'rest' | 'summary';
 
 export type SessionExerciseMeta = {
@@ -28,6 +38,7 @@ export type SessionExerciseMeta = {
   reps: number | null;
   weight: number | null;
   durationMinutes: number | null;
+  distance: number | null;
 };
 
 export type PerExerciseState = {
@@ -35,6 +46,7 @@ export type PerExerciseState = {
   actualReps?: number | null;
   actualWeight?: number | null;
   actualDurationMinutes?: number | null;
+  actualDistance?: number | null;
   outcome?: 'done' | 'skipped';
 };
 
@@ -59,19 +71,32 @@ export type WorkoutSessionState = {
   durationEndsAtMs: number | null;
   pausedRemainingMs: number | null;
   perExercise: Record<string, PerExerciseState>;
+  /** Outcomes already mirrored to the server — survives remount so skip is not toggled twice. */
+  syncedOutcomes: Record<string, 'done' | 'skipped'>;
   settings: WorkoutSessionSettings;
 };
 
 export type SessionAction =
   | { type: 'START'; date: string; exercises: ScheduledExercise[]; nowMs: number; settings?: Partial<WorkoutSessionSettings> }
   | { type: 'COMPLETE_SET'; nowMs: number }
-  | { type: 'ADJUST_ACTUALS'; patch: { reps?: number | null; weight?: number | null; durationMinutes?: number | null }; nowMs: number }
+  | {
+      type: 'ADJUST_ACTUALS';
+      patch: {
+        reps?: number | null;
+        weight?: number | null;
+        durationMinutes?: number | null;
+        distance?: number | null;
+      };
+      nowMs: number;
+    }
   | { type: 'SKIP_EXERCISE'; nowMs: number }
   | { type: 'SKIP_REST'; nowMs: number }
+  | { type: 'ADJUST_REST_15'; delta: 1 | -1; nowMs: number }
   | { type: 'EXTEND_REST_15'; nowMs: number }
   | { type: 'PAUSE'; nowMs: number }
   | { type: 'RESUME'; nowMs: number }
   | { type: 'RECONCILE'; exercises: ScheduledExercise[]; nowMs: number }
+  | { type: 'MARK_SYNCED'; id: string; outcome: 'done' | 'skipped' }
   | { type: 'FINISH'; nowMs: number };
 
 // ---------------------------------------------------------------------------
@@ -88,7 +113,8 @@ export function toMeta(exercise: ScheduledExercise): SessionExerciseMeta {
     sets: exercise.sets ?? null,
     reps: exercise.reps ?? null,
     weight: exercise.weight ?? null,
-    durationMinutes: exercise.durationMinutes ?? null
+    durationMinutes: exercise.durationMinutes ?? null,
+    distance: exercise.distance ?? null
   };
 }
 
@@ -102,6 +128,15 @@ export function totalSets(meta: SessionExerciseMeta): number {
 
 export function isDurationBased(meta: SessionExerciseMeta): boolean {
   return !hasSets(meta) && meta.durationMinutes != null && meta.durationMinutes > 0;
+}
+
+export function isDistanceBased(meta: SessionExerciseMeta): boolean {
+  return (
+    !hasSets(meta) &&
+    !isDurationBased(meta) &&
+    meta.distance != null &&
+    meta.distance > 0
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +220,7 @@ export function startSession(
     durationEndsAtMs: null,
     pausedRemainingMs: null,
     perExercise,
+    syncedOutcomes: {},
     settings: { ...DEFAULT_SESSION_SETTINGS, ...settings }
   };
 
@@ -213,13 +249,20 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
         return { ...rested, currentSet: state.currentSet + 1 };
       }
 
-      // Exercise complete.
+      // Exercise complete. For duration work, log elapsed time (not only the prescription).
       const completedPer = {
         ...nextPer[currentId],
         ...(isDurationBased(meta)
           ? {
               actualDurationMinutes:
-                nextPer[currentId].actualDurationMinutes ?? meta.durationMinutes ?? null
+                nextPer[currentId].actualDurationMinutes ??
+                elapsedDurationMinutes(state, action.nowMs, meta.durationMinutes)
+            }
+          : {}),
+        ...(isDistanceBased(meta)
+          ? {
+              actualDistance:
+                nextPer[currentId].actualDistance ?? meta.distance ?? null
             }
           : {})
       };
@@ -248,11 +291,18 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
             ...(action.patch.weight !== undefined ? { actualWeight: action.patch.weight } : {}),
             ...(action.patch.durationMinutes !== undefined
               ? { actualDurationMinutes: action.patch.durationMinutes }
-              : {})
+              : {}),
+            ...(action.patch.distance !== undefined ? { actualDistance: action.patch.distance } : {})
           }
         }
       };
     }
+
+    case 'MARK_SYNCED':
+      return {
+        ...state,
+        syncedOutcomes: { ...state.syncedOutcomes, [action.id]: action.outcome }
+      };
 
     case 'SKIP_EXERCISE': {
       if (state.phase === 'summary') return state;
@@ -274,13 +324,30 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
       return enterExercise(state, state.currentIndex, state.currentSet, action.nowMs);
     }
 
-    case 'EXTEND_REST_15': {
+    case 'EXTEND_REST_15':
+      return sessionReducer(state, { type: 'ADJUST_REST_15', delta: 1, nowMs: action.nowMs });
+
+    case 'ADJUST_REST_15': {
       if (state.phase !== 'rest') return state;
+      const deltaMs = action.delta * REST_STEP_SEC * 1000;
+      // Between-set rest has currentSet > 1; between-exercise rest resets to set 1.
+      const settingKey = state.currentSet > 1 ? 'restSetSec' : 'restExerciseSec';
+      const nextSettings = {
+        ...state.settings,
+        [settingKey]: clampRestSec(state.settings[settingKey] + action.delta * REST_STEP_SEC)
+      };
+
       if (state.pausedRemainingMs != null) {
-        return { ...state, pausedRemainingMs: state.pausedRemainingMs + 15_000 };
+        return {
+          ...state,
+          settings: nextSettings,
+          pausedRemainingMs: Math.max(0, state.pausedRemainingMs + deltaMs)
+        };
       }
-      if (state.restEndsAtMs == null) return state;
-      return { ...state, restEndsAtMs: state.restEndsAtMs + 15_000 };
+      if (state.restEndsAtMs == null) return { ...state, settings: nextSettings };
+      // Shortening past "now" clamps to zero remaining (rest complete).
+      const nextEnds = Math.max(action.nowMs, state.restEndsAtMs + deltaMs);
+      return { ...state, settings: nextSettings, restEndsAtMs: nextEnds };
     }
 
     case 'PAUSE': {
@@ -382,6 +449,22 @@ export function remainingMs(state: WorkoutSessionState, nowMs: number): number |
   return null;
 }
 
+/** Elapsed duration minutes for a timed exercise (prescribed − remaining), min 1. */
+export function elapsedDurationMinutes(
+  state: WorkoutSessionState,
+  nowMs: number,
+  prescribedMinutes: number | null
+): number {
+  const prescribed = prescribedMinutes && prescribedMinutes > 0 ? prescribedMinutes : null;
+  if (prescribed != null && (state.durationEndsAtMs != null || state.pausedRemainingMs != null)) {
+    const rem = remainingMs(state, nowMs) ?? 0;
+    const elapsedMs = Math.max(0, prescribed * 60_000 - rem);
+    return Math.max(1, Math.round(elapsedMs / 60_000));
+  }
+  const elapsedMs = Math.max(0, nowMs - state.phaseStartedAtMs);
+  return Math.max(1, Math.round(elapsedMs / 60_000));
+}
+
 export function currentMeta(state: WorkoutSessionState): SessionExerciseMeta | null {
   return state.plan[state.order[state.currentIndex]] ?? null;
 }
@@ -429,6 +512,11 @@ export function actualsForExercise(state: WorkoutSessionState, id: string) {
       actualDurationMinutes: per.actualDurationMinutes ?? meta.durationMinutes ?? undefined
     };
   }
+  if (meta && isDistanceBased(meta)) {
+    return {
+      actualDistance: per.actualDistance ?? meta.distance ?? undefined
+    };
+  }
   return {
     actualReps: per.actualReps ?? undefined,
     actualWeight: per.actualWeight ?? undefined,
@@ -441,30 +529,85 @@ export function actualsForExercise(state: WorkoutSessionState, id: string) {
 // Persistence (localStorage). All access guarded for SSR / privacy modes.
 // ---------------------------------------------------------------------------
 
+/** Per-date storage key so changing `?date=` cannot wipe another day's session. */
+export function sessionStorageKey(date: string): string {
+  return `${SESSION_STORAGE_KEY}:${date}`;
+}
+
 export function saveSession(state: WorkoutSessionState): void {
   try {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(sessionStorageKey(state.date), JSON.stringify(state));
+    // Drop legacy single-slot key when it belongs to this date.
+    const legacy = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (legacy) {
+      try {
+        const parsed = JSON.parse(legacy) as WorkoutSessionState;
+        if (parsed?.date === state.date) window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
   } catch {
     // ignore quota / unavailable storage
   }
 }
 
+function normalizeLoadedSession(parsed: WorkoutSessionState): WorkoutSessionState {
+  return {
+    ...parsed,
+    syncedOutcomes: parsed.syncedOutcomes ?? {}
+  };
+}
+
 export function loadSession(date?: string): WorkoutSessionState | null {
   try {
+    if (date) {
+      const dated = window.localStorage.getItem(sessionStorageKey(date));
+      if (dated) {
+        const parsed = JSON.parse(dated) as WorkoutSessionState;
+        if (parsed?.version !== SESSION_VERSION || parsed.date !== date) return null;
+        return normalizeLoadedSession(parsed);
+      }
+      // Legacy single-key fallback (pre date-scoped storage).
+      const legacy = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!legacy) return null;
+      const parsed = JSON.parse(legacy) as WorkoutSessionState;
+      if (parsed?.version !== SESSION_VERSION || parsed.date !== date) return null;
+      return normalizeLoadedSession(parsed);
+    }
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WorkoutSessionState;
     if (parsed?.version !== SESSION_VERSION) return null;
-    if (date && parsed.date !== date) return null;
-    return parsed;
+    return normalizeLoadedSession(parsed);
   } catch {
     return null;
   }
 }
 
-export function clearSession(): void {
+export function clearSession(date?: string): void {
   try {
+    if (date) {
+      window.localStorage.removeItem(sessionStorageKey(date));
+      const legacy = window.localStorage.getItem(SESSION_STORAGE_KEY);
+      if (legacy) {
+        try {
+          const parsed = JSON.parse(legacy) as WorkoutSessionState;
+          if (parsed?.date === date) window.localStorage.removeItem(SESSION_STORAGE_KEY);
+        } catch {
+          window.localStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+      }
+      return;
+    }
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    const prefix = `${SESSION_STORAGE_KEY}:`;
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    for (const key of keys) window.localStorage.removeItem(key);
   } catch {
     // ignore
   }

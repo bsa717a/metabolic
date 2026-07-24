@@ -36,7 +36,7 @@ export function WorkoutSessionPage() {
   }, [active]);
 
   function leaveToToday() {
-    clearSession();
+    clearSession(date);
     navigate(`/exercise?date=${date}`);
   }
 
@@ -53,7 +53,9 @@ export function WorkoutSessionPage() {
     );
   }
 
-  if (loadError) {
+  const canResumeOffline = Boolean(state && state.order.length > 0);
+
+  if (loadError && !canResumeOffline) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
         <p className="text-lg font-semibold">Could not load workout</p>
@@ -69,7 +71,7 @@ export function WorkoutSessionPage() {
     );
   }
 
-  if (ready && !state) {
+  if (ready && (!state || (state.phase === 'summary' && state.order.length === 0))) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
         <p className="text-lg font-semibold">No workout to start</p>
@@ -112,6 +114,12 @@ export function WorkoutSessionPage() {
         </div>
       )}
 
+      {loadError && canResumeOffline && (
+        <div className="mt-3 rounded-xl bg-amber-500/20 px-3 py-2 text-xs text-amber-200">
+          Couldn’t refresh today’s plan ({loadError}). Continuing from your saved session.
+        </div>
+      )}
+
       {syncError && (
         <div className="mt-3 rounded-xl bg-amber-500/20 px-3 py-2 text-xs text-amber-200">{syncError}</div>
       )}
@@ -135,10 +143,13 @@ export function WorkoutSessionPage() {
         {state && state.phase === 'rest' && (
           <SessionRestTimer
             remainingMs={remaining ?? 0}
+            restIntervalSec={
+              state.currentSet > 1 ? state.settings.restSetSec : state.settings.restExerciseSec
+            }
             upNext={meta}
             upNextIsSameExercise={state.currentSet > 1}
             onSkip={prime(session.skipRest)}
-            onExtend={session.extendRest}
+            onAdjustRest={session.adjustRest}
           />
         )}
 
