@@ -142,8 +142,15 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
     function handleMealsUpdated() {
       void loadDashboard({ silent: true });
     }
+    function handleExercisesUpdated() {
+      void loadDashboard({ silent: true });
+    }
     window.addEventListener('nutrition-meals-updated', handleMealsUpdated);
-    return () => window.removeEventListener('nutrition-meals-updated', handleMealsUpdated);
+    window.addEventListener('exercise-plan-updated', handleExercisesUpdated);
+    return () => {
+      window.removeEventListener('nutrition-meals-updated', handleMealsUpdated);
+      window.removeEventListener('exercise-plan-updated', handleExercisesUpdated);
+    };
   }, [loadDashboard]);
 
   useEffect(() => {

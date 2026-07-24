@@ -61,6 +61,16 @@ const updateScheduleSchema = z.object({
   bodyPart: optionalString
 });
 
+const markDoneSchema = z.object({
+  actualSets: optionalNumber,
+  actualReps: optionalNumber,
+  actualDurationMinutes: optionalNumber,
+  actualDistance: optionalNumber,
+  actualWeight: optionalNumber,
+  difficulty: z.enum(['EASY', 'NORMAL', 'HARD']).optional(),
+  notes: optionalString
+});
+
 const exercisePlanSnapshotItemSchema = z.object({
   exerciseId: z.string(),
   sets: z.union([z.number(), z.null()]),
@@ -347,7 +357,8 @@ export async function exerciseRoutes(app: FastifyInstance) {
   app.post('/api/scheduled-exercises/:id/mark-done', { preHandler: requireAuth }, async (request) => {
     const id = (request.params as { id: string }).id;
     const ownerId = await scheduledExerciseOwnerForActor(request.appUser!, id);
-    return markDone(ownerId, id);
+    const actuals = markDoneSchema.parse(request.body ?? {});
+    return markDone(ownerId, id, actuals);
   });
   app.post('/api/scheduled-exercises/:id/skip', { preHandler: requireAuth }, async (request) => {
     const id = (request.params as { id: string }).id;

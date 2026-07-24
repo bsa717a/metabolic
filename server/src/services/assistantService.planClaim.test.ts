@@ -2,9 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   claimsCompletion,
+  claimsExercisePlanUpdate,
   claimsHydrationGoalSet,
   claimsMealPlanUpdate,
   parseMealOptionPick,
+  userRequestedExerciseAction,
   userRequestedMealAction
 } from './assistantService.js';
 
@@ -92,5 +94,34 @@ describe('userRequestedMealAction', () => {
   it('ignores pure questions and small talk', () => {
     assert.equal(userRequestedMealAction('what are my macros for lunch?'), false);
     assert.equal(userRequestedMealAction('thanks, that helps!'), false);
+  });
+});
+
+describe('claimsExercisePlanUpdate', () => {
+  it('detects workout mutation claims', () => {
+    assert.equal(claimsExercisePlanUpdate("I've added push-ups to your workout."), true);
+    assert.equal(claimsExercisePlanUpdate('Updated your exercise to 3x10.'), true);
+    assert.equal(claimsExercisePlanUpdate('Skipped that exercise for today.'), true);
+  });
+
+  it('does not flag workout questions or suggestions alone', () => {
+    assert.equal(claimsExercisePlanUpdate("What's your workout today?"), false);
+    assert.equal(
+      claimsExercisePlanUpdate('Here are 3 options:\n1. Push-ups\n2. Squats\nWhich sounds best?'),
+      false
+    );
+  });
+});
+
+describe('userRequestedExerciseAction', () => {
+  it('recognizes workout change requests', () => {
+    assert.equal(userRequestedExerciseAction('add push-ups to my workout'), true);
+    assert.equal(userRequestedExerciseAction('skip the squat'), true);
+    assert.equal(userRequestedExerciseAction('change bench to 3 sets'), true);
+  });
+
+  it('ignores pure questions and meal requests', () => {
+    assert.equal(userRequestedExerciseAction("what's my workout today?"), false);
+    assert.equal(userRequestedExerciseAction('add a banana to breakfast'), false);
   });
 });

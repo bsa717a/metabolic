@@ -2,6 +2,8 @@ import { isFuture, isToday } from '../../../services/api';
 import type { ScheduledExercise } from '../../../types';
 import type { DayExercises } from '../../../utils/planExportData';
 
+export { formatPlanShort } from '../../../utils/exerciseFormat';
+
 export type ExerciseCompletionStatus = 'complete' | 'incomplete' | 'none';
 
 export function exercisesForDay(days: DayExercises[], date: string): ScheduledExercise[] {
@@ -29,16 +31,6 @@ export function exerciseCompletionHighlightClass(status: ExerciseCompletionStatu
     default:
       return 'border-app-border bg-app-surface';
   }
-}
-
-export function formatPlanShort(item: ScheduledExercise): string {
-  if (item.sets != null) {
-    const weight = item.weight != null ? ` @ ${item.weight} lbs` : '';
-    return `${item.sets}×${item.reps ?? '—'}${weight}`;
-  }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min`;
-  if (item.weight != null) return `${item.weight} lbs`;
-  return '—';
 }
 
 export const EXERCISE_STATUS_LABEL: Record<string, string> = {

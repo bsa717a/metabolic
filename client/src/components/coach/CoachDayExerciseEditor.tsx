@@ -18,41 +18,12 @@ import {
   fetchCoachExercisesForDates
 } from '../../utils/planExportData';
 import type { PublishPlanPayload } from '../../utils/weekdayPattern';
-import { weekdayIndex } from '../../utils/weekdayPattern';
+import { routineRestDatesForWeek, routineSummaryLabel } from '../../utils/exerciseRoutineDisplay';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../exercise/ExercisePlanUndoToast';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
 
 type View = 'week' | 'day';
-
-function routineRestDatesForWeek(routine: ExerciseRoutine | null, weekDates: string[]) {
-  if (!routine?.days.length) return new Set<string>();
-  const byWeekday = new Map(routine.days.map((day) => [day.weekday, day.templateId]));
-  const restDates = new Set<string>();
-  for (const date of weekDates) {
-    if (byWeekday.get(weekdayIndex(date)) === null) restDates.add(date);
-  }
-  return restDates;
-}
-
-function routineSummaryLabel(routine: ExerciseRoutine | null) {
-  if (!routine?.days.length) return null;
-  const parts: string[] = [];
-  const counts = new Map<string, number>();
-  for (const day of routine.days) {
-    const key = day.templateId ?? 'rest';
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  for (const [key, count] of counts) {
-    if (key === 'rest') {
-      parts.push(`${count} rest`);
-    } else {
-      const name = routine.days.find((day) => day.templateId === key)?.template?.name ?? 'Workout';
-      parts.push(`${count}× ${name}`);
-    }
-  }
-  return parts.join(' · ');
-}
 
 export function CoachDayExerciseEditor({
   open,

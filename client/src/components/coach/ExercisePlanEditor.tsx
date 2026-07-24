@@ -2,18 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { ExercisePlanTemplateSummary, ScheduledExercise } from '../../types';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
+import { formatPlan } from '../../utils/exerciseFormat';
 import { CoachDayExerciseEditor } from './CoachDayExerciseEditor';
 import { Button } from '../ui/Button';
-
-function formatPlan(item: ScheduledExercise) {
-  if (item.sets != null) {
-    const weight = item.weight != null ? ` @ ${item.weight} lbs` : '';
-    return `${item.sets} sets × ${item.reps ?? '—'} reps${weight}`;
-  }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min`;
-  if (item.weight != null) return `${item.weight} lbs`;
-  return 'No prescription set';
-}
 
 export function ExercisePlanEditor({
   clientId,
