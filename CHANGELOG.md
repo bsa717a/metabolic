@@ -7,6 +7,21 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.5.0](https://github.com/bsa717a/metabolic/compare/v0.4.0...v0.5.0) (2026-07-24)
+
+
+### Features
+
+* **coach:** day-level exercise tools for web and SMS coaches ([f455494](https://github.com/bsa717a/metabolic/commit/f4554947d72976b9f15a6146e2720ce20849b3b7))
+* **exercise:** guided session UI + day-level coach exercise tools ([2579f22](https://github.com/bsa717a/metabolic/commit/2579f223a63c41491ee4f158aebec548216f10ef))
+* **exercise:** guided workout session and Today/Plan/Manage exercise area ([49049fb](https://github.com/bsa717a/metabolic/commit/49049fb1b35af0aadaa451bed265bb45b3713701))
+
+
+### Bug Fixes
+
+* **auth:** apply role promotions in the client without re-login ([af1f26d](https://github.com/bsa717a/metabolic/commit/af1f26dd457a2c6e1d7302e7ccf3e5d82aef87e0))
+* **exercise:** harden guided session sync and polish Manage editor ([a41a56f](https://github.com/bsa717a/metabolic/commit/a41a56f6a2fe2a238b375ce8964df64ed9f6e59c))
+
 ## [0.4.0](https://github.com/bsa717a/metabolic/compare/v0.3.0...v0.4.0) (2026-07-24)
 
 
