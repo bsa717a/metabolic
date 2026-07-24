@@ -6,6 +6,7 @@ import { acceptFoodLookup, acceptFoodLookups, lookupFood, lookupFoodFromImage } 
 import { lookupFoodOptions } from '../services/foodSearchService.js';
 import { acceptExerciseLookup, lookupExercise } from '../services/exerciseLookupService.js';
 import { chatWithAssistant, suggestMealOptions } from '../services/assistantService.js';
+import { loadCoachConversation } from '../services/coachConversationService.js';
 import { isCoachVoiceConfigured, synthesizeCoachSpeech } from '../services/coachVoiceService.js';
 import { analyzeProgressPhotoComparison } from '../services/progressPhotoAnalysisService.js';
 
@@ -13,7 +14,20 @@ const chatMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string().min(1).max(4000)
 });
+/** How many turns we keep for the model. Longer UI threads are accepted, then trimmed. */
+const CHAT_CONTEXT_LIMIT = 24;
 const mealSuggestionBody = z.object({ inputText: z.string().min(5).max(1000) });
+
+function formatChatRouteError(error: unknown): string {
+  if (error instanceof z.ZodError) {
+    const issue = error.issues[0];
+    if (issue?.path?.[0] === 'messages') {
+      return 'That chat message could not be sent. Try again — I only need the recent conversation.';
+    }
+    return issue?.message ?? 'Invalid chat request.';
+  }
+  return error instanceof Error ? error.message : 'AI chat failed';
+}
 
 export async function aiRoutes(app: FastifyInstance) {
   app.post('/api/ai/food-lookup/options', { preHandler: requireAuth }, async (request, reply) => {
@@ -84,11 +98,20 @@ export async function aiRoutes(app: FastifyInstance) {
   app.post('/api/ai/exercise-lookup/:lookupId/accept', { preHandler: requireAuth }, async (request) =>
     acceptExerciseLookup(request.appUser!.id, (request.params as { lookupId: string }).lookupId)
   );
+  app.get(
+    '/api/ai/coach-history',
+    { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] },
+    async (request) => {
+      const messages = await loadCoachConversation(request.appUser!.id);
+      return { messages };
+    }
+  );
   app.post('/api/ai/chat', { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] }, async (request, reply) => {
     try {
       const body = z
         .object({
-          messages: z.array(chatMessageSchema).min(1).max(20),
+          // Accept long UI threads; trim to CHAT_CONTEXT_LIMIT before the model runs.
+          messages: z.array(chatMessageSchema).min(1).max(200),
           mealEditFocus: z
             .object({
               mealName: z.string().min(1).max(60),
@@ -96,16 +119,26 @@ export async function aiRoutes(app: FastifyInstance) {
               date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
               targetCalories: z.number().positive().max(5000).optional()
             })
+            .optional(),
+          activeMeal: z
+            .object({
+              mealId: z.string().min(1).max(64),
+              mealName: z.string().min(1).max(60),
+              date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+            })
             .optional()
         })
         .parse(request.body);
-      return await chatWithAssistant(request.appUser!.id, body.messages, {
-        mealEditFocus: body.mealEditFocus
+      const messages = body.messages.slice(-CHAT_CONTEXT_LIMIT);
+      return await chatWithAssistant(request.appUser!.id, messages, {
+        mealEditFocus: body.mealEditFocus,
+        activeMeal: body.activeMeal
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'AI chat failed';
+      const message = formatChatRouteError(error);
       request.log.error({ err: error }, 'AI chat failed');
-      return reply.code(502).send({ error: message });
+      const status = error instanceof z.ZodError ? 400 : 502;
+      return reply.code(status).send({ error: message });
     }
   });
   app.post(

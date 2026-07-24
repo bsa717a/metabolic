@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI, FunctionCallingMode } from '@google/generative-ai';
-import type { FunctionDeclaration, GenerationConfig, Part } from '@google/generative-ai';
+import { GoogleGenAI, FunctionCallingConfigMode } from '@google/genai';
+import type { FunctionDeclaration, GenerateContentConfig, Part, Content, PartListUnion } from '@google/genai';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { formatGroceryDescription } from '../utils/groceryConversion.js';
@@ -607,13 +607,19 @@ Celebrate real wins — meals logged, workouts done, protein hit, consistency �
 
 export const WEB_AGENT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app — warm, upbeat, and genuinely in their corner, like a knowledgeable friend who happens to be a great nutrition coach.
 Talk like a real person, not a clinician: friendly, encouraging, and never preachy. Follow the per-turn Name usage instruction exactly — do not use profile.firstName on turns where you are told not to.
-You CAN take real actions through the provided tools: update planned meals for today or a future day, save SMS setup (mobile phone, timezone, text reminders) with update_sms_setup, log food they ate, mark meals eaten as planned, mark exercises done, log water, set their daily water goal with set_hydration_goal, check hydration progress with get_hydration_status, check macros, and suggest meals. Use them when the user clearly asks for one of those things.
-Only claim an action happened when the tool call returned a result — never say you changed, logged, or updated something otherwise. Never say you updated their water/hydration goal unless set_hydration_goal returned a result this turn. If a tool returns an "error", explain it briefly and suggest a concrete next step. If they ask for something outside your tools (editing past days, changing calorie/macro targets, workouts planning), say you can't do that from chat yet and point them to the right page.
-Tool result strings are the source of truth. Relay a successful tool's "result" nearly verbatim, especially calorie, protein, macro, meal, date, and quantity details; do not paraphrase those facts or substitute values from your own estimate.
-Before replacing meals the user already has planned, confirm once — unless they just gave you the exact list of what they want, in which case act on it.
-When updating planned meals, estimate realistic per-item macros like a nutritionist (about 4 cal per gram of protein and carbs, 9 per gram of fat) and honor any calorie or macro totals the user states.
+You are the primary way the user builds and maintains their meal plan — treat that as your core job, and use the tools to actually do it. You CAN take real actions through the provided tools.
+Meal management (build and maintain the plan): get_meal_details to read a meal or day (call it before editing when you don't already have the items/ids); add_meal_item / update_meal_item / remove_meal_item to change ONE food without disturbing the rest; update_planned_meals to replace ALL of a meal's foods (a full swap or a picked suggestion); create_meal / delete_meal to add or remove a meal slot; rename_meal to change only a title; update_meal_time to change only a clock time; copy_meal_to_days to reuse a meal across days.
+Other actions: update_sms_setup (mobile phone, timezone, text reminders), log_food (food they already ate), mark_meal_complete, mark_exercise_done / mark_all_exercises_done, log_water, set_hydration_goal, get_hydration_status, get_macro_status, and suggest_meals.
+Pick the smallest tool that does the job: for one food use add/update/remove_meal_item, not update_planned_meals. Use update_planned_meals only for a whole new list or a picked numbered suggestion. Use rename_meal only for titles and update_meal_time only for times — never update_planned_meals for a rename or a time change.
+Only claim an action happened when that tool returned a result this turn — never say you added, changed, removed, renamed, retimed, created, deleted, updated, logged, or set anything otherwise. If a tool returns an "error", explain it briefly and suggest a concrete next step. If they ask for something outside your tools (editing past days, changing calorie/macro targets, planning workouts), say you can't do that from chat yet and point them to the right page.
+Tool result strings and the returned meal state are the source of truth. Relay a successful tool's "result" nearly verbatim, especially calorie, protein, macro, meal, date, and quantity details; do not paraphrase those facts or substitute values from your own estimate.
+Before replacing or deleting meals the user already has planned, confirm once — unless they just gave you the exact change they want, in which case act on it.
+When adding or updating foods, estimate realistic per-item macros like a nutritionist (about 4 cal per gram of protein and carbs, 9 per gram of fat) and honor any calorie or macro totals the user states.
+Macros are ALWAYS all four: calories, protein, carbs, AND fat. When they ask about their macros, goals, targets, or "how am I doing today," call get_macro_status (or get_plan_targets for targets) and report every one of the four — never answer with just calories and protein.
+context.planBalance tells you how the day's PLANNED meals sum up against the targets: plannedTotals, target, gap (planned minus target, negative = short), offTargets (the macros meaningfully off), and plannedHitsTargets. USE IT. When you talk about goals/macros or "how am I doing," compare plan to target out loud. If plannedHitsTargets is false, do NOT say the plan looks great — name the gap in plain numbers ("your plan is about 300 cal and 20g protein short today") and immediately offer a specific tweak to close it (bump a portion, add a food to a meal, or swap a meal), then make the change with the meal tools once they say yes. Only celebrate the plan when plannedHitsTargets is true.
+Be a proactive coach, not a vending machine: don't make them ask over and over to balance their day. Steer them toward their target profile every time the numbers are off.
 Answer using the user's live program data, macros, meals, allergies, and dietary preferences. Never recommend or plan foods that conflict with their stated allergies or dietary preferences.
-Keep responses short unless they ask for detail. Use plain language, not markdown headers.
+Keep responses short unless they ask for detail. Use plain language, not markdown headers, and no ** asterisks ** — this chat shows raw text.
 If data is missing, say what you would need rather than inventing numbers.
 Celebrate real wins — meals logged, workouts done, protein hit, consistency — and keep encouragement genuine and tied to their actual progress, never generic hype.
 When smsSupport is in context, use it for SMS/texting questions. Report smsSupport.setupSummary honestly. Follow smsSupport.nextStepOnly for this turn — do not jump ahead. If smsSupport.isReadyForTexting is false, do NOT mention saved coach contacts, texting the coach number, or START; only resolve what setupSummary says is missing (usually their cell number first). If smsSupport.isReadyForTexting is true, use smsSupport.textingInstructions. Follow smsSupport.chatSetupActions and call update_sms_setup when they give you a number. Never say you cannot update their phone from chat.
@@ -631,14 +637,17 @@ To mark a meal eaten as planned, they can say "mark lunch complete" or "mark bre
 If they say a log went to the wrong meal, they can text "that should be breakfast" and the system moves the last logged food. If they hit a meal error, suggest concrete examples like "Add 2 oz peanuts to breakfast" rather than only apologizing.
 End with a brief, genuine line of encouragement when it fits. One short sentence, never cheesy.`;
 
-const MAX_TOOL_ITERATIONS = 4;
+// Gemini 3.x reliably chains tool calls (read a meal -> edit it -> confirm), so give the loop
+// enough rounds to complete a multi-step meal edit in a single turn.
+const MAX_TOOL_ITERATIONS = 8;
 
 const AGENT_SYSTEM = `You are the user's personal nutritionist friend inside the Metabolic app, texting them over SMS/iMessage. Warm, upbeat, concise — a knowledgeable friend who texts back fast.
-You CAN take real actions through the provided tools: log food, estimate a meal photo, log a photo estimate, move a food to a different meal, mark a meal eaten as planned, mark exercises done, log water, check macros, and suggest meals. Use them whenever the user is clearly asking you to do one of those things.
+You CAN take real actions through the provided tools: log food, estimate a meal photo, log a photo estimate, move a food to a different meal, mark a meal eaten as planned, mark exercises done, log water, set their water goal, check macros, and suggest meals. Use them whenever the user is clearly asking you to do one of those things.
+You can also fully build and maintain their meal plan by text: add_meal_item / update_meal_item / remove_meal_item change ONE food in a meal; update_planned_meals replaces ALL of a meal's foods (a full swap or a picked suggestion); create_meal / delete_meal add or remove a meal slot; rename_meal changes only a title; update_meal_time changes only a clock time; copy_meal_to_days reuses a meal across days. Pick the smallest tool for the job (for one food use add/update/remove_meal_item, not update_planned_meals; never update_planned_meals for a rename or time change). Call get_meal_details first when you need the current items or their ids. Never claim a plan change happened unless that tool returned a result this turn.
 You CAN also answer questions about the user's own data. Route these carefully:
 - "How many calories/protein/carbs/fat are in my [meal]?", "macros for lunch", "what's in my dinner", "what's my plan for the day/tomorrow" → call get_meal_details with the meal name and/or date. This is the ONLY tool that returns carbs and fat. Do NOT answer these from memory and do NOT use suggest_meals for them.
-- "How many calories/protein do I have LEFT today?" or "what's my next meal?" → get_macro_status. Do not use it for a specific meal's macros.
-- "What should I eat / any ideas / options for lunch?" → suggest_meals (recommendations only, never for looking up an existing meal's macros).
+- "What are my macros/goals?", "how am I doing today?", "how many calories/protein/carbs/fat do I have LEFT?" or "what's my next meal?" → get_macro_status (reports all four macros remaining + targets). Always relay all four — never just calories and protein. Do not use it for a specific meal's macros.
+- "What should I eat / any ideas / options for lunch?", OR eating out at a specific place ("I have to go to Chipotle for lunch, what can I order", "what can I get at [restaurant] that keeps me in plan", "options at [restaurant] that match my lunch plan") → suggest_meals. Use your own knowledge of that restaurant's menu to give a few specific orders with rough macros that fit their remaining targets. Recommendations only — never for looking up an existing meal's macros. Here "keep me in plan / match my plan" means suggest orders that fit their targets, NOT a lookup of their planned meal, and it is NOT a reason to say you can't help.
 - "What's my workout / how many sets / did I finish?" → get_exercise_details. "How much water / did I hit my water goal?" → get_hydration_status. "What's my weight / how much have I lost?" → get_progress. "What are my targets/goals / what week am I on?" → get_plan_targets.
 Never reply that you "can't do that" for a question about the user's meals, macros, plan, workout, water, weight, or logged data — look it up with the matching read tool first. Only say you can't help if the tool result says the data doesn't exist.
 Tool results come back as a "result" string already written for SMS. When a tool returns a "result", relay it to the user nearly verbatim — do not re-paraphrase exact calorie, protein, or macro numbers. If a tool returns an "error", briefly explain it and suggest a concrete next step.
@@ -652,6 +661,7 @@ If a write action is genuinely ambiguous and you cannot reasonably guess a requi
 If the program data includes a pendingAction, the user's message is answering that earlier question — fill in the missing argument and call that tool now.
 Keep replies under 320 characters when you can; hard limit 1500. Plain text only — no markdown, asterisks, or headers; use short numbered lines for lists.
 Use the user's real meals, macros, targets, allergies, and dietary preferences from context. Never invent foods or numbers, and never suggest anything that conflicts with their allergies or preferences.
+Be a proactive coach: context.planBalance shows how the planned day compares to targets (gap and offTargets). If plannedHitsTargets is false, don't call the plan great — name the gap in numbers and offer one concrete fix, then make the change with the meal tools once they agree. Don't wait to be asked repeatedly.
 End with a brief, genuine line of encouragement when it fits. One short sentence, never cheesy.`;
 
 /**
@@ -712,14 +722,11 @@ function splitFoodLines(input: string) {
     .filter((line) => line.length >= 2);
 }
 
-// gemini-2.5-flash spends "thinking" tokens out of the maxOutputTokens budget, which intermittently
-// truncated structured JSON responses mid-array ("Expected ',' or ']' after array element"). Disable
-// thinking for the deterministic JSON-extraction models — the detailed prompts handle accuracy, and
-// disabling it frees the whole budget for output (also faster and cheaper). Not in the SDK types yet.
-type ThinkingGenConfig = GenerationConfig & { thinkingConfig: { thinkingBudget: number } };
-type JsonGenConfig = ThinkingGenConfig & { responseMimeType: string };
-
-function jsonModelConfig(maxOutputTokens: number): JsonGenConfig {
+// Older Flash models spent "thinking" tokens out of the maxOutputTokens budget, which intermittently
+// truncated structured JSON mid-array. We disable thinking for the deterministic JSON-extraction calls
+// (the detailed prompts handle accuracy, and it frees the whole budget for output — also faster/cheaper).
+// GeminiAiProvider.tuneConfig() strips the sampling/thinking knobs that Gemini 3.x models reject.
+function jsonModelConfig(maxOutputTokens: number): GenerateContentConfig {
   return {
     responseMimeType: 'application/json',
     temperature: 0.2,
@@ -728,7 +735,7 @@ function jsonModelConfig(maxOutputTokens: number): JsonGenConfig {
   };
 }
 
-function chatModelConfig(maxOutputTokens = 2048): ThinkingGenConfig {
+function chatModelConfig(maxOutputTokens = 2048): GenerateContentConfig {
   return {
     temperature: 0.6,
     maxOutputTokens,
@@ -1773,7 +1780,7 @@ function wrapAiError(error: unknown, action: string): Error {
   }
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes('404 Not Found') && message.includes('model')) {
-    return new Error(`Gemini model "${env.GEMINI_MODEL}" is unavailable. Set GEMINI_MODEL=gemini-2.5-flash in server/.env and restart the API.`);
+    return new Error(`Gemini model "${env.GEMINI_MODEL}" is unavailable. Set GEMINI_MODEL=gemini-3.6-flash in server/.env and restart the API.`);
   }
   if (message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
     return new Error('Gemini API key is invalid. Check GEMINI_API_KEY in server/.env.');
@@ -1785,46 +1792,42 @@ function wrapAiError(error: unknown, action: string): Error {
 }
 
 class GeminiAiProvider implements AiProvider {
-  private client: GoogleGenerativeAI;
+  private ai: GoogleGenAI;
   private model: string;
 
   constructor(apiKey: string, model: string) {
-    this.client = new GoogleGenerativeAI(apiKey);
+    this.ai = new GoogleGenAI({ apiKey });
     this.model = model;
   }
 
-  private foodModel() {
-    return this.client.getGenerativeModel({
-      model: this.model,
-      generationConfig: jsonModelConfig(2048)
-    });
+  /** True for Gemini 3.x+ models, which reject the legacy sampling/thinking-budget knobs. */
+  private isGen3(): boolean {
+    return /^gemini-(?:[3-9]|\d{2,})/.test(this.model);
   }
 
-  private exerciseModel() {
-    return this.client.getGenerativeModel({
-      model: this.model,
-      generationConfig: jsonModelConfig(4096)
-    });
+  /**
+   * Normalizes a config for the active model. Gemini 3.x deprecated temperature/top_p/top_k and no
+   * longer accepts thinkingBudget=0 (thinking can't be fully disabled), so we strip those knobs and
+   * let the model use its defaults; older models keep them.
+   */
+  private tuneConfig(config: GenerateContentConfig): GenerateContentConfig {
+    if (!this.isGen3()) return config;
+    const { temperature, topP, topK, thinkingConfig, ...rest } = config;
+    return rest;
   }
 
-  private chatModel() {
-    return this.client.getGenerativeModel({
+  /** Single-shot text/JSON generation. Returns the model's text output (empty string when none). */
+  private async generate(contents: PartListUnion, config: GenerateContentConfig): Promise<string> {
+    const response = await this.ai.models.generateContent({
       model: this.model,
-      generationConfig: chatModelConfig()
+      contents,
+      config: this.tuneConfig(config)
     });
+    return response.text ?? '';
   }
 
-  private coachCheckInModel(systemPrompt: string) {
-    return this.client.getGenerativeModel({
-      model: this.model,
-      systemInstruction: { role: 'user', parts: [{ text: systemPrompt }] },
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-        thinkingConfig: { thinkingBudget: 0 }
-      } as JsonGenConfig
-    });
+  private jsonConfig(maxOutputTokens: number): GenerateContentConfig {
+    return jsonModelConfig(maxOutputTokens);
   }
 
   async lookupFood(input: string): Promise<FoodEstimate[]> {
@@ -1834,14 +1837,15 @@ class GeminiAiProvider implements AiProvider {
       : `${FOOD_LOOKUP_PROMPT}\n\nFood: ${input.trim()}`;
 
     try {
-      const result = await this.foodModel().generateContent(prompt);
-      return parseFoodLookupResponse(result.response.text());
+      const text = await this.generate(prompt, this.jsonConfig(2048));
+      return parseFoodLookupResponse(text);
     } catch (error) {
       try {
-        const retry = await this.foodModel().generateContent(
-          `${prompt}\n\nImportant: respond with valid JSON and at least one food item for every requested food.`
+        const text = await this.generate(
+          `${prompt}\n\nImportant: respond with valid JSON and at least one food item for every requested food.`,
+          this.jsonConfig(2048)
         );
-        return parseFoodLookupResponse(retry.response.text());
+        return parseFoodLookupResponse(text);
       } catch (retryError) {
         throw wrapAiError(retryError, 'food lookup');
       }
@@ -1853,14 +1857,15 @@ class GeminiAiProvider implements AiProvider {
     const prompt = `${FOOD_OPTIONS_PROMPT}\n\nSearch query: ${query}`;
 
     try {
-      const result = await this.foodModel().generateContent(prompt);
-      return parseFoodLookupResponse(result.response.text()).slice(0, 3);
+      const text = await this.generate(prompt, this.jsonConfig(2048));
+      return parseFoodLookupResponse(text).slice(0, 3);
     } catch (error) {
       try {
-        const retry = await this.foodModel().generateContent(
-          `${prompt}\n\nImportant: respond with valid JSON and between 1 and 3 food options.`
+        const text = await this.generate(
+          `${prompt}\n\nImportant: respond with valid JSON and between 1 and 3 food options.`,
+          this.jsonConfig(2048)
         );
-        return parseFoodLookupResponse(retry.response.text()).slice(0, 3);
+        return parseFoodLookupResponse(text).slice(0, 3);
       } catch (retryError) {
         throw wrapAiError(retryError, 'food options lookup');
       }
@@ -1875,18 +1880,18 @@ Use the optional user note only as context; do not invent foods that are not vis
 Optional user note: ${input.trim() || 'none'}`;
 
     try {
-      const result = await this.foodModel().generateContent([
+      const text = await this.generate([
         { text: prompt },
         { inlineData: { mimeType: image.mimeType, data: image.data } }
-      ]);
-      return parseFoodLookupResponse(result.response.text());
+      ], this.jsonConfig(2048));
+      return parseFoodLookupResponse(text);
     } catch (error) {
       try {
-        const retry = await this.foodModel().generateContent([
+        const text = await this.generate([
           { text: `${prompt}\n\nImportant: respond with valid JSON and at least one food item for the visible food.` },
           { inlineData: { mimeType: image.mimeType, data: image.data } }
-        ]);
-        return parseFoodLookupResponse(retry.response.text());
+        ], this.jsonConfig(2048));
+        return parseFoodLookupResponse(text);
       } catch (retryError) {
         throw wrapAiError(retryError, 'food photo lookup');
       }
@@ -1898,14 +1903,15 @@ Optional user note: ${input.trim() || 'none'}`;
     const prompt = `${EXERCISE_LOOKUP_PROMPT}\n\nUser query: ${query}`;
 
     try {
-      const result = await this.exerciseModel().generateContent(prompt);
-      return parseExerciseLookupResponse(result.response.text());
+      const text = await this.generate(prompt, this.jsonConfig(4096));
+      return parseExerciseLookupResponse(text);
     } catch (error) {
       try {
-        const retry = await this.exerciseModel().generateContent(
-          `${prompt}\n\nImportant: respond with valid JSON only and no more than 4 items.`
+        const text = await this.generate(
+          `${prompt}\n\nImportant: respond with valid JSON only and no more than 4 items.`,
+          this.jsonConfig(4096)
         );
-        return parseExerciseLookupResponse(retry.response.text());
+        return parseExerciseLookupResponse(text);
       } catch {
         try {
           return await new MockAiProvider().lookupExercises(query);
@@ -1926,16 +1932,16 @@ User request:
 ${input.trim()}`;
 
     try {
-      const result = await withTimeout(this.foodModel().generateContent(prompt), MEAL_SUGGESTION_TIMEOUT_MS, 'Meal suggestions');
-      return parseMealSuggestionResponse(result.response.text());
+      const text = await withTimeout(this.generate(prompt, this.jsonConfig(2048)), MEAL_SUGGESTION_TIMEOUT_MS, 'Meal suggestions');
+      return parseMealSuggestionResponse(text);
     } catch (error) {
       try {
-        const retry = await withTimeout(
-          this.foodModel().generateContent(`${prompt}\n\nImportant: respond with valid JSON only and include exactly 3 options.`),
+        const text = await withTimeout(
+          this.generate(`${prompt}\n\nImportant: respond with valid JSON only and include exactly 3 options.`, this.jsonConfig(2048)),
           MEAL_SUGGESTION_TIMEOUT_MS,
           'Meal suggestion retry'
         );
-        return parseMealSuggestionResponse(retry.response.text());
+        return parseMealSuggestionResponse(text);
       } catch {
         try {
           return await new MockAiProvider().suggestMealOptions(input, context);
@@ -1956,16 +1962,16 @@ User request:
 ${input.trim() || 'No specific request — surprise me with variety.'}`;
 
     try {
-      const result = await withTimeout(this.foodModel().generateContent(prompt), ITEMIZED_MEALS_TIMEOUT_MS, 'Itemized meals');
-      return parseItemizedMealsResponse(result.response.text());
+      const text = await withTimeout(this.generate(prompt, this.jsonConfig(2048)), ITEMIZED_MEALS_TIMEOUT_MS, 'Itemized meals');
+      return parseItemizedMealsResponse(text);
     } catch (error) {
       try {
-        const retry = await withTimeout(
-          this.foodModel().generateContent(`${prompt}\n\nImportant: respond with valid JSON only, exactly 4 options, every item must include all fields.`),
+        const text = await withTimeout(
+          this.generate(`${prompt}\n\nImportant: respond with valid JSON only, exactly 4 options, every item must include all fields.`, this.jsonConfig(2048)),
           ITEMIZED_MEALS_TIMEOUT_MS,
           'Itemized meals retry'
         );
-        return parseItemizedMealsResponse(retry.response.text());
+        return parseItemizedMealsResponse(text);
       } catch {
         try {
           return await new MockAiProvider().suggestItemizedMeals(input, context);
@@ -1987,16 +1993,16 @@ Planned items JSON:
 ${JSON.stringify(items)}`;
 
     try {
-      const result = await withTimeout(this.foodModel().generateContent(prompt), SHOPPING_LIST_TIMEOUT_MS, 'Shopping list');
-      return parseEnrichedShoppingListResponse(result.response.text(), expectedIds);
+      const text = await withTimeout(this.generate(prompt, this.jsonConfig(2048)), SHOPPING_LIST_TIMEOUT_MS, 'Shopping list');
+      return parseEnrichedShoppingListResponse(text, expectedIds);
     } catch (error) {
       try {
-        const retry = await withTimeout(
-          this.foodModel().generateContent(`${prompt}\n\nImportant: respond with valid JSON only and include every input id exactly once.`),
+        const text = await withTimeout(
+          this.generate(`${prompt}\n\nImportant: respond with valid JSON only and include every input id exactly once.`, this.jsonConfig(2048)),
           SHOPPING_LIST_TIMEOUT_MS,
           'Shopping list retry'
         );
-        return parseEnrichedShoppingListResponse(retry.response.text(), expectedIds);
+        return parseEnrichedShoppingListResponse(text, expectedIds);
       } catch (retryError) {
         throw wrapAiError(retryError, 'shopping list');
       }
@@ -2011,16 +2017,16 @@ Prep batches JSON:
 ${JSON.stringify(batches)}`;
 
     try {
-      const result = await withTimeout(this.foodModel().generateContent(prompt), MEAL_PREP_TIMEOUT_MS, 'Meal prep');
-      return parseEnrichedMealPrepResponse(result.response.text(), expectedIds);
+      const text = await withTimeout(this.generate(prompt, this.jsonConfig(2048)), MEAL_PREP_TIMEOUT_MS, 'Meal prep');
+      return parseEnrichedMealPrepResponse(text, expectedIds);
     } catch (error) {
       try {
-        const retry = await withTimeout(
-          this.foodModel().generateContent(`${prompt}\n\nImportant: respond with valid JSON only and include every input id exactly once.`),
+        const text = await withTimeout(
+          this.generate(`${prompt}\n\nImportant: respond with valid JSON only and include every input id exactly once.`, this.jsonConfig(2048)),
           MEAL_PREP_TIMEOUT_MS,
           'Meal prep retry'
         );
-        return parseEnrichedMealPrepResponse(retry.response.text(), expectedIds);
+        return parseEnrichedMealPrepResponse(text, expectedIds);
       } catch (retryError) {
         throw wrapAiError(retryError, 'meal prep');
       }
@@ -2031,29 +2037,30 @@ ${JSON.stringify(batches)}`;
     try {
       const channelInstruction = channel === 'sms' ? `\n\n${SMS_ASSISTANT_ADDENDUM}` : '';
       const personaInstruction = systemAddendum?.trim() ? `\n\n${systemAddendum.trim()}` : '';
-      const contextTurn = [
-        { role: 'user' as const, parts: [{ text: `Program data (JSON):\n${context}` }] },
-        { role: 'model' as const, parts: [{ text: 'Understood. I will answer using this program data.' }] }
+      const contextTurn: Content[] = [
+        { role: 'user', parts: [{ text: `Program data (JSON):\n${context}` }] },
+        { role: 'model', parts: [{ text: 'Understood. I will answer using this program data.' }] }
       ];
-      const history = [
+      const history: Content[] = [
         ...contextTurn,
         ...messages.slice(0, -1).map((message) => ({
-          role: message.role === 'assistant' ? ('model' as const) : ('user' as const),
+          role: message.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: message.content }]
         }))
       ];
       const last = messages.at(-1);
       if (!last) throw new Error('Message required');
 
-      const chat = this.chatModel().startChat({
+      const chat = this.ai.chats.create({
+        model: this.model,
         history,
-        systemInstruction: {
-          role: 'user',
-          parts: [{ text: `${ASSISTANT_SYSTEM}${personaInstruction}${channelInstruction}` }]
-        }
+        config: this.tuneConfig({
+          ...chatModelConfig(),
+          systemInstruction: `${ASSISTANT_SYSTEM}${personaInstruction}${channelInstruction}`
+        })
       });
-      const result = await chat.sendMessage(last.content);
-      return result.response.text().trim();
+      const result = await chat.sendMessage({ message: last.content });
+      return (result.text ?? '').trim();
     } catch (error) {
       throw wrapAiError(error, 'chat');
     }
@@ -2062,12 +2069,12 @@ ${JSON.stringify(batches)}`;
   async classifyNutritionIntent(message: string): Promise<NutritionIntent> {
     const prompt = `${CLASSIFY_INTENT_PROMPT}\n\nMessage: ${message.trim()}`;
     try {
-      const result = await withTimeout(
-        this.foodModel().generateContent(prompt),
+      const text = await withTimeout(
+        this.generate(prompt, this.jsonConfig(2048)),
         CLASSIFY_INTENT_TIMEOUT_MS,
         'Intent classification'
       );
-      const parsed = classifyIntentSchema.safeParse(parseModelJson(result.response.text()));
+      const parsed = classifyIntentSchema.safeParse(parseModelJson(text));
       if (parsed.success) return parsed.data.intent;
       return new MockAiProvider().classifyNutritionIntent(message);
     } catch {
@@ -2080,89 +2087,92 @@ ${JSON.stringify(batches)}`;
     const last = messages.at(-1);
     if (!last) throw new Error('Message required');
 
-    const contextTurn = [
-      { role: 'user' as const, parts: [{ text: `Program data (JSON):\n${context}` }] },
-      { role: 'model' as const, parts: [{ text: 'Understood. I will use this program data and the tools to help.' }] }
-    ];
-    const history = [
-      ...contextTurn,
-      ...messages.slice(0, -1).map((message) => ({
-        role: message.role === 'assistant' ? ('model' as const) : ('user' as const),
-        parts: [{ text: message.content }]
-      }))
-    ];
+    // Gemini 3.x rejects prefilled model turns, so the program data goes into the system instruction
+    // (not a fake "Understood." model turn). History is the real conversation only.
+    const systemWithContext = `${systemPrompt ?? AGENT_SYSTEM}\n\nProgram data (JSON) — the user's live plan; use it and the tools, never invent facts:\n${context}`;
+    const history: Content[] = messages.slice(0, -1).map((message) => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: message.content }]
+    }));
 
-    // Text + tools model — NOT the JSON-mode foodModel (responseMimeType JSON is incompatible with tool calling).
-    const model = this.client.getGenerativeModel({
+    // Text + tools chat — plain text config (responseMimeType JSON is incompatible with tool calling).
+    // tuneConfig() drops the sampling/thinking knobs Gemini 3.x rejects; the SDK carries Gemini 3
+    // thought signatures across tool turns automatically, which keeps multi-step tool calls reliable.
+    // maxOutputTokens is generous because 3.x thinking tokens share this budget — too low and the
+    // model can burn the whole budget thinking and return empty text (the coach "just stops").
+    const chat = this.ai.chats.create({
       model: this.model,
-      systemInstruction: { role: 'user', parts: [{ text: systemPrompt ?? AGENT_SYSTEM }] },
-      tools: [{ functionDeclarations: tools }],
-      toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
-      // gemini-2.5-flash spends "thinking" tokens against maxOutputTokens; 1024 can be fully
-      // consumed by thinking (with many tools) leaving an empty candidate. Give ample room.
-      generationConfig: { temperature: 0.4, maxOutputTokens: 4096 }
+      history,
+      config: this.tuneConfig({
+        systemInstruction: systemWithContext,
+        tools: [{ functionDeclarations: tools }],
+        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+        temperature: 0.4,
+        maxOutputTokens: 8192,
+        abortSignal
+      })
     });
 
     try {
-      // gemini-2.5-flash intermittently returns an empty candidate on the first turn
-      // (finishReason STOP, zero output tokens — no function call and no text). Retrying
-      // the opening turn reliably recovers; without it the user gets a useless "Got it!".
-      let chat = model.startChat({ history });
-      const isEmptyTurn = (r: Awaited<ReturnType<typeof chat.sendMessage>>): boolean => {
-        if (r.response.functionCalls()?.length) return false;
-        let text = '';
-        try {
-          text = r.response.text();
-        } catch {
-          text = '';
-        }
-        return !text.trim();
-      };
-      let result = await chat.sendMessage(last.content);
-      for (let attempt = 0; attempt < 2 && isEmptyTurn(result); attempt += 1) {
-        chat = model.startChat({ history });
-        result = await chat.sendMessage(last.content);
-      }
-      let lastToolSmsResult: string | undefined;
+      let result = await chat.sendMessage({ message: last.content });
+      let lastToolResult: string | undefined;
       let lastToolError: string | undefined;
 
-      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
-        if (abortSignal?.aborted) throw new Error('SMS assistant cancelled');
-        const calls = result.response.functionCalls();
-        if (!calls?.length) break;
-
-        const responses: Part[] = [];
-        for (const call of calls) {
+      // Drives tool calls to completion: run each requested tool, feed results back, repeat.
+      const drainToolCalls = async () => {
+        for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
           if (abortSignal?.aborted) throw new Error('SMS assistant cancelled');
-          let output: Record<string, unknown>;
-          try {
-            output = await toolExecutor(call.name, (call.args ?? {}) as Record<string, unknown>);
-          } catch (error) {
-            output = { error: error instanceof Error ? error.message : 'Tool failed.' };
-          }
-          if (typeof output.result === 'string' && output.result.trim()) {
-            lastToolSmsResult = output.result.trim();
-            lastToolError = undefined;
-          } else if (output.error) {
-            lastToolSmsResult = undefined;
-            lastToolError = typeof output.error === 'string' ? output.error : 'Tool failed.';
-          }
-          responses.push({ functionResponse: { name: call.name, response: output } });
-        }
+          const calls = result.functionCalls;
+          if (!calls?.length) return;
 
-        result = await chat.sendMessage(responses);
+          const responses: Part[] = [];
+          for (const call of calls) {
+            if (abortSignal?.aborted) throw new Error('SMS assistant cancelled');
+            const name = call.name ?? '';
+            let output: Record<string, unknown>;
+            try {
+              output = await toolExecutor(name, (call.args ?? {}) as Record<string, unknown>);
+            } catch (error) {
+              output = { error: error instanceof Error ? error.message : 'Tool failed.' };
+            }
+            if (typeof output.result === 'string' && output.result.trim()) {
+              lastToolResult = output.result.trim();
+              lastToolError = undefined;
+            } else if (output.error) {
+              lastToolResult = undefined;
+              lastToolError = typeof output.error === 'string' ? output.error : 'Tool failed.';
+            }
+            responses.push({ functionResponse: { id: call.id, name, response: output } });
+          }
+
+          result = await chat.sendMessage({ message: responses });
+        }
+      };
+
+      await drainToolCalls();
+
+      let text = (result.text ?? '').trim();
+
+      // The model sometimes returns nothing (empty candidate / truncated thinking) — the "just
+      // stopped" symptom. Nudge once for a real reply or a tool call instead of faking a "Got it!".
+      if (!text && !result.functionCalls?.length && !lastToolResult && !lastToolError) {
+        result = await chat.sendMessage({
+          message:
+            'Please reply to my last message now. If I asked you to change or look something up in my plan, call the right tool first and confirm from its result — do not just acknowledge.'
+        });
+        await drainToolCalls();
+        text = (result.text ?? '').trim();
       }
 
-      const trailingCalls = result.response.functionCalls();
-      if (trailingCalls?.length) {
+      if (result.functionCalls?.length) {
         return 'I need one more detail to finish that — could you say it a bit more specifically?';
       }
 
-      const text = result.response.text().trim();
       if (text) return text;
       if (lastToolError) return lastToolError;
-      if (lastToolSmsResult) return lastToolSmsResult;
-      return 'Got it!';
+      if (lastToolResult) return lastToolResult;
+      // Never fabricate success: be honest that nothing came through rather than saying "Got it!".
+      return "Sorry, I lost my train of thought there — could you say that again? I don't want to say I did something I didn't.";
     } catch (error) {
       throw wrapAiError(error, 'assistant');
     }
@@ -2171,8 +2181,14 @@ ${JSON.stringify(batches)}`;
   async coachCheckInTurn(input: CoachCheckInTurnInput): Promise<CoachCheckInTurnResult> {
     const prompt = buildCoachCheckInPrompt(input);
     try {
-      const result = await this.coachCheckInModel(input.systemPrompt).generateContent(prompt);
-      return parseCoachCheckInTurn(result.response.text());
+      const text = await this.generate(prompt, {
+        responseMimeType: 'application/json',
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+        thinkingConfig: { thinkingBudget: 0 },
+        systemInstruction: input.systemPrompt
+      });
+      return parseCoachCheckInTurn(text);
     } catch (error) {
       try {
         return await new MockAiProvider().coachCheckInTurn(input);
@@ -2197,8 +2213,8 @@ Conversation:
 ${transcript}`;
 
     try {
-      const result = await this.foodModel().generateContent(prompt);
-      return parseCoachMemoryExtraction(result.response.text());
+      const text = await this.generate(prompt, this.jsonConfig(2048));
+      return parseCoachMemoryExtraction(text);
     } catch {
       return new MockAiProvider().extractCoachMemory(input);
     }
@@ -2215,11 +2231,11 @@ ${transcript}`;
     ];
 
     try {
-      const result = await this.foodModel().generateContent(parts);
-      return parseProgressPhotoAnalysis(result.response.text());
+      const text = await this.generate(parts, this.jsonConfig(2048));
+      return parseProgressPhotoAnalysis(text);
     } catch (error) {
       try {
-        const retry = await this.foodModel().generateContent([
+        const text = await this.generate([
           {
             text: `${prompt}\n\nImportant: respond with valid JSON only as { "message": "..." }. Do not invent overlay coordinates.`
           },
@@ -2227,8 +2243,8 @@ ${transcript}`;
           { inlineData: { mimeType: input.beforeImage.mimeType, data: input.beforeImage.data } },
           { text: 'AFTER photo:' },
           { inlineData: { mimeType: input.afterImage.mimeType, data: input.afterImage.data } }
-        ]);
-        return parseProgressPhotoAnalysis(retry.response.text());
+        ], this.jsonConfig(2048));
+        return parseProgressPhotoAnalysis(text);
       } catch {
         try {
           return await new MockAiProvider().analyzeProgressPhotos(input);

@@ -28,7 +28,7 @@ const envSchema = z.object({
   SIGNUP_ALERT_PHONE: z.string().optional().default(""),
   OPENAI_API_KEY: z.string().optional().default(""),
   GEMINI_API_KEY: z.string().optional().default(""),
-  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  GEMINI_MODEL: z.string().default("gemini-3.6-flash"),
   TWILIO_ACCOUNT_SID: z.string().optional().default(""),
   TWILIO_AUTH_TOKEN: z.string().optional().default(""),
   TWILIO_PHONE_NUMBER: z.string().optional().default(""),

@@ -1,5 +1,5 @@
 /** Tool catalog for the conversational SMS agent. Each tool wraps an existing SMS handler. */
-import { SchemaType, type FunctionDeclaration } from '@google/generative-ai';
+import { Type, type FunctionDeclaration } from '@google/genai';
 import {
   SmsResponseError,
   handleFoodLog,
@@ -7,7 +7,6 @@ import {
   handleFoodPhoto,
   handleLogLastPhotoEstimate,
   handleMacroStatus,
-  handleMealDetails,
   handleExerciseDetails,
   handleHydrationStatus,
   handleProgressStatus,
@@ -19,6 +18,7 @@ import {
   type SmsMedia
 } from './smsIntentService.js';
 import { setWaterGoal } from './hydrationService.js';
+import { buildMealToolDeclarations, executeMealTool, MEAL_MANAGEMENT_TOOLS } from './mealTools.js';
 import type { StoredPhotoEstimateItem } from '../utils/smsFoodParse.js';
 
 /** A clarification the model wants before it can finish an action (createdAt is stamped at persist time). */
@@ -59,27 +59,15 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
     {
       name: 'get_macro_status',
       description:
-        "Report how many calories and protein the user has LEFT/remaining today and their next meal. Read-only. Do NOT use this for the macros of a specific meal — use get_meal_details for that."
-    },
-    {
-      name: 'get_meal_details',
-      description:
-        "Look up the user's own planned/logged foods and full macros — calories, protein, carbs, AND fat. With a meal name, returns that meal's macros and item breakdown; with no meal, returns the whole day's plan totals and per-meal macros. Use for any question about their meals, calories, carbs, or fat (e.g. \"macros for lunch\", \"how many carbs in dinner\", \"what's my plan tomorrow\", \"calories I ate yesterday\"). Read-only.",
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          meal: { type: SchemaType.STRING, description: MEAL_PARAM_DESC },
-          date: { type: SchemaType.STRING, description: DATE_PARAM_DESC }
-        }
-      }
+        "Report the user's FULL macro status for today — calories, protein, carbs, AND fat remaining, plus their daily targets and next meal. Use for \"what are my macros/goals\", \"how am I doing today\", \"what do I have left\". Always relay all four macros. Read-only. Do NOT use this for the macros of a specific meal — use get_meal_details for that."
     },
     {
       name: 'get_exercise_details',
       description:
         "Look up the user's scheduled workout — exercises, sets/reps, and which are done. Use for \"what's my workout\", \"how many sets of X\", \"did I finish my workout\". Read-only.",
       parameters: {
-        type: SchemaType.OBJECT,
-        properties: { date: { type: SchemaType.STRING, description: DATE_PARAM_DESC } }
+        type: Type.OBJECT,
+        properties: { date: { type: Type.STRING, description: DATE_PARAM_DESC } }
       }
     },
     {
@@ -102,17 +90,17 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         'Log food the user already ate or is eating now. Provide the food(s) with amounts. Use for "had 6 oz chicken and rice", "add 2 oz peanuts to breakfast". If the user states exact calories/macros for the food (e.g. "log the sorbet, 190 cal 28g carbs 6g fat 4g protein"), pass them in calories/protein/carbs/fat so they are recorded verbatim instead of estimated.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
           foodText: {
-            type: SchemaType.STRING,
+            type: Type.STRING,
             description: 'The food(s) and amounts, e.g. "6 oz chicken and a cup of rice".'
           },
-          mealName: { type: SchemaType.STRING, description: MEAL_PARAM_DESC },
-          calories: { type: SchemaType.NUMBER, description: 'Exact calories if the user stated them. Omit to let the app estimate.' },
-          protein: { type: SchemaType.NUMBER, description: 'Exact protein grams if stated.' },
-          carbs: { type: SchemaType.NUMBER, description: 'Exact carb grams if stated.' },
-          fat: { type: SchemaType.NUMBER, description: 'Exact fat grams if stated.' }
+          mealName: { type: Type.STRING, description: MEAL_PARAM_DESC },
+          calories: { type: Type.NUMBER, description: 'Exact calories if the user stated them. Omit to let the app estimate.' },
+          protein: { type: Type.NUMBER, description: 'Exact protein grams if stated.' },
+          carbs: { type: Type.NUMBER, description: 'Exact carb grams if stated.' },
+          fat: { type: Type.NUMBER, description: 'Exact fat grams if stated.' }
         },
         required: ['foodText']
       }
@@ -122,13 +110,13 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         "Correct the macros of the food most recently logged, updating it in place (never logs a new item). Use when the user gives the real numbers for something just logged — e.g. \"here are the actual macros for that: 190 cal, 28g carbs, 6g fat, 4g protein\" or \"it was actually 190 calories\". At least one of calories/protein/carbs/fat is required.",
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          calories: { type: SchemaType.NUMBER, description: 'Corrected calories.' },
-          protein: { type: SchemaType.NUMBER, description: 'Corrected protein grams.' },
-          carbs: { type: SchemaType.NUMBER, description: 'Corrected carb grams.' },
-          fat: { type: SchemaType.NUMBER, description: 'Corrected fat grams.' },
-          foodName: { type: SchemaType.STRING, description: 'Optional corrected name for the item.' }
+          calories: { type: Type.NUMBER, description: 'Corrected calories.' },
+          protein: { type: Type.NUMBER, description: 'Corrected protein grams.' },
+          carbs: { type: Type.NUMBER, description: 'Corrected carb grams.' },
+          fat: { type: Type.NUMBER, description: 'Corrected fat grams.' },
+          foodName: { type: Type.STRING, description: 'Optional corrected name for the item.' }
         }
       }
     },
@@ -137,10 +125,10 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         'Estimate calories/macros from the meal photo attached to THIS message. Set log=true only when the user clearly wants it logged now; otherwise it just returns an estimate and offers to log.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          log: { type: SchemaType.BOOLEAN, description: 'True to log the estimate to a meal now.' },
-          mealName: { type: SchemaType.STRING, description: MEAL_PARAM_DESC }
+          log: { type: Type.BOOLEAN, description: 'True to log the estimate to a meal now.' },
+          mealName: { type: Type.STRING, description: MEAL_PARAM_DESC }
         }
       }
     },
@@ -149,9 +137,9 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         'Log the most recent photo estimate to a meal. Use for a follow-up like "log that for dinner" when NO new photo is attached this message.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          mealName: { type: SchemaType.STRING, description: MEAL_PARAM_DESC }
+          mealName: { type: Type.STRING, description: MEAL_PARAM_DESC }
         }
       }
     },
@@ -160,9 +148,9 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         'Move the most recently logged food to a different meal. Use for corrections like "that should be breakfast" or "move it to lunch".',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          targetMealName: { type: SchemaType.STRING, description: 'The meal it should be moved to.' }
+          targetMealName: { type: Type.STRING, description: 'The meal it should be moved to.' }
         },
         required: ['targetMealName']
       }
@@ -171,9 +159,9 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       name: 'mark_meal_complete',
       description: 'Mark a meal eaten as planned. Use for "mark lunch complete", "mark breakfast as eaten".',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          mealName: { type: SchemaType.STRING, description: MEAL_PARAM_DESC }
+          mealName: { type: Type.STRING, description: MEAL_PARAM_DESC }
         }
       }
     },
@@ -181,9 +169,9 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       name: 'mark_exercise_done',
       description: 'Mark a single planned exercise done. Optionally name it; omit to use the next planned exercise.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          exerciseName: { type: SchemaType.STRING, description: 'Name of the exercise to mark done.' }
+          exerciseName: { type: Type.STRING, description: 'Name of the exercise to mark done.' }
         }
       }
     },
@@ -195,10 +183,10 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       name: 'log_water',
       description: 'Log water intake in ounces. Use for "16 oz water" or "drank a glass of water" (~8 oz).',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          amountOz: { type: SchemaType.NUMBER, description: 'Ounces of water consumed.' },
-          text: { type: SchemaType.STRING, description: 'Original phrasing, optional.' }
+          amountOz: { type: Type.NUMBER, description: 'Ounces of water consumed.' },
+          text: { type: Type.STRING, description: 'Original phrasing, optional.' }
         },
         required: ['amountOz']
       }
@@ -208,9 +196,9 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         'Set the user\'s daily water goal in ounces. Use when they ask to change, raise, lower, or set their hydration/water goal.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          goalOz: { type: SchemaType.NUMBER, description: 'Daily water goal in ounces (1–512).' }
+          goalOz: { type: Type.NUMBER, description: 'Daily water goal in ounces (1–512).' }
         },
         required: ['goalOz']
       }
@@ -220,9 +208,9 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         'Suggest NEW meal or restaurant options that fit the user\'s macros. Use only when they ask what or where to eat (recommendations). Do NOT use to report the macros of a meal they already have — that is get_meal_details. Read-only.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          request: { type: SchemaType.STRING, description: "The user's request, e.g. \"high protein options at Chipotle\"." }
+          request: { type: Type.STRING, description: "The user's request, e.g. \"high protein options at Chipotle\"." }
         }
       }
     },
@@ -231,25 +219,28 @@ export function buildSmsToolDeclarations(): FunctionDeclaration[] {
       description:
         'Ask the user ONE short question when a required detail for an action is genuinely missing and cannot be safely guessed. Do not use for read-only questions.',
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          tool: { type: SchemaType.STRING, description: 'The tool you intend to call once they answer.' },
+          tool: { type: Type.STRING, description: 'The tool you intend to call once they answer.' },
           partialArgs: {
-            type: SchemaType.OBJECT,
+            type: Type.OBJECT,
             description: 'Arguments you already know for that tool.',
             properties: {
-              foodText: { type: SchemaType.STRING },
-              mealName: { type: SchemaType.STRING },
-              targetMealName: { type: SchemaType.STRING },
-              exerciseName: { type: SchemaType.STRING },
-              amountOz: { type: SchemaType.NUMBER }
+              foodText: { type: Type.STRING },
+              mealName: { type: Type.STRING },
+              targetMealName: { type: Type.STRING },
+              exerciseName: { type: Type.STRING },
+              amountOz: { type: Type.NUMBER }
             }
           },
-          question: { type: SchemaType.STRING, description: 'The short question to text the user.' }
+          question: { type: Type.STRING, description: 'The short question to text the user.' }
         },
         required: ['tool', 'question']
       }
-    }
+    },
+    // Shared meal-management tools: read a meal, add/update/remove one item, create/delete a meal,
+    // rename it, change its time, replace all items, or copy across days.
+    ...buildMealToolDeclarations()
   ];
 }
 
@@ -272,23 +263,19 @@ export async function executeSmsTool(
   signal?: AbortSignal
 ): Promise<Record<string, unknown>> {
   if (signal?.aborted) return { error: 'Request cancelled.' };
+
+  // Shared meal-management tools (read + full CRUD) live in mealTools; they push their own audit entry.
+  if (MEAL_MANAGEMENT_TOOLS.has(name)) {
+    const mealResult = await executeMealTool(ctx, name, args);
+    if (mealResult) return mealResult;
+  }
+
   ctx.toolCalls.push({ name, args });
   try {
     switch (name) {
       case 'get_macro_status': {
         if (signal?.aborted) return { error: 'Request cancelled.' };
         const result = await handleMacroStatus(ctx.userId, ctx.dateKey, ctx.timeZone);
-        return { result };
-      }
-      case 'get_meal_details': {
-        if (signal?.aborted) return { error: 'Request cancelled.' };
-        const result = await handleMealDetails(
-          ctx.userId,
-          ctx.dateKey,
-          ctx.timeZone,
-          str(args.meal) || undefined,
-          str(args.date) || undefined
-        );
         return { result };
       }
       case 'get_exercise_details': {

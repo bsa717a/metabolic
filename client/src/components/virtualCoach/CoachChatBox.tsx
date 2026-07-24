@@ -4,7 +4,7 @@ import { clsx } from 'clsx';
 import type { VirtualCoach } from '../../data/virtualCoaches';
 import type { Dashboard, Meal } from '../../types';
 import type { MealCardsPayload } from '../../utils/mealCards';
-import { api, todayDateParam } from '../../services/api';
+import { api, todayDateParam, todayKey } from '../../services/api';
 import { buildCoachChatOpeningMessage } from './coachChatGreeting';
 import {
   formatMealDetailForChat,
@@ -24,6 +24,9 @@ import {
 export type CoachChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export type CoachChatQuickReply = CoachWelcomeQuickReply;
+
+/** Keep full history in the UI; only send recent turns to the API. */
+const CHAT_API_MESSAGE_LIMIT = 24;
 
 export function CoachChatBox({
   coach,
@@ -68,22 +71,33 @@ export function CoachChatBox({
 
     void (async () => {
       try {
-        const dashboard = await api<Dashboard>(`/api/dashboard/today?${todayDateParam()}`);
+        // Load the persisted conversation first so a refresh (or a thread started over SMS) picks up
+        // right where it left off. Only fall back to a fresh greeting when there's no history yet.
+        const history = await api<{ messages: CoachChatMessage[] }>('/api/ai/coach-history').catch(() => null);
         if (cancelled) return;
-        setMessages([
-          {
-            role: 'assistant',
-            content: buildCoachChatOpeningMessage(userFirstName, dashboard.meals ?? [])
-          }
-        ]);
-      } catch {
-        if (cancelled) return;
-        setMessages([
-          {
-            role: 'assistant',
-            content: buildCoachChatOpeningMessage(userFirstName, [])
-          }
-        ]);
+        if (history?.messages?.length) {
+          setMessages(history.messages);
+          return;
+        }
+
+        try {
+          const dashboard = await api<Dashboard>(`/api/dashboard/today?${todayDateParam()}`);
+          if (cancelled) return;
+          setMessages([
+            {
+              role: 'assistant',
+              content: buildCoachChatOpeningMessage(userFirstName, dashboard.meals ?? [])
+            }
+          ]);
+        } catch {
+          if (cancelled) return;
+          setMessages([
+            {
+              role: 'assistant',
+              content: buildCoachChatOpeningMessage(userFirstName, [])
+            }
+          ]);
+        }
       } finally {
         if (!cancelled) setGreetingLoading(false);
       }
@@ -271,20 +285,26 @@ export function CoachChatBox({
     }
   }
 
-  async function refreshMealAfterEdit(options?: { checkBalance?: boolean }) {
+  async function refreshMealAfterEdit(options?: { checkBalance?: boolean; mealId?: string }) {
     const session = mealEditSessionRef.current;
-    if (!session) return;
+    // In an edit session we refresh the session's meal; in review-only mode (no session) we still
+    // need to refresh the meal the user is looking at so its foods/macros don't go stale after a
+    // mutation. Fall back to the explicitly-passed reviewed meal id when there is no session.
+    const targetMealId = session?.mealId ?? options?.mealId;
+    if (!targetMealId) return;
 
     try {
       const meals = await loadTodayMeals();
-      const meal = meals.find((entry) => entry.id === session.mealId);
+      const meal = meals.find((entry) => entry.id === targetMealId);
       if (!meal) {
-        setActiveQuickReplies(mealEditModeQuickReplies(session.mealId));
+        if (session) setActiveQuickReplies(mealEditModeQuickReplies(session.mealId));
         return;
       }
 
-      setReviewedMeal(meal);
+      setReviewedMeal((prev) => (session ? meal : prev && prev.id === targetMealId ? meal : prev));
       setPickerMeals(meals);
+
+      if (!session) return;
 
       // AI reply already asks about rebalance; only attach Yes/No buttons here.
       if (
@@ -298,7 +318,7 @@ export function CoachChatBox({
 
       setActiveQuickReplies(mealEditModeQuickReplies(meal.id));
     } catch {
-      setActiveQuickReplies(mealEditModeQuickReplies(session.mealId));
+      if (session) setActiveQuickReplies(mealEditModeQuickReplies(session.mealId));
     }
   }
 
@@ -316,6 +336,13 @@ export function CoachChatBox({
     }
 
     const focus = options?.mealEditFocus === undefined ? mealEditSessionRef.current : options.mealEditFocus;
+    const reviewed = reviewedMeal;
+    const activeMeal =
+      focus != null
+        ? { mealId: focus.mealId, mealName: focus.mealName, date: focus.date }
+        : reviewed
+          ? { mealId: reviewed.id, mealName: reviewed.name, date: todayKey() }
+          : null;
     const priorMessages = messages;
     const nextMessages: CoachChatMessage[] = [...priorMessages, { role: 'user', content: trimmed }];
     setMessages(nextMessages);
@@ -325,31 +352,69 @@ export function CoachChatBox({
     onUserMessage?.(trimmed);
 
     try {
-      const result = await api<{ reply: string; hydrationGoalUpdated?: boolean; plannedMealsUpdated?: boolean }>(
-        '/api/ai/chat',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            messages: nextMessages,
-            ...(focus
-              ? {
-                  mealEditFocus: {
-                    mealName: focus.mealName,
-                    mealId: focus.mealId,
-                    date: focus.date,
-                    targetCalories: focus.targetCalories
-                  }
+      const result = await api<{
+        reply: string;
+        hydrationGoalUpdated?: boolean;
+        plannedMealsUpdated?: boolean;
+        mealRenamed?: boolean;
+        mealRename?: { mealId: string; newName: string; previousName?: string; date?: string };
+        mealTimeUpdated?: boolean;
+        mealTimeUpdate?: { mealId: string; mealName: string; plannedTime: string; date?: string };
+      }>('/api/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: nextMessages.slice(-CHAT_API_MESSAGE_LIMIT),
+          ...(focus
+            ? {
+                mealEditFocus: {
+                  mealName: focus.mealName,
+                  mealId: focus.mealId,
+                  date: focus.date,
+                  targetCalories: focus.targetCalories
                 }
-              : {})
-          })
-        }
-      );
+              }
+            : {}),
+          ...(activeMeal ? { activeMeal } : {})
+        })
+      });
       setMessages([...nextMessages, { role: 'assistant', content: result.reply }]);
       if (result.hydrationGoalUpdated) {
         window.dispatchEvent(new Event('hydration-updated'));
       }
-      if (focus) {
-        await refreshMealAfterEdit({ checkBalance: Boolean(result.plannedMealsUpdated) });
+      if (result.mealRenamed && result.mealRename) {
+        const renamed = result.mealRename;
+        if (mealEditSessionRef.current?.mealId === renamed.mealId) {
+          mealEditSessionRef.current = { ...mealEditSessionRef.current, mealName: renamed.newName };
+        }
+        setMealEditSession((prev) =>
+          prev && prev.mealId === renamed.mealId ? { ...prev, mealName: renamed.newName } : prev
+        );
+        setReviewedMeal((prev) => (prev && prev.id === renamed.mealId ? { ...prev, name: renamed.newName } : prev));
+        setPickerMeals((prev) =>
+          prev.map((meal) => (meal.id === renamed.mealId ? { ...meal, name: renamed.newName } : meal))
+        );
+        window.dispatchEvent(new Event('nutrition-meals-updated'));
+      }
+      if (result.mealTimeUpdated && result.mealTimeUpdate) {
+        const updated = result.mealTimeUpdate;
+        setReviewedMeal((prev) =>
+          prev && prev.id === updated.mealId ? { ...prev, plannedTime: updated.plannedTime } : prev
+        );
+        setPickerMeals((prev) =>
+          prev.map((meal) =>
+            meal.id === updated.mealId ? { ...meal, plannedTime: updated.plannedTime } : meal
+          )
+        );
+        window.dispatchEvent(new Event('nutrition-meals-updated'));
+      }
+      if (result.plannedMealsUpdated) {
+        window.dispatchEvent(new Event('nutrition-meals-updated'));
+      }
+      if (focus || result.mealRenamed || result.mealTimeUpdated || result.plannedMealsUpdated) {
+        await refreshMealAfterEdit({
+          checkBalance: Boolean(result.plannedMealsUpdated),
+          mealId: activeMeal?.mealId
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

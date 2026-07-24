@@ -23,7 +23,7 @@
     "@fastify/formbody": "^8.0.2",
     "@fastify/helmet": "^13.0.2",
     "@fastify/multipart": "^10.0.0",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^2.13.0",
     "@prisma/client": "^6.19.3",
     "@sendgrid/mail": "^8.1.6",
     "dotenv": "^16.6.1",

@@ -92,6 +92,14 @@ export function NutritionPage() {
     void reloadWeek();
   }, [reloadWeek]);
 
+  useEffect(() => {
+    const handleMealsUpdated = () => {
+      void reloadWeek();
+    };
+    window.addEventListener('nutrition-meals-updated', handleMealsUpdated);
+    return () => window.removeEventListener('nutrition-meals-updated', handleMealsUpdated);
+  }, [reloadWeek]);
+
   const currentDayMeals = useMemo(
     () => weekDays.find((day) => day.date === selectedDate)?.meals ?? [],
     [weekDays, selectedDate]

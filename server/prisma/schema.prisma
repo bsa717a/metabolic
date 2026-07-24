@@ -250,6 +250,7 @@ model User {
   aiFoodLookups AiFoodLookup[]
   aiExerciseLookups AiExerciseLookup[]
   smsMessages SmsMessage[]
+  coachMessages CoachMessage[]
   coachAssignments CoachAssignment[] @relation("CoachAssignments")
   userAssignments CoachAssignment[] @relation("UserAssignments")
   clientGroups ClientGroup[] @relation("CoachClientGroups")
@@ -795,6 +796,28 @@ model SmsMessage {
   status SmsStatus @default(RECEIVED)
   createdAt DateTime @default(now())
   user User? @relation(fields: [userId], references: [id])
+}
+
+enum CoachChannel {
+  WEB
+  SMS
+}
+
+/// One turn in the unified coach conversation, shared across web chat and SMS/iMessage so the
+/// coach remembers across sessions and channels. Web chat persists here (survives refresh) and
+/// SMS turns are mirrored here so either channel can read the same thread. SmsMessage stays the
+/// operational log for delivery status and pending-action bookkeeping.
+model CoachMessage {
+  id String @id @default(cuid())
+  userId String
+  channel CoachChannel
+  role String
+  content String
+  toolCalls Json?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 enum SmsNudgeKind {
