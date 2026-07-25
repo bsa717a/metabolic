@@ -138,7 +138,10 @@ export function ExerciseAreaLayout() {
           <h1 className="text-3xl font-bold text-app-text">Exercise</h1>
           <p className="text-app-text-muted sm:pt-1">Start today&apos;s workout, plan your week, manage routines.</p>
         </div>
-        <nav className="inline-flex w-full max-w-md rounded-2xl bg-app-muted p-1 sm:w-auto">
+        <nav
+          aria-label="Exercise sections"
+          className="inline-flex w-fit max-w-full rounded-2xl border border-app-border bg-app-surface p-1 shadow-sm"
+        >
           {TABS.map((tab) => (
             <NavLink
               key={tab.to}
@@ -146,10 +149,10 @@ export function ExerciseAreaLayout() {
               end={tab.end}
               className={({ isActive }) =>
                 clsx(
-                  'flex-1 rounded-xl px-4 py-2 text-center text-sm font-semibold transition sm:flex-none',
+                  'rounded-xl px-4 py-2 text-center text-base font-bold tracking-wide transition',
                   isActive
-                    ? 'bg-app-surface text-app-text shadow-sm'
-                    : 'text-app-text-muted hover:text-app-text'
+                    ? 'bg-brand-green text-white shadow-sm'
+                    : 'text-app-text hover:bg-app-muted'
                 )
               }
             >
