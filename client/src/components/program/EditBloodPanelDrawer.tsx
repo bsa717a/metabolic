@@ -3,6 +3,7 @@ import type { BloodPanelSummary, UserDemographics } from '../../types';
 import { api, parseDateKey, todayKey } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 import {
   BLOOD_PANEL_FORM_FIELDS,
   bloodPanelToFormValues,
@@ -213,13 +214,12 @@ function EditBloodPanelDrawerContent({
               <span className="mb-1 block text-xs font-medium text-slate-500 dark:text-app-text-muted">
                 {field.label} ({field.unit})
               </span>
-              <input
+              <NumberInput
                 className={inputClassName()}
-                type="number"
                 step="0.01"
                 placeholder={field.placeholder}
                 value={values.metrics[field.apiKey]}
-                onChange={(event) => updateMetric(field.apiKey, event.target.value)}
+                onChange={(value) => updateMetric(field.apiKey, value)}
               />
             </label>
           ))}

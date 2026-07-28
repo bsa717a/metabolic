@@ -12,6 +12,7 @@ import {
   type WeekdayIndex
 } from '../../utils/weekdayPattern';
 import { Button } from '../ui/Button';
+import { NumberInput } from '../ui/NumberInput';
 
 function publishButtonLabel({
   busy,
@@ -153,13 +154,13 @@ export function CopyWeekPlanPanel({
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block text-sm text-app-text">
           For
-          <input
-            type="number"
+          <NumberInput
             min={1}
             max={MAX_PATTERN_WEEKS}
+            integer
             value={weeks}
             disabled={disabled || busy}
-            onChange={(event) => setWeeks(Math.min(MAX_PATTERN_WEEKS, Math.max(1, Number(event.target.value) || 1)))}
+            onChange={(value) => setWeeks(Math.min(MAX_PATTERN_WEEKS, Math.max(1, value || 1)))}
             className="mt-1 w-full rounded-lg border border-app-border bg-app-surface px-2 py-1.5 text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-brand-green/40"
           />
           <span className="mt-0.5 block text-xs text-app-text-muted">weeks (max {MAX_PATTERN_WEEKS})</span>

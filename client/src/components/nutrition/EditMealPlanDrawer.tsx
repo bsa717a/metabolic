@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { Food, Meal, MealItem } from '../../types';
 import { Button } from '../ui/Button';
+import { NumberInput } from '../ui/NumberInput';
+import { QuantityInput } from '../ui/QuantityInput';
 import { plannedTimeToInputValue } from '../../utils/plannedTime';
 import { Drawer } from '../ui/Drawer';
 import { FoodSearch } from './FoodSearch';
@@ -206,13 +208,11 @@ export function EditMealPlanDrawer({
                     <p className="truncate font-medium text-app-text">{item.nameSnapshot}</p>
                     <p className="text-xs text-app-text-muted">{formatMacros(item)}</p>
                   </div>
-                  <input
-                    type="number"
-                    min={0.25}
-                    step={0.25}
+                  <QuantityInput
                     className="w-16 rounded-lg border border-app-border bg-app-surface px-2 py-1 text-sm text-app-text"
                     value={Number(item.quantity)}
-                    onChange={(event) => updateQuantity(item, Number(event.target.value))}
+                    onChange={(quantity) => void updateQuantity(item, quantity)}
+                    aria-label={`Quantity for ${item.nameSnapshot}`}
                   />
                   <button type="button" className="text-sm text-app-text-muted hover:text-red-500" onClick={() => removeItem(item.id)}>×</button>
                 </li>
@@ -237,12 +237,12 @@ export function EditMealPlanDrawer({
                 {(['calories', 'protein', 'carbs', 'fat'] as const).map((field) => (
                   <label key={field} className="text-sm">
                     <span className="mb-1 block capitalize text-app-text-muted">{field === 'calories' ? 'Kcal' : `${field} (g)`}</span>
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
+                      step={1}
                       className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-app-text"
                       value={manual[field]}
-                      onChange={(event) => setManual({ ...manual, [field]: Number(event.target.value) })}
+                      onChange={(value) => setManual({ ...manual, [field]: value })}
                     />
                   </label>
                 ))}

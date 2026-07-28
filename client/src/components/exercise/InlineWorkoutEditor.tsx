@@ -4,6 +4,7 @@ import type { ExerciseCatalogItem, ExercisePlanTemplate, ExerciseTemplateItem } 
 import { api } from '../../services/api';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import { Button } from '../ui/Button';
+import { NumberInput } from '../ui/NumberInput';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -432,20 +433,13 @@ function NumberChip({
 }) {
   return (
     <label className="inline-flex items-center gap-1 rounded-lg bg-app-muted/70 px-2 py-1">
-      <input
-        type="number"
+      <NumberInput
         inputMode="numeric"
         aria-label={ariaLabel}
         value={value}
         placeholder={optional ? '—' : '0'}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={onChange}
         onBlur={onCommit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            (event.target as HTMLInputElement).blur();
-          }
-        }}
         className="w-10 bg-transparent text-center text-sm font-semibold tabular-nums text-app-text outline-none"
       />
       <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">{label}</span>

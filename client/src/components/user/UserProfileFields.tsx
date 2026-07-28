@@ -1,5 +1,6 @@
 import type { ProfileDraft } from './userProfileForm';
 import { BirthDateInput } from '../ui/BirthDateInput';
+import { NumberInput } from '../ui/NumberInput';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
 
 function labelClassName() {
@@ -56,28 +57,28 @@ export function UserProfileFields({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-app-text-muted">Feet</span>
-            <input
+            <NumberInput
               className={inputClassName()}
-              type="number"
+              integer
               min={0}
               max={8}
               step={1}
               placeholder="5"
               value={draft.heightFeet}
-              onChange={(event) => onChange('heightFeet', event.target.value)}
+              onChange={(value) => onChange('heightFeet', value)}
             />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-app-text-muted">Inches</span>
-            <input
+            <NumberInput
               className={inputClassName()}
-              type="number"
+              integer
               min={0}
               max={11}
               step={1}
               placeholder="10"
               value={draft.heightInches}
-              onChange={(event) => onChange('heightInches', event.target.value)}
+              onChange={(value) => onChange('heightInches', value)}
             />
           </label>
         </div>

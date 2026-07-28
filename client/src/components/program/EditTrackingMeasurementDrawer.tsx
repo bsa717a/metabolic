@@ -3,6 +3,7 @@ import type { ProgramMetricSnapshot } from '../../types';
 import { api, parseDateKey, todayKey } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 import type { TrackingMetricType } from './snapshotTracking';
 
 function labelClassName() {
@@ -127,12 +128,11 @@ function EditTrackingMeasurementDrawerContent({
       <label className="block">
         <span className={labelClassName()}>{label}</span>
         <div className="flex items-center gap-2">
-          <input
+          <NumberInput
             className={inputClassName()}
-            type="number"
             step="0.01"
             value={value}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={setValue}
           />
           <span className="text-sm text-slate-500">{unit}</span>
         </div>

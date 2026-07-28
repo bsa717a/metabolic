@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../services/api';
 import type { Food, NutritionTemplateMeal, NutritionTemplateMealItem } from '../../types';
 import { Drawer } from '../ui/Drawer';
+import { QuantityInput } from '../ui/QuantityInput';
 import { FoodSearch } from '../nutrition/FoodSearch';
 
 function formatMacros(item: Pick<NutritionTemplateMealItem, 'calories' | 'protein' | 'carbs' | 'fat'>) {
@@ -87,13 +88,11 @@ export function EditTemplateMealDrawer({
                     <p className="truncate font-medium">{item.nameSnapshot}</p>
                     <p className="text-xs text-app-text-muted">{formatMacros(item)}</p>
                   </div>
-                  <input
-                    type="number"
-                    min={0.25}
-                    step={0.25}
+                  <QuantityInput
                     className="w-16 rounded-lg border border-app-border px-2 py-1 text-sm"
                     value={Number(item.quantity)}
-                    onChange={(event) => void updateQuantity(item, Number(event.target.value))}
+                    onChange={(quantity) => void updateQuantity(item, quantity)}
+                    aria-label={`Quantity for ${item.nameSnapshot}`}
                   />
                   <button type="button" className="text-sm text-app-text-muted hover:text-red-600" onClick={() => void removeItem(item.id)}>
                     ×

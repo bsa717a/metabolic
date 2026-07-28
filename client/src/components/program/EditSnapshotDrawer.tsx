@@ -3,6 +3,7 @@ import type { ProgramMetricSnapshot } from '../../types';
 import { api, parseDateKey } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 const BODY_COMP_METRICS = [
   { metricType: 'WEIGHT', label: 'Weight', unit: 'lbs' },
@@ -151,12 +152,11 @@ function EditSnapshotDrawerContent({
         <label key={metricType} className="block">
           <span className={labelClassName()}>{label}</span>
           <div className="flex items-center gap-2">
-            <input
+            <NumberInput
               className={inputClassName()}
-              type="number"
               step="0.01"
               value={draft[metricType]}
-              onChange={(event) => updateDraft(metricType, event.target.value)}
+              onChange={(value) => updateDraft(metricType, value)}
             />
             <span className="text-sm text-slate-500">{unitFor(snapshot, metricType, unit)}</span>
           </div>

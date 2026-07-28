@@ -23,6 +23,7 @@ import {
   type BuilderPicks,
   type QuantityOverrides
 } from '../../utils/mealCards';
+import { QuantityInput } from '../ui/QuantityInput';
 import { MacroSummaryFooter } from './MacroSummaryFooter';
 
 export type { MealCardsPayload } from '../../utils/mealCards';
@@ -168,13 +169,11 @@ export function MealBuilder({
       <li key={key} className="flex items-baseline gap-2 py-1.5 text-sm">
         <Check size={14} className="shrink-0 self-center text-brand-green" strokeWidth={3} />
         <span className="min-w-0 flex-1 text-app-text">{line.name}</span>
-        <input
-          type="number"
-          min={0.25}
-          step={0.25}
+        <QuantityInput
           className="w-16 rounded-lg border border-app-border bg-app-bg px-2 py-1 text-sm tabular-nums text-app-text"
           value={foodQuantity(line, quantityOverrides)}
-          onChange={(event) => updateFoodQuantity(key, Number(event.target.value))}
+          onChange={(quantity) => updateFoodQuantity(key, quantity)}
+          aria-label={`Quantity for ${line.name}`}
         />
         <span className="w-12 shrink-0 text-xs font-semibold text-brand-green">{line.unit}</span>
       </li>

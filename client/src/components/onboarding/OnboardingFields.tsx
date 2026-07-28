@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { BirthDateInput } from '../ui/BirthDateInput';
+import { NumberInput } from '../ui/NumberInput';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
 import { detectedTimezone, timezoneOptions } from '../../utils/timezoneOptions';
 import type { SetupFormState } from '../../types/onboarding';
@@ -38,16 +39,15 @@ export function OnboardingWeightFields({
               <label htmlFor="current-weight" className="mb-2 block text-sm font-medium text-app-text">
                 Current weight (lbs)
               </label>
-              <input
+              <NumberInput
                 id="current-weight"
                 className={onboardingInputClass}
                 value={form.weight}
-                onChange={(e) => onChange('weight', e.target.value)}
+                onChange={(value) => onChange('weight', value)}
                 placeholder="180"
                 inputMode="decimal"
-                type="number"
-                min="1"
-                step="0.1"
+                min={1}
+                step={0.1}
               />
             </div>
           ) : null}
@@ -56,16 +56,15 @@ export function OnboardingWeightFields({
               <label htmlFor="goal-weight" className="mb-2 block text-sm font-medium text-app-text">
                 Goal weight (lbs)
               </label>
-              <input
+              <NumberInput
                 id="goal-weight"
                 className={onboardingInputClass}
                 value={form.goalWeight}
-                onChange={(e) => onChange('goalWeight', e.target.value)}
+                onChange={(value) => onChange('goalWeight', value)}
                 placeholder="165"
                 inputMode="decimal"
-                type="number"
-                min="1"
-                step="0.1"
+                min={1}
+                step={0.1}
               />
             </div>
           ) : null}
@@ -78,30 +77,30 @@ export function OnboardingWeightFields({
             Height
           </label>
           <div className="grid grid-cols-2 gap-4">
-            <input
+            <NumberInput
               id="height-feet"
               className={onboardingInputClass}
               value={form.heightFeet}
-              onChange={(e) => onChange('heightFeet', e.target.value)}
+              onChange={(value) => onChange('heightFeet', value)}
               placeholder="Feet"
               inputMode="numeric"
-              type="number"
-              min="0"
-              max="8"
-              step="1"
+              integer
+              min={0}
+              max={8}
+              step={1}
               aria-label="Height in feet"
             />
-            <input
+            <NumberInput
               id="height-inches"
               className={onboardingInputClass}
               value={form.heightInches}
-              onChange={(e) => onChange('heightInches', e.target.value)}
+              onChange={(value) => onChange('heightInches', value)}
               placeholder="Inches"
               inputMode="numeric"
-              type="number"
-              min="0"
-              max="11"
-              step="1"
+              integer
+              min={0}
+              max={11}
+              step={1}
               aria-label="Height in inches"
             />
           </div>
@@ -126,17 +125,16 @@ export function OnboardingWeightFields({
                   <HelpCircle size={15} aria-hidden />
                 </button>
               </div>
-              <input
+              <NumberInput
                 id="current-body-fat"
                 className={onboardingInputClass}
                 value={form.bodyFat}
-                onChange={(e) => onChange('bodyFat', e.target.value)}
+                onChange={(value) => onChange('bodyFat', value)}
                 placeholder="35"
                 inputMode="decimal"
-                type="number"
-                min="1"
-                max="75"
-                step="0.1"
+                min={1}
+                max={75}
+                step={0.1}
               />
               {showBodyFatHelp ? (
                 <p className="mt-2 text-xs leading-relaxed text-app-text-muted">
@@ -152,17 +150,16 @@ export function OnboardingWeightFields({
               <label htmlFor="goal-body-fat" className="mb-2 block text-sm font-medium text-app-text">
                 Goal body fat (%)
               </label>
-              <input
+              <NumberInput
                 id="goal-body-fat"
                 className={onboardingInputClass}
                 value={form.goalBodyFat}
-                onChange={(e) => onChange('goalBodyFat', e.target.value)}
+                onChange={(value) => onChange('goalBodyFat', value)}
                 placeholder="18"
                 inputMode="decimal"
-                type="number"
-                min="1"
-                max="75"
-                step="0.1"
+                min={1}
+                max={75}
+                step={0.1}
               />
             </div>
           ) : null}
@@ -335,29 +332,27 @@ export function OnboardingGoalSummary({
         <div>
           <p className="mb-2 text-sm font-medium text-app-text">Weight (lbs)</p>
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <input
+            <NumberInput
               className={onboardingInputClass}
               value={form.weight}
-              onChange={(e) => onChange('weight', e.target.value)}
+              onChange={(value) => onChange('weight', value)}
               placeholder="Current"
               inputMode="decimal"
-              type="number"
-              min="1"
-              step="0.1"
+              min={1}
+              step={0.1}
               aria-label="Current weight in pounds"
             />
             <span className="text-app-text-muted" aria-hidden>
               →
             </span>
-            <input
+            <NumberInput
               className={onboardingInputClass}
               value={form.goalWeight}
-              onChange={(e) => onChange('goalWeight', e.target.value)}
+              onChange={(value) => onChange('goalWeight', value)}
               placeholder="Goal"
               inputMode="decimal"
-              type="number"
-              min="1"
-              step="0.1"
+              min={1}
+              step={0.1}
               aria-label="Goal weight in pounds"
             />
           </div>
@@ -368,30 +363,30 @@ export function OnboardingGoalSummary({
             Height
           </label>
           <div className="grid grid-cols-2 gap-3">
-            <input
+            <NumberInput
               id="target-height-feet"
               className={onboardingInputClass}
               value={form.heightFeet}
-              onChange={(e) => onChange('heightFeet', e.target.value)}
+              onChange={(value) => onChange('heightFeet', value)}
               placeholder="Feet"
               inputMode="numeric"
-              type="number"
-              min="1"
-              max="8"
-              step="1"
+              integer
+              min={1}
+              max={8}
+              step={1}
               aria-label="Height in feet"
             />
-            <input
+            <NumberInput
               id="target-height-inches"
               className={onboardingInputClass}
               value={form.heightInches}
-              onChange={(e) => onChange('heightInches', e.target.value)}
+              onChange={(value) => onChange('heightInches', value)}
               placeholder="Inches"
               inputMode="numeric"
-              type="number"
-              min="0"
-              max="11"
-              step="1"
+              integer
+              min={0}
+              max={11}
+              step={1}
               aria-label="Height in inches"
             />
           </div>

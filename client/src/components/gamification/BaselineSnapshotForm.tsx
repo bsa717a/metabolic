@@ -10,6 +10,7 @@ import {
 } from '../../services/progressPhotoStorage';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { NumberInput } from '../ui/NumberInput';
 import {
   emptyPhotoDraft,
   ProgressPhotoUploadField,
@@ -242,11 +243,10 @@ export function BaselineSnapshotForm({
 
       <label className="mt-4 block text-sm font-medium">
         Starting weight (lbs)
-        <input
-          type="number"
+        <NumberInput
           className="mt-1 w-full rounded-xl border border-app-border bg-app-bg px-3 py-2"
           value={weight}
-          onChange={(e) => setWeight(e.target.value)}
+          onChange={setWeight}
         />
       </label>
 
@@ -254,11 +254,10 @@ export function BaselineSnapshotForm({
         {MEASUREMENT_FIELDS.map((f) => (
           <label key={f.key} className="text-sm font-medium">
             {f.label} ({f.unit})
-            <input
-              type="number"
+            <NumberInput
               className="mt-1 w-full rounded-xl border border-app-border bg-app-bg px-3 py-2"
               value={measurements[f.key] ?? ''}
-              onChange={(e) => setMeasurements((m) => ({ ...m, [f.key]: e.target.value }))}
+              onChange={(value) => setMeasurements((m) => ({ ...m, [f.key]: value }))}
             />
           </label>
         ))}

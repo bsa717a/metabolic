@@ -3,6 +3,7 @@ import type { AdminUser, CoachSummary, PlanSlug, Role, SubscriptionStatusSlug, U
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 import { UserProfileFields } from '../user/UserProfileFields';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from '../user/userProfileForm';
 import { timezoneOptions } from '../../utils/timezoneOptions';
@@ -380,13 +381,12 @@ function EditUserDrawerContent({
             </label>
             <label className="block">
               <span className={labelClassName()}>Grace period (days)</span>
-              <input
+              <NumberInput
                 className={inputClassName()}
-                type="number"
                 min={0}
                 max={30}
                 value={endGraceDays}
-                onChange={(event) => setEndGraceDays(Number(event.target.value))}
+                onChange={setEndGraceDays}
               />
             </label>
             <Button variant="secondary" disabled={coachActionLoading || saving} onClick={() => void endCoachLed()}>

@@ -5,6 +5,7 @@ import { api } from '../../services/api';
 import { coachDailyExercisesApi } from '../../utils/coachExerciseApi';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -238,43 +239,39 @@ function AddExerciseDrawerContent({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-sm">
                 <span className="font-medium text-app-text">Sets</span>
-                <input
-                  type="number"
+                <NumberInput
                   min={0}
                   className="exercise-metric-input"
                   value={sets}
-                  onChange={(event) => setSets(event.target.value)}
+                  onChange={setSets}
                 />
               </label>
               <label className="text-sm">
                 <span className="font-medium text-app-text">Reps</span>
-                <input
-                  type="number"
+                <NumberInput
                   min={0}
                   className="exercise-metric-input"
                   value={reps}
-                  onChange={(event) => setReps(event.target.value)}
+                  onChange={setReps}
                 />
               </label>
               <label className="text-sm">
                 <span className="font-medium text-app-text">Minutes</span>
-                <input
-                  type="number"
+                <NumberInput
                   min={0}
                   className="exercise-metric-input"
                   value={durationMinutes}
-                  onChange={(event) => setDurationMinutes(event.target.value)}
+                  onChange={setDurationMinutes}
                 />
               </label>
               <label className="text-sm">
                 <span className="font-medium text-app-text">Weight (lbs)</span>
-                <input
-                  type="number"
+                <NumberInput
                   min={0}
                   step="0.5"
                   className="exercise-metric-input"
                   value={weight}
-                  onChange={(event) => setWeight(event.target.value)}
+                  onChange={setWeight}
                 />
               </label>
             </div>

@@ -20,6 +20,8 @@ import {
   type FoodsByGroup,
   type MacroTotals
 } from '../../data/mealBuilderGroups';
+import { NumberInput } from '../ui/NumberInput';
+import { QuantityInput } from '../ui/QuantityInput';
 import { foodEmoji } from '../../utils/foodEmoji';
 
 type PlanMeal = {
@@ -344,17 +346,11 @@ function MealRow({
                         </span>
                       </button>
                       {isEditingQty && (
-                        <input
-                          type="number"
-                          min={0.25}
-                          step={0.25}
+                        <QuantityInput
                           value={item.quantity}
                           autoFocus
-                          onChange={(e) => onUpdateQuantity(group, item.instanceId, Number(e.target.value))}
+                          onChange={(qty) => onUpdateQuantity(group, item.instanceId, qty)}
                           onBlur={onQuantityEditDone}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === 'Escape') onQuantityEditDone();
-                          }}
                           className="w-16 shrink-0 rounded-md border border-[#dde3e8] bg-white px-1.5 py-0.5 text-center text-xs font-medium tabular-nums text-[#1b2733] outline-none focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]"
                           aria-label={`Quantity for ${item.name}`}
                         />
@@ -669,15 +665,13 @@ export function DailyMealBuilderModal({
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 rounded-lg border border-[#dde3e8] bg-[#f8fafb] px-3 py-1.5 text-sm text-[#5a6b7d]">
               <span className="font-semibold">Also apply to next</span>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 max={31}
+                step={1}
+                integer
                 value={pushForwardDays}
-                onChange={(e) => {
-                  const next = Number(e.target.value);
-                  setPushForwardDays(Number.isFinite(next) ? Math.min(31, Math.max(0, Math.trunc(next))) : 0);
-                }}
+                onChange={setPushForwardDays}
                 className="w-14 rounded-md border border-[#dde3e8] bg-white px-2 py-1 text-center text-sm font-semibold text-[#1b2733] outline-none focus:border-[#3b82f6]"
               />
               <span className="font-semibold">days</span>

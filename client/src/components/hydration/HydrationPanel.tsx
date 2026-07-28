@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Droplets, Save, Undo2 } from 'lucide-react';
 import { WaterBottle } from './WaterBottle';
+import { NumberInput } from '../ui/NumberInput';
 import { api, todayDateParam } from '../../services/api';
 import type { HydrationLogResponse, HydrationSummary } from '../../types/hydration';
 
@@ -178,12 +179,11 @@ export function HydrationPanel({ variant = 'page', onClose }: HydrationPanelProp
             <div>
               <p className="text-sm font-medium text-app-text">Custom amount</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <input
-                  type="number"
+                <NumberInput
                   min={1}
                   max={512}
                   value={customAmount}
-                  onChange={(event) => setCustomAmount(event.target.value)}
+                  onChange={setCustomAmount}
                   placeholder="Ounces"
                   className="w-24 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm"
                 />
@@ -213,12 +213,11 @@ export function HydrationPanel({ variant = 'page', onClose }: HydrationPanelProp
             <div>
               <p className="text-sm font-medium text-app-text">Daily goal (oz)</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <input
-                  type="number"
+                <NumberInput
                   min={1}
                   max={512}
                   value={goalDraft}
-                  onChange={(event) => setGoalDraft(event.target.value)}
+                  onChange={setGoalDraft}
                   className="w-24 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm"
                 />
                 <button

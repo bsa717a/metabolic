@@ -11,6 +11,7 @@ import {
 import { metricValue } from '../../utils/snapshotHistoryUtils';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 import {
   emptyPhotoDraft,
   ProgressPhotoUploadField,
@@ -242,12 +243,11 @@ function EditMeasurementsDrawerContent({
           <label key={metricType} className="block rounded-2xl border border-slate-200 p-4 dark:border-app-border">
             <span className={labelClassName()}>{MEASUREMENT_LABELS[metricType]}</span>
             <div className="flex items-center gap-2">
-              <input
+              <NumberInput
                 className={inputClassName()}
-                type="number"
                 step="0.01"
                 value={draft[metricType]}
-                onChange={(event) => updateDraft(metricType, event.target.value)}
+                onChange={(value) => updateDraft(metricType, value)}
               />
               <span className="text-xs text-slate-500">in</span>
             </div>

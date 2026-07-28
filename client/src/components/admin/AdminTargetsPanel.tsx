@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { NumberInput } from '../ui/NumberInput';
 
 type FormulaConfig = {
   activityMultipliers: Record<'1' | '2' | '3' | '4' | '5', number>;
@@ -126,11 +127,10 @@ export function AdminTargetsPanel() {
   const numField = (label: string, value: number, onChange: (v: number) => void, step = 1) => (
     <label className="text-sm">
       <span className="mb-1 block text-xs font-semibold uppercase text-app-text-muted">{label}</span>
-      <input
-        type="number"
+      <NumberInput
         step={step}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={onChange}
         className="w-24 rounded-xl border border-app-border bg-app-surface px-2 py-1.5 tabular-nums"
       />
     </label>

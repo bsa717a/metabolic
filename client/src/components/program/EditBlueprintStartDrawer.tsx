@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import { BLUEPRINT_JOURNEY_METRICS } from '../../utils/journeyDialUtils';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 type StartDraft = {
   id: string;
@@ -138,12 +139,11 @@ function EditBlueprintStartDrawerContent({
           <label className="block">
             <span className={labelClassName()}>Start</span>
             <div className="flex items-center gap-2">
-              <input
+              <NumberInput
                 className={inputClassName()}
-                type="number"
                 step="0.01"
                 value={metric.startValue}
-                onChange={(event) => updateStart(metric.id, event.target.value)}
+                onChange={(value) => updateStart(metric.id, value)}
               />
               <span className="text-xs text-slate-500">{metric.unit}</span>
             </div>
