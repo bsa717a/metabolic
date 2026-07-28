@@ -82,7 +82,7 @@ import {
 import { prisma } from '../db/prisma.js';
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 
-const coachOnly = [requireAuth, requireRole(['COACH'])];
+const coachOnly = [requireAuth, requireRole(['COACH', 'SUPER_ADMIN'])];
 
 const coachNutritionTemplatesQuery = z.object({
   clientId: z.string().trim().min(1).optional()
