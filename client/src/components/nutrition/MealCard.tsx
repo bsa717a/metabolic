@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { ChevronDown } from 'lucide-react';
 import type { Meal } from '../../types';
 import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
-import { MealCardEditor, type MealMacroTargets } from './MealCardEditor';
+import {
+  MealCardEditor,
+  type MealCardEditorHandle,
+  type MealCardEditorSaveAllOptions,
+  type MealMacroTargets
+} from './MealCardEditor';
 import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
 import { MacroSummaryInline } from './MacroSummaryFooter';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
@@ -124,37 +129,49 @@ function ActionsDropdown({
   );
 }
 
-export function MealCard({
-  meal,
-  selectedDate,
-  onChange,
-  isEditing,
-  onEnterEditMode,
-  onExitEditMode,
-  onLogActual,
-  onAiSuggestions,
-  onSwapMeal,
-  selected = false,
-  onSelect,
-  onBuildMeal,
-  macroTargets,
-  dailyTargets,
-}: {
-  meal: Meal;
-  selectedDate: string;
-  onChange: () => void | Promise<void>;
-  isEditing: boolean;
-  onEnterEditMode: (mealId: string) => void;
-  onExitEditMode: () => void;
-  onLogActual: (mealId: string) => void;
-  onAiSuggestions: (meal: Meal) => void;
-  onSwapMeal: (meal: Meal) => void;
-  selected?: boolean;
-  onSelect?: (mealId: string) => void;
-  onBuildMeal?: () => void;
-  macroTargets?: MealMacroTargets;
-  dailyTargets?: MealMacroTargets | null;
-}) {
+export const MealCard = forwardRef<
+  MealCardEditorHandle,
+  {
+    meal: Meal;
+    selectedDate: string;
+    onChange: () => void | Promise<void>;
+    isEditing: boolean;
+    onEnterEditMode: (mealId: string) => void;
+    onExitEditMode: () => void;
+    onLogActual: (mealId: string) => void;
+    onAiSuggestions: (meal: Meal) => void;
+    onSwapMeal: (meal: Meal) => void;
+    selected?: boolean;
+    onSelect?: (mealId: string) => void;
+    onBuildMeal?: () => void;
+    macroTargets?: MealMacroTargets;
+    dailyTargets?: MealMacroTargets | null;
+    onRequestSaveAll?: (options?: MealCardEditorSaveAllOptions) => void;
+    onRequestCancelAll?: () => void;
+    externalSaving?: boolean;
+  }
+>(function MealCard(
+  {
+    meal,
+    selectedDate,
+    onChange,
+    isEditing,
+    onEnterEditMode,
+    onExitEditMode,
+    onLogActual,
+    onAiSuggestions,
+    onSwapMeal,
+    selected = false,
+    onSelect,
+    onBuildMeal,
+    macroTargets,
+    dailyTargets,
+    onRequestSaveAll,
+    onRequestCancelAll,
+    externalSaving
+  },
+  ref
+) {
   const future = isFuture(selectedDate);
   const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -244,6 +261,7 @@ export function MealCard({
       {isEditing ? (
         <MealCardEditor
           key={editorKey}
+          ref={ref}
           meal={meal}
           macroTargets={macroTargets}
           dailyTargets={dailyTargets}
@@ -254,6 +272,9 @@ export function MealCard({
           onCancel={onExitEditMode}
           onRefresh={refreshAfterSaveFailure}
           onRequestRebalance={() => onAiSuggestions(meal)}
+          onRequestSaveAll={onRequestSaveAll}
+          onRequestCancelAll={onRequestCancelAll}
+          externalSaving={externalSaving}
         />
       ) : (
         <>
@@ -367,4 +388,4 @@ export function MealCard({
       />
     </div>
   );
-}
+});

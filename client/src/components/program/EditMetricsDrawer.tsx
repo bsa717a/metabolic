@@ -3,6 +3,7 @@ import type { ProgramMetric } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 type MetricDraft = {
   id: string;
@@ -127,12 +128,11 @@ function EditMetricsDrawerContent({
             <label className="block">
               <span className={labelClassName()}>Start</span>
               <div className="flex items-center gap-2">
-                <input
+                <NumberInput
                   className={inputClassName()}
-                  type="number"
                   step="0.01"
                   value={metric.startValue}
-                  onChange={(event) => updateDraft(metric.id, 'startValue', event.target.value)}
+                  onChange={(value) => updateDraft(metric.id, 'startValue', value)}
                 />
                 <span className="text-xs text-slate-500">{metric.unit}</span>
               </div>
@@ -140,12 +140,11 @@ function EditMetricsDrawerContent({
             <label className="block">
               <span className={labelClassName()}>Current</span>
               <div className="flex items-center gap-2">
-                <input
+                <NumberInput
                   className={inputClassName()}
-                  type="number"
                   step="0.01"
                   value={metric.currentValue}
-                  onChange={(event) => updateDraft(metric.id, 'currentValue', event.target.value)}
+                  onChange={(value) => updateDraft(metric.id, 'currentValue', value)}
                 />
                 <span className="text-xs text-slate-500">{metric.unit}</span>
               </div>
@@ -153,12 +152,11 @@ function EditMetricsDrawerContent({
             <label className="block">
               <span className={labelClassName()}>Goal</span>
               <div className="flex items-center gap-2">
-                <input
+                <NumberInput
                   className={inputClassName()}
-                  type="number"
                   step="0.01"
                   value={metric.goalValue}
-                  onChange={(event) => updateDraft(metric.id, 'goalValue', event.target.value)}
+                  onChange={(value) => updateDraft(metric.id, 'goalValue', value)}
                 />
                 <span className="text-xs text-slate-500">{metric.unit}</span>
               </div>

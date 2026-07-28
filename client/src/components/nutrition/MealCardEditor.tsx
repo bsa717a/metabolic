@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Minus, Search, Sparkles } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Food, Meal, MealItem } from '../../types';
 import { Button } from '../ui/Button';
+import { QuantityInput } from '../ui/QuantityInput';
 import { plannedTimeToInputValue } from '../../utils/plannedTime';
 import { foodEmoji } from '../../utils/foodEmoji';
 import {
@@ -14,6 +15,16 @@ import {
 import { MacroSummaryFooter, type MacroTotals } from './MacroSummaryFooter';
 
 export type MealMacroTargets = MacroTotals;
+
+export type MealCardEditorHandle = {
+  isDirty: () => boolean;
+  save: () => Promise<boolean>;
+  getMealId: () => string;
+};
+
+export type MealCardEditorSaveAllOptions = {
+  thenRebalanceMealId?: string;
+};
 
 type LocalEditItem = {
   serverId?: string;
@@ -62,23 +73,45 @@ function isOutOfBalance(calories: number, targetCalories: number | undefined) {
   return Math.abs(calories - targetCalories) > targetCalories * CALORIE_BAND;
 }
 
-export function MealCardEditor({
-  meal,
-  macroTargets,
-  dailyTargets,
-  onSaved,
-  onCancel,
-  onRefresh,
-  onRequestRebalance,
-}: {
-  meal: Meal;
-  macroTargets?: MealMacroTargets;
-  dailyTargets?: MealMacroTargets | null;
-  onSaved: () => void;
-  onCancel: () => void;
-  onRefresh: () => void | Promise<void>;
-  onRequestRebalance?: () => void;
-}) {
+function itemsAreDirty(baselineItems: MealItem[], localItems: LocalEditItem[]) {
+  if (localItems.some((item) => !item.serverId)) return true;
+  if (baselineItems.length !== localItems.length) return true;
+  if (baselineItems.some((orig) => !localItems.some((local) => local.serverId === orig.id))) return true;
+  return localItems.some((local) => {
+    const orig = baselineItems.find((item) => item.id === local.serverId);
+    return Boolean(orig && Number(orig.quantity) !== local.quantity);
+  });
+}
+
+export const MealCardEditor = forwardRef<
+  MealCardEditorHandle,
+  {
+    meal: Meal;
+    macroTargets?: MealMacroTargets;
+    dailyTargets?: MealMacroTargets | null;
+    onSaved: () => void;
+    onCancel: () => void;
+    onRefresh: () => void | Promise<void>;
+    onRequestRebalance?: () => void;
+    onRequestSaveAll?: (options?: MealCardEditorSaveAllOptions) => void;
+    onRequestCancelAll?: () => void;
+    externalSaving?: boolean;
+  }
+>(function MealCardEditor(
+  {
+    meal,
+    macroTargets,
+    dailyTargets,
+    onSaved,
+    onCancel,
+    onRefresh,
+    onRequestRebalance,
+    onRequestSaveAll,
+    onRequestCancelAll,
+    externalSaving = false
+  },
+  ref
+) {
   const [baseline] = useState(() => ({
     name: meal.name,
     plannedTime: plannedTimeToInputValue(meal.plannedTime),
@@ -280,13 +313,21 @@ export function MealCardEditor({
     }
   }
 
-  async function handleSave(options?: { thenRebalance?: boolean }) {
+  function isDirty() {
+    return (
+      localName !== baseline.name ||
+      localTime !== baseline.plannedTime ||
+      itemsAreDirty(baseline.plannedItems, localItems)
+    );
+  }
+
+  async function persistMeal(options?: { thenRebalance?: boolean; notifySaved?: boolean }): Promise<boolean> {
     setSaving(true);
     setSaveError(null);
     if (!localTime.trim()) {
       setSaveError('Meal time is required.');
       setSaving(false);
-      return;
+      return false;
     }
     try {
       const patch: Record<string, unknown> = {};
@@ -349,8 +390,9 @@ export function MealCardEditor({
       }
 
       setRebalanceAsk(false);
-      onSaved();
+      if (options?.notifySaved !== false) onSaved();
       if (options?.thenRebalance) onRequestRebalance?.();
+      return true;
     } catch (err) {
       await onRefresh();
       setSaveError(
@@ -358,10 +400,41 @@ export function MealCardEditor({
           ? `${err.message} Some changes may have been saved — review the refreshed plan and try again.`
           : 'Could not save all changes. Review the refreshed plan and try again.'
       );
+      return false;
     } finally {
       setSaving(false);
     }
   }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      isDirty,
+      save: () => persistMeal({ notifySaved: false }),
+      getMealId: () => meal.id
+    }),
+    // Keep handle current with latest draft state used by isDirty/persistMeal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional snapshot of latest closures
+    [meal.id, localName, localTime, localItems, baseline]
+  );
+
+  function handleSaveClick(options?: { thenRebalance?: boolean }) {
+    if (onRequestSaveAll) {
+      onRequestSaveAll(options?.thenRebalance ? { thenRebalanceMealId: meal.id } : undefined);
+      return;
+    }
+    void persistMeal(options);
+  }
+
+  function handleCancelClick() {
+    if (onRequestCancelAll) {
+      onRequestCancelAll();
+      return;
+    }
+    onCancel();
+  }
+
+  const busy = saving || externalSaving;
 
   return (
     <div className="space-y-4">
@@ -412,12 +485,9 @@ export function MealCardEditor({
                     <Minus size={14} />
                   </button>
                   <div className="flex shrink-0 items-center gap-1">
-                    <input
-                      type="number"
-                      min={0.25}
-                      step={0.25}
+                    <QuantityInput
                       value={item.quantity}
-                      onChange={(e) => updateQuantity(item, Number(e.target.value))}
+                      onChange={(qty) => updateQuantity(item, qty)}
                       className="w-20 rounded-lg border border-app-border bg-app-surface px-2 py-1 text-center text-sm font-medium text-app-text focus:outline-none focus:ring-2 focus:ring-emerald-400"
                       aria-label={`Quantity for ${item.nameSnapshot}`}
                     />
@@ -576,18 +646,22 @@ export function MealCardEditor({
       {/* Footer: error + save/cancel */}
       {saveError && <p className="text-sm text-red-600">{saveError}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-app-text-muted">Saving sets this meal for the rest of the week — days you've already logged stay untouched.</p>
+        <p className="text-xs text-app-text-muted">
+          {onRequestSaveAll
+            ? "Saving updates every meal on this day — days you've already logged stay untouched."
+            : "Saving sets this meal for the rest of the week — days you've already logged stay untouched."}
+        </p>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
+          <Button type="button" variant="secondary" onClick={handleCancelClick} disabled={busy}>
             Cancel
           </Button>
           <Button
             type="button"
             className="bg-emerald-600 text-white hover:bg-emerald-700"
-            onClick={() => void handleSave()}
-            disabled={saving}
+            onClick={() => handleSaveClick()}
+            disabled={busy}
           >
-            {saving ? 'Saving…' : 'Save changes'}
+            {busy ? 'Saving…' : onRequestSaveAll ? 'Save day' : 'Save changes'}
           </Button>
         </div>
       </div>
@@ -610,20 +684,20 @@ export function MealCardEditor({
             Want to try to get it back in balance?
           </p>
           <div className="flex shrink-0 items-center gap-2">
-            <Button type="button" variant="secondary" onClick={dismissRebalanceAsk} disabled={saving}>
+            <Button type="button" variant="secondary" onClick={dismissRebalanceAsk} disabled={busy}>
               Not now
             </Button>
             <Button
               type="button"
               className="bg-emerald-600 text-white hover:bg-emerald-700"
-              onClick={() => void handleSave({ thenRebalance: true })}
-              disabled={saving}
+              onClick={() => handleSaveClick({ thenRebalance: true })}
+              disabled={busy}
             >
-              {saving ? 'Saving…' : 'Yes, help me'}
+              {busy ? 'Saving…' : 'Yes, help me'}
             </Button>
           </div>
         </div>
       )}
     </div>
   );
-}
+});

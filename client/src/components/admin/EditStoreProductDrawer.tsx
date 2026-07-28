@@ -3,6 +3,7 @@ import type { AdminStoreProduct, StoreProductCategory } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 const CATEGORIES: StoreProductCategory[] = ['SUPPLEMENT', 'PROTEIN', 'EQUIPMENT', 'OTHER'];
 
@@ -144,13 +145,12 @@ function EditStoreProductContent({
         </label>
         <label className="block">
           <span className={labelClassName()}>Price (USD)</span>
-          <input
+          <NumberInput
             className={inputClassName()}
-            type="number"
             step="0.01"
-            min="0"
+            min={0}
             value={draft.priceDollars}
-            onChange={(event) => updateDraft('priceDollars', event.target.value)}
+            onChange={(value) => updateDraft('priceDollars', value)}
             placeholder="0.00"
           />
         </label>

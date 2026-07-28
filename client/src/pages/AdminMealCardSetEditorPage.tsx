@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Plus, Star, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { NumberInput } from '../components/ui/NumberInput';
 import type { Food } from '../types';
 
 type CardRole = 'STYLE' | 'PROTEIN' | 'FAT' | 'CARB' | 'VEGETABLE' | 'FRUIT' | 'FREE';
@@ -172,10 +173,9 @@ export function AdminMealCardSetEditorPage() {
         </div>
         <label className="text-sm">
           <span className="mb-1 block text-xs font-semibold uppercase text-app-text-muted">Preview at target (kcal)</span>
-          <input
-            type="number"
+          <NumberInput
             value={previewTarget}
-            onChange={(e) => setPreviewTarget(Number(e.target.value))}
+            onChange={setPreviewTarget}
             className="w-28 rounded-xl border border-app-border bg-app-surface px-3 py-2 tabular-nums"
           />
         </label>
@@ -216,10 +216,16 @@ export function AdminMealCardSetEditorPage() {
             </label>
             <label className="flex items-center gap-1 text-xs text-app-text-muted">
               max
-              <input
-                type="number"
-                defaultValue={card.maxSelect}
-                onBlur={(e) => Number(e.target.value) !== card.maxSelect && void call(`/api/admin/cards/${card.id}`, 'PATCH', { maxSelect: Number(e.target.value) })}
+              <NumberInput
+                value={card.maxSelect}
+                commitOnBlur
+                integer
+                min={1}
+                onChange={(value) => {
+                  if (value !== card.maxSelect) {
+                    void call(`/api/admin/cards/${card.id}`, 'PATCH', { maxSelect: value });
+                  }
+                }}
                 className="w-14 rounded-lg border border-app-border bg-app-surface px-1 py-0.5 tabular-nums"
               />
             </label>
@@ -293,11 +299,16 @@ export function AdminMealCardSetEditorPage() {
                           <tr key={line.id} className="border-t border-app-muted">
                             <td className="py-1 font-semibold">{line.food.name}</td>
                             <td>
-                              <input
-                                type="number"
-                                step="0.1"
-                                defaultValue={Number(line.baseServings)}
-                                onBlur={(e) => Number(e.target.value) !== Number(line.baseServings) && void call(`/api/admin/option-foods/${line.id}`, 'PATCH', { baseServings: Number(e.target.value) })}
+                              <NumberInput
+                                step={0.1}
+                                min={0.1}
+                                commitOnBlur
+                                value={Number(line.baseServings)}
+                                onChange={(value) => {
+                                  if (value !== Number(line.baseServings)) {
+                                    void call(`/api/admin/option-foods/${line.id}`, 'PATCH', { baseServings: value });
+                                  }
+                                }}
                                 className="w-20 rounded-lg border border-app-border bg-app-surface px-1 py-0.5 tabular-nums"
                               />{' '}
                               × {line.food.servingSize} {line.food.servingUnit}

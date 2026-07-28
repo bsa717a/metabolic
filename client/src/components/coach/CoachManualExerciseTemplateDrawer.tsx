@@ -4,6 +4,7 @@ import type { ExercisePlanTemplate, ExerciseTemplateItem } from '../../types';
 import { formatPlan } from '../../utils/exerciseFormat';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -111,42 +112,38 @@ export function CoachManualExerciseTemplateDrawer({
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm">
                   <span className="mb-1 block text-app-text-muted">Sets</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
                     className="w-full rounded-xl border border-app-border px-3 py-2"
                     value={sets}
-                    onChange={(event) => setSets(event.target.value)}
+                    onChange={setSets}
                   />
                 </label>
                 <label className="text-sm">
                   <span className="mb-1 block text-app-text-muted">Reps</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
                     className="w-full rounded-xl border border-app-border px-3 py-2"
                     value={reps}
-                    onChange={(event) => setReps(event.target.value)}
+                    onChange={setReps}
                   />
                 </label>
                 <label className="text-sm">
                   <span className="mb-1 block text-app-text-muted">Duration (min)</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
                     className="w-full rounded-xl border border-app-border px-3 py-2"
                     value={durationMinutes}
-                    onChange={(event) => setDurationMinutes(event.target.value)}
+                    onChange={setDurationMinutes}
                   />
                 </label>
                 <label className="text-sm">
                   <span className="mb-1 block text-app-text-muted">Weight (lbs)</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
                     className="w-full rounded-xl border border-app-border px-3 py-2"
                     value={weight}
-                    onChange={(event) => setWeight(event.target.value)}
+                    onChange={setWeight}
                   />
                 </label>
               </div>

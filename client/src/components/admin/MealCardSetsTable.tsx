@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { NumberInput } from '../ui/NumberInput';
 
 export type AdminCardSetSummary = {
   id: string;
@@ -119,10 +120,9 @@ export function MealCardSetsTable() {
         </label>
         <label className="text-sm">
           <span className="mb-1 block text-xs font-semibold uppercase text-app-text-muted">Reference kcal</span>
-          <input
-            type="number"
+          <NumberInput
             value={draft.referenceCalories}
-            onChange={(e) => setDraft({ ...draft, referenceCalories: Number(e.target.value) })}
+            onChange={(value) => setDraft({ ...draft, referenceCalories: value })}
             className="w-28 rounded-xl border border-app-border bg-app-surface px-3 py-2 tabular-nums"
           />
         </label>

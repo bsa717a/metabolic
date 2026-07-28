@@ -14,6 +14,7 @@ import { ClientMetricsPanel } from './ClientMetricsPanel';
 import { ClientMeasurementsPanel } from './ClientMeasurementsPanel';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { NumberInput } from '../ui/NumberInput';
 
 type CoachEngagement = GamificationDashboard & { hydration: CoachHydrationStats };
 type DetailTab = 'overview' | 'food' | 'exercise' | 'metrics' | 'measurements';
@@ -266,12 +267,11 @@ export function ClientDetailTabs({
                   <div className="mt-4 flex flex-wrap items-end gap-2">
                     <label className="text-sm text-app-text-muted">
                       Daily goal (oz)
-                      <input
-                        type="number"
+                      <NumberInput
                         min={1}
                         max={512}
                         value={clientWaterGoalDraft}
-                        onChange={(event) => onClientWaterGoalDraftChange(event.target.value)}
+                        onChange={onClientWaterGoalDraftChange}
                         className="mt-1 block w-28 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text"
                       />
                     </label>

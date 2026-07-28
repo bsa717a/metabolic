@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { NutritionMacroTargets, NutritionTargetSource } from '../../types';
 import { Button } from '../ui/Button';
+import { NumberInput } from '../ui/NumberInput';
 
 type MacroKey = keyof NutritionMacroTargets;
 
@@ -153,14 +154,13 @@ export function MacroOverridePanel({
             <span className="mb-1 block font-medium">
               {macro.label} <span className="text-app-text-muted">({macro.unit})</span>
             </span>
-            <input
-              type="number"
+            <NumberInput
               min={1}
               inputMode="numeric"
               className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 tabular-nums"
               placeholder={resolvedTargets?.[macro.key] != null ? String(resolvedTargets[macro.key]) : 'formula'}
               value={values[macro.key]}
-              onChange={(event) => setValues((prev) => ({ ...prev, [macro.key]: event.target.value }))}
+              onChange={(value) => setValues((prev) => ({ ...prev, [macro.key]: value }))}
             />
           </label>
         ))}

@@ -8,6 +8,7 @@ import {
 } from '../../services/exerciseVideoStorage';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 type ExerciseDraft = {
   name: string;
@@ -259,46 +260,42 @@ function EditExerciseDrawerContent({
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className={labelClassName()}>Default sets</span>
-          <input
+          <NumberInput
             className={inputClassName()}
-            type="number"
             min={0}
             step={1}
             value={draft.defaultSets}
-            onChange={(event) => updateDraft('defaultSets', event.target.value)}
+            onChange={(value) => updateDraft('defaultSets', value)}
           />
         </label>
         <label className="block">
           <span className={labelClassName()}>Default reps</span>
-          <input
+          <NumberInput
             className={inputClassName()}
-            type="number"
             min={0}
             step={1}
             value={draft.defaultReps}
-            onChange={(event) => updateDraft('defaultReps', event.target.value)}
+            onChange={(value) => updateDraft('defaultReps', value)}
           />
         </label>
         <label className="block">
           <span className={labelClassName()}>Default duration (min)</span>
-          <input
+          <NumberInput
             className={inputClassName()}
-            type="number"
             min={0}
             step={1}
             value={draft.defaultDurationMinutes}
-            onChange={(event) => updateDraft('defaultDurationMinutes', event.target.value)}
+            onChange={(value) => updateDraft('defaultDurationMinutes', value)}
           />
         </label>
         <label className="block">
           <span className={labelClassName()}>Default distance (mi)</span>
-          <input
+          <NumberInput
             className={inputClassName()}
-            type="number"
             min={0}
             step={0.01}
             value={draft.defaultDistance}
-            onChange={(event) => updateDraft('defaultDistance', event.target.value)}
+            onChange={(value) => updateDraft('defaultDistance', value)}
           />
         </label>
       </div>

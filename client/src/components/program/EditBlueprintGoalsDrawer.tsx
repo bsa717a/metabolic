@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import { BLUEPRINT_JOURNEY_METRICS } from '../../utils/journeyDialUtils';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 type GoalDraft = {
   id: string;
@@ -136,12 +137,11 @@ function EditBlueprintGoalsDrawerContent({
           <label className="block">
             <span className={labelClassName()}>Goal</span>
             <div className="flex items-center gap-2">
-              <input
+              <NumberInput
                 className={inputClassName()}
-                type="number"
                 step="0.01"
                 value={metric.goalValue}
-                onChange={(event) => updateGoal(metric.id, event.target.value)}
+                onChange={(value) => updateGoal(metric.id, value)}
               />
               <span className="text-xs text-slate-500">{metric.unit}</span>
             </div>

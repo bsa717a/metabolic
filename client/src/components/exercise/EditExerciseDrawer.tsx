@@ -4,6 +4,7 @@ import { EXERCISE_BODY_PARTS, EXERCISE_CATEGORIES } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 import { ExerciseHowToVideoButton } from './ExerciseHowToVideoButton';
 
 function toInput(value?: number | null) {
@@ -117,43 +118,39 @@ function EditExerciseDrawerContent({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="text-sm">
               <span className="font-medium text-slate-700">Sets</span>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 value={sets}
-                onChange={(event) => setSets(event.target.value)}
+                onChange={setSets}
               />
             </label>
             <label className="text-sm">
               <span className="font-medium text-slate-700">Reps</span>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 value={reps}
-                onChange={(event) => setReps(event.target.value)}
+                onChange={setReps}
               />
             </label>
             <label className="text-sm">
               <span className="font-medium text-slate-700">Minutes</span>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 value={durationMinutes}
-                onChange={(event) => setDurationMinutes(event.target.value)}
+                onChange={setDurationMinutes}
               />
             </label>
             <label className="text-sm">
               <span className="font-medium text-slate-700">Weight (lbs)</span>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 step="0.5"
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
                 value={weight}
-                onChange={(event) => setWeight(event.target.value)}
+                onChange={setWeight}
               />
             </label>
           </div>

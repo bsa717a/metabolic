@@ -14,6 +14,7 @@ import {
 import { EditTemplateMealDrawer } from '../components/admin/EditTemplateMealDrawer';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { NumberInput } from '../components/ui/NumberInput';
 
 function mealTotals(meal: NutritionTemplateMeal) {
   return meal.items.reduce(
@@ -179,12 +180,11 @@ export function AdminNutritionTemplateEditorPage() {
                   <span className="mb-1 block font-medium capitalize text-slate-700">
                     {field.replace('Target', '').replace('calorie', 'Calories (kcal)').replace('protein', 'Protein (g)').replace('carb', 'Carbs (g)').replace('fat', 'Fat (g)')}
                   </span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
                     className="w-full rounded-xl border border-slate-200 px-3 py-2"
                     value={draft[field]}
-                    onChange={(event) => setDraft({ ...draft, [field]: Number(event.target.value) })}
+                    onChange={(value) => setDraft({ ...draft, [field]: value })}
                   />
                 </label>
               ))}
@@ -219,66 +219,60 @@ export function AdminNutritionTemplateEditorPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="flex items-center gap-2">
                     <span className="w-10 text-slate-500">Min</span>
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       max={8}
                       placeholder="ft"
                       className="w-20 rounded-xl border border-slate-200 px-3 py-2"
                       value={criteriaDraft.heightMinFeet}
-                      onChange={(event) => updateCriteriaDraft({ heightMinFeet: event.target.value })}
+                      onChange={(value) => updateCriteriaDraft({ heightMinFeet: value })}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       max={11}
                       placeholder="in"
                       className="w-20 rounded-xl border border-slate-200 px-3 py-2"
                       value={criteriaDraft.heightMinInches}
-                      onChange={(event) => updateCriteriaDraft({ heightMinInches: event.target.value })}
+                      onChange={(value) => updateCriteriaDraft({ heightMinInches: value })}
                     />
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-10 text-slate-500">Max</span>
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       max={8}
                       placeholder="ft"
                       className="w-20 rounded-xl border border-slate-200 px-3 py-2"
                       value={criteriaDraft.heightMaxFeet}
-                      onChange={(event) => updateCriteriaDraft({ heightMaxFeet: event.target.value })}
+                      onChange={(value) => updateCriteriaDraft({ heightMaxFeet: value })}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       max={11}
                       placeholder="in"
                       className="w-20 rounded-xl border border-slate-200 px-3 py-2"
                       value={criteriaDraft.heightMaxInches}
-                      onChange={(event) => updateCriteriaDraft({ heightMaxInches: event.target.value })}
+                      onChange={(value) => updateCriteriaDraft({ heightMaxInches: value })}
                     />
                   </div>
                 </div>
               </div>
               <label className="text-sm">
                 <span className="mb-1 block font-medium text-slate-700">Weight min (lbs)</span>
-                <input
-                  type="number"
+                <NumberInput
                   min={0}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2"
                   value={criteriaDraft.weightMinLbs}
-                  onChange={(event) => updateCriteriaDraft({ weightMinLbs: event.target.value })}
+                  onChange={(value) => updateCriteriaDraft({ weightMinLbs: value })}
                 />
               </label>
               <label className="text-sm">
                 <span className="mb-1 block font-medium text-slate-700">Weight max (lbs)</span>
-                <input
-                  type="number"
+                <NumberInput
                   min={0}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2"
                   value={criteriaDraft.weightMaxLbs}
-                  onChange={(event) => updateCriteriaDraft({ weightMaxLbs: event.target.value })}
+                  onChange={(value) => updateCriteriaDraft({ weightMaxLbs: value })}
                 />
               </label>
               <label className="text-sm">

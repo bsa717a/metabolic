@@ -13,6 +13,7 @@ import {
 } from '../../utils/measurementUtils';
 import { BLUEPRINT_JOURNEY_METRICS, type JourneyMetricType } from '../../utils/journeyDialUtils';
 import { metricValue, metricsWithSnapshotCurrent } from '../../utils/snapshotHistoryUtils';
+import { NumberInput } from '../ui/NumberInput';
 import {
   emptyPhotoDraft,
   ProgressPhotoUploadField,
@@ -101,12 +102,11 @@ function MetricFields({
         <label key={metric.id} className="block rounded-2xl border border-slate-200 p-4 dark:border-app-border">
           <span className={labelClassName()}>{metric.label}</span>
           <div className="flex items-center gap-2">
-            <input
+            <NumberInput
               className={inputClassName()}
-              type="number"
               step="0.01"
               value={metric.currentValue}
-              onChange={(event) => onChange(metric.id, event.target.value)}
+              onChange={(value) => onChange(metric.id, value)}
             />
             <span className="text-xs text-slate-500">{metric.unit}</span>
           </div>
@@ -382,12 +382,11 @@ export function BlueprintCheckInModal({
                   <label key={metricType} className="block rounded-2xl border border-slate-200 p-4 dark:border-app-border">
                     <span className={labelClassName()}>{MEASUREMENT_LABELS[metricType]}</span>
                     <div className="flex items-center gap-2">
-                      <input
+                      <NumberInput
                         className={inputClassName()}
-                        type="number"
                         step="0.01"
                         value={measurements[metricType]}
-                        onChange={(event) => updateMeasurement(metricType, event.target.value)}
+                        onChange={(value) => updateMeasurement(metricType, value)}
                       />
                       <span className="text-xs text-slate-500">in</span>
                     </div>

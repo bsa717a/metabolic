@@ -3,6 +3,7 @@ import type { ExerciseCatalogItem, ExerciseTemplateItem } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -141,43 +142,39 @@ export function EditTemplateExerciseDrawer({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             <span className="mb-1 block font-medium text-app-text">Sets</span>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={sets}
-              onChange={(event) => setSets(event.target.value)}
+              onChange={setSets}
             />
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium text-app-text">Reps</span>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={reps}
-              onChange={(event) => setReps(event.target.value)}
+              onChange={setReps}
             />
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium text-app-text">Duration (min)</span>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={durationMinutes}
-              onChange={(event) => setDurationMinutes(event.target.value)}
+              onChange={setDurationMinutes}
             />
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium text-app-text">Weight (lbs)</span>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               step={0.5}
               className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
               value={weight}
-              onChange={(event) => setWeight(event.target.value)}
+              onChange={setWeight}
             />
           </label>
         </div>

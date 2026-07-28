@@ -3,6 +3,7 @@ import type { FoodVisibility, ReviewFood } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NumberInput } from '../ui/NumberInput';
 
 const visibilities: FoodVisibility[] = ['GLOBAL', 'USER'];
 
@@ -196,7 +197,7 @@ function ReviewFoodDrawerContent({
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className={labelClassName()}>Serving size</span>
-          <input className={inputClassName()} type="number" step="0.01" value={draft.servingSize} onChange={(event) => updateDraft('servingSize', event.target.value)} />
+          <NumberInput className={inputClassName()} step="0.01" value={draft.servingSize} onChange={(value) => updateDraft('servingSize', value)} />
         </label>
         <label className="block">
           <span className={labelClassName()}>Serving unit</span>
@@ -207,19 +208,19 @@ function ReviewFoodDrawerContent({
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className={labelClassName()}>Calories</span>
-          <input className={inputClassName()} type="number" step="0.01" value={draft.calories} onChange={(event) => updateDraft('calories', event.target.value)} />
+          <NumberInput className={inputClassName()} step="0.01" value={draft.calories} onChange={(value) => updateDraft('calories', value)} />
         </label>
         <label className="block">
           <span className={labelClassName()}>Protein (g)</span>
-          <input className={inputClassName()} type="number" step="0.01" value={draft.protein} onChange={(event) => updateDraft('protein', event.target.value)} />
+          <NumberInput className={inputClassName()} step="0.01" value={draft.protein} onChange={(value) => updateDraft('protein', value)} />
         </label>
         <label className="block">
           <span className={labelClassName()}>Carbs (g)</span>
-          <input className={inputClassName()} type="number" step="0.01" value={draft.carbs} onChange={(event) => updateDraft('carbs', event.target.value)} />
+          <NumberInput className={inputClassName()} step="0.01" value={draft.carbs} onChange={(value) => updateDraft('carbs', value)} />
         </label>
         <label className="block">
           <span className={labelClassName()}>Fat (g)</span>
-          <input className={inputClassName()} type="number" step="0.01" value={draft.fat} onChange={(event) => updateDraft('fat', event.target.value)} />
+          <NumberInput className={inputClassName()} step="0.01" value={draft.fat} onChange={(value) => updateDraft('fat', value)} />
         </label>
       </div>
 
