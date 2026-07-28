@@ -20,7 +20,7 @@ export function isAdmin(actor: { role: Role }) {
 }
 
 export function isCoach(actor: { role: Role }) {
-  return actor.role === "COACH";
+  return actor.role === "COACH" || actor.role === "SUPER_ADMIN";
 }
 
 export async function isAssignedCoach(actor: { id: string; role: Role }, ownerId: string) {

@@ -103,7 +103,7 @@ export async function listAdminUsers() {
 
 export async function listCoaches() {
   const coaches = await prisma.user.findMany({
-    where: { role: Role.COACH, status: { not: UserStatus.DISABLED } },
+    where: { role: { in: [Role.COACH, Role.SUPER_ADMIN] }, status: { not: UserStatus.DISABLED } },
     select: { id: true, firstName: true, lastName: true, email: true },
     orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }]
   });
@@ -197,7 +197,7 @@ export async function assignPrimaryCoach(userId: string, coachId: string) {
     prisma.user.findUnique({ where: { id: coachId } })
   ]);
   if (!user) throw new Error('User not found');
-  if (!coach || coach.role !== Role.COACH) throw new Error('Coach not found');
+  if (!coach || (coach.role !== Role.COACH && coach.role !== Role.SUPER_ADMIN)) throw new Error('Coach not found');
 
   const now = new Date();
 

@@ -11,5 +11,5 @@ export function isSuperAdminRole(role?: Role | null) {
 }
 
 export function isCoachRole(role?: Role | null) {
-  return role === 'COACH';
+  return role === 'COACH' || role === 'SUPER_ADMIN';
 }

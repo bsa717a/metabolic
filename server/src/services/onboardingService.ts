@@ -214,7 +214,7 @@ async function upsertClientProfileFromSetup(
 async function findCoachByCode(code: string | null) {
   if (!code) return null;
   return prisma.user.findFirst({
-    where: { role: Role.COACH, coachCode: { equals: code, mode: 'insensitive' } },
+    where: { role: { in: [Role.COACH, Role.SUPER_ADMIN] }, coachCode: { equals: code, mode: 'insensitive' } },
     select: { id: true, defaultNutritionTemplateId: true, defaultExerciseTemplateId: true }
   });
 }
