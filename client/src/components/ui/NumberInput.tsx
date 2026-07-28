@@ -1,4 +1,10 @@
-import { useRef, useState, type FocusEventHandler, type KeyboardEventHandler } from 'react';
+import {
+  useRef,
+  useState,
+  type FocusEventHandler,
+  type KeyboardEventHandler,
+  type ReactElement
+} from 'react';
 
 export function formatNumberDisplay(value: number) {
   if (!Number.isFinite(value)) return '';
@@ -61,8 +67,13 @@ function isStringValue(props: NumberInputProps): props is StringValueProps {
 /**
  * App-wide number field: native steppers, select-on-focus, and draft typing so
  * clearing/retyping decimals (and zeros) is not blocked by controlled number state.
+ *
+ * Overloads keep `onChange` parameter types inferable at call sites (a plain
+ * `number | string` props union makes callback params fall back to implicit any).
  */
-export function NumberInput(props: NumberInputProps) {
+export function NumberInput(props: NumberValueProps): ReactElement;
+export function NumberInput(props: StringValueProps): ReactElement;
+export function NumberInput(props: NumberInputProps): ReactElement {
   const {
     min,
     max,
