@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Plus } from 'lucide-react';
 import { api } from '../../services/api';
-import type { ExercisePlanTemplateSummary, ExerciseRoutine } from '../../types';
+import type { ExercisePlanSummary, ExercisePlanTemplateSummary, ExerciseRoutine } from '../../types';
 import type { ExercisePlanUndoSnapshot } from '../../types/exercisePlanUndo';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import { WEEKDAY_LABELS, type WeekdayIndex } from '../../utils/weekdayPattern';
@@ -10,6 +10,7 @@ import { Drawer } from '../ui/Drawer';
 import { InlineWorkoutEditor } from './InlineWorkoutEditor';
 
 const REST_VALUE = '';
+const CUSTOM_PLAN_VALUE = '__custom__';
 
 type DayAssignment = {
   weekday: WeekdayIndex;
@@ -51,6 +52,40 @@ function routineSummary(days: DayAssignment[], workouts: ExercisePlanTemplateSum
   return parts.join(' · ');
 }
 
+function workoutsForPlan(
+  planId: string | null,
+  plans: ExercisePlanSummary[],
+  workouts: ExercisePlanTemplateSummary[]
+) {
+  if (!planId) {
+    // Custom: only user-built workouts, never global/imported catalog days.
+    return workouts.filter((workout) => workout.visibility === 'USER' && !workout.planId);
+  }
+  const plan = plans.find((entry) => entry.id === planId);
+  if (!plan) return [];
+  return [...plan.days].sort((a, b) => (a.dayIndex ?? 0) - (b.dayIndex ?? 0));
+}
+
+/** Prefer persisted plan; else infer when all assigned days belong to one plan. */
+function resolveSelectedPlanId(
+  routine: ExerciseRoutine | null,
+  templates: ExercisePlanTemplateSummary[]
+): string | null {
+  if (routine?.exercisePlanId) return routine.exercisePlanId;
+  const assignedIds = (routine?.days ?? [])
+    .map((day) => day.templateId)
+    .filter((id): id is string => Boolean(id));
+  if (!assignedIds.length) return null;
+  const byId = new Map(templates.map((template) => [template.id, template]));
+  const planIds = new Set<string>();
+  for (const id of assignedIds) {
+    const planId = byId.get(id)?.planId;
+    if (!planId) return null;
+    planIds.add(planId);
+  }
+  return planIds.size === 1 ? [...planIds][0]! : null;
+}
+
 /**
  * The routine-editing body (weekday assignments + reusable workouts). Rendered
  * inline on the Manage tab, and inside a Drawer by {@link RoutineEditor} for the
@@ -73,6 +108,8 @@ export function RoutineEditorContent({
   registerUndo?: (message: string, snapshot: ExercisePlanUndoSnapshot | undefined) => void;
 }) {
   const [workouts, setWorkouts] = useState<ExercisePlanTemplateSummary[]>([]);
+  const [plans, setPlans] = useState<ExercisePlanSummary[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<DayAssignment[]>(defaultAssignments);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -83,10 +120,15 @@ export function RoutineEditorContent({
   const [saveFromDayName, setSaveFromDayName] = useState('');
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
 
-  const summary = useMemo(() => routineSummary(assignments, workouts), [assignments, workouts]);
+  const dayOptions = useMemo(
+    () => workoutsForPlan(selectedPlanId, plans, workouts),
+    [selectedPlanId, plans, workouts]
+  );
+
+  const summary = useMemo(() => routineSummary(assignments, dayOptions), [assignments, dayOptions]);
 
   const myWorkouts = useMemo(
-    () => workouts.filter((workout) => workout.visibility === 'USER'),
+    () => workouts.filter((workout) => workout.visibility === 'USER' && !workout.planId),
     [workouts]
   );
 
@@ -94,8 +136,12 @@ export function RoutineEditorContent({
   const workoutsLabel = clientId ? 'Client workouts' : 'My workouts';
 
   async function reloadWorkouts() {
-    const templates = await api<ExercisePlanTemplateSummary[]>(endpoints.templates);
+    const [templates, nextPlans] = await Promise.all([
+      api<ExercisePlanTemplateSummary[]>(endpoints.templates),
+      api<ExercisePlanSummary[]>(endpoints.plans)
+    ]);
     setWorkouts(templates);
+    setPlans(nextPlans);
   }
 
   useEffect(() => {
@@ -104,17 +150,20 @@ export function RoutineEditorContent({
     setError('');
     Promise.all([
       api<ExerciseRoutine | null>(endpoints.routine),
-      api<ExercisePlanTemplateSummary[]>(endpoints.templates)
+      api<ExercisePlanTemplateSummary[]>(endpoints.templates),
+      api<ExercisePlanSummary[]>(endpoints.plans)
     ])
-      .then(([routine, templates]) => {
+      .then(([routine, templates, nextPlans]) => {
         setWorkouts(templates);
+        setPlans(nextPlans);
         setAssignments(assignmentsFromRoutine(routine));
+        setSelectedPlanId(resolveSelectedPlanId(routine, templates));
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Unable to load routine');
       })
       .finally(() => setLoading(false));
-  }, [active, endpoints.routine, endpoints.templates]);
+  }, [active, endpoints.routine, endpoints.templates, endpoints.plans]);
 
   function setDayTemplate(weekday: WeekdayIndex, value: string) {
     setSaved(false);
@@ -123,6 +172,27 @@ export function RoutineEditorContent({
         day.weekday === weekday ? { ...day, templateId: value === REST_VALUE ? null : value } : day
       )
     );
+  }
+
+  function handlePlanChange(nextValue: string) {
+    const nextPlanId = nextValue === CUSTOM_PLAN_VALUE ? null : nextValue;
+    const allowed = new Set(workoutsForPlan(nextPlanId, plans, workouts).map((workout) => workout.id));
+    const invalid = assignments.some((day) => day.templateId && !allowed.has(day.templateId));
+    if (
+      invalid &&
+      !window.confirm('Switching plans clears weekday assignments that are not in the new plan. Continue?')
+    ) {
+      return;
+    }
+    setSelectedPlanId(nextPlanId);
+    setSaved(false);
+    if (invalid) {
+      setAssignments((current) =>
+        current.map((day) =>
+          day.templateId && !allowed.has(day.templateId) ? { ...day, templateId: null } : day
+        )
+      );
+    }
   }
 
   async function handleSave() {
@@ -138,12 +208,14 @@ export function RoutineEditorContent({
               weekday: day.weekday,
               templateId: day.templateId
             })),
+            exercisePlanId: selectedPlanId,
             applyForward: true
           })
         }
       );
       registerUndo?.('Weekly routine updated', result.undoSnapshot);
       setAssignments(assignmentsFromRoutine(result.routine));
+      setSelectedPlanId(result.routine.exercisePlanId ?? null);
       setSaved(true);
       await onSaved();
       onCancel?.();
@@ -201,7 +273,7 @@ export function RoutineEditorContent({
           <h3 className="text-sm font-semibold text-app-text">{workoutsLabel}</h3>
           <p className="text-xs text-app-text-muted">
             Workouts are reusable exercise lists. Add exercises on any day, then save that day as a workout
-            to reuse it in your routine.
+            to reuse it in your routine. Multi-day plans appear in the Weekly routine section below.
           </p>
           <div className="flex gap-2">
             <input
@@ -226,7 +298,7 @@ export function RoutineEditorContent({
               type="text"
               value={saveFromDayName}
               onChange={(event) => setSaveFromDayName(event.target.value)}
-              placeholder="Save today&apos;s exercises as…"
+              placeholder="Save today's exercises as…"
               className="min-w-0 flex-1 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm"
             />
             <Button
@@ -281,8 +353,8 @@ export function RoutineEditorContent({
                         clientId={clientId}
                         onClose={() => setEditingWorkoutId(null)}
                         onChanged={async () => {
+                          await reloadWorkouts();
                           const templates = await api<ExercisePlanTemplateSummary[]>(endpoints.templates);
-                          setWorkouts(templates);
                           if (!templates.some((entry) => entry.id === workout.id)) {
                             setAssignments((current) =>
                               current.map((day) =>
@@ -304,14 +376,33 @@ export function RoutineEditorContent({
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-app-text">Weekly routine</h3>
           <p className="text-sm text-app-text-muted">
-            Assign a workout or rest day to each weekday. Your routine repeats every week and fills in
-            upcoming days automatically.
+            Choose an exercise plan, then assign each weekday a routine from that plan (or Rest). Your
+            schedule repeats every week and fills in upcoming days automatically.
           </p>
 
           {loading ? (
             <p className="text-sm text-app-text-muted">Loading…</p>
           ) : (
             <>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">
+                  Exercise plan
+                </span>
+                <select
+                  value={selectedPlanId ?? CUSTOM_PLAN_VALUE}
+                  onChange={(event) => handlePlanChange(event.target.value)}
+                  className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm text-app-text"
+                >
+                  <option value={CUSTOM_PLAN_VALUE}>Custom (my workouts)</option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name}
+                      {plan.dayCount ? ` · ${plan.dayCount} routine${plan.dayCount === 1 ? '' : 's'}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <div className="space-y-3">
                 {assignments.map((day) => (
                   <div key={day.weekday} className="flex items-center gap-3">
@@ -324,8 +415,9 @@ export function RoutineEditorContent({
                       className="min-w-0 flex-1 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm text-app-text"
                     >
                       <option value={REST_VALUE}>Rest</option>
-                      {workouts.map((workout) => (
+                      {dayOptions.map((workout) => (
                         <option key={workout.id} value={workout.id}>
+                          {workout.dayIndex != null ? `${workout.dayIndex}. ` : ''}
                           {workout.name}
                           {workout.exerciseCount ? ` (${workout.exerciseCount})` : ''}
                         </option>
@@ -338,6 +430,11 @@ export function RoutineEditorContent({
               <p className="text-sm text-app-text-muted">
                 Your routine: <span className="font-medium text-app-text">{summary || 'All rest days'}</span>
               </p>
+              {selectedPlanId && dayOptions.length === 0 && (
+                <p className="text-sm text-amber-700">
+                  This plan has no day routines yet. Re-import plans or pick Custom.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -368,7 +465,6 @@ export function RoutineEditorContent({
           )}
         </div>
       </div>
-
     </>
   );
 }

@@ -3,6 +3,7 @@ export function exercisePlanApi(clientId?: string) {
     return {
       routine: '/api/exercise-routine',
       templates: '/api/exercise-templates',
+      plans: '/api/exercise-plans',
       createTemplate: '/api/exercise-templates',
       fromDay: '/api/exercise-templates/from-day',
       template: (id: string) => `/api/exercise-templates/${id}`,
@@ -15,6 +16,7 @@ export function exercisePlanApi(clientId?: string) {
   return {
     routine: `${base}/exercise-routine`,
     templates: `/api/coach/exercise-templates?clientId=${encodeURIComponent(clientId)}`,
+    plans: `/api/coach/exercise-plans?clientId=${encodeURIComponent(clientId)}`,
     createTemplate: `${base}/exercise-templates`,
     fromDay: `${base}/exercise-templates/from-day`,
     template: (id: string) => `${base}/exercise-templates/${id}`,

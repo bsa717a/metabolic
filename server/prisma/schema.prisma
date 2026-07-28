@@ -262,6 +262,7 @@ model User {
   mealTemplates MealTemplate[]
   nutritionPlanTemplatesCreated NutritionPlanTemplate[] @relation("NutritionPlanTemplateCreator")
   exerciseTemplatesCreated ExerciseTemplate[] @relation("ExerciseTemplateCreator")
+  exercisePlansCreated ExercisePlan[] @relation("ExercisePlanCreator")
   exerciseRoutines ExerciseRoutine[]
   planPeriodsCreated PlanPeriod[] @relation("PlanPeriodCreator")
   mealCardSetsCreated MealCardSet[] @relation("MealCardSetCreator")
@@ -862,7 +863,8 @@ model MealTemplate {
   user User? @relation(fields: [userId], references: [id])
 }
 
-model ExerciseTemplate {
+/// Multi-day exercise plan (e.g. "5 Day Gym Split") that owns ordered day workouts.
+model ExercisePlan {
   id String @id @default(cuid())
   name String
   description String?
@@ -870,12 +872,32 @@ model ExerciseTemplate {
   createdById String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  createdBy User? @relation("ExercisePlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  days ExerciseTemplate[]
+  routines ExerciseRoutine[]
+}
+
+model ExerciseTemplate {
+  id String @id @default(cuid())
+  name String
+  description String?
+  visibility Visibility @default(GLOBAL)
+  createdById String?
+  /// Parent multi-day plan, when this template is one day/routine in that plan.
+  planId String?
+  /// 1-based order within the parent plan.
+  dayIndex Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   createdBy User? @relation("ExerciseTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  plan ExercisePlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
   items ExerciseTemplateItem[]
   programs Program[]
   planPeriods PlanPeriod[]
   defaultForCoaches User[] @relation("CoachDefaultExerciseTemplate")
   routineDays ExerciseRoutineDay[]
+
+  @@index([planId, dayIndex])
 }
 
 model ExerciseTemplateItem {
@@ -899,10 +921,13 @@ model ExerciseRoutine {
   id String @id @default(cuid())
   programId String @unique
   userId String
+  /// Plan used to scope weekday routine pickers (null = custom / all loose workouts).
+  exercisePlanId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercisePlan ExercisePlan? @relation(fields: [exercisePlanId], references: [id], onDelete: SetNull)
   days ExerciseRoutineDay[]
 }
 

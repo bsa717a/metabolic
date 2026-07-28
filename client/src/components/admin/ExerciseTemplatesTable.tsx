@@ -295,9 +295,14 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
                   >
                     <td className="max-w-0 py-3 pr-4">
                       <div className="truncate font-semibold">{template.name}</div>
-                      {template.description && (
+                      {template.planName ? (
+                        <div className="truncate text-app-text-muted">
+                          Plan: {template.planName}
+                          {template.dayIndex != null ? ` · day ${template.dayIndex}` : ''}
+                        </div>
+                      ) : template.description ? (
                         <div className="truncate text-app-text-muted">{template.description}</div>
-                      )}
+                      ) : null}
                     </td>
                     <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">
                       {template.exerciseCount} exercises

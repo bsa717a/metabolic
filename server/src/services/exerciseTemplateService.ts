@@ -57,6 +57,9 @@ export function serializeTemplateSummary(template: {
   createdAt: Date;
   updatedAt: Date;
   items: unknown[];
+  planId?: string | null;
+  dayIndex?: number | null;
+  plan?: { name: string } | null;
 }) {
   return {
     id: template.id,
@@ -64,6 +67,9 @@ export function serializeTemplateSummary(template: {
     description: template.description,
     visibility: template.visibility,
     exerciseCount: template.items.length,
+    planId: template.planId ?? null,
+    dayIndex: template.dayIndex ?? null,
+    planName: template.plan?.name ?? null,
     createdAt: template.createdAt.toISOString(),
     updatedAt: template.updatedAt.toISOString()
   };
@@ -86,12 +92,17 @@ export function serializeTemplate(template: {
   };
 }
 
+const templateListInclude = {
+  items: true,
+  plan: { select: { name: true } }
+} satisfies Prisma.ExerciseTemplateInclude;
+
 export async function listTemplatesForUser(userId: string) {
   const templates = await prisma.exerciseTemplate.findMany({
     where: {
       OR: [{ visibility: Visibility.GLOBAL }, { visibility: Visibility.USER, createdById: userId }]
     },
-    include: { items: true },
+    include: templateListInclude,
     orderBy: { updatedAt: 'desc' }
   });
   return templates.map(serializeTemplateSummary);
@@ -99,7 +110,7 @@ export async function listTemplatesForUser(userId: string) {
 
 export async function listTemplatesForAdmin() {
   const templates = await prisma.exerciseTemplate.findMany({
-    include: { items: true },
+    include: templateListInclude,
     orderBy: { updatedAt: 'desc' }
   });
   return templates.map(serializeTemplateSummary);
@@ -110,7 +121,7 @@ export async function listTemplatesForActor(actor: { id: string; role: Role }, c
   if (clientId) return listTemplatesForUser(clientId);
   const templates = await prisma.exerciseTemplate.findMany({
     where: { OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }] },
-    include: { items: true },
+    include: templateListInclude,
     orderBy: { updatedAt: 'desc' }
   });
   return templates.map(serializeTemplateSummary);

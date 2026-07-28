@@ -32,6 +32,7 @@ import {
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
 import { getRoutineForUser, upsertRoutine } from '../services/exerciseRoutineService.js';
+import { listExercisePlansForUser } from '../services/exercisePlanService.js';
 import { prisma } from '../db/prisma.js';
 import { ExerciseStatus, Visibility } from '@prisma/client';
 
@@ -289,6 +290,10 @@ export async function exerciseRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get('/api/exercise-plans', { preHandler: requireAuth }, async (request) =>
+    listExercisePlansForUser(request.appUser!.id)
+  );
+
   app.get('/api/exercise-routine', { preHandler: requireAuth }, async (request) =>
     getRoutineForUser(request.appUser!.id)
   );
@@ -304,11 +309,15 @@ export async function exerciseRoutes(app: FastifyInstance) {
             })
           )
           .length(7),
-        applyForward: z.boolean().optional()
+        applyForward: z.boolean().optional(),
+        exercisePlanId: z.string().nullable().optional()
       })
       .parse(request.body);
     try {
-      return await upsertRoutine(request.appUser!.id, body.days, { applyForward: body.applyForward });
+      return await upsertRoutine(request.appUser!.id, body.days, {
+        applyForward: body.applyForward,
+        exercisePlanId: body.exercisePlanId
+      });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
     }

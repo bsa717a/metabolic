@@ -393,6 +393,9 @@ export type ExercisePlanTemplateSummary = {
   description?: string | null;
   visibility: FoodVisibility;
   exerciseCount: number;
+  planId?: string | null;
+  dayIndex?: number | null;
+  planName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -400,6 +403,18 @@ export type ExercisePlanTemplate = ExercisePlanTemplateSummary & {
   createdById?: string | null;
   items: ExerciseTemplateItem[];
 };
+
+export type ExercisePlanSummary = {
+  id: string;
+  name: string;
+  description?: string | null;
+  visibility: FoodVisibility;
+  dayCount: number;
+  days: ExercisePlanTemplateSummary[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ExerciseRoutineDay = {
   weekday: number;
   templateId: string | null;
@@ -409,6 +424,8 @@ export type ExerciseRoutineDay = {
 export type ExerciseRoutine = {
   id: string;
   programId: string;
+  exercisePlanId?: string | null;
+  exercisePlan?: { id: string; name: string } | null;
   days: ExerciseRoutineDay[];
 };
 export type DashboardDailyLog = {

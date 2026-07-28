@@ -14,6 +14,7 @@ import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { recalculateDailyLogTotals } from './totalsService.js';
 import { serializeTemplateSummary } from './exerciseTemplateService.js';
+import { assertPlanUsable } from './exercisePlanService.js';
 
 const routineInclude = {
   days: {
@@ -21,6 +22,9 @@ const routineInclude = {
     include: {
       template: { include: { items: true } }
     }
+  },
+  exercisePlan: {
+    select: { id: true, name: true }
   }
 } satisfies Prisma.ExerciseRoutineInclude;
 
@@ -32,7 +36,17 @@ export type RoutineDayInput = {
 function serializeRoutineDay(day: {
   weekday: number;
   templateId: string | null;
-  template: { id: string; name: string; description: string | null; visibility: Visibility; createdAt: Date; updatedAt: Date; items: unknown[] } | null;
+  template: {
+    id: string;
+    name: string;
+    description: string | null;
+    visibility: Visibility;
+    planId?: string | null;
+    dayIndex?: number | null;
+    createdAt: Date;
+    updatedAt: Date;
+    items: unknown[];
+  } | null;
 }) {
   return {
     weekday: day.weekday,
@@ -46,11 +60,17 @@ function serializeRoutineDay(day: {
 function serializeRoutine(routine: {
   id: string;
   programId: string;
+  exercisePlanId: string | null;
+  exercisePlan?: { id: string; name: string } | null;
   days: Parameters<typeof serializeRoutineDay>[0][];
 }) {
   return {
     id: routine.id,
     programId: routine.programId,
+    exercisePlanId: routine.exercisePlanId,
+    exercisePlan: routine.exercisePlan
+      ? { id: routine.exercisePlan.id, name: routine.exercisePlan.name }
+      : null,
     days: routine.days.map(serializeRoutineDay)
   };
 }
@@ -206,7 +226,7 @@ export async function applyRoutineForward(
 export async function upsertRoutine(
   userId: string,
   dayInputs: RoutineDayInput[],
-  options?: { applyForward?: boolean }
+  options?: { applyForward?: boolean; exercisePlanId?: string | null }
 ) {
   const program = await getActiveProgram(userId);
   if (!program) throw new Error('No active program found');
@@ -217,8 +237,25 @@ export async function upsertRoutine(
     throw new Error('Invalid weekday assignments');
   }
 
+  const exercisePlanId =
+    options?.exercisePlanId === undefined ? undefined : options.exercisePlanId;
+
+  let planDayIds: Set<string> | null = null;
+  if (exercisePlanId) {
+    const plan = await assertPlanUsable(exercisePlanId, userId);
+    planDayIds = new Set(plan.days.map((day) => day.id));
+  }
+
   for (const day of dayInputs) {
-    if (day.templateId) await assertTemplateUsable(day.templateId, userId);
+    if (!day.templateId) continue;
+    const template = await assertTemplateUsable(day.templateId, userId);
+    if (planDayIds && !planDayIds.has(template.id)) {
+      throw new Error('Workout is not part of the selected exercise plan');
+    }
+    if (exercisePlanId === null && template.planId) {
+      // Custom mode is for loose workouts only — plan day templates need a selected plan.
+      throw new Error('Custom routine days cannot use workouts that belong to an exercise plan');
+    }
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
@@ -227,13 +264,20 @@ export async function upsertRoutine(
   const routine = await prisma.$transaction(async (tx) => {
     const existing = await tx.exerciseRoutine.findUnique({ where: { programId: program.id } });
 
+    const planData =
+      exercisePlanId === undefined ? {} : { exercisePlanId: exercisePlanId };
+
     const routineRecord = existing
       ? await tx.exerciseRoutine.update({
           where: { id: existing.id },
-          data: { updatedAt: new Date() }
+          data: { updatedAt: new Date(), ...planData }
         })
       : await tx.exerciseRoutine.create({
-          data: { programId: program.id, userId }
+          data: {
+            programId: program.id,
+            userId,
+            ...(exercisePlanId !== undefined ? { exercisePlanId } : {})
+          }
         });
 
     await tx.exerciseRoutineDay.deleteMany({ where: { routineId: routineRecord.id } });
