@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Minus, Search, Sparkles } from 'lucide-react';
+import { ChevronDown, Search, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Food, Meal, MealItem } from '../../types';
 import { Button } from '../ui/Button';
@@ -478,11 +478,11 @@ export const MealCardEditor = forwardRef<
                 <li key={item.serverId ?? `new-${idx}`} className="flex items-start gap-2">
                   <button
                     type="button"
-                    aria-label={`Remove ${item.nameSnapshot}`}
+                    aria-label={`Delete ${item.nameSnapshot}`}
                     className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-app-text-muted transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40"
                     onClick={() => removeItem(item)}
                   >
-                    <Minus size={14} />
+                    <Trash2 size={14} />
                   </button>
                   <div className="flex shrink-0 items-center gap-1">
                     <QuantityInput
