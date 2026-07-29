@@ -348,6 +348,7 @@ function WeekdayAssignmentRow({
   awaitingAssign,
   clientId,
   onActivate,
+  onPointerDown,
   onEnsureSaved,
   onOverrideSaved
 }: {
@@ -360,6 +361,7 @@ function WeekdayAssignmentRow({
   awaitingAssign: boolean;
   clientId?: string;
   onActivate: () => void;
+  onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onEnsureSaved: () => Promise<void>;
   onOverrideSaved: (override: ExerciseRoutineDayItemOverride) => void;
 }) {
@@ -430,6 +432,7 @@ function WeekdayAssignmentRow({
                 : `Show exercises for ${label}`
               : `${WEEKDAY_LABELS[weekday]} · ${label}`
         }
+        onPointerDown={onPointerDown}
         onClick={() => {
           if (awaitingAssign) {
             onActivate();
@@ -437,8 +440,8 @@ function WeekdayAssignmentRow({
           }
           if (hasRoutine) setOpen((current) => !current);
         }}
-        className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-app-muted/40 ${
-          hasRoutine || awaitingAssign ? 'cursor-pointer' : 'cursor-default'
+        className={`flex w-full touch-none items-center gap-3 px-3 py-2.5 text-left transition hover:bg-app-muted/40 ${
+          hasRoutine || awaitingAssign ? 'cursor-pointer' : 'cursor-grab'
         }`}
       >
         <span className="w-10 shrink-0 text-sm font-semibold text-app-text">
@@ -529,6 +532,14 @@ function assignmentsFromRoutine(routine: ExerciseRoutine | null): DayAssignment[
   return WEEKDAY_LABELS.map((_, weekday) => ({
     weekday: weekday as WeekdayIndex,
     templateId: byWeekday.get(weekday) ?? null
+  }));
+}
+
+/** Map plan routines (already dayIndex-sorted) onto Mon…Sun; leftover weekdays stay Rest. */
+function assignmentsFromPlanDays(planDays: ExercisePlanTemplateSummary[]): DayAssignment[] {
+  return WEEKDAY_LABELS.map((_, weekday) => ({
+    weekday: weekday as WeekdayIndex,
+    templateId: planDays[weekday]?.id ?? null
   }));
 }
 
@@ -627,6 +638,7 @@ export function RoutineEditorContent({
   const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
   const dragSessionRef = useRef<{
     value: string;
+    sourceWeekday: WeekdayIndex | null;
     startX: number;
     startY: number;
     dragging: boolean;
@@ -659,6 +671,24 @@ export function RoutineEditorContent({
 
   function assignToDay(weekday: WeekdayIndex, value: string) {
     setDayTemplate(weekday, value);
+    clearPaletteInteraction();
+  }
+
+  function swapDayAssignments(from: WeekdayIndex, to: WeekdayIndex) {
+    if (from === to) {
+      clearPaletteInteraction();
+      return;
+    }
+    setSaved(false);
+    setAssignments((current) => {
+      const fromId = current.find((day) => day.weekday === from)?.templateId ?? null;
+      const toId = current.find((day) => day.weekday === to)?.templateId ?? null;
+      return current.map((day) => {
+        if (day.weekday === from) return { ...day, templateId: toId };
+        if (day.weekday === to) return { ...day, templateId: fromId };
+        return day;
+      });
+    });
     clearPaletteInteraction();
   }
 
@@ -704,17 +734,35 @@ export function RoutineEditorContent({
 
   function handlePlanChange(nextValue: string) {
     const nextPlanId = nextValue === CUSTOM_PLAN_VALUE ? null : nextValue;
-    const allowed = new Set(workoutsForPlan(nextPlanId, plans, workouts).map((workout) => workout.id));
+    clearPaletteInteraction();
+
+    if (nextPlanId) {
+      const planDays = workoutsForPlan(nextPlanId, plans, workouts);
+      const nextAssignments = assignmentsFromPlanDays(planDays);
+      const hasExisting = assignments.some((day) => day.templateId);
+      if (
+        hasExisting &&
+        !window.confirm('Replace this week with the plan’s routines (Mon onward)? Remaining days stay Rest.')
+      ) {
+        return;
+      }
+      setSelectedPlanId(nextPlanId);
+      setAssignments(nextAssignments);
+      setSaved(false);
+      return;
+    }
+
+    // Custom: keep my-workout assignments; clear anything not in Custom.
+    const allowed = new Set(workoutsForPlan(null, plans, workouts).map((workout) => workout.id));
     const invalid = assignments.some((day) => day.templateId && !allowed.has(day.templateId));
     if (
       invalid &&
-      !window.confirm('Switching plans clears weekday assignments that are not in the new plan. Continue?')
+      !window.confirm('Switching to Custom clears weekday assignments that are not your workouts. Continue?')
     ) {
       return;
     }
-    setSelectedPlanId(nextPlanId);
+    setSelectedPlanId(null);
     setSaved(false);
-    clearPaletteInteraction();
     if (invalid) {
       setAssignments((current) =>
         current.map((day) =>
@@ -760,7 +808,11 @@ export function RoutineEditorContent({
       if (session.dragging) {
         const weekday = weekdayFromPoint(event.clientX, event.clientY);
         if (weekday != null) {
-          assignToDay(weekday, session.value);
+          if (session.sourceWeekday != null) {
+            swapDayAssignments(session.sourceWeekday, weekday);
+          } else {
+            assignToDay(weekday, session.value);
+          }
         } else {
           setPointerTracking(false);
           setDraggingValue(null);
@@ -768,8 +820,15 @@ export function RoutineEditorContent({
           setDragPointer(null);
           dragSessionRef.current = null;
         }
-      } else {
+      } else if (session.sourceWeekday == null) {
         setSelectedPaletteValue((current) => (current === session.value ? null : session.value));
+        setPointerTracking(false);
+        setDraggingValue(null);
+        setDragOverWeekday(null);
+        setDragPointer(null);
+        dragSessionRef.current = null;
+      } else {
+        // Weekday tap (no drag): let the row's onClick expand / assign.
         setPointerTracking(false);
         setDraggingValue(null);
         setDragOverWeekday(null);
@@ -794,6 +853,27 @@ export function RoutineEditorContent({
     event.currentTarget.setPointerCapture(event.pointerId);
     dragSessionRef.current = {
       value,
+      sourceWeekday: null,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+      pointerId: event.pointerId
+    };
+    setPointerTracking(true);
+  }
+
+  function handleWeekdayPointerDown(
+    weekday: WeekdayIndex,
+    templateId: string | null,
+    event: React.PointerEvent<HTMLButtonElement>
+  ) {
+    if (event.button !== 0) return;
+    // Don't steal the click when a palette routine is waiting to be assigned.
+    if (selectedPaletteValue != null) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragSessionRef.current = {
+      value: templateId ?? REST_VALUE,
+      sourceWeekday: weekday,
       startX: event.clientX,
       startY: event.clientY,
       dragging: false,
@@ -1055,9 +1135,9 @@ export function RoutineEditorContent({
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-app-text">Weekly routine</h3>
           <p className="text-sm text-app-text-muted">
-            Choose an exercise plan, then drag a routine from the work area onto each weekday (or Rest).
-            Tap a routine, then a day, if dragging is awkward. Your schedule repeats every week and fills
-            in upcoming days automatically.
+            Choose an exercise plan to pre-fill the week (first routine → Mon, next → Tue, and so on).
+            Drag days to swap them, or drag from the work area / Rest to replace a day. Your schedule
+            repeats every week and fills in upcoming days automatically.
           </p>
 
           {loading ? (
@@ -1108,6 +1188,9 @@ export function RoutineEditorContent({
                         awaitingAssign={selectedPaletteValue != null && draggingValue == null}
                         clientId={clientId}
                         onActivate={() => handleDayActivate(day.weekday)}
+                        onPointerDown={(event) =>
+                          handleWeekdayPointerDown(day.weekday, day.templateId, event)
+                        }
                         onEnsureSaved={ensureAssignmentsSaved}
                         onOverrideSaved={(override) => handleDayOverrideSaved(day.weekday, override)}
                       />
