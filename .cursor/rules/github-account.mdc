@@ -1,0 +1,36 @@
+---
+description: GitHub account and remote for Metabolic (bsa717a only)
+alwaysApply: true
+---
+
+# GitHub — Metabolic project
+
+This repo is **bsa717a/metabolic**. Do not use the BSA71 account or fork here.
+
+## Account and remote
+
+- **GitHub account:** `bsa717a`
+- **Git remote:** `origin` → `git@github-bsa717a:bsa717a/metabolic.git` (SSH host alias; uses `~/.ssh/id_ed25519_bsa717a`)
+- **Default repo:** `gh repo set-default bsa717a/metabolic`
+
+Project hooks auto-select bsa717a:
+
+- `workspaceOpen` / `sessionStart` → `gh auth switch --user bsa717a`
+- Agent `Shell` commands that run `gh` → inject `GH_TOKEN` for bsa717a
+
+**Never** push, open PRs, or merge to `BSA71/metabolic` or any other fork.
+
+## Commands
+
+```bash
+git push -u origin HEAD
+gh auth switch --user bsa717a   # only needed in a plain terminal if hooks have not run
+gh pr create
+gh repo set-default bsa717a/metabolic
+```
+
+Do not pass `--repo BSA71/...` or add a `bsa71` remote.
+
+## Other projects
+
+The **BSA71** GitHub account is for **4StudentLives**, not Metabolic. That repo uses `git@github-bsa71:...` and its own Cursor hooks.
