@@ -11,6 +11,9 @@ coverage
 *.log
 .tmp
 .firebase
-.cursor
+# Keep Cursor project rules in git; ignore the rest of .cursor (hooks, plans, local settings).
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 backups/
 client/public/tutorial/presrenter.mp4

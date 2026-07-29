@@ -1,0 +1,31 @@
+---
+description: Conventional Commit titles for PRs (and preferred commit messages)
+alwaysApply: true
+---
+
+# Conventional Commits — Metabolic
+
+CI runs **PR Title Check** (`.github/workflows/pr-title.yml`). A PR fails if the title is not a Conventional Commit.
+
+## PR titles (required)
+
+Format: `type(optional-scope)!: description`
+
+Allowed types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `perf`, `build`, `ci`, `style`, `revert`
+
+- Use `!` after the type/scope for breaking changes (`feat!: …` or `feat(api)!: …`)
+- Description must follow `: ` (colon + space)
+
+```text
+✅ feat(exercise): weekly routine drag-assign and tempo schemes
+✅ fix(sms): correct reminder timezone
+✅ chore: bump dependencies
+❌ Weekly routine drag-assign, day overrides, and tempo schemes
+❌ Feat: add workouts
+```
+
+When creating a PR with `gh pr create`, always set `--title` to a valid Conventional Commit. If a title check fails, fix it with `gh pr edit <n> --title 'type(scope): …'`.
+
+## Commit messages (preferred)
+
+Prefer the same format for commit messages. Release-please uses Conventional Commits for changelog/version bumps; non-matching messages may be omitted from releases.
