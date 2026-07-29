@@ -190,7 +190,8 @@ const templateMealItemUpdateBody = z
 const templateExerciseItemBody = z.object({
   exerciseId: z.string().trim().min(1),
   sets: z.number().int().min(0).nullable().optional(),
-  reps: z.number().int().min(0).nullable().optional(),
+  reps: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
+  speed: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
   durationMinutes: z.number().int().min(0).nullable().optional(),
   distance: z.number().finite().min(0).nullable().optional(),
   weight: z.number().finite().min(0).nullable().optional()
@@ -199,7 +200,8 @@ const templateExerciseItemBody = z.object({
 const templateExerciseItemUpdateBody = z
   .object({
     sets: z.number().int().min(0).nullable().optional(),
-    reps: z.number().int().min(0).nullable().optional(),
+    reps: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
+    speed: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
     durationMinutes: z.number().int().min(0).nullable().optional(),
     distance: z.number().finite().min(0).nullable().optional(),
     weight: z.number().finite().min(0).nullable().optional()

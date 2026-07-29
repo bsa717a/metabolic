@@ -4,6 +4,8 @@ import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
+import { RepSchemeSelect } from '../exercise/RepSchemeSelect';
+import { SpeedSchemeSelect } from '../exercise/SpeedSchemeSelect';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -27,7 +29,8 @@ export function EditTemplateExerciseDrawer({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ExerciseCatalogItem | null>(null);
   const [sets, setSets] = useState('');
-  const [reps, setReps] = useState('');
+  const [reps, setReps] = useState<string | null>(null);
+  const [speed, setSpeed] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState('');
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
@@ -46,7 +49,8 @@ export function EditTemplateExerciseDrawer({
         setSelected(null);
         setQuery('');
         setSets(toInput(item.sets));
-        setReps(toInput(item.reps));
+        setReps(item.reps ?? null);
+        setSpeed(item.speed ?? null);
         setDurationMinutes(toInput(item.durationMinutes));
         setWeight(toInput(item.weight));
         return;
@@ -54,7 +58,8 @@ export function EditTemplateExerciseDrawer({
       setSelected(null);
       setQuery('');
       setSets('');
-      setReps('');
+      setReps(null);
+      setSpeed(null);
       setDurationMinutes('');
       setWeight('');
     });
@@ -63,7 +68,8 @@ export function EditTemplateExerciseDrawer({
   function selectExercise(exercise: ExerciseCatalogItem) {
     setSelected(exercise);
     setSets(toInput(exercise.defaultSets));
-    setReps(toInput(exercise.defaultReps));
+    setReps(exercise.defaultReps == null ? null : String(exercise.defaultReps));
+    setSpeed(null);
     setDurationMinutes(toInput(exercise.defaultDurationMinutes));
   }
 
@@ -76,7 +82,8 @@ export function EditTemplateExerciseDrawer({
     try {
       const payload = {
         sets: sets ? Number(sets) : null,
-        reps: reps ? Number(reps) : null,
+        reps,
+        speed,
         durationMinutes: durationMinutes ? Number(durationMinutes) : null,
         weight: weight ? Number(weight) : null
       };
@@ -151,11 +158,18 @@ export function EditTemplateExerciseDrawer({
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium text-app-text">Reps</span>
-            <NumberInput
-              min={0}
-              className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
+            <RepSchemeSelect
               value={reps}
               onChange={setReps}
+              className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold text-app-text"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block font-medium text-app-text">Speed</span>
+            <SpeedSchemeSelect
+              value={speed}
+              onChange={setSpeed}
+              className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold text-app-text"
             />
           </label>
           <label className="text-sm">

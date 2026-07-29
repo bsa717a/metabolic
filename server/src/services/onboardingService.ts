@@ -120,7 +120,7 @@ async function seedDefaultExercises(userId: string, programId: string, date: Dat
         exerciseId: exercise.id,
         scheduledDate: date,
         sets: exercise.defaultSets,
-        reps: exercise.defaultReps,
+        reps: exercise.defaultReps == null ? null : String(exercise.defaultReps),
         durationMinutes: exercise.defaultDurationMinutes,
         status: 'PLANNED',
         sortOrder: index

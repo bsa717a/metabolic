@@ -1,6 +1,7 @@
 import { Minus, Pause, Play, Plus, SkipForward } from 'lucide-react';
 import { ExerciseHowToVideoButton } from '../ExerciseHowToVideoButton';
 import { formatPlan } from '../../../utils/exerciseFormat';
+import { repsForSet } from '../../../utils/repSchemes';
 import type { PerExerciseState, SessionExerciseMeta } from '../../../utils/workoutSession';
 import { hasSets, isDurationBased, totalSets } from '../../../utils/workoutSession';
 import { formatClock } from './format';
@@ -74,7 +75,8 @@ export function SessionExerciseCard({
   const durationBased = isDurationBased(meta);
   const total = totalSets(meta);
 
-  const reps = per.actualReps ?? meta.reps ?? 0;
+  const plannedReps = repsForSet(meta.reps, currentSet);
+  const reps = per.actualReps ?? plannedReps;
   const weight = per.actualWeight ?? meta.weight ?? 0;
   const durationTotalMs = (meta.durationMinutes ?? 0) * 60_000;
   const durationElapsedFrac =

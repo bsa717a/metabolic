@@ -31,18 +31,25 @@ import {
   updateTemplate,
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
-import { getRoutineForUser, upsertRoutine } from '../services/exerciseRoutineService.js';
+import {
+  getRoutineForUser,
+  upsertRoutine,
+  upsertRoutineDayItemOverride
+} from '../services/exerciseRoutineService.js';
 import { listExercisePlansForUser } from '../services/exercisePlanService.js';
 import { prisma } from '../db/prisma.js';
 import { ExerciseStatus, Visibility } from '@prisma/client';
 
 const optionalNumber = z.union([z.number(), z.null()]).optional();
 const optionalString = z.union([z.string(), z.null()]).optional();
+/** Prescription rep scheme (string); numbers accepted for legacy clients/snapshots. */
+const optionalRepScheme = z.union([z.string().trim().max(32), z.number(), z.null()]).optional();
 
 const scheduleBodySchema = z.object({
   exerciseId: z.string(),
   sets: optionalNumber,
-  reps: optionalNumber,
+  reps: optionalRepScheme,
+  speed: optionalRepScheme,
   durationMinutes: optionalNumber,
   distance: optionalNumber,
   weight: optionalNumber,
@@ -53,7 +60,8 @@ const scheduleBodySchema = z.object({
 
 const updateScheduleSchema = z.object({
   sets: optionalNumber,
-  reps: optionalNumber,
+  reps: optionalRepScheme,
+  speed: optionalRepScheme,
   durationMinutes: optionalNumber,
   distance: optionalNumber,
   weight: optionalNumber,
@@ -75,7 +83,8 @@ const markDoneSchema = z.object({
 const exercisePlanSnapshotItemSchema = z.object({
   exerciseId: z.string(),
   sets: z.union([z.number(), z.null()]),
-  reps: z.union([z.number(), z.null()]),
+  reps: z.union([z.string(), z.number(), z.null()]),
+  speed: z.union([z.string(), z.number(), z.null()]).optional(),
   durationMinutes: z.union([z.number(), z.null()]),
   distance: z.union([z.number(), z.null()]),
   weight: z.union([z.number(), z.null()]),
@@ -97,7 +106,8 @@ const restoreExercisePlanBodySchema = z.object({
 const templateExerciseItemBody = z.object({
   exerciseId: z.string().trim().min(1),
   sets: z.number().int().min(0).nullable().optional(),
-  reps: z.number().int().min(0).nullable().optional(),
+  reps: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
+  speed: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
   durationMinutes: z.number().int().min(0).nullable().optional(),
   distance: z.number().finite().min(0).nullable().optional(),
   weight: z.number().finite().min(0).nullable().optional()
@@ -322,6 +332,32 @@ export async function exerciseRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
     }
   });
+
+  app.patch(
+    '/api/exercise-routine/days/:weekday/items/:templateItemId',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z
+        .object({
+          weekday: z.coerce.number().int().min(0).max(6),
+          templateItemId: z.string().min(1)
+        })
+        .parse(request.params);
+      const body = templateExerciseItemUpdateBody.parse(request.body);
+      try {
+        return await upsertRoutineDayItemOverride(
+          request.appUser!.id,
+          params.weekday,
+          params.templateItemId,
+          body
+        );
+      } catch (error) {
+        return reply
+          .code(400)
+          .send({ error: error instanceof Error ? error.message : 'Unable to update day prescription' });
+      }
+    }
+  );
 
   app.get('/api/exercise-templates/default', { preHandler: requireAuth }, async (request) =>
     getProgramDefaultTemplate(request.appUser!.id)

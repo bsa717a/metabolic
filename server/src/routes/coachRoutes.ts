@@ -74,7 +74,11 @@ import {
   updateTemplate as updateExerciseTemplate,
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
-import { getRoutineForUser, upsertRoutine } from '../services/exerciseRoutineService.js';
+import {
+  getRoutineForUser,
+  upsertRoutine,
+  upsertRoutineDayItemOverride
+} from '../services/exerciseRoutineService.js';
 import { listExercisePlansForActor } from '../services/exercisePlanService.js';
 import {
   nutritionTemplateCreateBody,
@@ -146,7 +150,8 @@ const templateMealItemUpdateBody = templateMealItemBody.partial().refine((body) 
 const templateExerciseItemBody = z.object({
   exerciseId: z.string().trim().min(1),
   sets: z.number().int().min(0).nullable().optional(),
-  reps: z.number().int().min(0).nullable().optional(),
+  reps: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
+  speed: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
   durationMinutes: z.number().int().min(0).nullable().optional(),
   distance: z.number().finite().min(0).nullable().optional(),
   weight: z.number().finite().min(0).nullable().optional()
@@ -431,12 +436,14 @@ export async function coachRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid date' });
     }
     const optionalNumber = z.union([z.number(), z.null()]).optional();
+    const optionalRepScheme = z.union([z.string().trim().max(32), z.number(), z.null()]).optional();
     const optionalString = z.union([z.string(), z.null()]).optional();
     const parsed = z
       .object({
         exerciseId: z.string(),
         sets: optionalNumber,
-        reps: optionalNumber,
+        reps: optionalRepScheme,
+        speed: optionalRepScheme,
         durationMinutes: optionalNumber,
         distance: optionalNumber,
         weight: optionalNumber,
@@ -495,6 +502,7 @@ export async function coachRoutes(app: FastifyInstance) {
   app.post('/api/coach/users/:userId/daily-logs/exercises/restore-snapshot', { preHandler: coachOnly }, async (request, reply) => {
     const { userId } = request.params as { userId: string };
     const optionalNumber = z.union([z.number(), z.null()]);
+    const optionalRepScheme = z.union([z.string(), z.number(), z.null()]);
     const parsed = z
       .object({
         days: z
@@ -505,7 +513,8 @@ export async function coachRoutes(app: FastifyInstance) {
                 z.object({
                   exerciseId: z.string(),
                   sets: optionalNumber,
-                  reps: optionalNumber,
+                  reps: optionalRepScheme,
+                  speed: z.union([z.string(), z.number(), z.null()]).optional(),
                   durationMinutes: optionalNumber,
                   distance: optionalNumber,
                   weight: optionalNumber,
@@ -904,6 +913,40 @@ export async function coachRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
     }
   });
+
+  app.patch(
+    '/api/coach/users/:userId/exercise-routine/days/:weekday/items/:templateItemId',
+    { preHandler: coachOnly },
+    async (request, reply) => {
+      const params = z
+        .object({
+          userId: z.string().min(1),
+          weekday: z.coerce.number().int().min(0).max(6),
+          templateItemId: z.string().min(1)
+        })
+        .safeParse(request.params);
+      if (!params.success) {
+        return reply.code(400).send({ error: params.error.issues[0]?.message ?? 'Invalid request' });
+      }
+      const parsed = templateExerciseItemUpdateBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid prescription' });
+      }
+      try {
+        await requireCoachClient(request.appUser!, params.data.userId);
+        return await upsertRoutineDayItemOverride(
+          params.data.userId,
+          params.data.weekday,
+          params.data.templateItemId,
+          parsed.data
+        );
+      } catch (error) {
+        return reply
+          .code(400)
+          .send({ error: error instanceof Error ? error.message : 'Unable to update day prescription' });
+      }
+    }
+  );
 
   app.post('/api/coach/users/:userId/exercise-templates', { preHandler: coachOnly }, async (request, reply) => {
     const userId = (request.params as { userId: string }).userId;

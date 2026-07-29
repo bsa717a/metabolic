@@ -6,6 +6,8 @@ import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
 import { ExerciseHowToVideoButton } from './ExerciseHowToVideoButton';
+import { RepSchemeSelect } from './RepSchemeSelect';
+import { SpeedSchemeSelect } from './SpeedSchemeSelect';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -51,7 +53,8 @@ function EditExerciseDrawerContent({
   onRemove?: (id: string) => void | Promise<void>;
 }) {
   const [sets, setSets] = useState(() => toInput(item.sets));
-  const [reps, setReps] = useState(() => toInput(item.reps));
+  const [reps, setReps] = useState<string | null>(() => item.reps ?? null);
+  const [speed, setSpeed] = useState<string | null>(() => item.speed ?? null);
   const [durationMinutes, setDurationMinutes] = useState(() => toInput(item.durationMinutes));
   const [weight, setWeight] = useState(() => toInput(item.weight));
   const [description, setDescription] = useState(() => item.exercise.description ?? '');
@@ -68,7 +71,8 @@ function EditExerciseDrawerContent({
         method: 'PATCH',
         body: JSON.stringify({
           sets: sets === '' ? null : Number(sets),
-          reps: reps === '' ? null : Number(reps),
+          reps,
+          speed,
           durationMinutes: durationMinutes === '' ? null : Number(durationMinutes),
           weight: weight === '' ? null : Number(weight),
           description: description.trim() || null,
@@ -115,7 +119,7 @@ function EditExerciseDrawerContent({
               <p className="text-sm text-slate-600">Watch the how-to video for this exercise.</p>
             </div>
           )}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <label className="text-sm">
               <span className="font-medium text-slate-700">Sets</span>
               <NumberInput
@@ -127,11 +131,18 @@ function EditExerciseDrawerContent({
             </label>
             <label className="text-sm">
               <span className="font-medium text-slate-700">Reps</span>
-              <NumberInput
-                min={0}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+              <RepSchemeSelect
                 value={reps}
                 onChange={setReps}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="font-medium text-slate-700">Speed</span>
+              <SpeedSchemeSelect
+                value={speed}
+                onChange={setSpeed}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900"
               />
             </label>
             <label className="text-sm">

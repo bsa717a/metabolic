@@ -1,6 +1,8 @@
 import { type Difficulty, ExerciseStatus, ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey } from '../utils/dates.js';
+import { defaultRepsToScheme, normalizeRepScheme } from '../utils/repSchemes.js';
+import { normalizeSpeedScheme } from '../utils/speedSchemes.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { recalculateDailyLogTotals } from './totalsService.js';
 
@@ -58,7 +60,8 @@ export async function ensureExercisesForDate(userId: string, date: string) {
 
 const scheduleFields = {
   sets: (value: unknown) => (value === null || value === undefined ? null : Number(value)),
-  reps: (value: unknown) => (value === null || value === undefined ? null : Number(value)),
+  reps: (value: unknown) => normalizeRepScheme(value),
+  speed: (value: unknown) => normalizeSpeedScheme(value),
   durationMinutes: (value: unknown) => (value === null || value === undefined ? null : Number(value)),
   distance: (value: unknown) => (value === null || value === undefined ? null : value),
   weight: (value: unknown) => (value === null || value === undefined ? null : value)
@@ -70,7 +73,8 @@ export async function createScheduledExercise(
   data: {
     exerciseId: string;
     sets?: number | null;
-    reps?: number | null;
+    reps?: string | number | null;
+    speed?: string | number | null;
     durationMinutes?: number | null;
     distance?: number | null;
     weight?: number | null;
@@ -99,7 +103,8 @@ export async function createScheduledExercise(
       exerciseId: data.exerciseId,
       scheduledDate: parseDateParam(date),
       sets: data.sets ?? catalog.defaultSets,
-      reps: data.reps ?? catalog.defaultReps,
+      reps: data.reps !== undefined ? normalizeRepScheme(data.reps) : defaultRepsToScheme(catalog.defaultReps),
+      speed: data.speed !== undefined ? normalizeSpeedScheme(data.speed) : null,
       durationMinutes: data.durationMinutes ?? catalog.defaultDurationMinutes,
       distance: data.distance ?? catalog.defaultDistance,
       weight: data.weight ?? null,
@@ -120,7 +125,8 @@ export async function updateScheduledExercise(
   id: string,
   data: Partial<{
     sets: number | null;
-    reps: number | null;
+    reps: string | number | null;
+    speed: string | number | null;
     durationMinutes: number | null;
     distance: number | null;
     weight: number | null;
@@ -144,6 +150,7 @@ export async function updateScheduledExercise(
     data: {
       ...(data.sets !== undefined ? { sets: scheduleFields.sets(data.sets) } : {}),
       ...(data.reps !== undefined ? { reps: scheduleFields.reps(data.reps) } : {}),
+      ...(data.speed !== undefined ? { speed: scheduleFields.speed(data.speed) } : {}),
       ...(data.durationMinutes !== undefined ? { durationMinutes: scheduleFields.durationMinutes(data.durationMinutes) } : {}),
       ...(data.distance !== undefined ? { distance: scheduleFields.distance(data.distance) } : {}),
       ...(data.weight !== undefined ? { weight: scheduleFields.weight(data.weight) } : {})
@@ -188,6 +195,7 @@ async function copyExercisesToDate(
       scheduledDate: targetDate,
       sets: item.sets,
       reps: item.reps,
+      speed: item.speed,
       durationMinutes: item.durationMinutes,
       distance: item.distance,
       weight: item.weight,
@@ -401,7 +409,9 @@ export async function reorderScheduledExercises(userId: string, date: string, or
 export type ExercisePlanSnapshotItem = {
   exerciseId: string;
   sets: number | null;
-  reps: number | null;
+  /** String scheme; number allowed for legacy undo snapshots. */
+  reps: string | number | null;
+  speed?: string | number | null;
   durationMinutes: number | null;
   distance: number | null;
   weight: number | null;
@@ -425,6 +435,7 @@ function toSnapshotItem(
     exerciseId: item.exerciseId,
     sets: item.sets,
     reps: item.reps,
+    speed: item.speed,
     durationMinutes: item.durationMinutes,
     distance: item.distance == null ? null : Number(item.distance),
     weight: item.weight == null ? null : Number(item.weight),
@@ -466,7 +477,8 @@ export async function restoreExercisePlanSnapshot(userId: string, days: Exercise
             exerciseId: item.exerciseId,
             scheduledDate,
             sets: item.sets,
-            reps: item.reps,
+            reps: normalizeRepScheme(item.reps),
+            speed: normalizeSpeedScheme(item.speed),
             durationMinutes: item.durationMinutes,
             distance: item.distance,
             weight: item.weight,

@@ -273,7 +273,10 @@ export type ScheduledExercise = {
   id: string;
   status: string;
   sets?: number | null;
-  reps?: number | null;
+  /** Prescription scheme, e.g. "10", "15/12/10", "20/17/15". */
+  reps?: string | null;
+  /** Tempo/speed scheme, e.g. "1/3", "1/2", "1/1". */
+  speed?: string | null;
   durationMinutes?: number | null;
   distance?: number | null;
   weight?: number | null;
@@ -376,7 +379,10 @@ export type ExerciseTemplateItem = {
   exerciseId: string;
   sortOrder: number;
   sets?: number | null;
-  reps?: number | null;
+  /** Prescription scheme, e.g. "10", "15/12/10", "20/17/15". */
+  reps?: string | null;
+  /** Tempo/speed scheme, e.g. "1/3", "1/2", "1/1". */
+  speed?: string | null;
   durationMinutes?: number | null;
   distance?: number | null;
   weight?: number | null;
@@ -415,10 +421,22 @@ export type ExercisePlanSummary = {
   updatedAt: string;
 };
 
+export type ExerciseRoutineDayItemOverride = {
+  templateItemId: string;
+  sets?: number | null;
+  reps?: string | null;
+  speed?: string | null;
+  durationMinutes?: number | null;
+  distance?: number | null;
+  weight?: number | null;
+};
+
 export type ExerciseRoutineDay = {
+  id: string;
   weekday: number;
   templateId: string | null;
   template: ExercisePlanTemplateSummary | null;
+  itemOverrides: ExerciseRoutineDayItemOverride[];
 };
 
 export type ExerciseRoutine = {

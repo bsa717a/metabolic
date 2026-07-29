@@ -7,6 +7,7 @@ import { Type, type FunctionDeclaration } from '@google/genai';
 import { ExerciseStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { addUtcDays, parseDateParam, toDateKey } from '../utils/dates.js';
+import { defaultRepsToScheme, normalizeRepScheme } from '../utils/repSchemes.js';
 import {
   createScheduledExercise,
   deleteScheduledExercise,
@@ -60,7 +61,7 @@ export type DayExerciseState = {
   name: string;
   status: string;
   sets: number | null;
-  reps: number | null;
+  reps: string | null;
   durationMinutes: number | null;
   weight: number | null;
   distance: number | null;
@@ -93,13 +94,14 @@ function resolveDate(dateArg: string | undefined, todayKey: string): { dateKey: 
 
 function formatPrescription(ex: {
   sets: number | null;
-  reps: number | null;
+  reps: string | null;
   durationMinutes: number | null;
   weight: number | null;
   distance: number | null;
 }): string {
   const bits: string[] = [];
   if (ex.sets != null && ex.reps != null) bits.push(`${ex.sets}x${ex.reps}`);
+  else if (ex.reps != null) bits.push(`${ex.reps} reps`);
   else if (ex.durationMinutes != null) bits.push(`${ex.durationMinutes} min`);
   if (ex.weight != null) bits.push(`${Number(ex.weight)} lb`);
   if (ex.distance != null) bits.push(`${Number(ex.distance)} mi`);
@@ -243,7 +245,10 @@ export function buildExerciseToolDeclarations(): FunctionDeclaration[] {
           name: { type: Type.STRING, description: EXERCISE_NAME_DESC },
           date: { type: Type.STRING, description: DATE_DESC },
           sets: { type: Type.NUMBER, description: 'Number of sets.' },
-          reps: { type: Type.NUMBER, description: 'Reps per set.' },
+          reps: {
+            type: Type.STRING,
+            description: 'Rep scheme: "10", "15/12/10", or "20/17/15".'
+          },
           durationMinutes: { type: Type.NUMBER, description: 'Duration in minutes for timed exercises.' },
           weight: { type: Type.NUMBER, description: 'Weight in pounds, if applicable.' },
           distance: { type: Type.NUMBER, description: 'Distance in miles, if applicable.' }
@@ -262,7 +267,10 @@ export function buildExerciseToolDeclarations(): FunctionDeclaration[] {
           exerciseName: { type: Type.STRING, description: EXERCISE_NAME_DESC },
           date: { type: Type.STRING, description: DATE_DESC },
           sets: { type: Type.NUMBER },
-          reps: { type: Type.NUMBER },
+          reps: {
+            type: Type.STRING,
+            description: 'Rep scheme: "10", "15/12/10", or "20/17/15".'
+          },
           durationMinutes: { type: Type.NUMBER },
           weight: { type: Type.NUMBER },
           distance: { type: Type.NUMBER }
@@ -433,7 +441,10 @@ export async function executeExerciseTool(
         const scheduled = await createScheduledExercise(ctx.userId, dateKey, {
           exerciseId: catalog.id,
           sets: nullableNum(args.sets) ?? catalog.defaultSets,
-          reps: nullableNum(args.reps) ?? catalog.defaultReps,
+          reps:
+            args.reps !== undefined
+              ? normalizeRepScheme(args.reps)
+              : defaultRepsToScheme(catalog.defaultReps),
           durationMinutes: nullableNum(args.durationMinutes) ?? catalog.defaultDurationMinutes,
           weight: nullableNum(args.weight),
           distance: nullableNum(args.distance)
@@ -472,7 +483,7 @@ export async function executeExerciseTool(
         if (!target) return { error: 'I could not find that exercise on the plan — tell me the name or check the day.' };
         const patch = {
           ...(args.sets !== undefined ? { sets: nullableNum(args.sets) ?? null } : {}),
-          ...(args.reps !== undefined ? { reps: nullableNum(args.reps) ?? null } : {}),
+          ...(args.reps !== undefined ? { reps: normalizeRepScheme(args.reps) } : {}),
           ...(args.durationMinutes !== undefined
             ? { durationMinutes: nullableNum(args.durationMinutes) ?? null }
             : {}),

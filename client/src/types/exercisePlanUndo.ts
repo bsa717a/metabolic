@@ -1,7 +1,8 @@
 export type ExercisePlanSnapshotItem = {
   exerciseId: string;
   sets?: number | null;
-  reps?: number | null;
+  reps?: string | number | null;
+  speed?: string | number | null;
   durationMinutes?: number | null;
   distance?: number | null;
   weight?: number | null;

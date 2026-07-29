@@ -35,7 +35,7 @@ describe('startSession', () => {
   it('captures PLANNED-only order and starts on the first exercise', () => {
     const s = startSession(
       '2026-07-20',
-      [ex('a', 'PLANNED', { sets: 3, reps: 10 }), ex('done', 'DONE'), ex('b', 'PLANNED', { sets: 1 })],
+      [ex('a', 'PLANNED', { sets: 3, reps: '10' }), ex('done', 'DONE'), ex('b', 'PLANNED', { sets: 1 })],
       1000
     );
     expect(s.order).toEqual(['a', 'b']);
@@ -60,7 +60,7 @@ describe('startSession', () => {
 
 describe('COMPLETE_SET', () => {
   it('rests between sets and advances the set counter', () => {
-    const s0 = startSession('d', [ex('a', 'PLANNED', { sets: 3, reps: 10 })], 1000);
+    const s0 = startSession('d', [ex('a', 'PLANNED', { sets: 3, reps: '10' })], 1000);
     const s1 = sessionReducer(s0, { type: 'COMPLETE_SET', nowMs: 2000 });
     expect(s1.phase).toBe('rest');
     expect(s1.currentSet).toBe(2);
@@ -218,7 +218,7 @@ describe('actualsForExercise', () => {
   });
 
   it('sends set/rep actuals for set-based exercises', () => {
-    let s = startSession('d', [ex('a', 'PLANNED', { sets: 2, reps: 10, weight: 135 })], 1000);
+    let s = startSession('d', [ex('a', 'PLANNED', { sets: 2, reps: '10', weight: 135 })], 1000);
     s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 2000 });
     expect(actualsForExercise(s, 'a')).toEqual({ actualSets: 1 });
   });
@@ -257,7 +257,7 @@ describe('persistence', () => {
 
   beforeAll(() => {
     (globalThis as unknown as { window: unknown }).window = { localStorage: makeStorage() };
-    sample = startSession('2026-07-20', [ex('a', 'PLANNED', { sets: 2, reps: 10 })], 1000);
+    sample = startSession('2026-07-20', [ex('a', 'PLANNED', { sets: 2, reps: '10' })], 1000);
     otherDay = startSession('2026-07-21', [ex('b', 'PLANNED', { sets: 1 })], 1000);
   });
 

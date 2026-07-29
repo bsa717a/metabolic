@@ -5,6 +5,8 @@ import { api } from '../../services/api';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import { Button } from '../ui/Button';
 import { NumberInput } from '../ui/NumberInput';
+import { RepSchemeSelect } from './RepSchemeSelect';
+import { SpeedSchemeSelect } from './SpeedSchemeSelect';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -111,7 +113,7 @@ export function InlineWorkoutEditor({
         body: JSON.stringify({
           exerciseId: item.id,
           sets: 3,
-          reps: 10,
+          reps: '10',
           durationMinutes: null,
           weight: null
         })
@@ -129,7 +131,13 @@ export function InlineWorkoutEditor({
 
   async function handlePatchItem(
     item: ExerciseTemplateItem,
-    patch: { sets?: number | null; reps?: number | null; durationMinutes?: number | null; weight?: number | null }
+    patch: {
+      sets?: number | null;
+      reps?: string | null;
+      speed?: string | null;
+      durationMinutes?: number | null;
+      weight?: number | null;
+    }
   ) {
     setError('');
     try {
@@ -334,7 +342,8 @@ function ExerciseRow({
   onRemove: () => void;
   onPatch: (patch: {
     sets?: number | null;
-    reps?: number | null;
+    reps?: string | null;
+    speed?: string | null;
     durationMinutes?: number | null;
     weight?: number | null;
   }) => void;
@@ -342,25 +351,29 @@ function ExerciseRow({
   // Always expose sets/reps AND minutes (like the previous editors) — some exercises
   // (planks, carries, cardio) are timed instead of (or in addition to) rep-based.
   const [sets, setSets] = useState(toInput(item.sets));
-  const [reps, setReps] = useState(toInput(item.reps));
+  const [reps, setReps] = useState(item.reps ?? null);
+  const [speed, setSpeed] = useState<string | null>(item.speed ?? null);
   const [minutes, setMinutes] = useState(toInput(item.durationMinutes));
   const [weight, setWeight] = useState(toInput(item.weight));
 
   useEffect(() => {
     setSets(toInput(item.sets));
-    setReps(toInput(item.reps));
+    setReps(item.reps ?? null);
+    setSpeed(item.speed ?? null);
     setMinutes(toInput(item.durationMinutes));
     setWeight(toInput(item.weight));
-  }, [item.id, item.sets, item.reps, item.durationMinutes, item.weight]);
+  }, [item.id, item.sets, item.reps, item.speed, item.durationMinutes, item.weight]);
 
-  function commit() {
+  function commit(next: { reps?: string | null; speed?: string | null } = {}) {
     const nextSets = parseOptionalNumber(sets);
-    const nextReps = parseOptionalNumber(reps);
+    const nextReps = next.reps !== undefined ? next.reps : reps;
+    const nextSpeed = next.speed !== undefined ? next.speed : speed;
     const nextMinutes = parseOptionalNumber(minutes);
     const nextWeight = parseOptionalNumber(weight);
     if (
       nextSets === (item.sets ?? null) &&
       nextReps === (item.reps ?? null) &&
+      nextSpeed === (item.speed ?? null) &&
       nextMinutes === (item.durationMinutes ?? null) &&
       nextWeight === (item.weight == null ? null : Number(item.weight))
     ) {
@@ -369,6 +382,7 @@ function ExerciseRow({
     onPatch({
       sets: nextSets,
       reps: nextReps,
+      speed: nextSpeed,
       durationMinutes: nextMinutes,
       weight: nextWeight
     });
@@ -376,19 +390,42 @@ function ExerciseRow({
 
   return (
     <li className="rounded-2xl border border-app-border bg-app-surface px-3 py-2.5">
-      <div className="flex items-start gap-2">
-        <span className="mt-1 w-5 shrink-0 text-xs font-bold tabular-nums text-app-text-muted">{index}</span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="truncate text-sm font-semibold text-app-text">{item.exercise.name}</p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <NumberChip label="sets" value={sets} onChange={setSets} onCommit={commit} ariaLabel="Sets" optional />
+      <div className="flex items-center gap-2">
+        <span className="w-5 shrink-0 text-xs font-bold tabular-nums text-app-text-muted">{index}</span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <p className="min-w-[7rem] flex-1 truncate text-sm font-semibold text-app-text">
+            {item.exercise.name}
+          </p>
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+            <NumberChip label="sets" value={sets} onChange={setSets} onCommit={() => commit()} ariaLabel="Sets" optional />
             <span className="text-xs text-app-text-muted">×</span>
-            <NumberChip label="reps" value={reps} onChange={setReps} onCommit={commit} ariaLabel="Reps" optional />
+            <label className="inline-flex flex-col items-center rounded-lg border border-app-border bg-app-muted/40 px-1.5 py-1">
+              <RepSchemeSelect
+                value={reps}
+                onChange={(next) => {
+                  setReps(next);
+                  commit({ reps: next });
+                }}
+                className="w-[5.5rem] bg-transparent text-center text-sm font-semibold text-app-text outline-none"
+              />
+              <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">reps</span>
+            </label>
+            <label className="inline-flex flex-col items-center rounded-lg border border-app-border bg-app-muted/40 px-1.5 py-1">
+              <SpeedSchemeSelect
+                value={speed}
+                onChange={(next) => {
+                  setSpeed(next);
+                  commit({ speed: next });
+                }}
+                className="w-14 bg-transparent text-center text-sm font-semibold text-app-text outline-none"
+              />
+              <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">speed</span>
+            </label>
             <NumberChip
               label="min"
               value={minutes}
               onChange={setMinutes}
-              onCommit={commit}
+              onCommit={() => commit()}
               ariaLabel="Minutes"
               optional
             />
@@ -396,7 +433,7 @@ function ExerciseRow({
               label="lb"
               value={weight}
               onChange={setWeight}
-              onCommit={commit}
+              onCommit={() => commit()}
               ariaLabel="Weight"
               optional
             />
@@ -407,7 +444,7 @@ function ExerciseRow({
           aria-label={`Remove ${item.exercise.name}`}
           disabled={busy}
           onClick={onRemove}
-          className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-app-text-muted transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/40"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-app-text-muted transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/40"
         >
           <X className="h-4 w-4" />
         </button>
