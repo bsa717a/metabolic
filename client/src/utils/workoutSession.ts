@@ -35,7 +35,8 @@ export type SessionExerciseMeta = {
   description?: string | null;
   howToVideoUrl?: string | null;
   sets: number | null;
-  reps: number | null;
+  reps: string | null;
+  speed: string | null;
   weight: number | null;
   durationMinutes: number | null;
   distance: number | null;
@@ -112,6 +113,7 @@ export function toMeta(exercise: ScheduledExercise): SessionExerciseMeta {
     howToVideoUrl: exercise.exercise.howToVideoUrl ?? null,
     sets: exercise.sets ?? null,
     reps: exercise.reps ?? null,
+    speed: exercise.speed ?? null,
     weight: exercise.weight ?? null,
     durationMinutes: exercise.durationMinutes ?? null,
     distance: exercise.distance ?? null
@@ -245,7 +247,12 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
 
       if (setsDone < total) {
         // More sets remain: rest, then continue the same exercise at the next set.
-        const rested = enterRest({ ...state, perExercise: nextPer }, state.settings.restSetSec, action.nowMs);
+        // Clear actualReps so descending schemes (15/12/10) reset to the next set target.
+        const betweenSets = {
+          ...nextPer,
+          [currentId]: { ...nextPer[currentId], actualReps: undefined }
+        };
+        const rested = enterRest({ ...state, perExercise: betweenSets }, state.settings.restSetSec, action.nowMs);
         return { ...rested, currentSet: state.currentSet + 1 };
       }
 

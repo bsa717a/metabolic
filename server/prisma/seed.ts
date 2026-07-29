@@ -91,7 +91,7 @@ async function main() {
         exerciseId: exercise.id,
         scheduledDate: today,
         sets: exercise.defaultSets,
-        reps: exercise.defaultReps,
+        reps: exercise.defaultReps == null ? null : String(exercise.defaultReps),
         durationMinutes: exercise.defaultDurationMinutes,
         status: index === 0 ? 'DONE' : 'PLANNED',
         sortOrder: index
@@ -115,7 +115,7 @@ async function main() {
           exerciseId: exercise.id,
           sortOrder: index,
           sets: exercise.defaultSets,
-          reps: exercise.defaultReps,
+          reps: exercise.defaultReps == null ? null : String(exercise.defaultReps),
           durationMinutes: exercise.defaultDurationMinutes
         }))
       }
@@ -130,8 +130,8 @@ async function main() {
       createdById: admin.id,
       items: {
         create: [
-          { exerciseId: exercises[1].id, sortOrder: 0, sets: 4, reps: 8 },
-          { exerciseId: exercises[2].id, sortOrder: 1, sets: 4, reps: 10 },
+          { exerciseId: exercises[1].id, sortOrder: 0, sets: 4, reps: '8' },
+          { exerciseId: exercises[2].id, sortOrder: 1, sets: 4, reps: '10' },
           { exerciseId: exercises[0].id, sortOrder: 2, durationMinutes: 20 }
         ]
       }

@@ -5,6 +5,8 @@ import { formatPlan } from '../../utils/exerciseFormat';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
+import { RepSchemeSelect } from '../exercise/RepSchemeSelect';
+import { SpeedSchemeSelect } from '../exercise/SpeedSchemeSelect';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -24,7 +26,8 @@ export function CoachManualExerciseTemplateDrawer({
   const [error, setError] = useState('');
   const [editItem, setEditItem] = useState<ExerciseTemplateItem | null>(null);
   const [sets, setSets] = useState('');
-  const [reps, setReps] = useState('');
+  const [reps, setReps] = useState<string | null>(null);
+  const [speed, setSpeed] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState('');
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
@@ -51,7 +54,8 @@ export function CoachManualExerciseTemplateDrawer({
   function startEdit(item: ExerciseTemplateItem) {
     setEditItem(item);
     setSets(toInput(item.sets));
-    setReps(toInput(item.reps));
+    setReps(item.reps ?? null);
+    setSpeed(item.speed ?? null);
     setDurationMinutes(toInput(item.durationMinutes));
     setWeight(toInput(item.weight));
   }
@@ -65,7 +69,8 @@ export function CoachManualExerciseTemplateDrawer({
         method: 'PATCH',
         body: JSON.stringify({
           sets: sets ? Number(sets) : null,
-          reps: reps ? Number(reps) : null,
+          reps,
+          speed,
           durationMinutes: durationMinutes ? Number(durationMinutes) : null,
           weight: weight ? Number(weight) : null
         })
@@ -121,11 +126,18 @@ export function CoachManualExerciseTemplateDrawer({
                 </label>
                 <label className="text-sm">
                   <span className="mb-1 block text-app-text-muted">Reps</span>
-                  <NumberInput
-                    min={0}
-                    className="w-full rounded-xl border border-app-border px-3 py-2"
+                  <RepSchemeSelect
                     value={reps}
                     onChange={setReps}
+                    className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold text-app-text"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-app-text-muted">Speed</span>
+                  <SpeedSchemeSelect
+                    value={speed}
+                    onChange={setSpeed}
+                    className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold text-app-text"
                   />
                 </label>
                 <label className="text-sm">

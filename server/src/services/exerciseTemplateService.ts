@@ -3,6 +3,8 @@ import { prisma } from '../db/prisma.js';
 import { isAdmin } from '../auth/requireRole.js';
 import { parseDateParam } from '../utils/dates.js';
 import { n } from '../utils/numbers.js';
+import { defaultRepsToScheme, normalizeRepScheme } from '../utils/repSchemes.js';
+import { normalizeSpeedScheme } from '../utils/speedSchemes.js';
 import { getActiveProgram } from './exerciseService.js';
 import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
@@ -20,7 +22,8 @@ function serializeTemplateItem(item: {
   exerciseId: string;
   sortOrder: number;
   sets: number | null;
-  reps: number | null;
+  reps: string | null;
+  speed: string | null;
   durationMinutes: number | null;
   distance: unknown;
   weight: unknown;
@@ -37,6 +40,7 @@ function serializeTemplateItem(item: {
     sortOrder: item.sortOrder,
     sets: item.sets,
     reps: item.reps,
+    speed: item.speed,
     durationMinutes: item.durationMinutes,
     distance: item.distance == null ? null : n(item.distance),
     weight: item.weight == null ? null : n(item.weight),
@@ -221,6 +225,7 @@ async function deepCopyTemplate(sourceId: string, overrides: { name: string; cre
           sortOrder: item.sortOrder,
           sets: item.sets,
           reps: item.reps,
+          speed: item.speed,
           durationMinutes: item.durationMinutes,
           distance: item.distance,
           weight: item.weight
@@ -267,6 +272,7 @@ export async function cloneDailyLogToTemplate(
           sortOrder: index,
           sets: item.sets,
           reps: item.reps,
+          speed: item.speed,
           durationMinutes: item.durationMinutes,
           distance: item.distance,
           weight: item.weight
@@ -367,7 +373,11 @@ export async function addTemplateItem(templateId: string, data: Record<string, u
       exerciseId: exercise.id,
       sortOrder: await nextSortOrder(templateId),
       sets: data.sets === undefined || data.sets === null ? exercise.defaultSets : Number(data.sets),
-      reps: data.reps === undefined || data.reps === null ? exercise.defaultReps : Number(data.reps),
+      reps:
+        data.reps === undefined || data.reps === null
+          ? defaultRepsToScheme(exercise.defaultReps)
+          : normalizeRepScheme(data.reps),
+      speed: data.speed === undefined ? null : normalizeSpeedScheme(data.speed),
       durationMinutes:
         data.durationMinutes === undefined || data.durationMinutes === null
           ? exercise.defaultDurationMinutes
@@ -389,7 +399,8 @@ export async function updateTemplateItem(itemId: string, data: Record<string, un
     where: { id: itemId },
     data: {
       sets: data.sets === undefined ? undefined : data.sets === null ? null : Number(data.sets),
-      reps: data.reps === undefined ? undefined : data.reps === null ? null : Number(data.reps),
+      reps: data.reps === undefined ? undefined : normalizeRepScheme(data.reps),
+      speed: data.speed === undefined ? undefined : normalizeSpeedScheme(data.speed),
       durationMinutes:
         data.durationMinutes === undefined
           ? undefined

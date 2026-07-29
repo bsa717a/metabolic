@@ -6,6 +6,8 @@ import { coachDailyExercisesApi } from '../../utils/coachExerciseApi';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
+import { RepSchemeSelect } from './RepSchemeSelect';
+import { SpeedSchemeSelect } from './SpeedSchemeSelect';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -76,7 +78,8 @@ function AddExerciseDrawerContent({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ExerciseCatalogItem | null>(null);
   const [sets, setSets] = useState('');
-  const [reps, setReps] = useState('');
+  const [reps, setReps] = useState<string | null>(null);
+  const [speed, setSpeed] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState('');
   const [weight, setWeight] = useState('');
   const [description, setDescription] = useState('');
@@ -103,7 +106,8 @@ function AddExerciseDrawerContent({
     setCatalogError(undefined);
     setSelected(item);
     setSets(toInput(item.defaultSets));
-    setReps(toInput(item.defaultReps));
+    setReps(item.defaultReps == null ? null : String(item.defaultReps));
+    setSpeed(null);
     setDurationMinutes(toInput(item.defaultDurationMinutes));
     setDescription(item.description ?? '');
     setCategory(item.category ?? '');
@@ -155,7 +159,8 @@ function AddExerciseDrawerContent({
         body: JSON.stringify({
           exerciseId: selected.id,
           sets: sets === '' ? null : Number(sets),
-          reps: reps === '' ? null : Number(reps),
+          reps,
+          speed,
           durationMinutes: durationMinutes === '' ? null : Number(durationMinutes),
           weight: weight === '' ? null : Number(weight),
           description: description.trim() || null,
@@ -248,11 +253,18 @@ function AddExerciseDrawerContent({
               </label>
               <label className="text-sm">
                 <span className="font-medium text-app-text">Reps</span>
-                <NumberInput
-                  min={0}
-                  className="exercise-metric-input"
+                <RepSchemeSelect
                   value={reps}
                   onChange={setReps}
+                  className="exercise-metric-input w-full"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="font-medium text-app-text">Speed</span>
+                <SpeedSchemeSelect
+                  value={speed}
+                  onChange={setSpeed}
+                  className="exercise-metric-input w-full"
                 />
               </label>
               <label className="text-sm">
