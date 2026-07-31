@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  activeCards,
   defaultPicks,
   foodsLabel,
   missingCoverageRole,
   picksToSelections,
+  pruneAndRefillPicks,
   restorePicks,
   selectionTotals,
   togglePick,
+  visibleOptions,
   type BuilderCard,
   type CardOption
 } from './mealCards';
@@ -19,6 +22,7 @@ function option(id: string, overrides: Partial<CardOption> = {}): CardOption {
     icon: null,
     isDefault: false,
     sortOrder: 0,
+    visibleWhenOptionId: null,
     foods: [],
     totals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
     ...overrides
@@ -85,10 +89,60 @@ describe('restorePicks', () => {
     expect(picks).toEqual({ protein: ['shrimp'], carb: ['tortillas'], free: ['pico', 'hot-sauce'] });
   });
 
-  it('drops saved option ids that no longer exist, keeps defaults for missing cards', () => {
+  it('drops saved option ids that no longer exist and refills required cards', () => {
     const picks = restorePicks(cards, { protein: 'retired-option' });
-    expect(picks.protein).toEqual([]);
+    expect(picks.protein).toEqual(['beef']);
     expect(picks.carb).toEqual(['tortillas']);
+  });
+});
+
+describe('path visibility', () => {
+  const style = card('style', {
+    role: 'STYLE',
+    sortOrder: 0,
+    options: [option('hot', { isDefault: true }), option('cold')]
+  });
+  const proteinPath = card('protein', {
+    role: 'PROTEIN',
+    sortOrder: 1,
+    options: [
+      option('eggs', { isDefault: true, visibleWhenOptionId: 'hot' }),
+      option('yogurt', { isDefault: true, visibleWhenOptionId: 'cold' }),
+      option('shared', { visibleWhenOptionId: null })
+    ]
+  });
+  const pathCards = [style, proteinPath];
+
+  it('filters options by upstream pick', () => {
+    expect(visibleOptions(proteinPath, { style: ['hot'] }).map((o) => o.id)).toEqual(['eggs', 'shared']);
+    expect(visibleOptions(proteinPath, { style: ['cold'] }).map((o) => o.id)).toEqual(['yogurt', 'shared']);
+  });
+
+  it('defaults cascade through the selected path', () => {
+    expect(defaultPicks(pathCards)).toEqual({ style: ['hot'], protein: ['eggs'] });
+  });
+
+  it('prunes off-path picks when the style changes', () => {
+    const next = pruneAndRefillPicks(pathCards, { style: ['cold'], protein: ['eggs'] });
+    expect(next).toEqual({ style: ['cold'], protein: ['yogurt'] });
+  });
+
+  it('skips cards with no visible options', () => {
+    const hotOnly = card('hot-only', {
+      role: 'FAT',
+      sortOrder: 2,
+      options: [option('butter', { visibleWhenOptionId: 'hot' })]
+    });
+    expect(activeCards([style, hotOnly], { style: ['cold'], 'hot-only': [] }).map((c) => c.id)).toEqual(['style']);
+  });
+
+  it('still flags blood-sugar roles when the path hides every option', () => {
+    const hotProteinOnly = card('protein', {
+      role: 'PROTEIN',
+      sortOrder: 1,
+      options: [option('eggs', { visibleWhenOptionId: 'hot' })]
+    });
+    expect(missingCoverageRole([style, hotProteinOnly], { style: ['cold'], protein: [] })).toBe('PROTEIN');
   });
 });
 

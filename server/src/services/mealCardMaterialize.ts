@@ -56,20 +56,46 @@ export function pickedOptionIds(picks: CardPicks, cardId: string): string[] {
 /** The set's authored defaults — what a no-picks user gets (the menu's "house meal"). */
 export function defaultPicksForSet(cardSet: LoadedCardSet): CardPicks {
   const picks: CardPicks = {};
+  const selected = new Set<string>();
   for (const card of cardSet.cards) {
-    const def = card.options.find((option) => option.isDefault) ?? (card.required ? card.options[0] : undefined);
+    const visible = card.options.filter(
+      (option) => !option.visibleWhenOptionId || selected.has(option.visibleWhenOptionId)
+    );
+    if (!visible.length) continue;
+    const def = visible.find((option) => option.isDefault) ?? (card.required ? visible[0] : undefined);
     if (!def) continue;
     picks[card.id] = card.maxSelect > 1 ? [def.id] : def.id;
+    selected.add(def.id);
   }
   return picks;
 }
 
-/** Scale the picked options' foods to the meal's calorie target. Unknown ids are skipped. */
+/**
+ * Drop option ids that are off-path for the current picks (gated by visibleWhenOptionId).
+ * Processes cards in sort order so earlier selections unlock later options.
+ */
+export function sanitizePicksForPath(cardSet: LoadedCardSet, picks: CardPicks): CardPicks {
+  const next: CardPicks = {};
+  const selected = new Set<string>();
+  for (const card of cardSet.cards) {
+    const ids = pickedOptionIds(picks, card.id).filter((id) => {
+      const option = card.options.find((entry) => entry.id === id);
+      return Boolean(option && (!option.visibleWhenOptionId || selected.has(option.visibleWhenOptionId)));
+    });
+    if (!ids.length) continue;
+    next[card.id] = card.maxSelect > 1 ? ids : ids[0]!;
+    for (const id of ids) selected.add(id);
+  }
+  return next;
+}
+
+/** Scale the picked options' foods to the meal's calorie target. Unknown / off-path ids are skipped. */
 export function scaledLinesForPicks(cardSet: LoadedCardSet, targetCalories: number, picks: CardPicks): ScaledFoodLine[] {
+  const cleaned = sanitizePicksForPath(cardSet, picks);
   const factor = scaleFactor(targetCalories, cardSet.referenceCalories);
   const lines: ScaledFoodLine[] = [];
   for (const card of cardSet.cards) {
-    for (const optionId of pickedOptionIds(picks, card.id)) {
+    for (const optionId of pickedOptionIds(cleaned, card.id)) {
       const option = card.options.find((o) => o.id === optionId);
       if (!option) continue;
       for (const line of option.foods) {

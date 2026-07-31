@@ -47,8 +47,33 @@ const optionBodySchema = z.object({
   name: z.string().min(1).max(60),
   description: z.string().max(160).nullable().optional(),
   icon: z.string().max(8).nullable().optional(),
-  isDefault: z.boolean().optional()
+  isDefault: z.boolean().optional(),
+  visibleWhenOptionId: z.string().min(1).nullable().optional()
 });
+
+/** Gate must be an option on an earlier card in the same set (or null to clear). */
+async function assertVisibleWhenGate(cardId: string, optionId: string | null, gateId: string | null) {
+  if (gateId == null) return;
+  if (optionId && gateId === optionId) {
+    throw Object.assign(new Error('An option cannot depend on itself'), { statusCode: 400 });
+  }
+  const card = await prisma.mealCard.findUnique({
+    where: { id: cardId },
+    select: { sortOrder: true, cardSetId: true }
+  });
+  if (!card) throw Object.assign(new Error('Card not found'), { statusCode: 404 });
+  const gate = await prisma.mealCardOption.findUnique({
+    where: { id: gateId },
+    select: { id: true, card: { select: { sortOrder: true, cardSetId: true } } }
+  });
+  if (!gate) throw Object.assign(new Error('Visibility gate option not found'), { statusCode: 400 });
+  if (gate.card.cardSetId !== card.cardSetId) {
+    throw Object.assign(new Error('Visibility gate must be in the same card set'), { statusCode: 400 });
+  }
+  if (gate.card.sortOrder >= card.sortOrder) {
+    throw Object.assign(new Error('Visibility gate must be on an earlier step'), { statusCode: 400 });
+  }
+}
 
 const optionFoodBodySchema = z.object({
   foodId: z.string().min(1),
@@ -166,15 +191,22 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
   });
 
   /* ---------- options ---------- */
-  app.post('/api/admin/cards/:id/options', { preHandler: adminOnly }, async (request) => {
+  app.post('/api/admin/cards/:id/options', { preHandler: adminOnly }, async (request, reply) => {
     const cardId = (request.params as { id: string }).id;
     const body = optionBodySchema.parse(request.body);
+    try {
+      await assertVisibleWhenGate(cardId, null, body.visibleWhenOptionId ?? null);
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : 'Invalid visibility gate' });
+    }
     const max = await prisma.mealCardOption.aggregate({ where: { cardId }, _max: { sortOrder: true } });
+    const { isDefault, ...data } = body;
     const created = await prisma.mealCardOption.create({
-      data: { cardId, sortOrder: (max._max.sortOrder ?? 0) + 1, ...body, isDefault: false },
+      data: { cardId, sortOrder: (max._max.sortOrder ?? 0) + 1, ...data, isDefault: false },
       include: { foods: { include: { food: true } } }
     });
-    if (body.isDefault) await setDefaultExclusive(created.id, cardId);
+    if (isDefault) await setDefaultExclusive(created.id, cardId);
     return created;
   });
 
@@ -183,6 +215,14 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
     const body = optionBodySchema.partial().parse(request.body);
     const option = await prisma.mealCardOption.findUnique({ where: { id }, select: { cardId: true } });
     if (!option) return notFound(reply);
+    if (body.visibleWhenOptionId !== undefined) {
+      try {
+        await assertVisibleWhenGate(option.cardId, id, body.visibleWhenOptionId);
+      } catch (err) {
+        const status = (err as { statusCode?: number }).statusCode ?? 400;
+        return reply.code(status).send({ error: err instanceof Error ? err.message : 'Invalid visibility gate' });
+      }
+    }
     const { isDefault, ...rest } = body;
     const updated = await prisma.mealCardOption.update({ where: { id }, data: rest });
     if (isDefault === true) await setDefaultExclusive(id, option.cardId);

@@ -8,6 +8,7 @@ import {
   defaultPicksForSet,
   materializeCardMeal,
   parseStoredPicks,
+  sanitizePicksForPath,
   scaledLinesForPicks
 } from './mealCardMaterialize.js';
 import { findCardSetForTemplateMeal } from '../utils/mealSlotMatch.js';
@@ -80,7 +81,8 @@ export async function applyTemplateMealsToLog(
     // else the set's authored defaults. Template items are the pre-card legacy path.
     if (cardSet) {
       const { picks, quantities } = standing ? parseStoredPicks(standing.picks) : { picks: defaultPicksForSet(cardSet) };
-      if (Object.keys(picks).length > 0) {
+      const cleaned = sanitizePicksForPath(cardSet, picks);
+      if (Object.keys(cleaned).length > 0) {
         const meal = await tx.meal.create({
           data: {
             dailyLogId,
@@ -92,9 +94,9 @@ export async function applyTemplateMealsToLog(
           }
         });
         const target = cardMealTarget(templateMeal, cardSet) * factor;
-        let lines = scaledLinesForPicks(cardSet, target, picks);
+        let lines = scaledLinesForPicks(cardSet, target, cleaned);
         if (quantities && Object.keys(quantities).length) lines = applyQuantityOverrides(lines, quantities);
-        await materializeCardMeal(tx, meal.id, cardSet.id, picks, lines, quantities);
+        await materializeCardMeal(tx, meal.id, cardSet.id, cleaned, lines, quantities);
         continue;
       }
     }

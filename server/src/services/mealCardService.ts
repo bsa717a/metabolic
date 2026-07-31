@@ -11,6 +11,7 @@ import {
   cardSetInclude,
   materializeCardMeal,
   scaledLinesForPicks,
+  sanitizePicksForPath,
   applyQuantityOverrides,
   parseStoredPicks,
   serializeStoredPicks,
@@ -235,6 +236,7 @@ function scaledOptionPayload(cardSet: LoadedCardSet, targetCalories: number) {
         icon: option.icon,
         isDefault: option.isDefault,
         sortOrder: option.sortOrder,
+        visibleWhenOptionId: option.visibleWhenOptionId,
         foods,
         totals: sumLines(foods)
       };
@@ -335,22 +337,54 @@ export async function getMealCardsForDate(userId: string, date: string) {
 
 export type MealSelections = Record<string, string | string[]>;
 
+function selectionIdSet(selections: MealSelections): Set<string> {
+  const ids = new Set<string>();
+  for (const raw of Object.values(selections)) {
+    for (const id of raw == null ? [] : Array.isArray(raw) ? raw : [raw]) ids.add(id);
+  }
+  return ids;
+}
+
+function optionVisibleForSelections(
+  option: { id: string; visibleWhenOptionId: string | null },
+  selectedIds: Set<string>
+) {
+  return !option.visibleWhenOptionId || selectedIds.has(option.visibleWhenOptionId);
+}
+
+/**
+ * Drop off-path picks and omit empty cards. Processes cards in sort order so earlier
+ * gates unlock later options before their picks are checked.
+ */
+export function sanitizeSelections(cardSet: LoadedCardSet, selections: MealSelections): MealSelections {
+  return sanitizePicksForPath(cardSet, selections);
+}
+
 function validateSelections(cardSet: LoadedCardSet, selections: MealSelections) {
   const picked = new Map<string, string[]>();
+  const selected = selectionIdSet(selections);
+  const knownCards = new Set(cardSet.cards.map((c) => c.id));
+  for (const cardId of Object.keys(selections)) {
+    if (!knownCards.has(cardId)) throw new MealCardError('Unknown card in selections');
+  }
   for (const card of cardSet.cards) {
     const raw = selections[card.id];
     const ids = raw == null ? [] : Array.isArray(raw) ? raw : [raw];
-    const valid = new Set(card.options.map((o) => o.id));
+    const visible = card.options.filter((option) => optionVisibleForSelections(option, selected));
+    const valid = new Set(visible.map((option) => option.id));
     for (const id of ids) {
-      if (!valid.has(id)) throw new MealCardError(`Unknown option for card "${card.name}"`);
+      if (!valid.has(id)) {
+        throw new MealCardError(`Option is not available on the current path for "${card.name}"`);
+      }
+    }
+    // Cards with no visible options are skipped for this path.
+    if (visible.length === 0) {
+      if (ids.length) throw new MealCardError(`"${card.name}" has no options on the current path`);
+      continue;
     }
     if (card.required && ids.length === 0) throw new MealCardError(`"${card.name}" needs a selection`);
     if (ids.length > card.maxSelect) throw new MealCardError(`"${card.name}" allows at most ${card.maxSelect}`);
     picked.set(card.id, ids);
-  }
-  const knownCards = new Set(cardSet.cards.map((c) => c.id));
-  for (const cardId of Object.keys(selections)) {
-    if (!knownCards.has(cardId)) throw new MealCardError('Unknown card in selections');
   }
   return picked;
 }
@@ -370,9 +404,10 @@ export async function saveMealSelections(
   quantities?: QuantityOverrides
 ) {
   const slot = await resolveCardMealForDate(userId, date, mealNumber);
-  validateSelections(slot.cardSet, selections);
+  const cleaned = sanitizeSelections(slot.cardSet, selections);
+  validateSelections(slot.cardSet, cleaned);
 
-  let lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, selections);
+  let lines = scaledLinesForPicks(slot.cardSet, slot.targetCalories, cleaned);
   if (quantities && Object.keys(quantities).length) {
     lines = applyQuantityOverrides(lines, quantities);
   }
@@ -389,13 +424,13 @@ export async function saveMealSelections(
         userId,
         cardSetId: slot.cardSet.id,
         mealNumber: slot.mealNumber,
-        picks: serializeStoredPicks(selections, quantities)
+        picks: serializeStoredPicks(cleaned, quantities)
       },
-      update: { picks: serializeStoredPicks(selections, quantities) }
+      update: { picks: serializeStoredPicks(cleaned, quantities) }
     });
 
     const meal = await ensureMealRow(tx, log.id, userId, slot);
-    await materializeCardMeal(tx, meal.id, slot.cardSet.id, selections, lines, quantities);
+    await materializeCardMeal(tx, meal.id, slot.cardSet.id, cleaned, lines, quantities);
     await recalculateDailyLogTotals(log.id, tx);
   });
 
@@ -404,7 +439,7 @@ export async function saveMealSelections(
     parseDateParam(date),
     mealNumber,
     slot.cardSet.id,
-    selections,
+    cleaned,
     quantities
   );
 

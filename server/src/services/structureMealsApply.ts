@@ -7,6 +7,7 @@ import {
   cardSetInclude,
   defaultPicksForSet,
   materializeCardMeal,
+  sanitizePicksForPath,
   scaledLinesForPicks,
   applyQuantityOverrides,
   parseStoredPicks,
@@ -58,10 +59,11 @@ export async function applyStructureMealsToLog(userId: string, dailyLogId: strin
       if (!cardSet) continue;
       const standing = standingPicks.find((p) => p.cardSetId === cardSet.id && p.mealNumber === slot.mealNumber);
       const { picks, quantities } = standing ? parseStoredPicks(standing.picks) : { picks: defaultPicksForSet(cardSet) };
-      if (!Object.keys(picks).length) continue;
-      let lines = scaledLinesForPicks(cardSet, slot.calorieTarget, picks);
+      const cleaned = sanitizePicksForPath(cardSet, picks);
+      if (!Object.keys(cleaned).length) continue;
+      let lines = scaledLinesForPicks(cardSet, slot.calorieTarget, cleaned);
       if (quantities && Object.keys(quantities).length) lines = applyQuantityOverrides(lines, quantities);
-      await materializeCardMeal(tx, meal.id, cardSet.id, picks, lines, quantities);
+      await materializeCardMeal(tx, meal.id, cardSet.id, cleaned, lines, quantities);
     }
     await tx.dailyLog.update({ where: { id: dailyLogId }, data: { mealsPlanned: slots.length } });
     await recalculateDailyLogTotals(dailyLogId, tx);
@@ -107,11 +109,12 @@ export async function resyncCardMealsToFrozenPeriod(userId: string, dailyLogId: 
       const set = sets.find((candidate) => candidate.id === sel.setId);
       const slot = slotByNumber.get(meal.mealNumber);
       if (!set || !slot) continue;
-      let lines = scaledLinesForPicks(set, slot.calorieTarget, sel.picks);
+      const cleaned = sanitizePicksForPath(set, sel.picks);
+      let lines = scaledLinesForPicks(set, slot.calorieTarget, cleaned);
       if (sel.quantities && Object.keys(sel.quantities).length) {
         lines = applyQuantityOverrides(lines, sel.quantities);
       }
-      await materializeCardMeal(tx, meal.id, set.id, sel.picks, lines, sel.quantities);
+      await materializeCardMeal(tx, meal.id, set.id, cleaned, lines, sel.quantities);
     }
     await recalculateDailyLogTotals(dailyLogId, tx);
   });

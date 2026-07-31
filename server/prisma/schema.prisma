@@ -1083,11 +1083,16 @@ model MealCardOption {
   icon String?
   isDefault Boolean @default(false)
   sortOrder Int @default(0)
+  /// If set, only shown when that upstream option is selected (path branching).
+  visibleWhenOptionId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   card MealCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
   foods MealCardOptionFood[]
+  visibleWhenOption MealCardOption? @relation("OptionVisibility", fields: [visibleWhenOptionId], references: [id], onDelete: SetNull)
+  visibleDependents MealCardOption[] @relation("OptionVisibility")
   @@unique([cardId, sortOrder])
+  @@index([visibleWhenOptionId])
 }
 
 /// The user's current picks for one meal slot — their standing weekly selection. Written
