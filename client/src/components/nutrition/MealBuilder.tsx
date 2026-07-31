@@ -4,17 +4,20 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronLeft } from 'lucide-react';
 import { api } from '../../services/api';
 import {
+  activeCards,
   defaultPicks,
   foodsLabel,
   foodQuantity,
   foodQuantityKey,
   missingCoverageRole,
   picksToSelections,
+  pruneAndRefillPicks,
   pruneQuantityOverrides,
   restorePicks,
   selectedFoodLines,
   selectionTotals,
   togglePick,
+  visibleOptions,
   type BuilderCard,
   type CardOption,
   type MealCardsPayload,
@@ -82,6 +85,7 @@ export function MealBuilder({
     }
   }
 
+  const wizardCards = useMemo(() => activeCards(cards, picks), [cards, picks]);
   const totals = useMemo(
     () => selectionTotals(cards, picks, quantityOverrides),
     [cards, picks, quantityOverrides]
@@ -115,14 +119,20 @@ export function MealBuilder({
   const inBand = Math.abs(overBy) <= target * 0.1;
   const missingRole = missingCoverageRole(cards, picks);
 
-  const isReview = step >= cards.length;
-  const currentCard = isReview ? null : cards[step];
+  const isReview = step >= wizardCards.length;
+  const currentCard = isReview ? null : wizardCards[step];
+  const currentVisibleOptions = currentCard ? visibleOptions(currentCard, picks) : [];
   const stepPicked = currentCard ? (picks[currentCard.id] ?? []).length > 0 : true;
   const canAdvance = !currentCard || !currentCard.required || stepPicked;
 
+  // Path changes can shrink the step list — keep the index in range.
+  if (step > wizardCards.length) {
+    setStep(wizardCards.length);
+  }
+
   function toggleOption(card: BuilderCard, optionId: string) {
     setPicks((prev) => {
-      const next = togglePick(card, prev, optionId);
+      const next = pruneAndRefillPicks(cards, togglePick(card, prev, optionId));
       setQuantityOverrides((overrides) => pruneQuantityOverrides(cards, next, overrides));
       return next;
     });
@@ -156,9 +166,9 @@ export function MealBuilder({
     }
   }
 
-  const selectedLines = cards.flatMap((card) =>
+  const selectedLines = wizardCards.flatMap((card) =>
     (picks[card.id] ?? [])
-      .map((optionId) => card.options.find((o) => o.id === optionId))
+      .map((optionId) => visibleOptions(card, picks).find((o) => o.id === optionId))
       .filter((option): option is CardOption => Boolean(option))
       .map((option) => ({ card, option }))
   );
@@ -256,13 +266,13 @@ export function MealBuilder({
             </button>
             {mode === 'wizard' && (
               <span className="text-xs font-medium text-brand-off-white/70">
-                Step {Math.min(step + 1, cards.length + 1)} of {cards.length + 1}
+                Step {Math.min(step + 1, wizardCards.length + 1)} of {wizardCards.length + 1}
               </span>
             )}
           </div>
           {mode === 'wizard' && (
             <div className="mt-3 flex gap-1.5">
-              {[...cards, null].map((_, index) => (
+              {[...wizardCards, null].map((_, index) => (
                 <span
                   key={index}
                   className={clsx(
@@ -276,7 +286,7 @@ export function MealBuilder({
           <div className="mt-3 flex items-center gap-2">
             {mode === 'wizard' && (
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-green text-xs font-bold text-white">
-                {Math.min(step + 1, cards.length + 1)}
+                {Math.min(step + 1, wizardCards.length + 1)}
               </span>
             )}
             <h2 className="text-base font-bold uppercase tracking-wide">
@@ -324,7 +334,7 @@ export function MealBuilder({
               >
                 <span className="block text-base font-bold text-app-text">🃏 Build it myself</span>
                 <span className="mt-1 block text-sm text-app-text-muted">
-                  Step through the cards: {cards.map((c) => c.name.toLowerCase().replace('choose ', '').replace('add ', '')).join(' → ')}.
+                  Step through the cards: {wizardCards.map((c) => c.name.toLowerCase().replace('choose ', '').replace('add ', '')).join(' → ')}.
                 </span>
               </button>
             </div>
@@ -432,7 +442,7 @@ export function MealBuilder({
 
           {mode === 'wizard' && !isReview && currentCard && (
             <div className="space-y-2.5">
-              {currentCard.options.map((option) => {
+              {currentVisibleOptions.map((option) => {
                 const selected = (picks[currentCard.id] ?? []).includes(option.id);
                 return (
                   <button
@@ -559,7 +569,7 @@ export function MealBuilder({
                     onClick={() => setStep((s) => s + 1)}
                     className="shrink-0 rounded-xl bg-brand-green px-6 py-2.5 text-sm font-bold text-white transition hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {step === cards.length - 1 ? 'Review meal' : 'Next'}
+                    {step === wizardCards.length - 1 ? 'Review meal' : 'Next'}
                   </button>
                 )}
               </div>

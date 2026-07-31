@@ -21,6 +21,8 @@ export type CardOption = {
   icon: string | null;
   isDefault: boolean;
   sortOrder: number;
+  /** When set, only visible if that upstream option is currently picked. */
+  visibleWhenOptionId?: string | null;
   foods: CardFood[];
   totals: { calories: number; protein: number; carbs: number; fat: number };
 };
@@ -88,16 +90,62 @@ export type QuantityOverrides = Record<string, number>;
 
 export type SelectedFoodLine = CardFood & { optionId: string; cardName: string };
 
+export function selectedOptionIdSet(picks: BuilderPicks): Set<string> {
+  const ids = new Set<string>();
+  for (const list of Object.values(picks)) {
+    for (const id of list) ids.add(id);
+  }
+  return ids;
+}
+
+export function isOptionVisible(option: CardOption, picks: BuilderPicks): boolean {
+  if (!option.visibleWhenOptionId) return true;
+  return selectedOptionIdSet(picks).has(option.visibleWhenOptionId);
+}
+
+export function visibleOptions(card: BuilderCard, picks: BuilderPicks): CardOption[] {
+  return card.options.filter((option) => isOptionVisible(option, picks));
+}
+
+/** Cards that currently have at least one visible option (path-aware wizard steps). */
+export function activeCards(cards: BuilderCard[], picks: BuilderPicks): BuilderCard[] {
+  return [...cards]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .filter((card) => visibleOptions(card, picks).length > 0);
+}
+
+/**
+ * Drop picks that are off-path; refill required cards with a visible default.
+ * Processes cards in sort order so earlier gates unlock later defaults.
+ */
+export function pruneAndRefillPicks(cards: BuilderCard[], picks: BuilderPicks): BuilderPicks {
+  const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
+  const next: BuilderPicks = {};
+  for (const card of sorted) {
+    const visible = visibleOptions(card, { ...picks, ...next });
+    const visibleIds = new Set(visible.map((option) => option.id));
+    let ids = (picks[card.id] ?? []).filter((id) => visibleIds.has(id));
+    if (!ids.length && card.required && visible.length) {
+      const def = visible.find((option) => option.isDefault) ?? visible[0];
+      ids = def ? [def.id] : [];
+    }
+    next[card.id] = ids;
+  }
+  return next;
+}
+
 export function defaultPicks(cards: BuilderCard[]): BuilderPicks {
+  const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
   const picks: BuilderPicks = {};
-  for (const card of cards) {
-    const def = card.options.find((o) => o.isDefault) ?? (card.required ? card.options[0] : undefined);
+  for (const card of sorted) {
+    const visible = visibleOptions(card, picks);
+    const def = visible.find((o) => o.isDefault) ?? (card.required ? visible[0] : undefined);
     picks[card.id] = def ? [def.id] : [];
   }
   return picks;
 }
 
-/** Saved picks win where valid; unknown cards/options fall back to defaults. */
+/** Saved picks win where valid; unknown/off-path options fall back to defaults. */
 export function restorePicks(cards: BuilderCard[], saved: Record<string, string | string[]>): BuilderPicks {
   const picks = defaultPicks(cards);
   for (const card of cards) {
@@ -106,7 +154,7 @@ export function restorePicks(cards: BuilderCard[], saved: Record<string, string 
     const ids = (Array.isArray(raw) ? raw : [raw]).filter((id) => card.options.some((o) => o.id === id));
     picks[card.id] = ids;
   }
-  return picks;
+  return pruneAndRefillPicks(cards, picks);
 }
 
 export function togglePick(card: BuilderCard, picks: BuilderPicks, optionId: string): BuilderPicks {
@@ -204,11 +252,12 @@ export function foodsLabel(option: CardOption) {
 
 /** POST body shape: single-select cards send a string, multi-select send arrays. */
 export function picksToSelections(cards: BuilderCard[], picks: BuilderPicks) {
+  const pruned = pruneAndRefillPicks(cards, picks);
   const selections: Record<string, string | string[]> = {};
-  for (const card of cards) {
-    const ids = picks[card.id] ?? [];
+  for (const card of activeCards(cards, pruned)) {
+    const ids = pruned[card.id] ?? [];
     if (!ids.length) continue;
-    selections[card.id] = card.maxSelect <= 1 ? ids[0] : ids;
+    selections[card.id] = card.maxSelect <= 1 ? ids[0]! : ids;
   }
   return selections;
 }

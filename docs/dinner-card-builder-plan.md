@@ -137,6 +137,9 @@ model MealCardOption {
   cuisine   String?
   isDefault Boolean              @default(false)
   sortOrder Int                  @default(0)
+  // Path branching: when set, option only shows if that earlier option is picked
+  // (e.g. STYLE Hot/Cold/…). null = always visible on every path.
+  visibleWhenOptionId String?
   foods     MealCardOptionFood[]
 }
 
