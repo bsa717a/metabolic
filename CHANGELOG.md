@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.6.0](https://github.com/bsa717a/metabolic/compare/v0.5.0...v0.6.0) (2026-07-31)
+
+
+### Features
+
+* **exercise:** pre-fill week from plan and allow day swaps ([db81fa2](https://github.com/bsa717a/metabolic/commit/db81fa2c2aaa42332285376bdeb8f70a2e89e8b3))
+* **exercise:** pre-fill week from plan and allow day swaps ([e0396de](https://github.com/bsa717a/metabolic/commit/e0396de0d2af9d71dfb54ff6d48cbe536a36b17f))
+* **meal-cards:** gate options by style path with admin tooling ([acb9f4d](https://github.com/bsa717a/metabolic/commit/acb9f4db17612e485bc47e8b01003b68a96c13f3))
+* **meal-cards:** gate options by style path with admin tooling ([0434807](https://github.com/bsa717a/metabolic/commit/04348074c0738c636d91e6ee31928f6049a2ba73))
+
 ## [0.5.0](https://github.com/bsa717a/metabolic/compare/v0.4.0...v0.5.0) (2026-07-24)
 
 
