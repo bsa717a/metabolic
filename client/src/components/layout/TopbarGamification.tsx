@@ -1,7 +1,7 @@
 import { clsx } from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Award, Droplets, Flame, Mountain } from 'lucide-react';
+import { Award, Droplets, Flame } from 'lucide-react';
 import { badgeArtUrl } from '../gamification/badgeArt';
 import { HydrationTopbarDrawer } from '../hydration/HydrationTopbarDrawer';
 import { WaterBottle } from '../hydration/WaterBottle';
@@ -17,6 +17,7 @@ import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamificatio
 const TOPBAR_RING_SIZE = 28;
 const TOPBAR_BADGE_SIZE = 28;
 const MOBILE_RING_SIZE = 26;
+const JOURNEY_MOUNTAIN_SRC = '/journey/topbar-mountain.png?v=1';
 
 function CapsuleDivider() {
   return <span className="mx-0.5 h-5 w-px shrink-0 bg-app-border" aria-hidden />;
@@ -89,13 +90,14 @@ function JourneyTopbarLink({
           )}
         </>
       ) : (
-        <Mountain
-          className={clsx(
-            'shrink-0 text-brand-green',
-            isMobile ? 'size-[22px]' : 'size-7'
-          )}
-          strokeWidth={2}
+        <img
+          src={JOURNEY_MOUNTAIN_SRC}
+          alt=""
           aria-hidden
+          width={isMobile ? 22 : 28}
+          height={isMobile ? 22 : 28}
+          className={clsx('shrink-0 object-contain', isMobile ? 'size-[22px]' : 'size-7')}
+          draggable={false}
         />
       )}
     </Link>
