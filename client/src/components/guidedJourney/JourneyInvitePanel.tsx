@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { notifyGuidedJourneyUpdated } from '../../lib/guidedJourneyEvents';
 import { api } from '../../services/api';
 import type { GuidedJourneyState } from '../../types/guidedJourney';
 import { Button } from '../ui/Button';
@@ -91,6 +92,7 @@ export function JourneyInvitePanel({
     try {
       const next = await api<GuidedJourneyState>('/api/guided-journey/start', { method: 'POST' });
       setState(next);
+      notifyGuidedJourneyUpdated();
       navigate('/level-up/journey/arrival');
     } finally {
       setStarting(false);

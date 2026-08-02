@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { notifyGuidedJourneyUpdated } from '../../lib/guidedJourneyEvents';
 import { api } from '../../services/api';
 import type { GuidedJourneyState } from '../../types/guidedJourney';
 import { Button } from '../../components/ui/Button';
@@ -83,7 +84,12 @@ export function GuidedJourneyHomePage() {
               <Button
                 variant="secondary"
                 className="rounded-full"
-                onClick={() => void api('/api/guided-journey/pause', { method: 'POST' }).then(load)}
+                onClick={() =>
+                  void api('/api/guided-journey/pause', { method: 'POST' }).then(() => {
+                    notifyGuidedJourneyUpdated();
+                    load();
+                  })
+                }
               >
                 Pause
               </Button>
@@ -91,7 +97,12 @@ export function GuidedJourneyHomePage() {
             {state.enrollment?.status === 'PAUSED' && (
               <Button
                 className="rounded-full px-6"
-                onClick={() => void api('/api/guided-journey/resume', { method: 'POST' }).then(load)}
+                onClick={() =>
+                  void api('/api/guided-journey/resume', { method: 'POST' }).then(() => {
+                    notifyGuidedJourneyUpdated();
+                    load();
+                  })
+                }
               >
                 Resume
               </Button>
@@ -103,7 +114,10 @@ export function GuidedJourneyHomePage() {
                 onClick={() => {
                   setStarting(true);
                   void api('/api/guided-journey/start', { method: 'POST' })
-                    .then(() => navigate('/level-up/journey/arrival'))
+                    .then(() => {
+                      notifyGuidedJourneyUpdated();
+                      navigate('/level-up/journey/arrival');
+                    })
                     .finally(() => setStarting(false));
                 }}
               >
