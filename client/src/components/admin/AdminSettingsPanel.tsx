@@ -9,6 +9,7 @@ type AdminSettings = {
   storeOrderNotificationEmail: string | null;
   feedbackWidgetEnabled: boolean;
   feedbackNotificationEmail: string | null;
+  guidedJourneyEnabled: boolean;
 };
 
 function labelClassName() {
@@ -26,6 +27,7 @@ export function AdminSettingsPanel() {
   const [storeEmail, setStoreEmail] = useState('');
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [feedbackEmail, setFeedbackEmail] = useState('');
+  const [guidedJourneyEnabled, setGuidedJourneyEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -43,6 +45,7 @@ export function AdminSettingsPanel() {
           setStoreEmail(data.storeOrderNotificationEmail ?? '');
           setFeedbackEnabled(data.feedbackWidgetEnabled);
           setFeedbackEmail(data.feedbackNotificationEmail ?? '');
+          setGuidedJourneyEnabled(data.guidedJourneyEnabled);
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load settings'))
         .finally(() => setLoading(false));
@@ -61,7 +64,8 @@ export function AdminSettingsPanel() {
           storeEnabled,
           storeOrderNotificationEmail: storeEmail.trim() ? storeEmail.trim() : null,
           feedbackWidgetEnabled: feedbackEnabled,
-          feedbackNotificationEmail: feedbackEmail.trim() ? feedbackEmail.trim() : null
+          feedbackNotificationEmail: feedbackEmail.trim() ? feedbackEmail.trim() : null,
+          guidedJourneyEnabled
         })
       });
       setSettings(saved);
@@ -70,6 +74,7 @@ export function AdminSettingsPanel() {
       setStoreEmail(saved.storeOrderNotificationEmail ?? '');
       setFeedbackEnabled(saved.feedbackWidgetEnabled);
       setFeedbackEmail(saved.feedbackNotificationEmail ?? '');
+      setGuidedJourneyEnabled(saved.guidedJourneyEnabled);
       setMessage('Settings saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
@@ -158,6 +163,19 @@ export function AdminSettingsPanel() {
             Receives an alert for blocking reports and the periodic feedback digest.
           </span>
         </label>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={guidedJourneyEnabled}
+            onChange={(event) => setGuidedJourneyEnabled(event.target.checked)}
+            className="h-4 w-4 rounded border-app-border accent-brand-green"
+          />
+          <span className="text-sm font-medium text-app-text">Guided Journey enabled</span>
+        </label>
+        <span className="-mt-3 block text-xs text-app-text-muted">
+          When on, Plus users see the optional Guided Journey invite on Level Up. Off by default for safe rollout.
+        </span>
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {message ? <p className="text-sm text-brand-green">{message}</p> : null}

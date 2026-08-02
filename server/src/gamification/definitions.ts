@@ -23,7 +23,8 @@ export type LevelRequirement =
   | { type: 'food_log_days_in_14'; count: number }
   | { type: 'weekly_snapshots_count'; count: number }
   | { type: 'complete_focus_goal' }
-  | { type: 'review_progress_timeline' };
+  | { type: 'review_progress_timeline' }
+  | { type: 'complete_guided_discovery'; discoveryId: string };
 
 export type LevelDef = {
   id: string;
@@ -51,19 +52,16 @@ export type BadgeDef = {
 export const LEVEL_DEFINITIONS: LevelDef[] = [
   {
     id: 'level-1',
-    name: 'Log Your First Day',
-    description: 'Learn how to follow the meal plan and log what you actually eat.',
-    purpose: 'Teach the user how to follow the meal plan and log what they actually eat.',
+    name: 'Becoming Aware',
+    description:
+      'Begin to understand and listen to your body without judgment. Complete the guided Observe Hunger discovery.',
+    purpose: 'I am beginning to understand and listen to my body without judgment.',
     order: 1,
-    requirements: [
-      { type: 'review_meal_plan' },
-      { type: 'log_all_planned_meals' },
-      { type: 'complete_daily_food_log' }
-    ],
-    unlocks: ['Daily food history', 'Level 2'],
+    requirements: [{ type: 'complete_guided_discovery', discoveryId: 'observe-hunger' }],
+    unlocks: ['Level 2', 'Hunger Awareness skill'],
     completionMessage:
-      'You completed your first day. You now know how to track your meals and record what actually happened.',
-    badgeIds: ['first-day-complete']
+      'You practiced noticing without judging. Awareness is the first step toward understanding what your body needs.',
+    badgeIds: []
   },
   {
     id: 'level-2',

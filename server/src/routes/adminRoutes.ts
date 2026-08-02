@@ -95,7 +95,8 @@ const adminSettingsBody = z
     storeEnabled: z.boolean().optional(),
     storeOrderNotificationEmail: z.string().trim().email().nullable().optional(),
     feedbackWidgetEnabled: z.boolean().optional(),
-    feedbackNotificationEmail: z.string().trim().email().nullable().optional()
+    feedbackNotificationEmail: z.string().trim().email().nullable().optional(),
+    guidedJourneyEnabled: z.boolean().optional()
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
 

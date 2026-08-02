@@ -340,6 +340,10 @@ select {
   .animate-badge-content-rise {
     animation: none;
   }
+
+  .journey-scene-fade {
+    transition: none !important;
+  }
 }
 
 @media print {

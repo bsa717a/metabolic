@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Map, Award, ArrowLeft } from 'lucide-react';
+import { Map, Award, ArrowLeft, Route } from 'lucide-react';
 import { api } from '../services/api';
 import type { GamificationCelebration, GamificationDashboard } from '../types/gamification';
 import { CurrentLevelCard } from '../components/gamification/CurrentLevelCard';
 import { MomentumCard } from '../components/gamification/MomentumCard';
 import { RecentBadgesCard } from '../components/gamification/RecentBadgesCard';
 import { CelebrationModal } from '../components/gamification/CelebrationModal';
+import { JourneyInvitePanel } from '../components/guidedJourney/JourneyInvitePanel';
 import { EntitlementError } from '../services/api';
 import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
 import { Card } from '../components/ui/Card';
@@ -15,6 +16,7 @@ export function GamificationPage() {
   const [data, setData] = useState<GamificationDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [celebration, setCelebration] = useState<GamificationCelebration | null>(null);
+  const [guidedJourneyOn, setGuidedJourneyOn] = useState(false);
 
   const [entitlementBlocked, setEntitlementBlocked] = useState(false);
 
@@ -57,47 +59,59 @@ export function GamificationPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link
             to="/"
-            className="mb-2 inline-flex items-center gap-1 text-sm text-app-text-muted hover:text-app-text"
+            className="mb-1 inline-flex items-center gap-1 text-sm text-app-text-muted hover:text-app-text"
           >
             <ArrowLeft size={16} /> Dashboard
           </Link>
-          <h1 className="text-3xl font-bold text-brand-navy dark:text-brand-off-white">Level Up</h1>
-          <p className="mt-2 max-w-xl text-sm text-app-text-muted">
-            Consistency matters more than perfection. Learn one step at a time, track honestly, and
-            build momentum.
-          </p>
+          <h1 className="text-2xl font-bold text-brand-navy dark:text-brand-off-white sm:text-3xl">
+            Level Up
+          </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link
             to="/level-up/journey"
-            className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-4 py-2 text-sm font-semibold hover:border-brand-green/50"
+            className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
           >
-            <Map size={18} /> Your journey
+            <Map size={16} /> Journey
+          </Link>
+          <Link
+            to="/level-up/path"
+            className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
+          >
+            <Route size={16} /> Level path
           </Link>
           <Link
             to="/level-up/badges"
-            className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-4 py-2 text-sm font-semibold hover:border-brand-green/50"
+            className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
           >
-            <Award size={18} /> Badges
+            <Award size={16} /> Badges
           </Link>
         </div>
       </div>
 
+      {/* Immersive world — primary experience on this page */}
+      <JourneyInvitePanel onEnabledChange={setGuidedJourneyOn} />
+
       {data?.currentLevel ? (
-        <section className="grid gap-6 lg:grid-cols-3">
-          <CurrentLevelCard level={data.currentLevel} />
+        <section
+          className={
+            guidedJourneyOn ? 'grid gap-6 sm:grid-cols-2' : 'grid gap-6 lg:grid-cols-3'
+          }
+        >
+          {/* Task ladder is superseded by Guided Journey when the flag is on. */}
+          {!guidedJourneyOn && <CurrentLevelCard level={data.currentLevel} />}
           <MomentumCard momentum={data.momentum} />
           <RecentBadgesCard badges={data.recentBadges} />
         </section>
-      ) : (
+      ) : !guidedJourneyOn ? (
         <Card>
           <p className="text-app-text-muted">Your progression will appear here once your program is active.</p>
         </Card>
-      )}
+      ) : null}
 
       <Card className="border-dashed bg-brand-green/5">
         <p className="text-sm text-app-text-muted">

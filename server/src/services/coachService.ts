@@ -609,11 +609,13 @@ export async function updateCoachSession(
 
 export async function getCoachClientEngagement(actor: { id: string; role: Role }, userId: string) {
   await requireCoachClient(actor, userId);
-  const [engagement, hydration] = await Promise.all([
+  const { getCoachGuidedJourneySummary } = await import('./guidedJourneyService.js');
+  const [engagement, hydration, guidedJourney] = await Promise.all([
     getGamificationDashboard(userId),
-    getCoachHydrationStats(userId)
+    getCoachHydrationStats(userId),
+    getCoachGuidedJourneySummary(userId, true)
   ]);
-  return { ...engagement, hydration };
+  return { ...engagement, hydration, guidedJourney };
 }
 
 export async function getCoachClientHydration(actor: { id: string; role: Role }, userId: string) {

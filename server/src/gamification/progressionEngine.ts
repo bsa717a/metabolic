@@ -20,6 +20,7 @@ import {
   STREAK_GRACE_CONFIG,
   type LevelRequirement
 } from './definitions.js';
+import { getDiscovery } from '../guidedJourney/curriculum/index.js';
 
 export type ProgressionCelebration = {
   type: 'level_complete' | 'badge_earned';
@@ -314,6 +315,14 @@ async function evaluateRequirement(
       return Boolean(metadata.focusGoalCompleted);
     case 'review_progress_timeline':
       return Boolean(metadata.reviewedProgressTimeline);
+    case 'complete_guided_discovery': {
+      const progress = await prisma.guidedDiscoveryProgress.findUnique({
+        where: {
+          userId_discoveryId: { userId, discoveryId: req.discoveryId }
+        }
+      });
+      return progress?.status === 'COMPLETED';
+    }
     default:
       return false;
   }
@@ -343,6 +352,10 @@ function requirementLabel(req: LevelRequirement): string {
     complete_focus_goal: 'Complete your weekly focus goal',
     review_progress_timeline: 'Review the progress timeline'
   };
+  if (req.type === 'complete_guided_discovery') {
+    const discovery = getDiscovery(req.discoveryId);
+    return discovery ? `Complete discovery: ${discovery.title}` : 'Complete the guided discovery for this level';
+  }
   if (req.type === 'upload_progress_photo') {
     return `Upload ${req.pose} progress photo`;
   }

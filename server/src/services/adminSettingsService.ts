@@ -4,7 +4,8 @@ import {
   STORE_ENABLED_KEY,
   STORE_ORDER_NOTIFICATION_EMAIL_KEY,
   FEEDBACK_WIDGET_ENABLED_KEY,
-  FEEDBACK_NOTIFICATION_EMAIL_KEY
+  FEEDBACK_NOTIFICATION_EMAIL_KEY,
+  GUIDED_JOURNEY_ENABLED_KEY
 } from './appSettings.js';
 
 function isValidEmail(value: string) {
@@ -28,7 +29,8 @@ export async function getAdminSettings() {
           STORE_ENABLED_KEY,
           STORE_ORDER_NOTIFICATION_EMAIL_KEY,
           FEEDBACK_WIDGET_ENABLED_KEY,
-          FEEDBACK_NOTIFICATION_EMAIL_KEY
+          FEEDBACK_NOTIFICATION_EMAIL_KEY,
+          GUIDED_JOURNEY_ENABLED_KEY
         ]
       }
     }
@@ -40,7 +42,8 @@ export async function getAdminSettings() {
     storeEnabled: byKey.get(STORE_ENABLED_KEY) !== 'false',
     storeOrderNotificationEmail: byKey.get(STORE_ORDER_NOTIFICATION_EMAIL_KEY) ?? null,
     feedbackWidgetEnabled: byKey.get(FEEDBACK_WIDGET_ENABLED_KEY) !== 'false',
-    feedbackNotificationEmail: byKey.get(FEEDBACK_NOTIFICATION_EMAIL_KEY) ?? null
+    feedbackNotificationEmail: byKey.get(FEEDBACK_NOTIFICATION_EMAIL_KEY) ?? null,
+    guidedJourneyEnabled: byKey.get(GUIDED_JOURNEY_ENABLED_KEY) === 'true'
   };
 }
 
@@ -50,6 +53,7 @@ export async function updateAdminSettings(input: {
   storeOrderNotificationEmail?: string | null;
   feedbackWidgetEnabled?: boolean;
   feedbackNotificationEmail?: string | null;
+  guidedJourneyEnabled?: boolean;
 }) {
   if (input.coachRequestNotificationEmail !== undefined) {
     const value = input.coachRequestNotificationEmail?.trim() || null;
@@ -82,6 +86,11 @@ export async function updateAdminSettings(input: {
       throw new Error('Enter a valid feedback notification email.');
     }
     await upsertOrClear(FEEDBACK_NOTIFICATION_EMAIL_KEY, value);
+  }
+
+  if (input.guidedJourneyEnabled !== undefined) {
+    // Missing key means disabled — store "true" only when enabling.
+    await upsertOrClear(GUIDED_JOURNEY_ENABLED_KEY, input.guidedJourneyEnabled ? 'true' : null);
   }
 
   return getAdminSettings();

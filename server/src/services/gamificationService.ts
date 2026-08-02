@@ -191,28 +191,38 @@ export async function getGamificationDashboard(userId: string, dateKey?: string,
     };
   }
 
+  const { chapterForLevelId } = await import('../guidedJourney/curriculum/index.js');
+  const journeyChapter = activeProgress ? chapterForLevelId(activeProgress.levelId) : null;
+
   return {
     currentLevel: activeProgress
       ? {
           id: activeProgress.levelId,
           number: activeProgress.level.order,
-          name: activeProgress.level.name,
-          description: activeProgress.level.description,
-          purpose: activeProgress.level.purpose,
+          name: journeyChapter?.title ?? activeProgress.level.name,
+          description: journeyChapter?.description ?? activeProgress.level.description,
+          purpose: journeyChapter?.description ?? activeProgress.level.purpose,
           progressPercent: activeProgress.progressPercent,
           tasks,
           nextAction: nextTask?.label ?? 'Continue your journey',
           nextUnlock: nextLevel?.unlocks[0] ?? null,
-          ctaLabel: nextTask ? `Continue ${activeProgress.level.name.split(':').pop()?.trim() ?? 'Level'}` : 'View journey',
-          ctaPath:
-            nextTask?.key.includes('meal') || nextTask?.key.includes('log')
+          ctaLabel: nextTask
+            ? nextTask.key.includes('complete_guided_discovery')
+              ? 'Continue Journey'
+              : `Continue ${(journeyChapter?.title ?? activeProgress.level.name).split(':').pop()?.trim() ?? 'Level'}`
+            : 'View level path',
+          ctaPath: nextTask?.key.includes('complete_guided_discovery')
+            ? '/level-up/journey'
+            : nextTask?.key.includes('meal') || nextTask?.key.includes('log')
               ? '/nutrition'
               : nextTask?.key.includes('snapshot') ||
                   nextTask?.key.includes('photo') ||
                   nextTask?.key.includes('weight') ||
                   nextTask?.key.includes('measurement')
                 ? '/level-up/baseline'
-                : '/program'
+                : nextTask
+                  ? '/program'
+                  : '/level-up/path'
         }
       : null,
     momentum: {

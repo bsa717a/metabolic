@@ -17,6 +17,7 @@ import { mealCardAdminRoutes } from './routes/mealCardAdminRoutes.js';
 import { targetAdminRoutes } from './routes/targetAdminRoutes.js';
 import { onboardingRoutes } from './routes/onboardingRoutes.js';
 import { gamificationRoutes } from './routes/gamificationRoutes.js';
+import { guidedJourneyRoutes } from './routes/guidedJourneyRoutes.js';
 import { coachRoutes } from './routes/coachRoutes.js';
 import { bloodPanelRoutes } from './routes/bloodPanelRoutes.js';
 import { hydrationRoutes } from './routes/hydrationRoutes.js';
@@ -75,6 +76,7 @@ async function main() {
   await app.register(bloodPanelRoutes);
   await app.register(onboardingRoutes);
   await app.register(gamificationRoutes);
+  await app.register(guidedJourneyRoutes);
   await app.register(hydrationRoutes);
   await app.register(tutorialRoutes);
   await app.register(virtualCoachRoutes);
