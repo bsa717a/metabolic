@@ -331,9 +331,15 @@ export function AdminMealCardSetEditorPage() {
     );
   }
 
-  const factor = previewTarget > 0 && Number(set.referenceCalories) > 0 ? previewTarget / Number(set.referenceCalories) : 1;
+  // Bind after the null guard so nested helpers keep a non-null type under tsc -b.
+  const cardSet = set;
 
-  const styleCard = set.cards.find((card) => card.role === 'STYLE');
+  const factor =
+    previewTarget > 0 && Number(cardSet.referenceCalories) > 0
+      ? previewTarget / Number(cardSet.referenceCalories)
+      : 1;
+
+  const styleCard = cardSet.cards.find((card) => card.role === 'STYLE');
   const styleOptions = styleCard?.options ?? [];
   const styleFilterValid =
     styleFilter === 'all' ||
@@ -341,7 +347,7 @@ export function AdminMealCardSetEditorPage() {
     styleOptions.some((option) => option.id === styleFilter);
   const activeStyleFilter: StyleFilter = styleFilterValid ? styleFilter : 'all';
 
-  const selectedCard = set.cards.find((card) => card.id === selectedCardId) ?? null;
+  const selectedCard = cardSet.cards.find((card) => card.id === selectedCardId) ?? null;
   const selectedSection =
     selectedCard && selectedCard.role !== 'STYLE' ? selectedCard : null;
   const usedFoodIds = new Set(
@@ -352,7 +358,7 @@ export function AdminMealCardSetEditorPage() {
 
   /** Options on earlier steps — used as path gates (Hot / Cold / …). */
   function earlierGateOptions(cardSortOrder: number) {
-    return set.cards
+    return cardSet.cards
       .filter((card) => card.sortOrder < cardSortOrder)
       .flatMap((card) =>
         card.options.map((option) => ({
@@ -367,9 +373,10 @@ export function AdminMealCardSetEditorPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link to="/admin" className="text-sm font-semibold text-brand-green">← Admin</Link>
-          <h1 className="text-2xl font-bold">{set.name}</h1>
+          <h1 className="text-2xl font-bold">{cardSet.name}</h1>
           <p className="text-sm text-app-text-muted">
-            {set.slotType} · reference {Math.round(Number(set.referenceCalories))} kcal · backs {set._count.templateMeals} plan slot(s)
+            {cardSet.slotType} · reference {Math.round(Number(cardSet.referenceCalories))} kcal · backs{' '}
+            {cardSet._count.templateMeals} plan slot(s)
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
@@ -403,17 +410,17 @@ export function AdminMealCardSetEditorPage() {
         </div>
       </div>
 
-      {set._count.userPicks > 0 && (
+      {cardSet._count.userPicks > 0 && (
         <p className="rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          ⚠️ {set._count.userPicks} client(s) have standing picks in this set — editing portions or removing options
-          changes what they get from tomorrow onward. Adding new options is always safe.
+          ⚠️ {cardSet._count.userPicks} client(s) have standing picks in this set — editing portions or removing
+          options changes what they get from tomorrow onward. Adding new options is always safe.
         </p>
       )}
       {error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
-          {set.cards.map((card, cardIndex) => {
+          {cardSet.cards.map((card, cardIndex) => {
             const isStyleCard = card.role === 'STYLE';
             const sectionSelected = selectedCardId === card.id && !isStyleCard;
             const visibleOptions = card.options.filter((option) =>
@@ -660,7 +667,10 @@ export function AdminMealCardSetEditorPage() {
               type="button"
               onClick={() => {
                 if (!newCard.name.trim()) return;
-                void call(`/api/admin/card-sets/${set.id}/cards`, 'POST', { role: newCard.role, name: newCard.name.trim() });
+                void call(`/api/admin/card-sets/${cardSet.id}/cards`, 'POST', {
+                  role: newCard.role,
+                  name: newCard.name.trim()
+                });
                 setNewCard({ role: 'PROTEIN', name: '' });
               }}
               disabled={!newCard.name.trim()}
