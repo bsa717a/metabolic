@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.7.0](https://github.com/bsa717a/metabolic/compare/v0.6.0...v0.7.0) (2026-08-02)
+
+
+### Features
+
+* **journey:** Level 1 Guided Journey with Observe Hunger ([9599d88](https://github.com/bsa717a/metabolic/commit/9599d88ac34b8ad7eec123116e3e2b7019104a04))
+* **journey:** Level 1 Guided Journey with Observe Hunger ([8f25cc3](https://github.com/bsa717a/metabolic/commit/8f25cc34faa57cf34dbc5da467e411412d480ec1))
+
+
+### Bug Fixes
+
+* **admin:** narrow meal card set before nested helpers ([fb42ec9](https://github.com/bsa717a/metabolic/commit/fb42ec9468e6f9d2b1fc5d8acc7a268d14703a08))
+* **admin:** narrow meal card set before nested helpers ([f2955b5](https://github.com/bsa717a/metabolic/commit/f2955b5e8a5b9d8e94af8e838a76879852f74df2))
+
 ## [0.6.0](https://github.com/bsa717a/metabolic/compare/v0.5.0...v0.6.0) (2026-07-31)
 
 
