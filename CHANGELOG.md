@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.8.0](https://github.com/bsa717a/metabolic/compare/v0.7.0...v0.8.0) (2026-08-02)
+
+
+### Features
+
+* **journey:** topbar mountain chip for Guided Journey ([255f71e](https://github.com/bsa717a/metabolic/commit/255f71ebe5a827c88a94369dfe7553528b2cd0c3))
+* **journey:** topbar mountain chip for Guided Journey ([00aa19d](https://github.com/bsa717a/metabolic/commit/00aa19d24b9281872210ef505af85e125e055301))
+* **journey:** use painterly PNG for topbar mountain chip ([02507be](https://github.com/bsa717a/metabolic/commit/02507be70f2559d769eb36dd332e1ec5b738c560))
+* **journey:** use painterly PNG for topbar mountain chip ([9d4f8ee](https://github.com/bsa717a/metabolic/commit/9d4f8ee25aa93600e00a722500f132ecff60e09f))
+
 ## [0.7.0](https://github.com/bsa717a/metabolic/compare/v0.6.0...v0.7.0) (2026-08-02)
 
 
