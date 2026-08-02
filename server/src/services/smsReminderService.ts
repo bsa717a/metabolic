@@ -48,8 +48,10 @@ function isUniqueViolation(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
+type NudgeKind = 'MEAL_REMINDER' | 'EVENING_RECAP' | 'GUIDED_DISCOVERY_PROMPT';
+
 /** Reserves a nudge via the unique constraint. Returns false if it was already sent. */
-async function reserveNudge(userId: string, kind: 'MEAL_REMINDER' | 'EVENING_RECAP', date: string, refId: string) {
+async function reserveNudge(userId: string, kind: NudgeKind, date: string, refId: string) {
   try {
     await prisma.smsNudgeLog.create({ data: { userId, kind, date, refId } });
     return true;
@@ -60,7 +62,7 @@ async function reserveNudge(userId: string, kind: 'MEAL_REMINDER' | 'EVENING_REC
 }
 
 /** Releases a reservation so a later tick can retry (used when delivery fails). */
-async function releaseNudge(userId: string, kind: 'MEAL_REMINDER' | 'EVENING_RECAP', date: string, refId: string) {
+async function releaseNudge(userId: string, kind: NudgeKind, date: string, refId: string) {
   await prisma.smsNudgeLog.deleteMany({ where: { userId, kind, date, refId } });
 }
 
@@ -178,6 +180,43 @@ async function processUserReminders(user: ReminderUser, now: Date): Promise<numb
   return sent;
 }
 
+async function processGuidedDiscoveryReminders(now: Date): Promise<number> {
+  const { listActiveDiscoveryReminderCandidates } = await import('./guidedJourneyService.js');
+  const candidates = await listActiveDiscoveryReminderCandidates(now);
+  let sent = 0;
+
+  for (const candidate of candidates) {
+    if (isTwilioSenderPhone(candidate.phone)) continue;
+
+    const already = await prisma.smsNudgeLog.count({
+      where: {
+        userId: candidate.userId,
+        kind: 'GUIDED_DISCOVERY_PROMPT',
+        date: candidate.dateKey
+      }
+    });
+    if (already >= candidate.maxRemindersPerDay) continue;
+
+    const refId = `${candidate.discoveryId}:${already + 1}`;
+    const reserved = await reserveNudge(
+      candidate.userId,
+      'GUIDED_DISCOVERY_PROMPT',
+      candidate.dateKey,
+      refId
+    );
+    if (!reserved) continue;
+
+    const message = capSms(candidate.prompt);
+    if (await deliverNudge(candidate.userId, candidate.phone, message, 'GUIDED_DISCOVERY_PROMPT')) {
+      sent += 1;
+    } else {
+      await releaseNudge(candidate.userId, 'GUIDED_DISCOVERY_PROMPT', candidate.dateKey, refId);
+    }
+  }
+
+  return sent;
+}
+
 /** Sends due pre-meal reminders and evening recaps. Designed to be called every few minutes by a scheduler. */
 export async function runSmsReminderTick(now = new Date()) {
   if (!isTwilioConfigured()) {
@@ -213,6 +252,13 @@ export async function runSmsReminderTick(now = new Date()) {
       errors += 1;
       console.error('[sms-reminder] failed for user', user.id, error);
     }
+  }
+
+  try {
+    sent += await processGuidedDiscoveryReminders(now);
+  } catch (error) {
+    errors += 1;
+    console.error('[sms-reminder] guided journey prompts failed', error);
   }
 
   return { sent, considered: eligibleUsers.length, errors };

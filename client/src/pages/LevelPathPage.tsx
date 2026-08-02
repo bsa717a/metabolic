@@ -13,7 +13,7 @@ const statusIcon = {
   LOCKED: Lock
 } as const;
 
-export function JourneyPage() {
+export function LevelPathPage() {
   const [levels, setLevels] = useState<JourneyLevel[]>([]);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function JourneyPage() {
       >
         <ArrowLeft size={16} /> Level Up
       </Link>
-      <h1 className="text-3xl font-bold">Your journey</h1>
+      <h1 className="text-3xl font-bold">Level path</h1>
       <p className="text-sm text-app-text-muted">
         Each level introduces one new behavior. Complete it to unlock what comes next.
       </p>

@@ -223,7 +223,11 @@ function buildAppGuide() {
     meals: 'Nutrition page — review today\'s meals, log what they ate, and edit the plan.',
     exercise: 'Exercise page — review today\'s workout, start a guided session, or ask me in chat to add/change exercises.',
     hydration:
-      'Water jug in the top bar on every page — tap it to log water, see today\'s progress, and change their daily goal. They can also log water or change their goal in this chat.'
+      'Water jug in the top bar on every page — tap it to log water, see today\'s progress, and change their daily goal. They can also log water or change their goal in this chat.',
+    levelUp:
+      'Level Up — Journey is the optional guided experience (Level 1: Becoming Aware). Level path is the older task timeline. Badges are earned awards.',
+    guidedJourney:
+      'Level Up → Begin My Journey / Open Journey, or open Journey from the Level Up header. Completing Level 1 discovery Observe Hunger unlocks Level 2.'
   };
 }
 
@@ -262,6 +266,65 @@ async function buildHydrationSupport(
   };
 }
 
+async function buildGuidedJourneyContextSnippet(
+  userId: string,
+  options: { compact?: boolean } = {}
+) {
+  try {
+    const { getGuidedJourneyState } = await import('./guidedJourneyService.js');
+    const state = await getGuidedJourneyState(userId);
+    if (!state.enabled) return null;
+
+    const active = state.activeDiscovery;
+    const discovery = active?.content?.discovery;
+    const progress = active?.progress;
+    const coachSupport = {
+      whatItIs:
+        'Optional Guided Journey under Level Up. Level 1 is Becoming Aware; the first discovery is Observe Hunger. Completing it unlocks Level 2. Meals, exercise, and coaching still work if they never start it.',
+      whereInApp:
+        'Level Up → Begin My Journey / Open Journey, or the Journey link in the Level Up header. Level path is the older task checklist — not the Guided Journey.',
+      howToHelp:
+        'Help them understand the current step from this context. Encourage noticing without changing food during Observe Hunger. Do not invent discoveries, skills, or requirements. If status is EXPERIENCING, reinforce sitting with the experiment. If they ask why reflection is locked, explain they need time living with it first (unlocks after enough hours, often evening). Pause keeps progress. Never pressure them to start or finish.',
+      level1DiscoveryId: 'observe-hunger',
+      level1ChapterTitle: 'Becoming Aware'
+    };
+
+    if (options.compact) {
+      return {
+        enabled: true,
+        enrollmentStatus: state.enrollment?.status ?? 'NOT_STARTED',
+        activeDiscoveryTitle: discovery?.title ?? null,
+        activeDiscoveryStatus: progress?.status ?? null,
+        experienceLivingCopy: discovery?.experienceLivingCopy ?? null,
+        coachSupport: {
+          howToHelp: coachSupport.howToHelp,
+          whereInApp: coachSupport.whereInApp
+        }
+      };
+    }
+
+    return {
+      enabled: true,
+      enrollmentStatus: state.enrollment?.status ?? 'NOT_STARTED',
+      startedAt: state.enrollment?.startedAt ?? null,
+      paused: state.enrollment?.status === 'PAUSED',
+      inviteHeadline: state.invite.headline,
+      activeDiscoveryTitle: discovery?.title ?? null,
+      activeDiscoveryStatus: progress?.status ?? null,
+      experienceInstructions: discovery?.experienceInstructions ?? null,
+      experienceLivingCopy: discovery?.experienceLivingCopy ?? null,
+      reflectionQuestion: discovery?.reflectionQuestion ?? null,
+      reflectionUnlocked: progress?.status === 'REFLECTION_UNLOCKED' || progress?.status === 'COMPLETED',
+      skillsEarned: state.skills.map((s) => s.title),
+      wisdomStoneCount: state.wisdomStones.length,
+      remindersEnabled: state.remindersEnabled,
+      coachSupport
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function buildAssistantContext(userId: string) {
   const personalization = await loadPersonalization(userId);
   const smsSupport = buildSmsSupport(personalization);
@@ -274,6 +337,7 @@ export async function buildAssistantContext(userId: string) {
     personalization.timezone,
     dashboard.program
   );
+  const guidedJourney = await buildGuidedJourneyContextSnippet(userId);
   if (!dashboard.program) {
     return JSON.stringify({
       hasProgram: false,
@@ -281,6 +345,7 @@ export async function buildAssistantContext(userId: string) {
       smsSupport,
       appGuide,
       hydrationSupport,
+      guidedJourney,
       profile: {
         firstName: personalization.firstName,
         foodAllergies: personalization.foodAllergies,
@@ -294,6 +359,7 @@ export async function buildAssistantContext(userId: string) {
     smsSupport,
     appGuide,
     hydrationSupport,
+    guidedJourney,
     profile: {
       firstName: personalization.firstName,
       foodAllergies: personalization.foodAllergies,
@@ -339,12 +405,14 @@ export async function buildAssistantContext(userId: string) {
 export async function buildSmsAssistantContext(userId: string) {
   const personalization = await loadPersonalization(userId);
   const smsSupport = buildSmsSupport(personalization);
+  const guidedJourney = await buildGuidedJourneyContextSnippet(userId, { compact: true });
   const dashboard = await getTodayDashboard(userId, userDayKey(personalization.timezone), personalization.timezone);
   if (!dashboard.program) {
     return JSON.stringify({
       hasProgram: false,
       message: 'User has no active program.',
       smsSupport,
+      guidedJourney,
       profile: {
         firstName: personalization.firstName,
         foodAllergies: personalization.foodAllergies,
@@ -356,6 +424,7 @@ export async function buildSmsAssistantContext(userId: string) {
   return JSON.stringify({
     hasProgram: true,
     smsSupport,
+    guidedJourney,
     profile: {
       firstName: personalization.firstName,
       foodAllergies: personalization.foodAllergies,

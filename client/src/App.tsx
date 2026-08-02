@@ -33,7 +33,11 @@ import { CampaignTermsPage } from './pages/CampaignTermsPage';
 import { SupportPage } from './pages/SupportPage';
 import { SmsOptInPage } from './pages/SmsOptInPage';
 import { GamificationPage } from './pages/GamificationPage';
-import { JourneyPage } from './pages/JourneyPage';
+import { LevelPathPage } from './pages/LevelPathPage';
+import { GuidedJourneyHomePage } from './pages/guidedJourney/GuidedJourneyHomePage';
+import { JourneyArrivalPage } from './pages/guidedJourney/JourneyArrivalPage';
+import { JourneyChapterIntroPage } from './pages/guidedJourney/JourneyChapterIntroPage';
+import { JourneyDiscoveryPage } from './pages/guidedJourney/JourneyDiscoveryPage';
 import { BadgesPage } from './pages/BadgesPage';
 import { BaselineSnapshotPage } from './pages/BaselineSnapshotPage';
 import { HydrationPage } from './pages/HydrationPage';
@@ -310,7 +314,11 @@ export default function App() {
             <Route path="progress" element={<ProgressPage />} />
             <Route path="hydration" element={<HydrationPage />} />
             <Route path="level-up" element={<GamificationPage />} />
-            <Route path="level-up/journey" element={<JourneyPage />} />
+            <Route path="level-up/path" element={<LevelPathPage />} />
+            <Route path="level-up/journey" element={<GuidedJourneyHomePage />} />
+            <Route path="level-up/journey/arrival" element={<JourneyArrivalPage />} />
+            <Route path="level-up/journey/chapter/:chapterId" element={<JourneyChapterIntroPage />} />
+            <Route path="level-up/journey/discovery/:discoveryId" element={<JourneyDiscoveryPage />} />
             <Route path="level-up/badges" element={<BadgesPage />} />
             <Route path="level-up/baseline" element={<BaselineSnapshotPage />} />
             <Route path="assistant" element={<AssistantPage />} />

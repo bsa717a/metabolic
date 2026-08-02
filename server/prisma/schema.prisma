@@ -223,6 +223,7 @@ model User {
   smsRemindersEnabled Boolean @default(true)
   smsMealRemindersEnabled Boolean @default(true)
   smsEveningRecapEnabled Boolean @default(true)
+  guidedJourneyRemindersEnabled Boolean @default(true)
   dashboardTutorialCompletedAt DateTime?
   smsRemindersIntroCompletedAt DateTime?
   coachWelcomeCompletedAt DateTime?
@@ -296,6 +297,11 @@ model User {
   communicationTemplatesUpdated CommunicationTemplate[] @relation("CommunicationTemplateUpdater")
   communicationRecipients CommunicationRecipient[]
   communicationUnsubscribes CommunicationUnsubscribe[]
+  guidedJourneyEnrollment GuidedJourneyEnrollment?
+  guidedDiscoveryProgress GuidedDiscoveryProgress[]
+  userGuidedJourneySkills UserGuidedJourneySkill[]
+  guidedWisdomStones GuidedWisdomStone[]
+  guidedJourneyEvents GuidedJourneyEvent[]
 }
 
 model ClientProfile {
@@ -827,6 +833,35 @@ model CoachMessage {
 enum SmsNudgeKind {
   MEAL_REMINDER
   EVENING_RECAP
+  GUIDED_DISCOVERY_PROMPT
+}
+
+enum GuidedJourneyEnrollmentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum GuidedDiscoveryProgressStatus {
+  INTRODUCED
+  EXPERIENCING
+  REFLECTION_UNLOCKED
+  COMPLETED
+  ABANDONED
+}
+
+enum GuidedJourneyEventType {
+  INVITATION_VIEWED
+  JOURNEY_STARTED
+  DISCOVERY_INTRODUCED
+  EXPERIENCE_STARTED
+  REMINDER_INTERACTED
+  REFLECTION_UNLOCKED
+  REFLECTION_SUBMITTED
+  SKILL_EARNED
+  DISCOVERY_ABANDONED
+  JOURNEY_PAUSED
+  JOURNEY_RESUMED
 }
 
 model SmsNudgeLog {
@@ -1289,6 +1324,76 @@ model WeeklyReflection {
   updatedAt DateTime @updatedAt
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([userId, weekStartDate])
+}
+
+model GuidedJourneyEnrollment {
+  id String @id @default(cuid())
+  userId String @unique
+  status GuidedJourneyEnrollmentStatus @default(ACTIVE)
+  startedAt DateTime @default(now())
+  pausedAt DateTime?
+  resumedAt DateTime?
+  completedAt DateTime?
+  currentChapterId String?
+  currentDiscoveryId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GuidedDiscoveryProgress {
+  id String @id @default(cuid())
+  userId String
+  discoveryId String
+  status GuidedDiscoveryProgressStatus @default(INTRODUCED)
+  introducedAt DateTime @default(now())
+  experienceStartedAt DateTime?
+  reflectionUnlockedAt DateTime?
+  reflectedAt DateTime?
+  reflectionText String?
+  coachResponse String?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, discoveryId])
+  @@index([userId, status])
+}
+
+model UserGuidedJourneySkill {
+  id String @id @default(cuid())
+  userId String
+  skillId String
+  earnedAt DateTime @default(now())
+  sourceDiscoveryId String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, skillId])
+  @@index([userId])
+}
+
+model GuidedWisdomStone {
+  id String @id @default(cuid())
+  userId String
+  chapterId String
+  discoveryId String
+  reflectionText String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, chapterId])
+}
+
+model GuidedJourneyEvent {
+  id String @id @default(cuid())
+  userId String
+  type GuidedJourneyEventType
+  chapterId String?
+  discoveryId String?
+  skillId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, type, createdAt])
 }
 
 model AppSetting {
