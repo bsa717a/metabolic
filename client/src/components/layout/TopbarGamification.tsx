@@ -1,14 +1,16 @@
 import { clsx } from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Award, Droplets, Flame } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Award, Droplets, Flame, Mountain } from 'lucide-react';
 import { badgeArtUrl } from '../gamification/badgeArt';
 import { HydrationTopbarDrawer } from '../hydration/HydrationTopbarDrawer';
 import { WaterBottle } from '../hydration/WaterBottle';
 import { LevelUpTopbarDrawer } from './LevelUpTopbarDrawer';
 import { ProgressRing } from '../gamification/ProgressRing';
+import { GUIDED_JOURNEY_UPDATED_EVENT } from '../../lib/guidedJourneyEvents';
 import { api, todayDateParam } from '../../services/api';
 import type { GamificationDashboard } from '../../types/gamification';
+import type { GuidedJourneyState } from '../../types/guidedJourney';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { getTutorialGamificationData } from '../tutorial/tutorialDemoGamification';
 
@@ -35,9 +37,76 @@ function useIsMobileViewport() {
   return isMobile;
 }
 
+function JourneyTopbarLink({
+  onJourney,
+  trailDone,
+  trailTotal,
+  journeyPercent,
+  isMobile,
+  className
+}: {
+  onJourney: boolean;
+  trailDone: number;
+  trailTotal: number;
+  journeyPercent: number;
+  isMobile: boolean;
+  className?: string;
+}) {
+  const title = onJourney
+    ? `Journey · ${trailDone}/${trailTotal || 1} discoveries`
+    : 'Begin your Journey';
+  const ariaLabel = onJourney
+    ? `Guided Journey, ${trailDone} of ${trailTotal || 1} discoveries complete`
+    : 'Open Guided Journey';
+
+  return (
+    <Link
+      to="/level-up/journey"
+      data-tour="topbar-level"
+      className={clsx(
+        'flex items-center rounded-full px-2 py-1 transition hover:bg-app-border/50 hover:opacity-90',
+        !isMobile && onJourney && 'gap-1.5',
+        className
+      )}
+      title={title}
+      aria-label={ariaLabel}
+    >
+      {onJourney ? (
+        <>
+          <ProgressRing
+            percent={journeyPercent}
+            size={isMobile ? MOBILE_RING_SIZE : TOPBAR_RING_SIZE}
+            label="J"
+            labelClassName={clsx(
+              'absolute inset-0 flex items-center justify-center font-bold text-brand-green',
+              !isMobile && 'text-[10px]'
+            )}
+          />
+          {!isMobile && (
+            <span className="text-[13px] tabular-nums text-app-text-muted">
+              {trailDone}/{trailTotal || 1}
+            </span>
+          )}
+        </>
+      ) : (
+        <Mountain
+          className={clsx(
+            'shrink-0 text-brand-green',
+            isMobile ? 'size-[22px]' : 'size-7'
+          )}
+          strokeWidth={2}
+          aria-hidden
+        />
+      )}
+    </Link>
+  );
+}
+
 export function TopbarGamification() {
   const { demoMode, currentStepId } = useTutorial();
+  const location = useLocation();
   const [data, setData] = useState<GamificationDashboard | null>(null);
+  const [journey, setJourney] = useState<GuidedJourneyState | null>(null);
   const [hydrationOpen, setHydrationOpen] = useState(false);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const hydrationButtonRef = useRef<HTMLButtonElement>(null);
@@ -50,15 +119,38 @@ export function TopbarGamification() {
       .catch(() => setData(null));
   }, []);
 
+  const loadJourney = useCallback(() => {
+    if (demoMode) {
+      setJourney(null);
+      return;
+    }
+    api<GuidedJourneyState>('/api/guided-journey')
+      .then(setJourney)
+      .catch(() => setJourney(null));
+  }, [demoMode]);
+
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
-    const refresh = () => load();
+    loadJourney();
+  }, [loadJourney, location.pathname]);
+
+  useEffect(() => {
+    const refresh = () => {
+      load();
+      loadJourney();
+    };
     window.addEventListener('hydration-updated', refresh);
-    return () => window.removeEventListener('hydration-updated', refresh);
-  }, [load]);
+    window.addEventListener(GUIDED_JOURNEY_UPDATED_EVENT, loadJourney);
+    window.addEventListener('focus', loadJourney);
+    return () => {
+      window.removeEventListener('hydration-updated', refresh);
+      window.removeEventListener(GUIDED_JOURNEY_UPDATED_EVENT, loadJourney);
+      window.removeEventListener('focus', loadJourney);
+    };
+  }, [load, loadJourney]);
 
   const view = getTutorialGamificationData(data, demoMode);
   if (!view) return null;
@@ -71,6 +163,12 @@ export function TopbarGamification() {
   const showFoodStreak = demoMode || momentum.foodLoggingStreak > 0;
   const showWaterStreak = demoMode || hydration.currentStreak > 0;
   const pulseStreaks = demoMode && currentStepId === 'topbar-streaks';
+
+  const journeyMode = Boolean(!demoMode && journey?.enabled);
+  const onJourney = Boolean(journey?.enrollment);
+  const trailDone = journey?.trail.filter((stop) => stop.completed).length ?? 0;
+  const trailTotal = journey?.trail.length ?? 0;
+  const journeyPercent = trailTotal > 0 ? Math.round((trailDone / trailTotal) * 100) : onJourney ? 5 : 0;
 
   if (isMobile) {
     return (
@@ -120,30 +218,43 @@ export function TopbarGamification() {
             </>
           )}
 
-          {currentLevel && (
+          {journeyMode ? (
             <>
               <span className="mx-0.5 h-5 w-px shrink-0 bg-app-border" aria-hidden />
-              <button
-                ref={levelUpButtonRef}
-                type="button"
-                data-tour="topbar-level"
-                onClick={() => {
-                  setHydrationOpen(false);
-                  setLevelUpOpen((open) => !open);
-                }}
-                className="flex items-center rounded-full px-2 py-1 transition hover:bg-app-border/50"
-                title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
-                aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
-                aria-expanded={levelUpOpen}
-              >
-                <ProgressRing
-                  percent={currentLevel.progressPercent}
-                  size={MOBILE_RING_SIZE}
-                  label={`L${currentLevel.number}`}
-                  labelClassName="absolute inset-0 flex items-center justify-center font-bold text-brand-green"
-                />
-              </button>
+              <JourneyTopbarLink
+                onJourney={onJourney}
+                trailDone={trailDone}
+                trailTotal={trailTotal}
+                journeyPercent={journeyPercent}
+                isMobile
+              />
             </>
+          ) : (
+            currentLevel && (
+              <>
+                <span className="mx-0.5 h-5 w-px shrink-0 bg-app-border" aria-hidden />
+                <button
+                  ref={levelUpButtonRef}
+                  type="button"
+                  data-tour="topbar-level"
+                  onClick={() => {
+                    setHydrationOpen(false);
+                    setLevelUpOpen((open) => !open);
+                  }}
+                  className="flex items-center rounded-full px-2 py-1 transition hover:bg-app-border/50"
+                  title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
+                  aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
+                  aria-expanded={levelUpOpen}
+                >
+                  <ProgressRing
+                    percent={currentLevel.progressPercent}
+                    size={MOBILE_RING_SIZE}
+                    label={`L${currentLevel.number}`}
+                    labelClassName="absolute inset-0 flex items-center justify-center font-bold text-brand-green"
+                  />
+                </button>
+              </>
+            )
           )}
         </div>
 
@@ -152,7 +263,7 @@ export function TopbarGamification() {
           onClose={() => setHydrationOpen(false)}
           anchorRef={hydrationButtonRef}
         />
-        {currentLevel && (
+        {!journeyMode && currentLevel && (
           <LevelUpTopbarDrawer
             open={levelUpOpen}
             onClose={() => setLevelUpOpen(false)}
@@ -221,33 +332,46 @@ export function TopbarGamification() {
           </>
         )}
 
-        {currentLevel && (
+        {journeyMode ? (
           <>
             <CapsuleDivider />
-            <button
-              ref={levelUpButtonRef}
-              type="button"
-              data-tour="topbar-level"
-              onClick={() => {
-                setHydrationOpen(false);
-                setLevelUpOpen((open) => !open);
-              }}
-              className="flex items-center gap-1.5 rounded-full px-2 py-1 transition hover:bg-app-border/50"
-              title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
-              aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
-              aria-expanded={levelUpOpen}
-            >
-              <ProgressRing
-                percent={currentLevel.progressPercent}
-                size={TOPBAR_RING_SIZE}
-                label={`L${currentLevel.number}`}
-                labelClassName="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-brand-green"
-              />
-              <span className="text-[13px] tabular-nums text-app-text-muted">
-                {tasksDone}/{tasksTotal}
-              </span>
-            </button>
+            <JourneyTopbarLink
+              onJourney={onJourney}
+              trailDone={trailDone}
+              trailTotal={trailTotal}
+              journeyPercent={journeyPercent}
+              isMobile={false}
+            />
           </>
+        ) : (
+          currentLevel && (
+            <>
+              <CapsuleDivider />
+              <button
+                ref={levelUpButtonRef}
+                type="button"
+                data-tour="topbar-level"
+                onClick={() => {
+                  setHydrationOpen(false);
+                  setLevelUpOpen((open) => !open);
+                }}
+                className="flex items-center gap-1.5 rounded-full px-2 py-1 transition hover:bg-app-border/50"
+                title={`Level ${currentLevel.number} · ${tasksDone}/${tasksTotal} tasks`}
+                aria-label={`Level ${currentLevel.number}, ${tasksDone} of ${tasksTotal} tasks complete`}
+                aria-expanded={levelUpOpen}
+              >
+                <ProgressRing
+                  percent={currentLevel.progressPercent}
+                  size={TOPBAR_RING_SIZE}
+                  label={`L${currentLevel.number}`}
+                  labelClassName="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-brand-green"
+                />
+                <span className="text-[13px] tabular-nums text-app-text-muted">
+                  {tasksDone}/{tasksTotal}
+                </span>
+              </button>
+            </>
+          )
         )}
 
         <CapsuleDivider />
@@ -277,7 +401,7 @@ export function TopbarGamification() {
         onClose={() => setHydrationOpen(false)}
         anchorRef={hydrationButtonRef}
       />
-      {currentLevel && (
+      {!journeyMode && currentLevel && (
         <LevelUpTopbarDrawer
           open={levelUpOpen}
           onClose={() => setLevelUpOpen(false)}

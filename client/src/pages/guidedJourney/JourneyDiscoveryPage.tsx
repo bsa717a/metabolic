@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { notifyGuidedJourneyUpdated } from '../../lib/guidedJourneyEvents';
 import { api } from '../../services/api';
 import type { DiscoveryStateResponse } from '../../types/guidedJourney';
 import { Button } from '../../components/ui/Button';
@@ -87,6 +88,7 @@ export function JourneyDiscoveryPage() {
         { method: 'POST' }
       );
       setData(next);
+      notifyGuidedJourneyUpdated();
     } catch {
       setError('Could not start the experience.');
     } finally {
@@ -103,6 +105,7 @@ export function JourneyDiscoveryPage() {
         { method: 'POST', body: JSON.stringify({ reflectionText: reflection }) }
       );
       setData(next);
+      notifyGuidedJourneyUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save reflection.');
     } finally {

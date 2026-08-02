@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { notifyGuidedJourneyUpdated } from '../../lib/guidedJourneyEvents';
 import { api } from '../../services/api';
 import type { ChapterState } from '../../types/guidedJourney';
 import { Button } from '../../components/ui/Button';
@@ -40,6 +41,7 @@ export function JourneyChapterIntroPage() {
         await api('/api/guided-journey/start', { method: 'POST' });
       }
       await api(`/api/guided-journey/discoveries/${firstDiscovery.id}/begin`, { method: 'POST' });
+      notifyGuidedJourneyUpdated();
       navigate(`/level-up/journey/discovery/${firstDiscovery.id}`);
     } catch {
       setError('Could not begin discovery.');
