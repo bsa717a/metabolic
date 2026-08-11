@@ -21,6 +21,8 @@ import { AdminNutritionTemplateEditorPage } from './pages/AdminNutritionTemplate
 import { AdminMealCardSetEditorPage } from './pages/AdminMealCardSetEditorPage';
 import { AdminExerciseTemplatesPage } from './pages/AdminExerciseTemplatesPage';
 import { AdminExerciseTemplateEditorPage } from './pages/AdminExerciseTemplateEditorPage';
+import { AdminExercisePlansPage } from './pages/AdminExercisePlansPage';
+import { AdminExercisePlanEditorPage } from './pages/AdminExercisePlanEditorPage';
 import { AdminCommunicationsPage } from './pages/AdminCommunicationsPage';
 import { UnsubscribePage } from './pages/UnsubscribePage';
 import { CoachPage } from './pages/CoachPage';
@@ -358,6 +360,22 @@ export default function App() {
               element={
                 <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
                   <AdminMealCardSetEditorPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/exercise-plans"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminExercisePlansPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="admin/exercise-plans/:id"
+              element={
+                <AdminRoute appUser={appUser} refreshAppUser={refreshAppUser}>
+                  <AdminExercisePlanEditorPage />
                 </AdminRoute>
               }
             />

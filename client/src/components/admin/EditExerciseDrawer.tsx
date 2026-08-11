@@ -21,6 +21,19 @@ type ExerciseDraft = {
   defaultDistance: string;
 };
 
+function emptyDraft(): ExerciseDraft {
+  return {
+    name: '',
+    category: '',
+    bodyPart: '',
+    description: '',
+    defaultSets: '',
+    defaultReps: '',
+    defaultDurationMinutes: '',
+    defaultDistance: ''
+  };
+}
+
 function toDraft(exercise: AdminExercise): ExerciseDraft {
   return {
     name: exercise.name,
@@ -59,17 +72,24 @@ function parseOptionalNumber(value: string, label: string) {
 export function EditExerciseDrawer({
   open,
   exercise,
+  mode,
   onClose,
   onSaved
 }: {
   open: boolean;
   exercise?: AdminExercise;
+  mode: 'create' | 'edit';
   onClose: () => void;
   onSaved: (exercise: AdminExercise) => void;
 }) {
+  const title = mode === 'create' ? 'New exercise' : (exercise?.name ?? 'Edit exercise');
+
   return (
-    <Drawer open={open} title={exercise ? exercise.name : 'Edit exercise'} onClose={onClose}>
-      {open && exercise && (
+    <Drawer open={open} title={title} onClose={onClose}>
+      {open && mode === 'create' && (
+        <EditExerciseDrawerContent key="create" onClose={onClose} onSaved={onSaved} />
+      )}
+      {open && mode === 'edit' && exercise && (
         <EditExerciseDrawerContent key={exercise.id} exercise={exercise} onClose={onClose} onSaved={onSaved} />
       )}
     </Drawer>
@@ -81,16 +101,18 @@ function EditExerciseDrawerContent({
   onClose,
   onSaved
 }: {
-  exercise: AdminExercise;
+  exercise?: AdminExercise;
   onClose: () => void;
   onSaved: (exercise: AdminExercise) => void;
 }) {
-  const [draft, setDraft] = useState(() => toDraft(exercise));
-  const [howToVideoUrl, setHowToVideoUrl] = useState<string | null>(exercise.howToVideoUrl ?? null);
+  const isCreate = !exercise;
+  const [draft, setDraft] = useState(() => (exercise ? toDraft(exercise) : emptyDraft()));
+  const [howToVideoUrl, setHowToVideoUrl] = useState<string | null>(exercise?.howToVideoUrl ?? null);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [createdExerciseId, setCreatedExerciseId] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -146,20 +168,37 @@ function EditExerciseDrawerContent({
         defaultDistance: parseOptionalNumber(draft.defaultDistance, 'Default distance')
       };
 
-      let updated = await api<AdminExercise>(`/api/admin/exercises/${exercise.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(
-          pendingVideoFile
-            ? payload
-            : {
-                ...payload,
-                howToVideoUrl
-              }
-        )
-      });
+      let updated: AdminExercise;
+
+      if (isCreate) {
+        if (createdExerciseId) {
+          updated = await api<AdminExercise>(`/api/admin/exercises/${createdExerciseId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+          });
+        } else {
+          updated = await api<AdminExercise>('/api/admin/exercises', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+          setCreatedExerciseId(updated.id);
+        }
+      } else {
+        updated = await api<AdminExercise>(`/api/admin/exercises/${exercise.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(
+            pendingVideoFile
+              ? payload
+              : {
+                  ...payload,
+                  howToVideoUrl
+                }
+          )
+        });
+      }
 
       if (pendingVideoFile) {
-        updated = await uploadExerciseHowToVideo(exercise.id, pendingVideoFile);
+        updated = await uploadExerciseHowToVideo(updated.id, pendingVideoFile);
       }
 
       onSaved(updated);
@@ -173,7 +212,11 @@ function EditExerciseDrawerContent({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-app-text-muted">Update exercise details, how-to video, and default prescription values.</p>
+      <p className="text-sm text-app-text-muted">
+        {isCreate
+          ? 'Add a new exercise to the catalog with optional how-to video and default prescription values.'
+          : 'Update exercise details, how-to video, and default prescription values.'}
+      </p>
 
       <label className="block">
         <span className={labelClassName()}>Name</span>
@@ -304,7 +347,7 @@ function EditExerciseDrawerContent({
 
       <div className="flex gap-3 pt-2">
         <Button disabled={saving} onClick={save}>
-          {saving ? 'Saving...' : 'Save changes'}
+          {saving ? 'Saving...' : isCreate ? 'Create exercise' : 'Save changes'}
         </Button>
         <Button variant="secondary" disabled={saving} onClick={onClose}>
           Cancel
