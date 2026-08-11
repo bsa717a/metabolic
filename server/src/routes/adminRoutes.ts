@@ -20,6 +20,7 @@ import {
   sendAdminWelcomeEmail,
   unassignPrimaryCoach,
   updateAdminExercise,
+  createAdminExercise,
   updateAdminFood,
   updateAdminUser
 } from '../services/adminService.js';
@@ -59,6 +60,16 @@ import {
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
 import { uploadExerciseHowToVideo } from '../services/exerciseVideoStorageService.js';
+import {
+  addPlanDay,
+  createExercisePlan,
+  deleteExercisePlan,
+  detachPlanDay,
+  getExercisePlanForAdmin,
+  listExercisePlansForAdmin,
+  reorderPlanDays,
+  updateExercisePlan
+} from '../services/exercisePlanService.js';
 
 const adminOnly = [requireAuth, requireRole(['SUPER_ADMIN', 'ADMIN'])];
 const superAdminOnly = [requireAuth, requireRole(['SUPER_ADMIN'])];
@@ -126,6 +137,17 @@ const foodApproveBody = z.object({
   carbs: z.number().finite().min(0).optional(),
   fat: z.number().finite().min(0).optional(),
   visibility: z.nativeEnum(Visibility).optional()
+});
+
+const exerciseCreateBody = z.object({
+  name: z.string().trim().min(1),
+  category: z.string().trim().nullable().optional(),
+  bodyPart: z.string().trim().nullable().optional(),
+  description: z.string().trim().nullable().optional(),
+  defaultSets: z.number().int().min(0).nullable().optional(),
+  defaultReps: z.number().int().min(0).nullable().optional(),
+  defaultDurationMinutes: z.number().int().min(0).nullable().optional(),
+  defaultDistance: z.number().finite().min(0).nullable().optional()
 });
 
 const exerciseUpdateBody = z
@@ -212,16 +234,49 @@ const templateExerciseItemUpdateBody = z
 const exerciseTemplateCreateBody = z.object({
   name: z.string().trim().min(1),
   description: z.string().trim().nullable().optional(),
-  visibility: z.nativeEnum(Visibility).optional()
+  visibility: z.nativeEnum(Visibility).optional(),
+  planId: z.string().nullable().optional(),
+  dayIndex: z.number().int().min(1).nullable().optional()
 });
 
 const exerciseTemplateUpdateBody = z
   .object({
     name: z.string().trim().min(1).optional(),
     description: z.string().trim().nullable().optional(),
+    visibility: z.nativeEnum(Visibility).optional(),
+    planId: z.string().nullable().optional(),
+    dayIndex: z.number().int().min(1).nullable().optional()
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
+
+const exercisePlanCreateBody = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().trim().nullable().optional(),
+  visibility: z.nativeEnum(Visibility).optional()
+});
+
+const exercisePlanUpdateBody = z
+  .object({
+    name: z.string().trim().min(1).optional(),
+    description: z.string().trim().nullable().optional(),
     visibility: z.nativeEnum(Visibility).optional()
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
+
+const exercisePlanAddDayBody = z
+  .object({
+    name: z.string().trim().min(1).optional(),
+    templateId: z.string().optional(),
+    description: z.string().trim().nullable().optional(),
+    visibility: z.nativeEnum(Visibility).optional()
+  })
+  .refine((body) => Boolean(body.name?.trim()) || Boolean(body.templateId), {
+    message: 'Day name or templateId is required'
+  });
+
+const exercisePlanReorderDaysBody = z.object({
+  orderedTemplateIds: z.array(z.string()).min(1)
+});
 
 const exerciseTemplateReorderBody = z.object({
   orderedIds: z.array(z.string()).min(1)
@@ -411,6 +466,21 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/api/admin/exercises', { preHandler: adminOnly }, async () => {
     const exercises = await listAdminExercises();
     return exercises.map(serializeAdminExercise);
+  });
+
+  app.post('/api/admin/exercises', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = exerciseCreateBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise' });
+    }
+
+    try {
+      const exercise = await createAdminExercise(parsed.data);
+      return serializeAdminExercise(exercise);
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to create exercise');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create exercise' });
+    }
   });
 
   app.patch('/api/admin/exercises/:id', { preHandler: adminOnly }, async (request, reply) => {
@@ -749,6 +819,85 @@ export async function adminRoutes(app: FastifyInstance) {
       return await reorderTemplateItems((request.params as { id: string }).id, parsed.data.orderedIds);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to reorder exercises' });
+    }
+  });
+
+  app.get('/api/admin/exercise-plans', { preHandler: adminOnly }, async () => listExercisePlansForAdmin());
+
+  app.get('/api/admin/exercise-plans/:id', { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      return await getExercisePlanForAdmin((request.params as { id: string }).id);
+    } catch {
+      return reply.code(404).send({ error: 'Exercise plan not found' });
+    }
+  });
+
+  app.post('/api/admin/exercise-plans', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = exercisePlanCreateBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise plan' });
+    }
+    try {
+      return await createExercisePlan({ ...parsed.data, createdById: request.appUser!.id });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to create exercise plan' });
+    }
+  });
+
+  app.patch('/api/admin/exercise-plans/:id', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = exercisePlanUpdateBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise plan update' });
+    }
+    try {
+      return await updateExercisePlan((request.params as { id: string }).id, parsed.data);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update exercise plan' });
+    }
+  });
+
+  app.delete('/api/admin/exercise-plans/:id', { preHandler: adminOnly }, async (request, reply) => {
+    try {
+      await deleteExercisePlan((request.params as { id: string }).id);
+      return reply.code(204).send();
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to delete exercise plan' });
+    }
+  });
+
+  app.post('/api/admin/exercise-plans/:id/days', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = exercisePlanAddDayBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid day request' });
+    }
+    try {
+      return await addPlanDay((request.params as { id: string }).id, {
+        ...parsed.data,
+        createdById: request.appUser!.id
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add day' });
+    }
+  });
+
+  app.patch('/api/admin/exercise-plans/:id/days/reorder', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = exercisePlanReorderDaysBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid reorder request' });
+    }
+    try {
+      return await reorderPlanDays((request.params as { id: string }).id, parsed.data.orderedTemplateIds);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to reorder days' });
+    }
+  });
+
+  app.delete('/api/admin/exercise-plans/:id/days/:templateId', { preHandler: adminOnly }, async (request, reply) => {
+    const { id, templateId } = request.params as { id: string; templateId: string };
+    try {
+      return await detachPlanDay(id, templateId);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to remove day' });
     }
   });
 }

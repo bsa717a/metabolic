@@ -16,13 +16,15 @@ export function EditTemplateExerciseDrawer({
   templateId,
   item,
   onClose,
-  onSaved
+  onSaved,
+  zIndexClass
 }: {
   open: boolean;
   templateId?: string;
   item?: ExerciseTemplateItem;
   onClose: () => void;
   onSaved: () => void;
+  zIndexClass?: string;
 }) {
   const isEdit = Boolean(item);
   const [catalog, setCatalog] = useState<ExerciseCatalogItem[]>([]);
@@ -116,7 +118,12 @@ export function EditTemplateExerciseDrawer({
   }
 
   return (
-    <Drawer open={open} title={isEdit ? `Edit — ${item?.exercise.name ?? 'Exercise'}` : 'Add exercise'} onClose={onClose}>
+    <Drawer
+      open={open}
+      title={isEdit ? `Edit — ${item?.exercise.name ?? 'Exercise'}` : 'Add exercise'}
+      zIndexClass={zIndexClass}
+      onClose={onClose}
+    >
       <div className="space-y-4">
         {!isEdit && (
           <>

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { api } from '../../services/api';
 import type { AdminExercise } from '../../types';
 import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
 import { EditExerciseDrawer } from './EditExerciseDrawer';
 
 type SortKey = 'name' | 'category' | 'bodyPart' | 'video';
@@ -79,6 +81,7 @@ export function ExerciseTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -130,7 +133,18 @@ export function ExerciseTable() {
   }, [loadExercises]);
 
   function handleSaved(updated: AdminExercise) {
-    setExercises((current) => current.map((exercise) => (exercise.id === updated.id ? updated : exercise)));
+    setExercises((current) => {
+      const index = current.findIndex((exercise) => exercise.id === updated.id);
+      if (index < 0) {
+        return [...current, updated].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      }
+      return current.map((exercise) => (exercise.id === updated.id ? updated : exercise));
+    });
+  }
+
+  function closeDrawer() {
+    setCreating(false);
+    setSelectedExerciseId(null);
   }
 
   return (
@@ -139,7 +153,7 @@ export function ExerciseTable() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Exercise Database</h2>
-            <p className="text-sm text-app-text-muted">Click a row to edit exercise details.</p>
+            <p className="text-sm text-app-text-muted">Click a row to edit, or create a new exercise.</p>
           </div>
           {!loading && !error && (
             <input
@@ -151,9 +165,17 @@ export function ExerciseTable() {
               aria-label="Search exercises"
             />
           )}
-          <span className="ml-auto shrink-0 text-sm text-app-text-muted">
-            {searchQuery.trim() ? `${visibleExercises.length} of ${exercises.length}` : `${exercises.length} total`}
-          </span>
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            <span className="text-sm text-app-text-muted">
+              {searchQuery.trim() ? `${visibleExercises.length} of ${exercises.length}` : `${exercises.length} total`}
+            </span>
+            {!loading && !error && (
+              <Button type="button" onClick={() => { setSelectedExerciseId(null); setCreating(true); }}>
+                <Plus className="mr-1 inline h-4 w-4" />
+                New exercise
+              </Button>
+            )}
+          </div>
         </div>
 
         {loading && <p className="text-sm text-app-text-muted">Loading exercises...</p>}
@@ -216,10 +238,14 @@ export function ExerciseTable() {
                     <tr
                       key={exercise.id}
                       tabIndex={0}
-                      onClick={() => setSelectedExerciseId(exercise.id)}
+                      onClick={() => {
+                        setCreating(false);
+                        setSelectedExerciseId(exercise.id);
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
+                          setCreating(false);
                           setSelectedExerciseId(exercise.id);
                         }
                       }}
@@ -251,9 +277,10 @@ export function ExerciseTable() {
       </Card>
 
       <EditExerciseDrawer
-        open={Boolean(selectedExercise)}
+        open={creating || Boolean(selectedExercise)}
+        mode={creating ? 'create' : 'edit'}
         exercise={selectedExercise}
-        onClose={() => setSelectedExerciseId(null)}
+        onClose={closeDrawer}
         onSaved={handleSaved}
       />
     </>

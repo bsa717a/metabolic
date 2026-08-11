@@ -6,6 +6,32 @@ import { formatPlan } from '../../utils/exerciseFormat';
 import { Badge } from '../ui/Badge';
 import { ExerciseHowToVideoButton } from './ExerciseHowToVideoButton';
 
+function ExerciseNotes({
+  description,
+  completed = false,
+  skipped = false
+}: {
+  description?: string | null;
+  completed?: boolean;
+  skipped?: boolean;
+}) {
+  if (!description?.trim()) return null;
+
+  return (
+    <p
+      className={`mt-1 text-sm leading-snug ${
+        skipped
+          ? 'text-red-400/80 line-through decoration-red-300'
+          : completed
+            ? 'text-emerald-700/80'
+            : 'text-slate-500'
+      }`}
+    >
+      {description}
+    </p>
+  );
+}
+
 function ExerciseTitle({
   name,
   bodyPart,
@@ -183,6 +209,11 @@ export function ExerciseCard({
               {planText}
             </p>
           </div>
+          <ExerciseNotes
+            description={item.exercise.description}
+            completed={isDone}
+            skipped={isSkipped}
+          />
         </div>
         <ExerciseActions
           canComplete={false}
@@ -219,6 +250,7 @@ export function ExerciseCard({
           <ExerciseTitle name={item.exercise.name} bodyPart={item.exercise.bodyPart} />
           <p className="text-sm text-slate-500 sm:min-w-0">{planText}</p>
         </div>
+        <ExerciseNotes description={item.exercise.description} />
       </div>
       <ExerciseActions
         canComplete={canComplete}

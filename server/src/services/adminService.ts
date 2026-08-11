@@ -44,6 +44,17 @@ export type AdminExerciseUpdate = {
   defaultDistance?: number | null;
 };
 
+export type AdminExerciseCreate = {
+  name: string;
+  category?: string | null;
+  bodyPart?: string | null;
+  description?: string | null;
+  defaultSets?: number | null;
+  defaultReps?: number | null;
+  defaultDurationMinutes?: number | null;
+  defaultDistance?: number | null;
+};
+
 const userInclude = {
   userAssignments: {
     where: { status: CoachRelationshipStatus.ACTIVE },
@@ -233,6 +244,21 @@ export async function updateAdminExercise(id: string, data: AdminExerciseUpdate)
     await deleteExerciseHowToVideos(id);
   }
   return prisma.exercise.update({ where: { id }, data });
+}
+
+export async function createAdminExercise(data: AdminExerciseCreate) {
+  return prisma.exercise.create({
+    data: {
+      name: data.name.trim(),
+      category: data.category ?? null,
+      bodyPart: data.bodyPart ?? null,
+      description: data.description ?? null,
+      defaultSets: data.defaultSets ?? null,
+      defaultReps: data.defaultReps ?? null,
+      defaultDurationMinutes: data.defaultDurationMinutes ?? null,
+      defaultDistance: data.defaultDistance ?? null
+    }
+  });
 }
 
 export async function approveAdminFood(id: string, data?: AdminFoodUpdate) {

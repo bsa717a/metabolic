@@ -151,7 +151,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
   }, [load]);
 
   async function createTemplate() {
-    const name = window.prompt('Plan name');
+    const name = window.prompt('Workout name');
     if (!name?.trim()) return;
     setCreating(true);
     try {
@@ -202,17 +202,17 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
       <Card>
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold">Exercise Plans</h2>
-            <p className="text-sm text-app-text-muted">Click a row to edit a plan.</p>
+            <h2 className="text-lg font-bold">Workouts</h2>
+            <p className="text-sm text-app-text-muted">Day templates and standalone workouts. Click a row to edit.</p>
           </div>
           {!loading && !error && (
             <input
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search plans…"
+              placeholder="Search workouts…"
               className="h-9 w-full min-w-[10rem] max-w-xs flex-1 rounded-xl border border-app-border bg-app-surface px-3 text-sm text-app-text sm:flex-none sm:w-56"
-              aria-label="Search exercise plans"
+              aria-label="Search workouts"
             />
           )}
           {!loading && !error && (
@@ -222,7 +222,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
               </Button>
               <Button type="button" disabled={creating} onClick={() => void createTemplate()}>
                 <Plus className="mr-1 inline h-4 w-4" />
-                New plan
+                New workout
               </Button>
             </div>
           )}
@@ -231,7 +231,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
           </span>
         </div>
 
-        {loading && <p className="text-sm text-app-text-muted">Loading plans…</p>}
+        {loading && <p className="text-sm text-app-text-muted">Loading workouts…</p>}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <p>{error}</p>
@@ -344,7 +344,7 @@ export function ExerciseTemplatesTable({ initialTemplateId }: { initialTemplateI
               </tbody>
             </table>
             {templates.length === 0 && (
-              <p className="py-6 text-center text-sm text-app-text-muted">No plans yet. Create one to get started.</p>
+              <p className="py-6 text-center text-sm text-app-text-muted">No workouts yet. Create one to get started.</p>
             )}
             {templates.length > 0 && visibleTemplates.length === 0 && (
               <p className="py-6 text-center text-sm text-app-text-muted">No plans match your search.</p>

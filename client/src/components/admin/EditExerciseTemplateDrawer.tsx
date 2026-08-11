@@ -51,17 +51,19 @@ export function EditExerciseTemplateDrawer({
   open,
   templateId,
   onClose,
-  onSaved
+  onSaved,
+  zIndexClass
 }: {
   open: boolean;
   templateId?: string;
   onClose: () => void;
   onSaved?: (template: ExercisePlanTemplateSummary) => void;
+  zIndexClass?: string;
 }) {
-  const [title, setTitle] = useState('Exercise plan');
+  const [title, setTitle] = useState('Workout');
 
   useEffect(() => {
-    if (!open) queueMicrotask(() => setTitle('Exercise plan'));
+    if (!open) queueMicrotask(() => setTitle('Workout'));
   }, [open]);
 
   return (
@@ -69,12 +71,14 @@ export function EditExerciseTemplateDrawer({
       open={open}
       title={title}
       panelClassName="max-w-xl"
+      zIndexClass={zIndexClass}
       onClose={onClose}
     >
       {open && templateId && (
         <EditExerciseTemplateDrawerContent
           key={templateId}
           templateId={templateId}
+          zIndexClass={zIndexClass}
           onClose={onClose}
           onSaved={onSaved}
           onTitleChange={setTitle}
@@ -86,11 +90,13 @@ export function EditExerciseTemplateDrawer({
 
 function EditExerciseTemplateDrawerContent({
   templateId,
+  zIndexClass,
   onClose,
   onSaved,
   onTitleChange
 }: {
   templateId: string;
+  zIndexClass?: string;
   onClose: () => void;
   onSaved?: (template: ExercisePlanTemplateSummary) => void;
   onTitleChange: (title: string) => void;
@@ -254,6 +260,8 @@ function EditExerciseTemplateDrawerContent({
     );
   }
 
+  const nestedExerciseDrawerZ = zIndexClass ? 'z-[70]' : 'z-[60]';
+
   return (
     <div className="space-y-6 pb-2">
       {error && (
@@ -380,6 +388,7 @@ function EditExerciseTemplateDrawerContent({
       <EditTemplateExerciseDrawer
         open={addOpen}
         templateId={templateId}
+        zIndexClass={nestedExerciseDrawerZ}
         onClose={() => setAddOpen(false)}
         onSaved={() => void reloadAndNotify()}
       />
@@ -388,6 +397,7 @@ function EditExerciseTemplateDrawerContent({
         open={Boolean(editItem)}
         templateId={templateId}
         item={editItem}
+        zIndexClass={nestedExerciseDrawerZ}
         onClose={() => setEditItem(undefined)}
         onSaved={() => void reloadAndNotify()}
       />

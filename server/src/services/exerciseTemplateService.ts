@@ -161,13 +161,17 @@ export async function createTemplate(data: {
   description?: string | null;
   visibility?: Visibility;
   createdById?: string;
+  planId?: string | null;
+  dayIndex?: number | null;
 }) {
   const template = await prisma.exerciseTemplate.create({
     data: {
       name: data.name,
       description: data.description ?? null,
       visibility: data.visibility ?? Visibility.GLOBAL,
-      createdById: data.createdById ?? null
+      createdById: data.createdById ?? null,
+      planId: data.planId ?? null,
+      dayIndex: data.dayIndex ?? null
     }
   });
   return getTemplate(template.id);
@@ -179,6 +183,8 @@ export async function updateTemplate(
     name?: string;
     description?: string | null;
     visibility?: Visibility;
+    planId?: string | null;
+    dayIndex?: number | null;
   },
   actor?: { id: string; role: Role }
 ) {
@@ -188,7 +194,9 @@ export async function updateTemplate(
     data: {
       name: data.name,
       description: data.description,
-      visibility: data.visibility
+      visibility: data.visibility,
+      planId: data.planId,
+      dayIndex: data.dayIndex
     }
   });
   return getTemplate(id);
