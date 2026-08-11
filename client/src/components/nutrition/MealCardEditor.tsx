@@ -20,6 +20,7 @@ export type MealCardEditorHandle = {
   isDirty: () => boolean;
   save: () => Promise<boolean>;
   getMealId: () => string;
+  getPlannedTotals: () => MacroTotals;
 };
 
 export type MealCardEditorSaveAllOptions = {
@@ -96,6 +97,7 @@ export const MealCardEditor = forwardRef<
     onRequestSaveAll?: (options?: MealCardEditorSaveAllOptions) => void;
     onRequestCancelAll?: () => void;
     externalSaving?: boolean;
+    onDraftTotalsChange?: (totals: MacroTotals) => void;
   }
 >(function MealCardEditor(
   {
@@ -108,7 +110,8 @@ export const MealCardEditor = forwardRef<
     onRequestRebalance,
     onRequestSaveAll,
     onRequestCancelAll,
-    externalSaving = false
+    externalSaving = false,
+    onDraftTotalsChange
   },
   ref
 ) {
@@ -197,6 +200,10 @@ export const MealCardEditor = forwardRef<
     carbs: localItems.reduce((s, i) => s + i.carbs, 0),
     fat: localItems.reduce((s, i) => s + i.fat, 0),
   };
+
+  useEffect(() => {
+    onDraftTotalsChange?.(totals);
+  }, [onDraftTotalsChange, totals.calories, totals.protein, totals.carbs, totals.fat]);
 
   function maybeAskRebalance(nextCalories: number) {
     const target = macroTargets?.calories;
@@ -411,11 +418,12 @@ export const MealCardEditor = forwardRef<
     () => ({
       isDirty,
       save: () => persistMeal({ notifySaved: false }),
-      getMealId: () => meal.id
+      getMealId: () => meal.id,
+      getPlannedTotals: () => totals
     }),
     // Keep handle current with latest draft state used by isDirty/persistMeal.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional snapshot of latest closures
-    [meal.id, localName, localTime, localItems, baseline]
+    [meal.id, localName, localTime, localItems, baseline, totals]
   );
 
   function handleSaveClick(options?: { thenRebalance?: boolean }) {

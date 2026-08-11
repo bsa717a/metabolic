@@ -1,29 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { CalendarDays, LayoutTemplate, X } from 'lucide-react';
-import { api, getWeekDates, isToday, startOfWeek } from '../../services/api';
+import { LayoutTemplate, X } from 'lucide-react';
+import { api, getWeekDates, startOfWeek } from '../../services/api';
 import type { ExercisePlanTemplateSummary, ExerciseRoutine, ScheduledExercise } from '../../types';
-import { WeekDateStrip } from '../nutrition/WeekDateStrip';
-import { ExerciseChecklist } from '../exercise/ExerciseChecklist';
+import { DayExerciseEditor } from '../exercise/DayExerciseEditor';
+import { RoutineEditorContent } from '../exercise/RoutineEditor';
+import { WeekAgendaList } from '../exercise/weekly/WeekAgendaList';
+import { PlanPrintMenu } from '../export/PlanPrintMenu';
 import { CopyWeekPlanMenu } from '../plan/CopyWeekPlanMenu';
-import { AddExerciseDrawer } from '../exercise/AddExerciseDrawer';
-import { EditExerciseDrawer } from '../exercise/EditExerciseDrawer';
-import { RoutineEditor } from '../exercise/RoutineEditor';
-import { WeeklyExercisePlanner } from '../exercise/weekly/WeeklyExercisePlanner';
 import { Button } from '../ui/Button';
 import { coachDailyExercisesApi, coachRestoreExercisePlanApi } from '../../utils/coachExerciseApi';
-import {
-  type DayExercises,
-  fetchCoachExercisesForDates
-} from '../../utils/planExportData';
+import { fetchCoachExercisesForDates, formatWeekExportLabel, weekHasExercises } from '../../utils/planExportData';
+import { printExercisePlan, printExerciseWeekPlan } from '../../utils/printExercisePlan';
 import type { PublishPlanPayload } from '../../utils/weekdayPattern';
 import { routineRestDatesForWeek, routineSummaryLabel } from '../../utils/exerciseRoutineDisplay';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../exercise/ExercisePlanUndoToast';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
 
-type View = 'week' | 'day';
+type ExerciseEditorTab = 'today' | 'plan' | 'manage';
+
+const EXERCISE_TABS: { id: ExerciseEditorTab; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'manage', label: 'Manage' }
+];
 
 export function CoachDayExerciseEditor({
   open,
@@ -41,19 +43,17 @@ export function CoachDayExerciseEditor({
   onRefresh: () => Promise<void>;
 }) {
   const [selectedDate, setSelectedDate] = useState(planDate);
-  const [view, setView] = useState<View>('week');
-  const [weekDays, setWeekDays] = useState<DayExercises[]>([]);
+  const [activeTab, setActiveTab] = useState<ExerciseEditorTab>('today');
+  const [weekDays, setWeekDays] = useState<Awaited<ReturnType<typeof fetchCoachExercisesForDates>>>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [editItem, setEditItem] = useState<ScheduledExercise>();
-  const [editDayMode, setEditDayMode] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateId, setTemplateId] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
-  const [routineEditorOpen, setRoutineEditorOpen] = useState(false);
   const [routine, setRoutine] = useState<ExerciseRoutine | null>(null);
 
   const weekStart = startOfWeek(selectedDate);
@@ -75,26 +75,34 @@ export function CoachDayExerciseEditor({
     onRestored: reloadWeek
   });
 
+  const reloadRoutine = useCallback(async () => {
+    try {
+      const next = await api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`);
+      setRoutine(next);
+    } catch {
+      setRoutine(null);
+    }
+  }, [clientId]);
+
   useEffect(() => {
-    if (open) setSelectedDate(planDate);
+    if (open) {
+      setSelectedDate(planDate);
+      setActiveTab('today');
+    }
   }, [open, planDate]);
 
   useEffect(() => {
     if (!open) return;
     void reloadWeek();
-    setEditItem(undefined);
-    setAddOpen(false);
-    setEditDayMode(false);
     setTemplateOpen(false);
-    setRoutineEditorOpen(false);
+    setActionError(null);
+    setPrintError(null);
   }, [open, reloadWeek]);
 
   useEffect(() => {
     if (!open) return;
-    api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`)
-      .then(setRoutine)
-      .catch(() => setRoutine(null));
-  }, [clientId, open, weekDays]);
+    void reloadRoutine();
+  }, [clientId, open, reloadRoutine]);
 
   useEffect(() => {
     setTemplateId((current) => current || exerciseTemplates[0]?.id || '');
@@ -104,10 +112,6 @@ export function CoachDayExerciseEditor({
     () => weekDays.find((day) => day.date === selectedDate)?.exercises ?? [],
     [weekDays, selectedDate]
   );
-
-  useEffect(() => {
-    setEditDayMode(false);
-  }, [selectedDate]);
 
   async function removeExercise(id: string) {
     setActionError(null);
@@ -121,8 +125,6 @@ export function CoachDayExerciseEditor({
         result.undoSnapshot
       );
       await reloadWeek();
-      if (editItem?.id === id) setEditItem(undefined);
-      if (exercises.length <= 1) setEditDayMode(false);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Could not remove exercise.');
     } finally {
@@ -189,9 +191,6 @@ export function CoachDayExerciseEditor({
     }
   }
 
-  const doneCount = exercises.filter((item) => item.status === 'DONE').length;
-  const progress = exercises.length ? Math.round((doneCount / exercises.length) * 100) : 0;
-
   const defaultTemplateName = useMemo(() => {
     const match = exerciseTemplates.find((template) => template.id === templateId);
     return match?.name;
@@ -202,7 +201,47 @@ export function CoachDayExerciseEditor({
     onClose();
   }
 
+  function openDay(date: string) {
+    setSelectedDate(date);
+    setActiveTab('today');
+  }
+
+  function handlePrintDay() {
+    setPrintError(null);
+    if (!exercises.length) {
+      setPrintError('No exercises planned for this day.');
+      return;
+    }
+    try {
+      printExercisePlan(exercises, selectedDate);
+    } catch (error) {
+      setPrintError(error instanceof Error ? error.message : 'Could not open print view.');
+    }
+  }
+
+  async function handlePrintWeek() {
+    setPrintError(null);
+    setPrinting('week');
+    try {
+      if (!weekHasExercises(weekDays)) {
+        setPrintError('No exercises planned for this week.');
+        return;
+      }
+      printExerciseWeekPlan(weekDays, formatWeekExportLabel(weekStart));
+    } catch (error) {
+      setPrintError(error instanceof Error ? error.message : 'Could not open print view.');
+    } finally {
+      setPrinting(null);
+    }
+  }
+
+  async function handleRoutineSaved() {
+    await Promise.all([reloadRoutine(), reloadWeek()]);
+  }
+
   if (!open) return null;
+
+  const displayError = activeTab === 'today' ? actionError ?? loadError : loadError;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
@@ -210,13 +249,18 @@ export function CoachDayExerciseEditor({
         <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-app-text">Edit exercise plan</h2>
-            <p className="text-sm text-app-text-muted">Plan workouts for this client.</p>
+            <p className="text-sm text-app-text-muted">
+              Same Exercise experience your client sees — Today, Plan, and Manage.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" onClick={() => setRoutineEditorOpen(true)}>
-              <CalendarDays className="mr-1 inline h-4 w-4" />
-              Routine
-            </Button>
+            <CopyWeekPlanMenu
+              sourceDate={selectedDate}
+              planLabel="exercises"
+              hasSourcePlan={exercises.length > 0}
+              disabled={Boolean(removingId)}
+              onCopy={publishPlan}
+            />
             <Button type="button" variant="secondary" onClick={() => setTemplateOpen(true)}>
               <LayoutTemplate className="mr-1 inline h-4 w-4" />
               Plans
@@ -234,133 +278,103 @@ export function CoachDayExerciseEditor({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        <div className="mx-auto max-w-7xl space-y-4">
-          <WeekDateStrip
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-            exerciseDays={weekDays}
-            endAction={
-              <div className="inline-flex rounded-xl bg-app-muted p-1">
-                {(['week', 'day'] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setView(option)}
-                    className={clsx(
-                      'rounded-lg px-4 py-1.5 text-sm font-semibold capitalize transition',
-                      view === option ? 'bg-app-surface text-app-text shadow-sm' : 'text-app-text-muted hover:text-app-text'
-                    )}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            }
-          />
+        <div className="mx-auto max-w-7xl space-y-6">
+          <nav
+            aria-label="Exercise sections"
+            className="inline-flex w-fit max-w-full rounded-2xl border border-app-border bg-app-surface p-1 shadow-sm"
+          >
+            {EXERCISE_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={clsx(
+                  'rounded-xl px-4 py-2 text-center text-base font-bold tracking-wide transition',
+                  activeTab === tab.id
+                    ? 'bg-brand-green text-white shadow-sm'
+                    : 'text-app-text hover:bg-app-muted'
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-          {defaultTemplateName && (
-            <p className="text-sm text-app-text-muted">
-              Default plan: <span className="font-medium text-app-text">{defaultTemplateName}</span>
-            </p>
-          )}
-
-          {routine && routineSummaryLabel(routine) && (
-            <p className="text-sm text-app-text-muted">
-              Weekly routine:{' '}
-              <span className="font-medium text-app-text">{routineSummaryLabel(routine)}</span>
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => setAddOpen(true)}>Add exercise</Button>
-            <Button type="button" variant="secondary" onClick={() => setRoutineEditorOpen(true)}>
-              Edit routine
-            </Button>
-            <CopyWeekPlanMenu
-              sourceDate={selectedDate}
-              planLabel="exercises"
-              hasSourcePlan={exercises.length > 0}
-              disabled={editDayMode}
-              onCopy={publishPlan}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setEditDayMode((value) => !value)}
-            >
-              {editDayMode ? 'Done editing' : 'Edit day'}
-            </Button>
-          </div>
-
-          {editDayMode && (
-            <p className="text-sm text-red-700">Tap the red × to remove exercises from this day.</p>
-          )}
-
-          {view === 'day' && exercises.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <p className="font-semibold text-slate-900">
-                  {doneCount} of {exercises.length} done
-                </p>
-                {!isToday(selectedDate) && <p className="text-slate-400">{selectedDate}</p>}
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {(loadError || actionError) && (
-            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {actionError ?? loadError}
-            </div>
-          )}
-
-          {view === 'week' ? (
-            <WeeklyExercisePlanner
-              weekDates={weekDates}
-              days={weekDays}
+          {activeTab === 'today' && (
+            <DayExerciseEditor
               selectedDate={selectedDate}
-              editDayMode={editDayMode}
-              removingId={removingId}
-              onSelectDay={setSelectedDate}
-              onChange={reloadWeek}
-              onEdit={setEditItem}
-              onRemove={removeExercise}
-              routineRestDates={routineRestDates}
-            />
-          ) : (
-            <ExerciseChecklist
+              onSelectDate={setSelectedDate}
+              weekDays={weekDays}
               exercises={exercises}
-              selectedDate={selectedDate}
+              onReload={reloadWeek}
+              onRemoveExercise={removeExercise}
               coachClientId={clientId}
-              editDayMode={editDayMode}
-              onChange={reloadWeek}
-              onEdit={setEditItem}
-              onRemove={removeExercise}
+              actionError={displayError}
+              onClearActionError={() => {
+                setActionError(null);
+                setLoadError(null);
+              }}
+              beforeChecklist={
+                defaultTemplateName || routineSummaryLabel(routine) ? (
+                  <div className="space-y-1">
+                    {defaultTemplateName && (
+                      <p className="text-sm text-app-text-muted">
+                        Default plan: <span className="font-medium text-app-text">{defaultTemplateName}</span>
+                      </p>
+                    )}
+                    {routine && routineSummaryLabel(routine) && (
+                      <p className="text-sm text-app-text-muted">
+                        Weekly routine:{' '}
+                        <span className="font-medium text-app-text">{routineSummaryLabel(routine)}</span>
+                      </p>
+                    )}
+                  </div>
+                ) : null
+              }
             />
           )}
+
+          {activeTab === 'plan' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-app-text-muted">
+                  Your week at a glance. Tap any day to open and edit it.
+                </p>
+                <PlanPrintMenu printing={printing} onPrintDay={handlePrintDay} onPrintWeek={handlePrintWeek} />
+              </div>
+
+              {printError && (
+                <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{printError}</div>
+              )}
+
+              {loadError && (
+                <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>
+              )}
+
+              <WeekAgendaList
+                weekDates={weekDates}
+                days={weekDays}
+                selectedDate={selectedDate}
+                routineRestDates={routineRestDates}
+                onSelectDay={openDay}
+              />
+            </div>
+          )}
+
+          <div className={activeTab === 'manage' ? 'space-y-4' : 'hidden'}>
+            <p className="text-sm text-app-text-muted">
+              Manage reusable workouts, then choose which one runs on each weekday.
+            </p>
+            <RoutineEditorContent
+              active={open}
+              selectedDate={selectedDate}
+              clientId={clientId}
+              onSaved={handleRoutineSaved}
+              registerUndo={registerUndo}
+            />
+          </div>
         </div>
       </div>
-
-      <AddExerciseDrawer
-        open={addOpen}
-        date={selectedDate}
-        coachClientId={clientId}
-        onClose={() => setAddOpen(false)}
-        onSaved={reloadWeek}
-      />
-
-      <EditExerciseDrawer
-        open={Boolean(editItem)}
-        item={editItem}
-        onClose={() => setEditItem(undefined)}
-        onSaved={reloadWeek}
-        onRemove={removeExercise}
-      />
 
       {templateOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -414,19 +428,6 @@ export function CoachDayExerciseEditor({
           </div>
         </div>
       )}
-
-      <RoutineEditor
-        open={routineEditorOpen}
-        selectedDate={selectedDate}
-        clientId={clientId}
-        onClose={() => setRoutineEditorOpen(false)}
-        onSaved={async () => {
-          const nextRoutine = await api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`);
-          setRoutine(nextRoutine);
-          await reloadWeek();
-        }}
-        registerUndo={registerUndo}
-      />
 
       <ExercisePlanUndoToast
         message={undo?.message ?? null}

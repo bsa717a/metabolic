@@ -8,6 +8,7 @@ import type {
   MealCardEditorSaveAllOptions,
   MealMacroTargets
 } from './MealCardEditor';
+import type { MacroTotals } from './MacroSummaryFooter';
 
 export type CardMealInfo = {
   mealNumber: number;
@@ -36,6 +37,7 @@ export const MealPlanner = forwardRef<
     onBuildMeal?: (mealNumber: number) => void;
     multiMealEdit?: boolean;
     onEditingChange?: (editing: boolean) => void;
+    onDraftPlannedTotalsChange?: (totals: MacroTotals) => void;
   }
 >(function MealPlanner(
   {
@@ -48,7 +50,8 @@ export const MealPlanner = forwardRef<
     cardMeals = [],
     onBuildMeal,
     multiMealEdit = false,
-    onEditingChange
+    onEditingChange,
+    onDraftPlannedTotalsChange
   },
   ref
 ) {
@@ -58,6 +61,7 @@ export const MealPlanner = forwardRef<
   const [suggestionsMeal, setSuggestionsMeal] = useState<Meal | null>(null);
   const [savingAll, setSavingAll] = useState(false);
   const [saveAllError, setSaveAllError] = useState<string | null>(null);
+  const [draftTotalsByMeal, setDraftTotalsByMeal] = useState<Record<string, MacroTotals>>({});
   const editorRefs = useRef(new Map<string, MealCardEditorHandle>());
 
   const isEditing = multiMealEdit ? editingAll : Boolean(editingMealId);
@@ -68,12 +72,47 @@ export const MealPlanner = forwardRef<
     setSwapMeal(null);
     setSuggestionsMeal(null);
     setSaveAllError(null);
+    setDraftTotalsByMeal({});
     editorRefs.current.clear();
   }, [selectedDate]);
 
   useEffect(() => {
     onEditingChange?.(isEditing);
   }, [isEditing, onEditingChange]);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftTotalsByMeal({});
+      return;
+    }
+    if (!onDraftPlannedTotalsChange) return;
+
+    const aggregated = meals.reduce(
+      (sum, meal) => {
+        const draft = draftTotalsByMeal[meal.id];
+        if (draft) {
+          return {
+            calories: sum.calories + draft.calories,
+            protein: sum.protein + draft.protein,
+            carbs: sum.carbs + draft.carbs,
+            fat: sum.fat + draft.fat
+          };
+        }
+        return {
+          calories: sum.calories + Number(meal.plannedCalories),
+          protein: sum.protein + Number(meal.plannedProtein),
+          carbs: sum.carbs + Number(meal.plannedCarbs),
+          fat: sum.fat + Number(meal.plannedFat)
+        };
+      },
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+    onDraftPlannedTotalsChange(aggregated);
+  }, [draftTotalsByMeal, isEditing, meals, onDraftPlannedTotalsChange]);
+
+  const handleDraftTotalsChange = useCallback((mealId: string, totals: MacroTotals) => {
+    setDraftTotalsByMeal((prev) => ({ ...prev, [mealId]: totals }));
+  }, []);
 
   const setEditorRef = useCallback((mealId: string, handle: MealCardEditorHandle | null) => {
     if (handle) editorRefs.current.set(mealId, handle);
@@ -197,6 +236,9 @@ export const MealPlanner = forwardRef<
               onRequestSaveAll={multiMealEdit ? (opts) => void saveAll(opts) : undefined}
               onRequestCancelAll={multiMealEdit ? () => void cancelAll() : undefined}
               externalSaving={multiMealEdit ? savingAll : undefined}
+              onDraftTotalsChange={
+                mealEditing ? (totals) => handleDraftTotalsChange(meal.id, totals) : undefined
+              }
             />
           );
         })}

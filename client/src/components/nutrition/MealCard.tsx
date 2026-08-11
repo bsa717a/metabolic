@@ -12,7 +12,7 @@ import {
   type MealMacroTargets
 } from './MealCardEditor';
 import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
-import { MacroSummaryInline } from './MacroSummaryFooter';
+import { MacroSummaryInline, type MacroTotals } from './MacroSummaryFooter';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
 import { DeleteMealScopeModal } from './DeleteMealScopeModal';
 
@@ -149,6 +149,7 @@ export const MealCard = forwardRef<
     onRequestSaveAll?: (options?: MealCardEditorSaveAllOptions) => void;
     onRequestCancelAll?: () => void;
     externalSaving?: boolean;
+    onDraftTotalsChange?: (totals: MacroTotals) => void;
   }
 >(function MealCard(
   {
@@ -168,7 +169,8 @@ export const MealCard = forwardRef<
     dailyTargets,
     onRequestSaveAll,
     onRequestCancelAll,
-    externalSaving
+    externalSaving,
+    onDraftTotalsChange
   },
   ref
 ) {
@@ -275,6 +277,7 @@ export const MealCard = forwardRef<
           onRequestSaveAll={onRequestSaveAll}
           onRequestCancelAll={onRequestCancelAll}
           externalSaving={externalSaving}
+          onDraftTotalsChange={onDraftTotalsChange}
         />
       ) : (
         <>
