@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { clsx } from 'clsx';
 import { CopyPlus, LayoutTemplate, X } from 'lucide-react';
 import { api, formatDayAbbrev, formatDayNumber, isToday } from '../../services/api';
 import type { Meal, NutritionPlanTemplateSummary } from '../../types';
@@ -9,10 +10,88 @@ import { AddFoodsPanel } from '../nutrition/weekly/AddFoodsPanel';
 import { CopyDayForward } from '../nutrition/weekly/CopyDayForward';
 import { EditMealPlanDrawer } from '../nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../nutrition/AiFoodLookupDrawer';
+import type { MacroTotals } from '../nutrition/MacroSummaryFooter';
 import { Button } from '../ui/Button';
 
 function formatDayLine(label: string, calories: number, protein: number, carbs: number, fat: number) {
   return `${label}: ${Math.round(calories)} kcal · ${Math.round(protein)}g protein · ${Math.round(carbs)}g carbs · ${Math.round(fat)}g fat`;
+}
+
+function MacroTotalsBlock({
+  label,
+  totals,
+  variant,
+  layout
+}: {
+  label: string;
+  totals: MacroTotals;
+  variant: 'gold' | 'green';
+  layout: 'horizontal' | 'vertical';
+}) {
+  const shellClass =
+    variant === 'gold'
+      ? 'rounded-2xl bg-brand-gold/10 text-app-text ring-1 ring-brand-gold/20'
+      : 'rounded-2xl bg-brand-green/10 text-app-text ring-1 ring-brand-green/20';
+
+  if (layout === 'horizontal') {
+    return (
+      <div className={`p-3 text-sm ${shellClass}`}>
+        {formatDayLine(label, totals.calories, totals.protein, totals.carbs, totals.fat)}
+      </div>
+    );
+  }
+
+  const rows = [
+    { name: 'Calories', value: `${Math.round(totals.calories)} kcal` },
+    { name: 'Protein', value: `${Math.round(totals.protein)}g` },
+    { name: 'Carbs', value: `${Math.round(totals.carbs)}g` },
+    { name: 'Fat', value: `${Math.round(totals.fat)}g` }
+  ];
+
+  return (
+    <div className={`p-3 ${shellClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">{label}</p>
+      <dl className="mt-2 space-y-2">
+        {rows.map((row) => (
+          <div key={row.name} className="flex items-baseline justify-between gap-3 text-sm">
+            <dt className="text-app-text-muted">{row.name}</dt>
+            <dd className="font-bold tabular-nums text-app-text">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function DayTotalsPanel({
+  planned,
+  actual,
+  layout,
+  selectedDate,
+  pinWhileScrolling = false
+}: {
+  planned: MacroTotals;
+  actual: MacroTotals;
+  layout: 'horizontal' | 'vertical';
+  selectedDate: string;
+  pinWhileScrolling?: boolean;
+}) {
+  return (
+    <div
+      className={clsx(
+        'rounded-2xl border border-app-border bg-app-surface p-4 shadow-sm',
+        pinWhileScrolling &&
+          'sticky top-4 z-10 self-start lg:top-6 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto'
+      )}
+    >
+      <p className="font-semibold text-app-text">Day totals</p>
+      {!isToday(selectedDate) && <p className="text-sm text-app-text-muted">{selectedDate}</p>}
+      <div className={layout === 'vertical' ? 'mt-3 space-y-3' : 'mt-3 grid gap-3 sm:grid-cols-2'}>
+        <MacroTotalsBlock label="Planned" totals={planned} variant="gold" layout={layout} />
+        <MacroTotalsBlock label="Actual" totals={actual} variant="green" layout={layout} />
+      </div>
+    </div>
+  );
 }
 
 export function CoachDayNutritionEditor({
@@ -43,7 +122,16 @@ export function CoachDayNutritionEditor({
   const [selectedDate, setSelectedDate] = useState(planDate);
   const [editingPlan, setEditingPlan] = useState(false);
   const [savingDay, setSavingDay] = useState(false);
+  const [draftPlannedTotals, setDraftPlannedTotals] = useState<MacroTotals | null>(null);
   const plannerRef = useRef<MealPlannerHandle>(null);
+
+  const handleDraftPlannedTotalsChange = useCallback((totals: MacroTotals) => {
+    setDraftPlannedTotals(totals);
+  }, []);
+
+  useEffect(() => {
+    if (!editingPlan) setDraftPlannedTotals(null);
+  }, [editingPlan]);
 
   const reloadMeals = useCallback(async () => {
     try {
@@ -67,6 +155,7 @@ export function CoachDayNutritionEditor({
     setAiState(undefined);
     setTemplateOpen(false);
     setEditingPlan(false);
+    setDraftPlannedTotals(null);
   }, [open, reloadMeals]);
 
   useEffect(() => {
@@ -99,6 +188,26 @@ export function CoachDayNutritionEditor({
       actualCarbs: 0,
       actualFat: 0
     }
+  );
+
+  const plannedTotals = useMemo<MacroTotals>(() => {
+    if (editingPlan && draftPlannedTotals) return draftPlannedTotals;
+    return {
+      calories: dayTotals.plannedCalories,
+      protein: dayTotals.plannedProtein,
+      carbs: dayTotals.plannedCarbs,
+      fat: dayTotals.plannedFat
+    };
+  }, [dayTotals, draftPlannedTotals, editingPlan]);
+
+  const actualTotals = useMemo<MacroTotals>(
+    () => ({
+      calories: dayTotals.actualCalories,
+      protein: dayTotals.actualProtein,
+      carbs: dayTotals.actualCarbs,
+      fat: dayTotals.actualFat
+    }),
+    [dayTotals]
   );
 
   const defaultTemplateName = useMemo(() => {
@@ -187,7 +296,7 @@ export function CoachDayNutritionEditor({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
+    <div className="nutrition-ui-lg fixed inset-0 z-50 flex flex-col bg-app-bg">
       <header className="shrink-0 border-b border-app-border bg-app-surface px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-3">
           <div>
@@ -267,7 +376,7 @@ export function CoachDayNutritionEditor({
               No meals planned for this day. Apply a plan first, then edit manually.
             </p>
           ) : (
-            <div className={editingPlan ? 'space-y-4' : 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]'}>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
               <div className="min-w-0 space-y-4">
                 <MealPlanner
                   ref={plannerRef}
@@ -282,36 +391,29 @@ export function CoachDayNutritionEditor({
                   onSelectMeal={setSelectedMealId}
                   multiMealEdit
                   onEditingChange={setEditingPlan}
+                  onDraftPlannedTotalsChange={handleDraftPlannedTotalsChange}
                 />
 
-                <div className="rounded-2xl border border-app-border bg-app-surface p-4">
-                  <p className="font-semibold text-app-text">Day totals</p>
-                  {!isToday(selectedDate) && <p className="text-sm text-app-text-muted">{selectedDate}</p>}
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-brand-gold/10 p-3 text-sm text-app-text ring-1 ring-brand-gold/20">
-                      {formatDayLine(
-                        'Planned',
-                        dayTotals.plannedCalories,
-                        dayTotals.plannedProtein,
-                        dayTotals.plannedCarbs,
-                        dayTotals.plannedFat
-                      )}
-                    </div>
-                    <div className="rounded-2xl bg-brand-green/10 p-3 text-sm text-app-text ring-1 ring-brand-green/20">
-                      {formatDayLine(
-                        'Actual',
-                        dayTotals.actualCalories,
-                        dayTotals.actualProtein,
-                        dayTotals.actualCarbs,
-                        dayTotals.actualFat
-                      )}
-                    </div>
-                  </div>
-                </div>
+                {!editingPlan && (
+                  <DayTotalsPanel
+                    planned={plannedTotals}
+                    actual={actualTotals}
+                    layout="horizontal"
+                    selectedDate={selectedDate}
+                  />
+                )}
               </div>
 
-              {!editingPlan && (
-                <div>
+              <div>
+                {editingPlan ? (
+                  <DayTotalsPanel
+                    planned={plannedTotals}
+                    actual={actualTotals}
+                    layout="vertical"
+                    selectedDate={selectedDate}
+                    pinWhileScrolling
+                  />
+                ) : (
                   <AddFoodsPanel
                     selectedMeal={daySelectedMeal}
                     selectedLabel={daySelectedMeal?.name}
@@ -319,8 +421,8 @@ export function CoachDayNutritionEditor({
                     pinWhileScrolling={false}
                     onChange={() => void reloadMeals()}
                   />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -411,3 +411,36 @@ select {
 .tutorial-finale-card {
   box-shadow: 0 0 40px rgba(125, 163, 93, 0.2);
 }
+
+/* +2pt typography bump for nutrition plan editor and add-foods panel */
+.nutrition-ui-lg {
+  font-size: calc(0.875rem + 2pt);
+}
+
+.nutrition-ui-lg .text-\[11px\] {
+  font-size: calc(11px + 2pt);
+}
+
+.nutrition-ui-lg .text-xs {
+  font-size: calc(0.75rem + 2pt);
+}
+
+.nutrition-ui-lg .text-sm {
+  font-size: calc(0.875rem + 2pt);
+}
+
+.nutrition-ui-lg .text-base {
+  font-size: calc(1rem + 2pt);
+}
+
+.nutrition-ui-lg .text-lg {
+  font-size: calc(1.125rem + 2pt);
+}
+
+.nutrition-ui-lg .text-xl {
+  font-size: calc(1.25rem + 2pt);
+}
+
+.nutrition-ui-lg .text-2xl {
+  font-size: calc(1.5rem + 2pt);
+}

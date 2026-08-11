@@ -15,6 +15,8 @@ export function FoodPlanEditor({
   nutritionTemplates,
   planStatus,
   saving,
+  manualOpen,
+  onManualOpenChange,
   onSavingChange,
   onError,
   onRefresh,
@@ -25,6 +27,8 @@ export function FoodPlanEditor({
   nutritionTemplates: NutritionPlanTemplateSummary[];
   planStatus: CoachClientPlanStatus | null;
   saving: boolean;
+  manualOpen: boolean;
+  onManualOpenChange: (open: boolean) => void;
   onSavingChange: (saving: boolean) => void;
   onError: (message: string) => void;
   onRefresh: () => Promise<void>;
@@ -34,7 +38,6 @@ export function FoodPlanEditor({
   const [loading, setLoading] = useState(false);
   const [templateId, setTemplateId] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(true);
-  const [manualOpen, setManualOpen] = useState(false);
 
   const loadMeals = useCallback(async () => {
     setLoading(true);
@@ -88,7 +91,7 @@ export function FoodPlanEditor({
   }, [loadMeals, onRefresh, onRefreshPlanStatus]);
 
   return (
-    <div className="space-y-4">
+    <div className="nutrition-ui-lg space-y-4">
       {planStatus ? (
         <MacroOverridePanel
           key={`${planStatus.overrideTargets.calories}|${planStatus.overrideTargets.protein}|${planStatus.overrideTargets.carbs}|${planStatus.overrideTargets.fat}`}
@@ -125,9 +128,6 @@ export function FoodPlanEditor({
         </label>
         <Button disabled={saving || !nutritionTemplates.length} onClick={() => void applyTemplate()}>
           Apply plan
-        </Button>
-        <Button variant="secondary" onClick={() => setManualOpen(true)}>
-          Edit manually
         </Button>
       </div>
 
@@ -190,7 +190,7 @@ export function FoodPlanEditor({
         planDate={planDate}
         nutritionTemplates={nutritionTemplates}
         onClose={() => {
-          setManualOpen(false);
+          onManualOpenChange(false);
           void loadMeals();
         }}
         onRefresh={onRefresh}

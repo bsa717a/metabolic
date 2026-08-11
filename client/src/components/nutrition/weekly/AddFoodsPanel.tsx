@@ -81,7 +81,7 @@ export function AddFoodsPanel({
   return (
     <div
       className={clsx(
-        'rounded-2xl border border-app-border bg-app-surface p-4',
+        'nutrition-ui-lg rounded-2xl border border-app-border bg-app-surface p-4',
         pinWhileScrolling
           ? 'sticky bottom-[calc(1rem+var(--app-mobile-home-bar-height))] z-10 flex max-h-[calc(100vh-2rem-var(--app-mobile-home-bar-height))] flex-col self-start sm:bottom-4 sm:max-h-[calc(100vh-2rem)] lg:bottom-auto lg:top-[var(--app-sticky-offset)] lg:max-h-[calc(100vh-var(--app-sticky-offset)-1rem)] shadow-lg lg:shadow-sm'
           : 'shadow-sm'

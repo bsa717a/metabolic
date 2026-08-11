@@ -11,6 +11,8 @@ export function ExercisePlanEditor({
   planDate,
   exerciseTemplates,
   saving,
+  manualOpen,
+  onManualOpenChange,
   onSavingChange,
   onError,
   onRefresh
@@ -19,6 +21,8 @@ export function ExercisePlanEditor({
   planDate: string;
   exerciseTemplates: ExercisePlanTemplateSummary[];
   saving: boolean;
+  manualOpen: boolean;
+  onManualOpenChange: (open: boolean) => void;
   onSavingChange: (saving: boolean) => void;
   onError: (message: string) => void;
   onRefresh: () => Promise<void>;
@@ -27,7 +31,6 @@ export function ExercisePlanEditor({
   const [loading, setLoading] = useState(false);
   const [templateId, setTemplateId] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(true);
-  const [manualOpen, setManualOpen] = useState(false);
 
   const loadExercises = useCallback(async () => {
     setLoading(true);
@@ -94,9 +97,6 @@ export function ExercisePlanEditor({
         <Button disabled={saving || !exerciseTemplates.length} onClick={() => void applyTemplate()}>
           Apply plan
         </Button>
-        <Button variant="secondary" onClick={() => setManualOpen(true)}>
-          Edit manually
-        </Button>
       </div>
 
       <label className="flex items-center gap-2 text-sm">
@@ -130,7 +130,7 @@ export function ExercisePlanEditor({
         planDate={planDate}
         exerciseTemplates={exerciseTemplates}
         onClose={() => {
-          setManualOpen(false);
+          onManualOpenChange(false);
           void loadExercises();
         }}
         onRefresh={onRefresh}

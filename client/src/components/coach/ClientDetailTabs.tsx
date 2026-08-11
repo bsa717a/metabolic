@@ -106,6 +106,8 @@ export function ClientDetailTabs({
   const [planDate, setPlanDate] = useState(() => todayKey());
   const [weeklyFoodReportOpen, setWeeklyFoodReportOpen] = useState(false);
   const [weeklyExerciseReportOpen, setWeeklyExerciseReportOpen] = useState(false);
+  const [foodManualOpen, setFoodManualOpen] = useState(false);
+  const [exerciseManualOpen, setExerciseManualOpen] = useState(false);
 
   const pct = client.compliancePct;
   const hydrationToday = engagement?.hydration.todayActualOz ?? 0;
@@ -185,14 +187,24 @@ export function ClientDetailTabs({
               />
             </label>
             {activeTab === 'food' && (
-              <Button type="button" variant="secondary" onClick={() => setWeeklyFoodReportOpen(true)}>
-                Week analysis
-              </Button>
+              <>
+                <Button type="button" variant="secondary" onClick={() => setWeeklyFoodReportOpen(true)}>
+                  Week analysis
+                </Button>
+                <Button type="button" onClick={() => setFoodManualOpen(true)}>
+                  Edit
+                </Button>
+              </>
             )}
             {activeTab === 'exercise' && (
-              <Button type="button" variant="secondary" onClick={() => setWeeklyExerciseReportOpen(true)}>
-                Week analysis
-              </Button>
+              <>
+                <Button type="button" variant="secondary" onClick={() => setWeeklyExerciseReportOpen(true)}>
+                  Week analysis
+                </Button>
+                <Button type="button" onClick={() => setExerciseManualOpen(true)}>
+                  Edit
+                </Button>
+              </>
             )}
           </div>
         )}
@@ -309,6 +321,8 @@ export function ClientDetailTabs({
             nutritionTemplates={nutritionTemplates}
             planStatus={planStatus}
             saving={saving}
+            manualOpen={foodManualOpen}
+            onManualOpenChange={setFoodManualOpen}
             onSavingChange={onSavingChange}
             onError={onError}
             onRefresh={onRefresh}
@@ -322,6 +336,8 @@ export function ClientDetailTabs({
             planDate={planDate}
             exerciseTemplates={exerciseTemplates}
             saving={saving}
+            manualOpen={exerciseManualOpen}
+            onManualOpenChange={setExerciseManualOpen}
             onSavingChange={onSavingChange}
             onError={onError}
             onRefresh={onRefresh}
