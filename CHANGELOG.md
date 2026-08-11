@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.9.0](https://github.com/bsa717a/metabolic/compare/v0.8.0...v0.9.0) (2026-08-11)
+
+
+### Features
+
+* **coach:** align food and exercise plan editors with client UX ([5b3f7e9](https://github.com/bsa717a/metabolic/commit/5b3f7e965aff5c8004bdc8aebd9787921f235b73))
+* **coach:** align food and exercise plan editors with client UX ([570fc47](https://github.com/bsa717a/metabolic/commit/570fc4793adf5c902df575dbeeaab8d5701176ef))
+* **exercise:** admin exercise plan routines and catalog improvements ([c73796a](https://github.com/bsa717a/metabolic/commit/c73796a55f3b7614162cde2a892a58c507c17654))
+* **exercise:** admin exercise plan routines and catalog improvements ([f14b5f8](https://github.com/bsa717a/metabolic/commit/f14b5f8708f1515c854b79d242a470c4529abefa))
+
 ## [0.8.0](https://github.com/bsa717a/metabolic/compare/v0.7.0...v0.8.0) (2026-08-02)
 
 
