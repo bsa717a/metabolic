@@ -33,11 +33,30 @@ function visibilityFilter(userId: string) {
   return { OR: [{ visibility: 'GLOBAL' as const }, { ownerUserId: userId }] };
 }
 
-export function resolveFoodGroup(food: Pick<Food, 'role' | 'protein' | 'carbs' | 'fat'>): FoodGroup {
-  if (food.role && ROLE_TO_GROUP[food.role]) {
-    return ROLE_TO_GROUP[food.role]!;
-  }
+/** Catalog prefixes and whole-food proteins whose fat calories would otherwise win. */
+export function resolveFoodGroupFromName(name: string): FoodGroup | null {
+  const n = name.trim();
+  if (/^(fruit|berries)\b/i.test(n)) return 'Fruits';
+  if (/^(vegetable|squash)\b/i.test(n)) return 'Veggies';
 
+  if (/^(fish|seafood)\b/i.test(n)) return 'Protein';
+  if (/\b(salmon|tuna|tilapia|shrimp|scallop|cod|halibut|trout)\b/i.test(n)) return 'Protein';
+  if (/\beggs?\b/i.test(n) && !/noodle|plant/i.test(n)) return 'Protein';
+  if (/\b(tofu|tempeh|tempah)\b/i.test(n)) return 'Protein';
+  if (/\b(ground beef|chuck roast|hamburger|hot dog)\b/i.test(n)) return 'Protein';
+  if (/^(ham|pork bacon|pork sausage)\b/i.test(n)) return 'Protein';
+  if (/\b(turkey sausage|pork sausage|sausage link)\b/i.test(n)) return 'Protein';
+  if (/^roasted chicken\b/i.test(n)) return 'Protein';
+  if (/\bvegan protein\b/i.test(n)) return 'Protein';
+  if (/\bprotein (bar|powder)\b/i.test(n)) return 'Protein';
+  if (/^bar-/i.test(n)) return 'Protein';
+  if (/\bcottage cheese\b/i.test(n)) return 'Protein';
+  if (/\b(string cheese|babybel)\b/i.test(n)) return 'Protein';
+  if (/\byogurt\b/i.test(n) && !/coconut|sauce/i.test(n)) return 'Protein';
+  return null;
+}
+
+export function resolveFoodGroupFromMacros(food: { protein: unknown; carbs: unknown; fat: unknown }): FoodGroup {
   const proteinKcal = n(food.protein) * 4;
   const carbsKcal = n(food.carbs) * 4;
   const fatKcal = n(food.fat) * 9;
@@ -45,6 +64,17 @@ export function resolveFoodGroup(food: Pick<Food, 'role' | 'protein' | 'carbs' |
   if (proteinKcal >= carbsKcal && proteinKcal >= fatKcal) return 'Protein';
   if (fatKcal >= carbsKcal) return 'Fats';
   return 'Carbs';
+}
+
+export function resolveFoodGroup(
+  food: Pick<Food, 'role' | 'protein' | 'carbs' | 'fat'> & { name?: string | null }
+): FoodGroup {
+  if (food.role && ROLE_TO_GROUP[food.role]) {
+    return ROLE_TO_GROUP[food.role]!;
+  }
+  const fromName = food.name ? resolveFoodGroupFromName(food.name) : null;
+  if (fromName) return fromName;
+  return resolveFoodGroupFromMacros(food);
 }
 
 function serializeFood(food: Food, group: FoodGroup): GroupedFood {

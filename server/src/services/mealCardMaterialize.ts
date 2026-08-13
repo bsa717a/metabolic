@@ -53,11 +53,21 @@ export function pickedOptionIds(picks: CardPicks, cardId: string): string[] {
   return raw == null ? [] : Array.isArray(raw) ? raw : [raw];
 }
 
+export function isCardOnPath(
+  card: { visibleWhenOptionId?: string | null; hiddenForOptionIds?: string[] },
+  selectedIds: Set<string>
+) {
+  if (card.visibleWhenOptionId && !selectedIds.has(card.visibleWhenOptionId)) return false;
+  if ((card.hiddenForOptionIds ?? []).some((id) => selectedIds.has(id))) return false;
+  return true;
+}
+
 /** The set's authored defaults — what a no-picks user gets (the menu's "house meal"). */
 export function defaultPicksForSet(cardSet: LoadedCardSet): CardPicks {
   const picks: CardPicks = {};
   const selected = new Set<string>();
   for (const card of cardSet.cards) {
+    if (!isCardOnPath(card, selected)) continue;
     const visible = card.options.filter(
       (option) => !option.visibleWhenOptionId || selected.has(option.visibleWhenOptionId)
     );
@@ -78,6 +88,7 @@ export function sanitizePicksForPath(cardSet: LoadedCardSet, picks: CardPicks): 
   const next: CardPicks = {};
   const selected = new Set<string>();
   for (const card of cardSet.cards) {
+    if (!isCardOnPath(card, selected)) continue;
     const ids = pickedOptionIds(picks, card.id).filter((id) => {
       const option = card.options.find((entry) => entry.id === id);
       return Boolean(option && (!option.visibleWhenOptionId || selected.has(option.visibleWhenOptionId)));

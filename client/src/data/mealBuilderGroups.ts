@@ -100,7 +100,29 @@ export function emptyFoodsByGroupCatalog(): FoodsByGroup {
   };
 }
 
-/** Client-side mirror of server `resolveFoodGroup` macro fallback when a food has no role. */
+/** Client-side mirror of server `resolveFoodGroup` when a food has no role. */
+export function resolveFoodGroupFromName(name: string): FoodGroup | null {
+  const n = name.trim();
+  if (/^(fruit|berries)\b/i.test(n)) return 'Fruits';
+  if (/^(vegetable|squash)\b/i.test(n)) return 'Veggies';
+
+  if (/^(fish|seafood)\b/i.test(n)) return 'Protein';
+  if (/\b(salmon|tuna|tilapia|shrimp|scallop|cod|halibut|trout)\b/i.test(n)) return 'Protein';
+  if (/\beggs?\b/i.test(n) && !/noodle|plant/i.test(n)) return 'Protein';
+  if (/\b(tofu|tempeh|tempah)\b/i.test(n)) return 'Protein';
+  if (/\b(ground beef|chuck roast|hamburger|hot dog)\b/i.test(n)) return 'Protein';
+  if (/^(ham|pork bacon|pork sausage)\b/i.test(n)) return 'Protein';
+  if (/\b(turkey sausage|pork sausage|sausage link)\b/i.test(n)) return 'Protein';
+  if (/^roasted chicken\b/i.test(n)) return 'Protein';
+  if (/\bvegan protein\b/i.test(n)) return 'Protein';
+  if (/\bprotein (bar|powder)\b/i.test(n)) return 'Protein';
+  if (/^bar-/i.test(n)) return 'Protein';
+  if (/\bcottage cheese\b/i.test(n)) return 'Protein';
+  if (/\b(string cheese|babybel)\b/i.test(n)) return 'Protein';
+  if (/\byogurt\b/i.test(n) && !/coconut|sauce/i.test(n)) return 'Protein';
+  return null;
+}
+
 export function resolveFoodGroupFromMacros(item: { protein: number; carbs: number; fat: number }): FoodGroup {
   const proteinKcal = item.protein * 4;
   const carbsKcal = item.carbs * 4;
@@ -158,6 +180,7 @@ export function mealsFromDayPlan(
       const catalogGroup = item.foodId ? catalogByFoodId.get(item.foodId) : undefined;
       const group =
         catalogGroup ??
+        resolveFoodGroupFromName(item.nameSnapshot) ??
         resolveFoodGroupFromMacros({
           protein: Number(item.protein),
           carbs: Number(item.carbs),

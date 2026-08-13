@@ -15,6 +15,7 @@ import {
   applyQuantityOverrides,
   parseStoredPicks,
   serializeStoredPicks,
+  isCardOnPath,
   type CardPicks,
   type LoadedCardSet,
   type QuantityOverrides
@@ -225,6 +226,8 @@ function scaledOptionPayload(cardSet: LoadedCardSet, targetCalories: number) {
     required: card.required,
     maxSelect: card.maxSelect,
     sortOrder: card.sortOrder,
+    visibleWhenOptionId: card.visibleWhenOptionId,
+    hiddenForOptionIds: card.hiddenForOptionIds,
     options: card.options.map((option) => {
       const foods = option.foods.map((line) =>
         scaleOptionFood({ ...line, food: line.food, isFree: line.food.isFreeFood || !line.scalable }, factor)
@@ -370,6 +373,10 @@ function validateSelections(cardSet: LoadedCardSet, selections: MealSelections) 
   for (const card of cardSet.cards) {
     const raw = selections[card.id];
     const ids = raw == null ? [] : Array.isArray(raw) ? raw : [raw];
+    if (!isCardOnPath(card, selected)) {
+      if (ids.length) throw new MealCardError(`"${card.name}" is not on the current path`);
+      continue;
+    }
     const visible = card.options.filter((option) => optionVisibleForSelections(option, selected));
     const valid = new Set(visible.map((option) => option.id));
     for (const id of ids) {

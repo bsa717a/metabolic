@@ -37,6 +37,8 @@ export type BuilderCard = {
   required: boolean;
   maxSelect: number;
   sortOrder: number;
+  visibleWhenOptionId?: string | null;
+  hiddenForOptionIds?: string[];
   options: CardOption[];
 };
 
@@ -103,6 +105,13 @@ export function isOptionVisible(option: CardOption, picks: BuilderPicks): boolea
   return selectedOptionIdSet(picks).has(option.visibleWhenOptionId);
 }
 
+export function isCardOnPath(card: BuilderCard, picks: BuilderPicks): boolean {
+  const selected = selectedOptionIdSet(picks);
+  if (card.visibleWhenOptionId && !selected.has(card.visibleWhenOptionId)) return false;
+  if ((card.hiddenForOptionIds ?? []).some((id) => selected.has(id))) return false;
+  return true;
+}
+
 export function visibleOptions(card: BuilderCard, picks: BuilderPicks): CardOption[] {
   return card.options.filter((option) => isOptionVisible(option, picks));
 }
@@ -111,7 +120,7 @@ export function visibleOptions(card: BuilderCard, picks: BuilderPicks): CardOpti
 export function activeCards(cards: BuilderCard[], picks: BuilderPicks): BuilderCard[] {
   return [...cards]
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .filter((card) => visibleOptions(card, picks).length > 0);
+    .filter((card) => isCardOnPath(card, picks) && visibleOptions(card, picks).length > 0);
 }
 
 /**
@@ -122,7 +131,12 @@ export function pruneAndRefillPicks(cards: BuilderCard[], picks: BuilderPicks): 
   const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
   const next: BuilderPicks = {};
   for (const card of sorted) {
-    const visible = visibleOptions(card, { ...picks, ...next });
+    const merged = { ...picks, ...next };
+    if (!isCardOnPath(card, merged)) {
+      next[card.id] = [];
+      continue;
+    }
+    const visible = visibleOptions(card, merged);
     const visibleIds = new Set(visible.map((option) => option.id));
     let ids = (picks[card.id] ?? []).filter((id) => visibleIds.has(id));
     if (!ids.length && card.required && visible.length) {
@@ -138,6 +152,10 @@ export function defaultPicks(cards: BuilderCard[]): BuilderPicks {
   const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
   const picks: BuilderPicks = {};
   for (const card of sorted) {
+    if (!isCardOnPath(card, picks)) {
+      picks[card.id] = [];
+      continue;
+    }
     const visible = visibleOptions(card, picks);
     const def = visible.find((o) => o.isDefault) ?? (card.required ? visible[0] : undefined);
     picks[card.id] = def ? [def.id] : [];
@@ -168,6 +186,7 @@ export function togglePick(card: BuilderCard, picks: BuilderPicks, optionId: str
 export function selectedFoodLines(cards: BuilderCard[], picks: BuilderPicks): SelectedFoodLine[] {
   const lines: SelectedFoodLine[] = [];
   for (const card of cards) {
+    if (!isCardOnPath(card, picks)) continue;
     for (const optionId of picks[card.id] ?? []) {
       const option = card.options.find((entry) => entry.id === optionId);
       if (!option) continue;
@@ -217,6 +236,7 @@ export function selectionTotals(cards: BuilderCard[], picks: BuilderPicks, quant
   }
 
   for (const card of cards) {
+    if (!isCardOnPath(card, picks)) continue;
     for (const optionId of picks[card.id] ?? []) {
       const option = card.options.find((entry) => entry.id === optionId);
       if (!option || option.foods.length) continue;
@@ -237,9 +257,10 @@ export function selectionTotals(cards: BuilderCard[], picks: BuilderPicks, quant
 
 /** First blood-sugar role (protein/carb/veg) present in the set but left unpicked. */
 export function missingCoverageRole(cards: BuilderCard[], picks: BuilderPicks) {
-  const covered = new Set(cards.filter((card) => (picks[card.id] ?? []).length > 0).map((card) => card.role));
+  const onPath = cards.filter((card) => isCardOnPath(card, picks));
+  const covered = new Set(onPath.filter((card) => (picks[card.id] ?? []).length > 0).map((card) => card.role));
   return (['PROTEIN', 'CARB', 'VEGETABLE'] as const).find(
-    (role) => cards.some((card) => card.role === role) && !covered.has(role)
+    (role) => onPath.some((card) => card.role === role) && !covered.has(role)
   );
 }
 

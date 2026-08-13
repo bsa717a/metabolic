@@ -1102,11 +1102,17 @@ model MealCard {
   sortOrder Int @default(0)
   required Boolean @default(true)
   maxSelect Int @default(1)
+  /// If set, this step only appears when that upstream option is selected (style-only extra steps).
+  visibleWhenOptionId String?
+  /// Style option ids for which this shared step is hidden.
+  hiddenForOptionIds String[] @default([])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   cardSet MealCardSet @relation(fields: [cardSetId], references: [id], onDelete: Cascade)
   options MealCardOption[]
+  visibleWhenOption MealCardOption? @relation("CardStepVisibility", fields: [visibleWhenOptionId], references: [id], onDelete: SetNull)
   @@unique([cardSetId, sortOrder])
+  @@index([visibleWhenOptionId])
 }
 
 model MealCardOption {
@@ -1126,6 +1132,7 @@ model MealCardOption {
   foods MealCardOptionFood[]
   visibleWhenOption MealCardOption? @relation("OptionVisibility", fields: [visibleWhenOptionId], references: [id], onDelete: SetNull)
   visibleDependents MealCardOption[] @relation("OptionVisibility")
+  visibleCards MealCard[] @relation("CardStepVisibility")
   @@unique([cardId, sortOrder])
   @@index([visibleWhenOptionId])
 }

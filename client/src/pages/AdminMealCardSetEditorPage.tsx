@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Star, Trash2 } from 'lucide-react';
+import { clsx } from 'clsx';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -15,6 +16,14 @@ import {
 import type { Food } from '../types';
 
 type CardRole = 'STYLE' | 'PROTEIN' | 'FAT' | 'CARB' | 'VEGETABLE' | 'FRUIT' | 'FREE';
+
+const ROLE_TO_FOOD_GROUP: Partial<Record<CardRole, FoodGroup>> = {
+  PROTEIN: 'Protein',
+  FRUIT: 'Fruits',
+  VEGETABLE: 'Veggies',
+  FAT: 'Fats',
+  CARB: 'Carbs'
+};
 
 const EMPTY_FOODS_BY_GROUP: FoodsByGroup = {
   Protein: [],
@@ -55,6 +64,8 @@ type AdminCard = {
   required: boolean;
   maxSelect: number;
   sortOrder: number;
+  visibleWhenOptionId?: string | null;
+  hiddenForOptionIds?: string[];
   options: AdminOption[];
 };
 
@@ -140,29 +151,36 @@ function FoodMacroSidebar({
   loading,
   usedFoodIds,
   selectedSectionLabel,
+  suggestedGroup,
   onPick
 }: {
   catalog: FoodsByGroup;
   loading: boolean;
   usedFoodIds: Set<string>;
   selectedSectionLabel: string | null;
+  suggestedGroup: FoodGroup | null;
   onPick: (food: BuilderFood) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [groupFilter, setGroupFilter] = useState<FoodGroup | 'all'>('all');
   const [openGroups, setOpenGroups] = useState<Record<FoodGroup, boolean>>(() =>
     Object.fromEntries(FOOD_GROUPS.map((group) => [group, true])) as Record<FoodGroup, boolean>
   );
 
+  useEffect(() => {
+    setGroupFilter(suggestedGroup ?? 'all');
+  }, [suggestedGroup]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return FOOD_GROUPS.map((group) => {
+    return FOOD_GROUPS.filter((group) => groupFilter === 'all' || group === groupFilter).map((group) => {
       const foods = catalog[group].filter((food) => {
         if (!q) return true;
         return food.name.toLowerCase().includes(q) || (food.brand ?? '').toLowerCase().includes(q);
       });
       return { group, foods };
     });
-  }, [catalog, query]);
+  }, [catalog, query, groupFilter]);
 
   return (
     <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-hidden flex flex-col rounded-2xl border border-app-border bg-app-surface">
@@ -173,6 +191,39 @@ function FoodMacroSidebar({
             ? `Click to add as a choosable option under “${selectedSectionLabel}”`
             : 'Select a step on the left, then click a food to add it as an option'}
         </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setGroupFilter('all')}
+            className={clsx(
+              'rounded-lg border px-2 py-1 text-[11px] font-semibold transition',
+              groupFilter === 'all'
+                ? 'border-brand-green bg-brand-green/15 text-brand-deep'
+                : 'border-app-border bg-app-bg text-app-text-muted hover:bg-app-muted'
+            )}
+          >
+            All
+          </button>
+          {FOOD_GROUPS.map((group) => {
+            const colors = GROUP_COLORS[group];
+            const active = groupFilter === group;
+            return (
+              <button
+                key={group}
+                type="button"
+                onClick={() => setGroupFilter(group)}
+                className="rounded-lg border px-2 py-1 text-[11px] font-semibold transition"
+                style={
+                  active
+                    ? { backgroundColor: colors.bg, color: colors.text, borderColor: colors.border }
+                    : { backgroundColor: 'transparent', color: colors.text, borderColor: colors.border, opacity: 0.55 }
+                }
+              >
+                {group}
+              </button>
+            );
+          })}
+        </div>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -185,7 +236,7 @@ function FoodMacroSidebar({
         {!loading &&
           filtered.map(({ group, foods }) => {
             const colors = GROUP_COLORS[group];
-            const open = openGroups[group];
+            const open = groupFilter !== 'all' || openGroups[group];
             return (
               <div key={group} className="mb-1">
                 <button
@@ -245,13 +296,33 @@ function FoodMacroSidebar({
   );
 }
 
-/** Filter token for the admin style path view. */
-type StyleFilter = 'all' | 'always' | string;
+/** Shared tab, or a STYLE option id. Null when the set has no style step. */
+type StyleWorkspace = 'shared' | string;
 
-function optionMatchesStyleFilter(option: AdminOption, filter: StyleFilter, isStyleCard: boolean): boolean {
-  if (filter === 'all' || isStyleCard) return true;
-  if (filter === 'always') return !option.visibleWhenOptionId;
-  return !option.visibleWhenOptionId || option.visibleWhenOptionId === filter;
+function optionMatchesWorkspace(option: AdminOption, workspace: StyleWorkspace | null, isStyleCard: boolean): boolean {
+  if (workspace == null) return true;
+  if (isStyleCard) return workspace === 'shared' || option.id === workspace;
+  if (workspace === 'shared') return !option.visibleWhenOptionId;
+  return !option.visibleWhenOptionId || option.visibleWhenOptionId === workspace;
+}
+
+function cardVisibleInWorkspace(card: AdminCard, workspace: StyleWorkspace | null): boolean {
+  if (workspace == null) return true;
+  if (card.role === 'STYLE') return workspace === 'shared';
+  if (workspace === 'shared') return !card.visibleWhenOptionId;
+  if (card.visibleWhenOptionId && card.visibleWhenOptionId !== workspace) return false;
+  if ((card.hiddenForOptionIds ?? []).includes(workspace)) return false;
+  return true;
+}
+
+function hiddenCardsForWorkspace(cards: AdminCard[], workspace: StyleWorkspace | null): AdminCard[] {
+  if (workspace == null || workspace === 'shared') return [];
+  return cards.filter(
+    (card) =>
+      card.role !== 'STYLE' &&
+      !card.visibleWhenOptionId &&
+      (card.hiddenForOptionIds ?? []).includes(workspace)
+  );
 }
 
 export function AdminMealCardSetEditorPage() {
@@ -259,7 +330,7 @@ export function AdminMealCardSetEditorPage() {
   const [set, setSet] = useState<AdminCardSet | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewTarget, setPreviewTarget] = useState(500);
-  const [styleFilter, setStyleFilter] = useState<StyleFilter>('all');
+  const [workspace, setWorkspace] = useState<StyleWorkspace | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [foodCatalog, setFoodCatalog] = useState<FoodsByGroup>(EMPTY_FOODS_BY_GROUP);
   const [foodsLoading, setFoodsLoading] = useState(true);
@@ -294,6 +365,26 @@ export function AdminMealCardSetEditorPage() {
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Change failed');
+    }
+  }
+
+  async function addStyle() {
+    const styleStep = set?.cards.find((card) => card.role === 'STYLE');
+    if (!styleStep || !id) return;
+    const name = window.prompt('New style name?');
+    if (!name?.trim()) return;
+    setError(null);
+    try {
+      const created = await api<{ id: string }>(`/api/admin/cards/${styleStep.id}/options`, {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim().slice(0, 60) })
+      });
+      const data = await api<AdminCardSet>(`/api/admin/card-sets/${id}`);
+      setSet(data);
+      setPreviewTarget((current) => (current === 500 ? Math.round(Number(data.referenceCalories)) : current));
+      setWorkspace(created.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add style');
     }
   }
 
@@ -341,20 +432,36 @@ export function AdminMealCardSetEditorPage() {
 
   const styleCard = cardSet.cards.find((card) => card.role === 'STYLE');
   const styleOptions = styleCard?.options ?? [];
-  const styleFilterValid =
-    styleFilter === 'all' ||
-    styleFilter === 'always' ||
-    styleOptions.some((option) => option.id === styleFilter);
-  const activeStyleFilter: StyleFilter = styleFilterValid ? styleFilter : 'all';
+  const hasStyleWorkspace = styleOptions.length > 0;
+  const activeWorkspace: StyleWorkspace | null = !hasStyleWorkspace
+    ? null
+    : workspace === 'shared' || (workspace != null && styleOptions.some((option) => option.id === workspace))
+      ? workspace
+      : styleOptions[0]!.id;
+  const activeStyle =
+    activeWorkspace && activeWorkspace !== 'shared'
+      ? styleOptions.find((option) => option.id === activeWorkspace) ?? null
+      : null;
+  const isStyleWorkspace = activeWorkspace != null && activeWorkspace !== 'shared';
+  const gateForNewOptions = isStyleWorkspace ? activeWorkspace : null;
+
+  const visibleCards = cardSet.cards.filter((card) => cardVisibleInWorkspace(card, activeWorkspace));
+  const hiddenCards = hiddenCardsForWorkspace(cardSet.cards, activeWorkspace);
 
   const selectedCard = cardSet.cards.find((card) => card.id === selectedCardId) ?? null;
   const selectedSection =
-    selectedCard && selectedCard.role !== 'STYLE' ? selectedCard : null;
+    selectedCard && selectedCard.role !== 'STYLE' && cardVisibleInWorkspace(selectedCard, activeWorkspace)
+      ? selectedCard
+      : null;
   const usedFoodIds = new Set(
-    (selectedSection?.options ?? []).flatMap((option) => option.foods.map((line) => line.foodId))
+    (selectedSection?.options ?? [])
+      .filter((option) => optionMatchesWorkspace(option, activeWorkspace, false))
+      .flatMap((option) => option.foods.map((line) => line.foodId))
   );
-  const gateForNewOptions =
-    activeStyleFilter !== 'all' && activeStyleFilter !== 'always' ? activeStyleFilter : null;
+
+  const addStepRoles = (
+    ['STYLE', 'PROTEIN', 'CARB', 'VEGETABLE', 'FAT', 'FRUIT', 'FREE'] as const
+  ).filter((role) => !isStyleWorkspace || role !== 'STYLE');
 
   /** Options on earlier steps — used as path gates (Hot / Cold / …). */
   function earlierGateOptions(cardSortOrder: number) {
@@ -380,25 +487,6 @@ export function AdminMealCardSetEditorPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          {styleOptions.length > 0 && (
-            <label className="text-sm">
-              <span className="mb-1 block text-xs font-semibold uppercase text-app-text-muted">Filter by style</span>
-              <select
-                value={activeStyleFilter}
-                onChange={(e) => setStyleFilter(e.target.value as StyleFilter)}
-                className="rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm"
-              >
-                <option value="all">All options</option>
-                <option value="always">Always (shared)</option>
-                {styleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.icon ? `${option.icon} ` : ''}
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <label className="text-sm">
             <span className="mb-1 block text-xs font-semibold uppercase text-app-text-muted">Preview at target (kcal)</span>
             <NumberInput
@@ -410,6 +498,70 @@ export function AdminMealCardSetEditorPage() {
         </div>
       </div>
 
+      {hasStyleWorkspace && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Working on</p>
+          <div className="flex flex-wrap gap-2">
+            {styleOptions.map((option) => {
+              const active = activeWorkspace === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setWorkspace(option.id)}
+                  className={clsx(
+                    'rounded-xl border px-3 py-2 text-sm font-semibold transition',
+                    active
+                      ? 'border-brand-green bg-brand-green/15 text-brand-deep'
+                      : 'border-app-border bg-app-surface text-app-text hover:bg-app-muted'
+                  )}
+                >
+                  {option.icon ? `${option.icon} ` : ''}
+                  {option.name}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setWorkspace('shared')}
+              className={clsx(
+                'rounded-xl border px-3 py-2 text-sm font-semibold transition',
+                activeWorkspace === 'shared'
+                  ? 'border-brand-green bg-brand-green/15 text-brand-deep'
+                  : 'border-app-border bg-app-surface text-app-text hover:bg-app-muted'
+              )}
+            >
+              Shared
+            </button>
+            <button
+              type="button"
+              title="Add style"
+              onClick={() => void addStyle()}
+              className="inline-flex items-center justify-center rounded-xl border border-dashed border-app-border px-2.5 py-2 text-app-text-muted transition hover:bg-app-muted hover:text-app-text"
+            >
+              <Plus size={16} />
+              <span className="sr-only">Add style</span>
+            </button>
+          </div>
+          {isStyleWorkspace && activeStyle && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-brand-green/15 px-3 py-1 text-xs font-semibold text-brand-deep">
+                Working on {activeStyle.name}
+              </span>
+              <span className="text-xs text-app-text-muted">
+                New foods from the sidebar attach to this style
+              </span>
+            </div>
+          )}
+          {activeWorkspace === 'shared' && (
+            <p className="text-sm text-app-text-muted">
+              Shared workspace: style names live here, plus options that appear no matter which style the client
+              picks. New foods are ungated.
+            </p>
+          )}
+        </div>
+      )}
+
       {cardSet._count.userPicks > 0 && (
         <p className="rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800">
           ⚠️ {cardSet._count.userPicks} client(s) have standing picks in this set — editing portions or removing
@@ -420,13 +572,17 @@ export function AdminMealCardSetEditorPage() {
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
-          {cardSet.cards.map((card, cardIndex) => {
+          {visibleCards.map((card, cardIndex) => {
             const isStyleCard = card.role === 'STYLE';
             const sectionSelected = selectedCardId === card.id && !isStyleCard;
             const visibleOptions = card.options.filter((option) =>
-              optionMatchesStyleFilter(option, activeStyleFilter, isStyleCard)
+              optionMatchesWorkspace(option, activeWorkspace, isStyleCard)
             );
             const hiddenCount = card.options.length - visibleOptions.length;
+            const styleOnly = Boolean(card.visibleWhenOptionId);
+            const hiddenForNames = (card.hiddenForOptionIds ?? [])
+              .map((id) => styleOptions.find((option) => option.id === id)?.name ?? id)
+              .filter(Boolean);
 
             return (
               <Card
@@ -443,20 +599,29 @@ export function AdminMealCardSetEditorPage() {
                     if (!isStyleCard) setSelectedCardId(card.id);
                   }}
                 >
-                  <span className="rounded-full bg-brand-green/15 px-2 py-0.5 text-xs font-bold text-brand-deep">
-                    {cardIndex + 1} · {card.role}
+                  <span className="rounded-full bg-brand-green/15 px-2 py-0.5 text-xs font-bold tabular-nums text-brand-deep">
+                    {cardIndex + 1}
                   </span>
+                  <select
+                    value={card.role}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      const role = e.target.value as CardRole;
+                      if (role !== card.role) void call(`/api/admin/cards/${card.id}`, 'PATCH', { role });
+                    }}
+                    title="Step type — what this section is for, not the heading"
+                    className="rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-xs font-bold uppercase tracking-wide text-brand-deep hover:border-app-border"
+                  >
+                    {(['STYLE', 'PROTEIN', 'CARB', 'VEGETABLE', 'FAT', 'FRUIT', 'FREE'] as const).map((role) => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
                   <input
                     defaultValue={card.name}
                     onBlur={(e) => e.target.value !== card.name && void call(`/api/admin/cards/${card.id}`, 'PATCH', { name: e.target.value })}
                     onClick={(e) => e.stopPropagation()}
                     className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-base font-bold hover:border-app-border"
                   />
-                  {sectionSelected && (
-                    <span className="rounded-full bg-brand-green/15 px-2 py-0.5 text-[11px] font-semibold text-brand-deep">
-                      Adding options here
-                    </span>
-                  )}
                   <input
                     defaultValue={card.pickRule ?? ''}
                     placeholder="pick rule (e.g. Pick 1 or more)"
@@ -487,10 +652,74 @@ export function AdminMealCardSetEditorPage() {
                       className="w-14 rounded-lg border border-app-border bg-app-surface px-1 py-0.5 tabular-nums"
                     />
                   </label>
-                  {hiddenCount > 0 && (
-                    <span className="text-xs text-app-text-muted">{hiddenCount} hidden by style filter</span>
+                  {isStyleWorkspace && !isStyleCard && (
+                    <div
+                      className="flex items-center gap-1 rounded-lg border border-app-border p-0.5 text-xs"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        className={clsx(
+                          'rounded-md px-2 py-0.5 font-semibold',
+                          !styleOnly ? 'bg-brand-green/15 text-brand-deep' : 'text-app-text-muted hover:text-app-text'
+                        )}
+                        onClick={() => {
+                          if (styleOnly) {
+                            void call(`/api/admin/cards/${card.id}`, 'PATCH', { visibleWhenOptionId: null });
+                          }
+                        }}
+                      >
+                        All styles
+                      </button>
+                      <button
+                        type="button"
+                        className={clsx(
+                          'rounded-md px-2 py-0.5 font-semibold',
+                          styleOnly ? 'bg-brand-green/15 text-brand-deep' : 'text-app-text-muted hover:text-app-text'
+                        )}
+                        onClick={() => {
+                          if (!styleOnly && activeWorkspace) {
+                            void call(`/api/admin/cards/${card.id}`, 'PATCH', {
+                              visibleWhenOptionId: activeWorkspace,
+                              hiddenForOptionIds: []
+                            });
+                          }
+                        }}
+                      >
+                        This style only
+                      </button>
+                    </div>
                   )}
-                  <button type="button" title="Move up" onClick={(e) => { e.stopPropagation(); void call(`/api/admin/cards/${card.id}/move`, 'POST', { direction: 'up' }); }} className="text-app-text-muted hover:text-app-text"><ArrowUp size={16} /></button>
+                  {isStyleWorkspace && !isStyleCard && !styleOnly && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!activeWorkspace) return;
+                        if (selectedCardId === card.id) setSelectedCardId(null);
+                        void call(`/api/admin/cards/${card.id}`, 'PATCH', {
+                          hiddenForOptionIds: [...new Set([...(card.hiddenForOptionIds ?? []), activeWorkspace])]
+                        });
+                      }}
+                      className="text-xs font-semibold text-app-text-muted hover:text-app-text"
+                    >
+                      Hide for this style
+                    </button>
+                  )}
+                  {activeWorkspace === 'shared' && !isStyleCard && (
+                    <span className="rounded-full bg-app-muted px-2 py-0.5 text-[11px] font-semibold text-app-text-muted">
+                      {styleOnly ? 'This style only' : 'All styles'}
+                    </span>
+                  )}
+                  {activeWorkspace === 'shared' && hiddenForNames.length > 0 && (
+                    <span className="text-xs text-app-text-muted">Hidden for {hiddenForNames.join(', ')}</span>
+                  )}
+                  {hasStyleWorkspace && hiddenCount > 0 && (
+                    <span className="text-xs text-app-text-muted">
+                      {hiddenCount} option{hiddenCount === 1 ? '' : 's'} on other styles
+                    </span>
+                  )}
+                  <button type="button" title="Move up" onClick={(e) => { e.stopPropagation(); void call(`/api/admin/cards/${card.id}/move`, 'POST', { direction: 'up' }); }} className="ml-auto text-app-text-muted hover:text-app-text"><ArrowUp size={16} /></button>
                   <button type="button" title="Move down" onClick={(e) => { e.stopPropagation(); void call(`/api/admin/cards/${card.id}/move`, 'POST', { direction: 'down' }); }} className="text-app-text-muted hover:text-app-text"><ArrowDown size={16} /></button>
                   <button
                     type="button"
@@ -506,11 +735,33 @@ export function AdminMealCardSetEditorPage() {
                   >
                     <Trash2 size={16} />
                   </button>
+                  {!isStyleCard && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCardId(card.id);
+                      }}
+                      className={clsx(
+                        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold',
+                        sectionSelected
+                          ? 'bg-brand-green/15 text-brand-deep'
+                          : 'text-brand-green hover:bg-app-muted'
+                      )}
+                    >
+                      <Pencil size={13} />
+                      {sectionSelected ? 'Editing' : 'Edit'}
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   {visibleOptions.length === 0 && card.options.length > 0 && (
-                    <p className="text-sm text-app-text-muted">No options match this style filter.</p>
+                    <p className="text-sm text-app-text-muted">
+                      {hasStyleWorkspace
+                        ? 'No options on this path yet — add one from the food sidebar or below.'
+                        : 'No options match this style filter.'}
+                    </p>
                   )}
                   {visibleOptions.map((option) => (
                     <div key={option.id} className="rounded-xl border border-app-border p-3">
@@ -534,7 +785,7 @@ export function AdminMealCardSetEditorPage() {
                         >
                           <Star size={16} fill={option.isDefault ? 'currentColor' : 'none'} />
                         </button>
-                        {earlierGateOptions(card.sortOrder).length > 0 && (
+                        {!hasStyleWorkspace && earlierGateOptions(card.sortOrder).length > 0 && (
                           <label className="flex items-center gap-1 text-xs text-app-text-muted">
                             Show
                             <select
@@ -631,7 +882,11 @@ export function AdminMealCardSetEditorPage() {
                     variant="secondary"
                     onClick={() => {
                       const name = window.prompt('New option name?');
-                      if (name?.trim()) void call(`/api/admin/cards/${card.id}/options`, 'POST', { name: name.trim() });
+                      if (!name?.trim()) return;
+                      void call(`/api/admin/cards/${card.id}/options`, 'POST', {
+                        name: name.trim(),
+                        ...(gateForNewOptions && !isStyleCard ? { visibleWhenOptionId: gateForNewOptions } : {})
+                      });
                     }}
                   >
                     <Plus size={14} className="mr-1 inline" /> Add option
@@ -641,15 +896,44 @@ export function AdminMealCardSetEditorPage() {
             );
           })}
 
+          {hiddenCards.length > 0 && activeStyle && (
+            <Card className="space-y-2">
+              <p className="text-sm font-semibold">Hidden for {activeStyle.name}</p>
+              <p className="text-xs text-app-text-muted">
+                These shared steps stay in the set but clients who pick this style will not see them.
+              </p>
+              <ul className="space-y-1">
+                {hiddenCards.map((card) => (
+                  <li key={card.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-app-muted px-3 py-2 text-sm">
+                    <span className="font-semibold">
+                      {card.role} · {card.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-brand-green hover:underline"
+                      onClick={() =>
+                        void call(`/api/admin/cards/${card.id}`, 'PATCH', {
+                          hiddenForOptionIds: (card.hiddenForOptionIds ?? []).filter((id) => id !== activeWorkspace)
+                        })
+                      }
+                    >
+                      Unhide
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
           <Card className="flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <span className="mb-1 block text-xs font-semibold uppercase text-app-text-muted">New step role</span>
               <select
-                value={newCard.role}
+                value={addStepRoles.includes(newCard.role) ? newCard.role : 'PROTEIN'}
                 onChange={(e) => setNewCard({ ...newCard, role: e.target.value as CardRole })}
                 className="rounded-xl border border-app-border bg-app-surface px-3 py-2"
               >
-                {(['STYLE', 'PROTEIN', 'CARB', 'VEGETABLE', 'FAT', 'FRUIT', 'FREE'] as const).map((role) => (
+                {addStepRoles.map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
               </select>
@@ -667,9 +951,11 @@ export function AdminMealCardSetEditorPage() {
               type="button"
               onClick={() => {
                 if (!newCard.name.trim()) return;
+                const role = addStepRoles.includes(newCard.role) ? newCard.role : 'PROTEIN';
                 void call(`/api/admin/card-sets/${cardSet.id}/cards`, 'POST', {
-                  role: newCard.role,
-                  name: newCard.name.trim()
+                  role,
+                  name: newCard.name.trim(),
+                  ...(isStyleWorkspace && activeWorkspace ? { visibleWhenOptionId: activeWorkspace } : {})
                 });
                 setNewCard({ role: 'PROTEIN', name: '' });
               }}
@@ -677,6 +963,16 @@ export function AdminMealCardSetEditorPage() {
             >
               <Plus size={14} className="mr-1 inline" /> Add step
             </Button>
+            {isStyleWorkspace && activeStyle && (
+              <p className="basis-full text-xs text-app-text-muted">
+                Adds a step that only appears for {activeStyle.name}.
+              </p>
+            )}
+            {activeWorkspace === 'shared' && (
+              <p className="basis-full text-xs text-app-text-muted">
+                Adds a step for every style. Hide it later from a style tab if needed.
+              </p>
+            )}
           </Card>
         </div>
 
@@ -685,6 +981,7 @@ export function AdminMealCardSetEditorPage() {
           loading={foodsLoading}
           usedFoodIds={usedFoodIds}
           selectedSectionLabel={selectedSection?.name ?? null}
+          suggestedGroup={selectedSection ? ROLE_TO_FOOD_GROUP[selectedSection.role] ?? null : null}
           onPick={(food) => {
             if (!selectedSection) return;
             void addFoodAsOption(selectedSection.id, food, gateForNewOptions);
