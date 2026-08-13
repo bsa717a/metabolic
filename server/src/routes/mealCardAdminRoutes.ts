@@ -40,7 +40,9 @@ const cardBodySchema = z.object({
   name: z.string().min(1).max(60),
   pickRule: z.string().max(120).nullable().optional(),
   required: z.boolean().optional(),
-  maxSelect: z.number().int().min(1).max(10).optional()
+  maxSelect: z.number().int().min(1).max(10).optional(),
+  visibleWhenOptionId: z.string().min(1).nullable().optional(),
+  hiddenForOptionIds: z.array(z.string().min(1)).optional()
 });
 
 const optionBodySchema = z.object({
@@ -52,26 +54,32 @@ const optionBodySchema = z.object({
 });
 
 /** Gate must be an option on an earlier card in the same set (or null to clear). */
-async function assertVisibleWhenGate(cardId: string, optionId: string | null, gateId: string | null) {
+async function assertVisibleWhenGate(
+  cardSetId: string,
+  cardSortOrder: number,
+  optionId: string | null,
+  gateId: string | null
+) {
   if (gateId == null) return;
   if (optionId && gateId === optionId) {
     throw Object.assign(new Error('An option cannot depend on itself'), { statusCode: 400 });
   }
-  const card = await prisma.mealCard.findUnique({
-    where: { id: cardId },
-    select: { sortOrder: true, cardSetId: true }
-  });
-  if (!card) throw Object.assign(new Error('Card not found'), { statusCode: 404 });
   const gate = await prisma.mealCardOption.findUnique({
     where: { id: gateId },
     select: { id: true, card: { select: { sortOrder: true, cardSetId: true } } }
   });
   if (!gate) throw Object.assign(new Error('Visibility gate option not found'), { statusCode: 400 });
-  if (gate.card.cardSetId !== card.cardSetId) {
+  if (gate.card.cardSetId !== cardSetId) {
     throw Object.assign(new Error('Visibility gate must be in the same card set'), { statusCode: 400 });
   }
-  if (gate.card.sortOrder >= card.sortOrder) {
+  if (gate.card.sortOrder >= cardSortOrder) {
     throw Object.assign(new Error('Visibility gate must be on an earlier step'), { statusCode: 400 });
+  }
+}
+
+async function assertHiddenForOptionIds(cardSetId: string, cardSortOrder: number, hiddenIds: string[]) {
+  for (const gateId of hiddenIds) {
+    await assertVisibleWhenGate(cardSetId, cardSortOrder, null, gateId);
   }
 }
 
@@ -148,19 +156,54 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
   });
 
   /* ---------- cards ---------- */
-  app.post('/api/admin/card-sets/:id/cards', { preHandler: adminOnly }, async (request) => {
+  app.post('/api/admin/card-sets/:id/cards', { preHandler: adminOnly }, async (request, reply) => {
     const setId = (request.params as { id: string }).id;
     const body = cardBodySchema.parse(request.body);
     const max = await prisma.mealCard.aggregate({ where: { cardSetId: setId }, _max: { sortOrder: true } });
+    const sortOrder = (max._max.sortOrder ?? 0) + 1;
+    try {
+      await assertVisibleWhenGate(setId, sortOrder, null, body.visibleWhenOptionId ?? null);
+      if (body.hiddenForOptionIds?.length) {
+        await assertHiddenForOptionIds(setId, sortOrder, body.hiddenForOptionIds);
+      }
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : 'Invalid visibility gate' });
+    }
+    if (body.visibleWhenOptionId && body.hiddenForOptionIds?.includes(body.visibleWhenOptionId)) {
+      return reply.code(400).send({ error: 'A step cannot be both gated to and hidden for the same option' });
+    }
     return prisma.mealCard.create({
-      data: { cardSetId: setId, sortOrder: (max._max.sortOrder ?? 0) + 1, ...body },
+      data: { cardSetId: setId, sortOrder, ...body },
       include: { options: { include: { foods: { include: { food: true } } } } }
     });
   });
 
-  app.patch('/api/admin/cards/:id', { preHandler: adminOnly }, async (request) => {
+  app.patch('/api/admin/cards/:id', { preHandler: adminOnly }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
     const body = cardBodySchema.partial().parse(request.body);
-    return prisma.mealCard.update({ where: { id: (request.params as { id: string }).id }, data: body });
+    const card = await prisma.mealCard.findUnique({
+      where: { id },
+      select: { cardSetId: true, sortOrder: true, visibleWhenOptionId: true, hiddenForOptionIds: true }
+    });
+    if (!card) return notFound(reply);
+    try {
+      if (body.visibleWhenOptionId !== undefined) {
+        await assertVisibleWhenGate(card.cardSetId, card.sortOrder, null, body.visibleWhenOptionId);
+      }
+      if (body.hiddenForOptionIds) {
+        await assertHiddenForOptionIds(card.cardSetId, card.sortOrder, body.hiddenForOptionIds);
+      }
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : 'Invalid visibility gate' });
+    }
+    const nextVisible = body.visibleWhenOptionId !== undefined ? body.visibleWhenOptionId : card.visibleWhenOptionId;
+    const nextHidden = body.hiddenForOptionIds ?? card.hiddenForOptionIds;
+    if (nextVisible && nextHidden.includes(nextVisible)) {
+      return reply.code(400).send({ error: 'A step cannot be both gated to and hidden for the same option' });
+    }
+    return prisma.mealCard.update({ where: { id }, data: body });
   });
 
   app.post('/api/admin/cards/:id/move', { preHandler: adminOnly }, async (request, reply) => {
@@ -194,8 +237,13 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
   app.post('/api/admin/cards/:id/options', { preHandler: adminOnly }, async (request, reply) => {
     const cardId = (request.params as { id: string }).id;
     const body = optionBodySchema.parse(request.body);
+    const card = await prisma.mealCard.findUnique({
+      where: { id: cardId },
+      select: { cardSetId: true, sortOrder: true }
+    });
+    if (!card) return notFound(reply);
     try {
-      await assertVisibleWhenGate(cardId, null, body.visibleWhenOptionId ?? null);
+      await assertVisibleWhenGate(card.cardSetId, card.sortOrder, null, body.visibleWhenOptionId ?? null);
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode ?? 400;
       return reply.code(status).send({ error: err instanceof Error ? err.message : 'Invalid visibility gate' });
@@ -213,11 +261,14 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
   app.patch('/api/admin/options/:id', { preHandler: adminOnly }, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const body = optionBodySchema.partial().parse(request.body);
-    const option = await prisma.mealCardOption.findUnique({ where: { id }, select: { cardId: true } });
+    const option = await prisma.mealCardOption.findUnique({
+      where: { id },
+      select: { cardId: true, card: { select: { cardSetId: true, sortOrder: true } } }
+    });
     if (!option) return notFound(reply);
     if (body.visibleWhenOptionId !== undefined) {
       try {
-        await assertVisibleWhenGate(option.cardId, id, body.visibleWhenOptionId);
+        await assertVisibleWhenGate(option.card.cardSetId, option.card.sortOrder, id, body.visibleWhenOptionId);
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode ?? 400;
         return reply.code(status).send({ error: err instanceof Error ? err.message : 'Invalid visibility gate' });
@@ -230,8 +281,27 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
     return updated;
   });
 
-  app.delete('/api/admin/options/:id', { preHandler: adminOnly }, async (request) => {
-    await prisma.mealCardOption.delete({ where: { id: (request.params as { id: string }).id } });
+  app.delete('/api/admin/options/:id', { preHandler: adminOnly }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const option = await prisma.mealCardOption.findUnique({
+      where: { id },
+      select: { card: { select: { cardSetId: true } } }
+    });
+    if (!option) return notFound(reply);
+    const cardSetId = option.card.cardSetId;
+    await prisma.$transaction(async (tx) => {
+      await tx.mealCardOption.delete({ where: { id } });
+      const hiddenOn = await tx.mealCard.findMany({
+        where: { cardSetId, hiddenForOptionIds: { has: id } },
+        select: { id: true, hiddenForOptionIds: true }
+      });
+      for (const card of hiddenOn) {
+        await tx.mealCard.update({
+          where: { id: card.id },
+          data: { hiddenForOptionIds: card.hiddenForOptionIds.filter((optionId) => optionId !== id) }
+        });
+      }
+    });
     return { deleted: true };
   });
 

@@ -144,6 +144,43 @@ describe('path visibility', () => {
     });
     expect(missingCoverageRole([style, hotProteinOnly], { style: ['cold'], protein: [] })).toBe('PROTEIN');
   });
+
+  it('skips shared steps hidden for the picked style', () => {
+    const protein = card('protein', {
+      role: 'PROTEIN',
+      sortOrder: 1,
+      hiddenForOptionIds: ['hot'],
+      options: [option('eggs', { isDefault: true })]
+    });
+    expect(activeCards([style, protein], { style: ['hot'], protein: [] }).map((c) => c.id)).toEqual(['style']);
+    expect(activeCards([style, protein], { style: ['cold'], protein: ['eggs'] }).map((c) => c.id)).toEqual([
+      'style',
+      'protein'
+    ]);
+    expect(defaultPicks([style, protein])).toEqual({ style: ['hot'], protein: [] });
+    expect(pruneAndRefillPicks([style, protein], { style: ['hot'], protein: ['eggs'] })).toEqual({
+      style: ['hot'],
+      protein: []
+    });
+    expect(missingCoverageRole([style, protein], { style: ['hot'], protein: [] })).toBeUndefined();
+  });
+
+  it('includes extra steps gated to the picked style', () => {
+    const shell = card('shell', {
+      role: 'FREE',
+      sortOrder: 2,
+      required: true,
+      visibleWhenOptionId: 'hot',
+      options: [option('hard-shell', { isDefault: true })]
+    });
+    expect(activeCards([style, shell], { style: ['hot'] }).map((c) => c.id)).toEqual(['style', 'shell']);
+    expect(activeCards([style, shell], { style: ['cold'], shell: [] }).map((c) => c.id)).toEqual(['style']);
+    expect(defaultPicks([style, shell])).toEqual({ style: ['hot'], shell: ['hard-shell'] });
+    expect(pruneAndRefillPicks([style, shell], { style: ['cold'], shell: ['hard-shell'] })).toEqual({
+      style: ['cold'],
+      shell: []
+    });
+  });
 });
 
 describe('togglePick', () => {
