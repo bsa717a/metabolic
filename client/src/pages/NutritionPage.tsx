@@ -27,6 +27,7 @@ import { useEntitlements } from '../context/EntitlementsContext';
 import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
 import { printNutritionPlan, printNutritionWeekPlan } from '../utils/printNutritionPlan';
 import { shareNutritionDayPlan } from '../utils/nutritionPlanShare';
+import { useWakeLock } from '../hooks/useWakeLock';
 
 function dateFromParams(params: URLSearchParams) {
   const date = params.get('date');
@@ -36,6 +37,7 @@ function dateFromParams(params: URLSearchParams) {
 export function NutritionPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
+  useWakeLock(true);
   const [weekDays, setWeekDays] = useState<DayMeals[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [logActualMealId, setLogActualMealId] = useState<string>();

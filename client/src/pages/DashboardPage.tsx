@@ -16,6 +16,7 @@ import { isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
 import { AUTO_START_DASHBOARD_TUTORIAL } from '../components/tutorial/tutorialPresenterTimeline';
 import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
+import { useWakeLock } from '../hooks/useWakeLock';
 
 function MacroDonut({
   label,
@@ -88,6 +89,7 @@ function RemainingMacrosDisplay({
 export function DashboardPage({ user }: { user?: AppUser | null }) {
   const location = useLocation();
   const { startTour, hasAutoStarted, isActive } = useTutorial();
+  useWakeLock(true);
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
