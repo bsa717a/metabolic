@@ -1,6 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import { clsx } from 'clsx';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Topbar } from './Topbar';
 import { MOBILE_BOTTOM_NAV_RESERVE, MobileBottomNav } from './MobileBottomNav';
 import type { AppUser } from '../../types';
@@ -21,27 +20,21 @@ export function AppShell({
   onTutorialComplete?: (user: AppUser) => void;
 }) {
   const location = useLocation();
-  const nutritionMobileLayout = location.pathname === '/nutrition';
+  const mainRef = useRef<HTMLElement>(null);
   const [coachIntroRequest, setCoachIntroRequest] = useState(0);
 
   useEffect(() => {
     recordNavigation(location.pathname);
+    mainRef.current?.scrollTo(0, 0);
   }, [location.pathname]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 639px)');
     function syncMobileLayout() {
-      if (media.matches) {
-        document.documentElement.style.setProperty(
-          '--app-mobile-home-bar-height',
-          MOBILE_BOTTOM_NAV_RESERVE
-        );
-        if (nutritionMobileLayout) {
-          document.documentElement.style.setProperty('--app-topbar-height', '0px');
-        }
-      } else {
-        document.documentElement.style.setProperty('--app-mobile-home-bar-height', '0px');
-      }
+      document.documentElement.style.setProperty(
+        '--app-mobile-home-bar-height',
+        media.matches ? MOBILE_BOTTOM_NAV_RESERVE : '0px'
+      );
     }
     syncMobileLayout();
     media.addEventListener('change', syncMobileLayout);
@@ -49,24 +42,20 @@ export function AppShell({
       media.removeEventListener('change', syncMobileLayout);
       document.documentElement.style.setProperty('--app-mobile-home-bar-height', '0px');
     };
-  }, [nutritionMobileLayout]);
+  }, []);
 
   return (
     <EntitlementsProvider user={user ?? null}>
     <TutorialProvider user={user} onComplete={onTutorialComplete}>
-      <div className="min-h-screen bg-app-bg flex flex-col transition-colors duration-200">
-        <div className={nutritionMobileLayout ? 'hidden sm:block' : undefined}>
-          <Topbar user={user} onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)} />
-        </div>
+      <div className="flex min-h-dvh flex-col bg-app-bg transition-colors duration-200 max-sm:h-dvh max-sm:overflow-hidden">
+        <Topbar user={user} onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)} />
         <main
-          className={clsx(
-            'flex-1 w-full mx-auto max-w-7xl p-4 sm:p-6 lg:p-8',
-            'pb-[calc(1rem+var(--app-mobile-home-bar-height))] sm:pb-6 lg:pb-8'
-          )}
+          ref={mainRef}
+          className="mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto p-4 sm:overflow-visible sm:p-6 lg:p-8"
         >
           <Outlet />
         </main>
-        <MobileBottomNav />
+        <MobileBottomNav user={user} />
         <SmsRemindersIntroModal user={user} onComplete={onTutorialComplete} />
         <DashboardTutorial />
         <CoachWelcomeGate

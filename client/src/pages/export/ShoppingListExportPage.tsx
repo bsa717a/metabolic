@@ -31,9 +31,9 @@ export function ShoppingListExportPage() {
   const backTo = useMemo(() => {
     const anchor = searchParams.get('anchorDate');
     if (anchor && /^\d{4}-\d{2}-\d{2}$/.test(anchor)) {
-      return anchor === todayKey() ? '/nutrition' : `/nutrition?date=${anchor}`;
+      return anchor === todayKey() ? '/nutrition/plan' : `/nutrition/plan?date=${anchor}`;
     }
-    return '/nutrition';
+    return '/nutrition/plan';
   }, [searchParams]);
 
   useEffect(() => {

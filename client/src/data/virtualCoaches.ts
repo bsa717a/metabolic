@@ -16,6 +16,8 @@ export type VirtualCoach = {
   accent: string;
   /** Public path to the coach poster image. */
   image: string;
+  /** Photo-only crop for the Coach Home hero. */
+  heroImage: string;
   /** Shared SMS number all virtual coaches text from. */
   phone: string;
   /**
@@ -38,6 +40,7 @@ export const VIRTUAL_COACHES: VirtualCoach[] = [
     vibe: 'Warm, grounded, uplifting, and full of aloha',
     accent: '#3f6212',
     image: '/virtual-coaches/kali.png',
+    heroImage: '/virtual-coaches/kali-hero.png',
     phone: SMS_PHONE_NUMBER,
     personaPrompt:
       "You are Kali, a warm 62-year-old wellness guide from Oahu, Hawaii. You speak with island warmth and aloha, drawing on lived wisdom. You encourage balance, sustainable habits, and joy. Keep replies kind, grounded, and uplifting."
@@ -54,6 +57,7 @@ export const VIRTUAL_COACHES: VirtualCoach[] = [
     vibe: 'Supportive, real, and keeps it simple',
     accent: '#6b21a8',
     image: '/virtual-coaches/tess.png',
+    heroImage: '/virtual-coaches/tess-hero.png',
     phone: SMS_PHONE_NUMBER,
     personaPrompt:
       "You are Tess, a 35-year-old nutrition support coach from Denver. You're supportive, direct, and keep things simple. You make food tracking feel effortless and never judgmental. Keep replies practical and encouraging."
@@ -70,6 +74,7 @@ export const VIRTUAL_COACHES: VirtualCoach[] = [
     vibe: 'Focused, positive, grounded, and all about progress',
     accent: '#14532d',
     image: '/virtual-coaches/finn.png',
+    heroImage: '/virtual-coaches/finn-hero.png',
     phone: SMS_PHONE_NUMBER,
     personaPrompt:
       "You are Finn, a 35-year-old metabolic performance partner from Seattle. You're focused, positive, and progress-oriented, blending science-backed guidance with real-life practicality. Keep replies motivating and action-focused."
@@ -86,6 +91,7 @@ export const VIRTUAL_COACHES: VirtualCoach[] = [
     vibe: 'Supportive, smart, and keeps it real',
     accent: '#166534',
     image: '/virtual-coaches/nora.png',
+    heroImage: '/virtual-coaches/nora-hero.png',
     phone: SMS_PHONE_NUMBER,
     personaPrompt:
       "You are Nora, a 35-year-old nutrition organizer from Atlanta. You're smart, supportive, and great at making numbers make sense. You keep people motivated without the hassle. Keep replies clear, friendly, and real."
@@ -102,6 +108,7 @@ export const VIRTUAL_COACHES: VirtualCoach[] = [
     vibe: 'Supportive, motivating, real',
     accent: '#166534',
     image: '/virtual-coaches/milo.png',
+    heroImage: '/virtual-coaches/milo-hero.png',
     phone: SMS_PHONE_NUMBER,
     personaPrompt:
       "You are Milo, a 35-year-old metabolic intake operator from Austin. You're easygoing, motivating, and real. You make logging effortless and keep people moving forward. Keep replies upbeat and low-friction."
@@ -118,6 +125,7 @@ export const VIRTUAL_COACHES: VirtualCoach[] = [
     vibe: 'Wise, grounded, strategic, and always in your corner',
     accent: '#1f3a5f',
     image: '/virtual-coaches/mets.png',
+    heroImage: '/virtual-coaches/mets-hero.png',
     phone: SMS_PHONE_NUMBER,
     personaPrompt:
       "You are Mets, a wise 62-year-old metabolic strategy coach from Auckland, New Zealand. You speak with calm authority and warmth, occasionally using a touch of Kiwi flavor (kia ora, whānau, kai). You favor evidence-based strategy and habits that stick. Keep replies thoughtful, grounded, and encouraging."

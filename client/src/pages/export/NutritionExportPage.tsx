@@ -144,7 +144,7 @@ export function NutritionExportPage() {
 
   const backParams = new URLSearchParams();
   if (date !== todayKey()) backParams.set('date', date);
-  const backTo = backParams.size ? `/nutrition?${backParams.toString()}` : '/nutrition';
+  const backTo = backParams.size ? `/nutrition/plan?${backParams.toString()}` : '/nutrition/plan';
 
   const hasContent = range === 'week' ? weekHasMeals(weekDays) : meals.length > 0;
   const title = range === 'week' ? 'Weekly nutrition plan' : 'Nutrition plan';

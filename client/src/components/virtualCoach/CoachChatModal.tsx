@@ -12,6 +12,7 @@ export function CoachChatModal({
   closeOnBackdropClick = true,
   autoGreeting = false,
   userFirstName,
+  seedUserMessage,
   chatSessionKey = 0
 }: {
   open: boolean;
@@ -23,6 +24,7 @@ export function CoachChatModal({
   closeOnBackdropClick?: boolean;
   autoGreeting?: boolean;
   userFirstName?: string | null;
+  seedUserMessage?: string;
   chatSessionKey?: number;
 }) {
   if (!open) return null;
@@ -59,6 +61,7 @@ export function CoachChatModal({
             quickReplies={quickReplies}
             autoGreeting={autoGreeting}
             userFirstName={userFirstName}
+            seedUserMessage={seedUserMessage}
             className="h-full min-h-0 border-0 shadow-none sm:h-[min(46rem,calc(90vh-3.5rem))] sm:border sm:shadow-sm"
           />
         </div>

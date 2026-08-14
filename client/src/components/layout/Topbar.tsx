@@ -12,6 +12,7 @@ import { ColorThemePicker } from './ColorThemePicker';
 import { ThemeToggle } from './ThemeToggle';
 import { isAdminRole, isCoachRole } from '../../utils/roles';
 import { planLabel } from '../../utils/entitlements';
+import { useDashboardLayout } from '../../utils/dashboardLayoutPreference';
 
 const MOBILE_NAV_LINKS = [
   ['/program', 'Metabolic Blueprint', Target],
@@ -63,6 +64,7 @@ export function Topbar({
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const [dashboardLayout, setDashboardLayout] = useDashboardLayout();
   const isDashboard = location.pathname === '/';
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -309,6 +311,14 @@ export function Topbar({
                       }}
                     />
                   ) : null}
+                  <ProfileMenuItem
+                    label={dashboardLayout === 'coachHome' ? 'Dashboard: Classic' : 'Dashboard: Coach Home'}
+                    icon={LayoutDashboard}
+                    onClick={() => {
+                      setDashboardLayout(dashboardLayout === 'coachHome' ? 'classic' : 'coachHome');
+                      closeProfileMenu();
+                    }}
+                  />
                   <li className="border-t border-app-border px-4 py-3">
                     <ColorThemePicker />
                   </li>

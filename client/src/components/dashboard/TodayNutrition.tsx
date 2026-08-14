@@ -440,7 +440,7 @@ export function TodayNutrition({
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Today&apos;s Nutrition</h2>
         <Link
-          to="/nutrition"
+          to="/nutrition/plan"
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-app-border text-app-text-muted transition hover:border-brand-green/50 hover:text-brand-green"
           aria-label="Edit nutrition"
         >

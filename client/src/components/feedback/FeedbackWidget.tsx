@@ -130,7 +130,7 @@ export function FeedbackWidget() {
           aria-label="Send feedback"
           onClick={() => setOpen(true)}
           style={{ bottom: fabBottom }}
-          className="fixed right-5 z-40 flex h-12 items-center gap-2 rounded-full bg-brand-green px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-deep sm:right-6"
+          className="fixed left-5 z-40 flex h-12 items-center gap-2 rounded-full bg-brand-green px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-deep sm:left-auto sm:right-6"
         >
           <MessageSquarePlus className="h-5 w-5" />
           <span className="hidden sm:inline">Feedback</span>

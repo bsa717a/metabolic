@@ -35,6 +35,7 @@ export function CoachChatBox({
   quickReplies,
   autoGreeting = false,
   userFirstName,
+  seedUserMessage,
   className
 }: {
   coach: VirtualCoach;
@@ -43,6 +44,7 @@ export function CoachChatBox({
   quickReplies?: CoachChatQuickReply[];
   autoGreeting?: boolean;
   userFirstName?: string | null;
+  seedUserMessage?: string;
   className?: string;
 }) {
   const [messages, setMessages] = useState<CoachChatMessage[]>(initialMessages);
@@ -58,6 +60,7 @@ export function CoachChatBox({
   const mealEditSessionRef = useRef<MealEditSession | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const seededRef = useRef(false);
 
   useEffect(() => {
     mealEditSessionRef.current = mealEditSession;
@@ -428,6 +431,15 @@ export function CoachChatBox({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const seed = seedUserMessage?.trim();
+    if (!seed || greetingLoading || seededRef.current) return;
+    seededRef.current = true;
+    void send(seed);
+    // Seed once after the opening greeting is ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedUserMessage, greetingLoading]);
 
   async function handleQuickReply(reply: CoachChatQuickReply) {
     if (loading) return;
