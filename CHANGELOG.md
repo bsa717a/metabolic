@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.11.0](https://github.com/bsa717a/metabolic/compare/v0.10.0...v0.11.0) (2026-08-14)
+
+
+### Features
+
+* **nutrition:** keep the phone screen awake on meals and dashboard ([2d232d5](https://github.com/bsa717a/metabolic/commit/2d232d5e5b922792639de346c48e2c63e1fce238))
+* **nutrition:** keep the phone screen awake on meals and dashboard ([7c0c77b](https://github.com/bsa717a/metabolic/commit/7c0c77bdcdff939fc212fd68e7f86affd4b267cb))
+
+
+### Bug Fixes
+
+* **nutrition:** stop duplicate meal slots and copy-day UI freeze ([5a975aa](https://github.com/bsa717a/metabolic/commit/5a975aade3ed919cbad3cb7a43b2d170f08b56ba))
+* **nutrition:** stop duplicate meal slots and copy-day UI freeze ([8e12375](https://github.com/bsa717a/metabolic/commit/8e1237554cde9b0a28779b02d0744525b1f77573))
+
 ## [0.10.0](https://github.com/bsa717a/metabolic/compare/v0.9.0...v0.10.0) (2026-08-14)
 
 
