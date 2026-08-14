@@ -201,9 +201,11 @@ export const MealCardEditor = forwardRef<
     fat: localItems.reduce((s, i) => s + i.fat, 0),
   };
 
+  const onDraftTotalsChangeRef = useRef(onDraftTotalsChange);
+  onDraftTotalsChangeRef.current = onDraftTotalsChange;
   useEffect(() => {
-    onDraftTotalsChange?.(totals);
-  }, [onDraftTotalsChange, totals.calories, totals.protein, totals.carbs, totals.fat]);
+    onDraftTotalsChangeRef.current?.(totals);
+  }, [totals.calories, totals.protein, totals.carbs, totals.fat]);
 
   function maybeAskRebalance(nextCalories: number) {
     const target = macroTargets?.calories;

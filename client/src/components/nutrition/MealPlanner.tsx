@@ -9,6 +9,7 @@ import type {
   MealMacroTargets
 } from './MealCardEditor';
 import type { MacroTotals } from './MacroSummaryFooter';
+import { clearDraftTotalsIfNeeded, nextDraftTotalsByMeal } from '../../utils/draftMealTotals';
 
 export type CardMealInfo = {
   mealNumber: number;
@@ -82,7 +83,7 @@ export const MealPlanner = forwardRef<
 
   useEffect(() => {
     if (!isEditing) {
-      setDraftTotalsByMeal({});
+      setDraftTotalsByMeal(clearDraftTotalsIfNeeded);
       return;
     }
     if (!onDraftPlannedTotalsChange) return;
@@ -111,7 +112,7 @@ export const MealPlanner = forwardRef<
   }, [draftTotalsByMeal, isEditing, meals, onDraftPlannedTotalsChange]);
 
   const handleDraftTotalsChange = useCallback((mealId: string, totals: MacroTotals) => {
-    setDraftTotalsByMeal((prev) => ({ ...prev, [mealId]: totals }));
+    setDraftTotalsByMeal((prev) => nextDraftTotalsByMeal(prev, mealId, totals));
   }, []);
 
   const setEditorRef = useCallback((mealId: string, handle: MealCardEditorHandle | null) => {

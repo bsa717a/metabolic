@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
@@ -58,13 +58,17 @@ export function NutritionPage() {
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
+  const reloadGeneration = useRef(0);
 
   const reloadWeek = useCallback(async () => {
+    const generation = ++reloadGeneration.current;
     try {
       const data = await fetchMealsForDates(weekDates);
+      if (generation !== reloadGeneration.current) return;
       setWeekDays(data);
       setLoadError(null);
     } catch (error) {
+      if (generation !== reloadGeneration.current) return;
       setLoadError(error instanceof Error ? error.message : 'Could not load meals.');
     }
   }, [weekDates]);
