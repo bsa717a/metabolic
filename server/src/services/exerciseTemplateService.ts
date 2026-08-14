@@ -509,3 +509,8 @@ export async function deleteClientTemplateItem(clientId: string, itemId: string)
   await ensureClientOwnedUserTemplate(item.templateId, clientId);
   return deleteTemplateItem(itemId);
 }
+
+export async function reorderClientTemplateItems(clientId: string, templateId: string, orderedIds: string[]) {
+  await ensureClientOwnedUserTemplate(templateId, clientId);
+  return reorderTemplateItems(templateId, orderedIds);
+}
