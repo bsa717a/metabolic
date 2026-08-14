@@ -573,6 +573,8 @@ model DailyLog {
   mealsCompleted Int @default(0)
   exercisesPlanned Int @default(0)
   exercisesCompleted Int @default(0)
+  /// Set when this day's meal plan was first materialized.
+  mealsInitializedAt DateTime?
   /// Set when this day's exercise plan was first materialized (including intentional rest).
   exercisesInitializedAt DateTime?
   /// When true, routine forward-apply skips this day so ad-hoc edits are preserved.
@@ -630,6 +632,7 @@ model Meal {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   items MealItem[]
   gamificationLog GamificationMealLog?
+  @@unique([dailyLogId, mealNumber])
 }
 
 model MealItem {

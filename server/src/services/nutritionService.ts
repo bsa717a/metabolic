@@ -5,6 +5,7 @@ import { n } from '../utils/numbers.js';
 import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { notifyMealActivity } from '../gamification/mealActivity.js';
+import { dedupeMealsByNumber } from '../utils/dedupeMealsByNumber.js';
 
 function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }) {
   return meal.items.length > 0 || n(meal.plannedCalories) > 0 || n(meal.actualCalories) > 0 || meal.status !== MealStatus.PLANNED;
@@ -39,7 +40,7 @@ export async function getMealsForDate(userId: string, date: string) {
     include: { items: true },
     orderBy: { mealNumber: 'asc' }
   });
-  return mealsForNutritionDisplay(meals);
+  return mealsForNutritionDisplay(dedupeMealsByNumber(meals));
 }
 
 async function resolvePlannedTime(mealNumber: number, plannedTime?: string | null) {
@@ -322,9 +323,9 @@ export async function copyMealFromPreviousDay(userId: string, mealId: string) {
       include: { meals: { where: { mealNumber: meal.mealNumber }, include: { items: true } } }
     });
 
-    if (!priorLog?.meals[0]) throw new Error('No prior meal found to copy');
-
-    const sourceMeal = priorLog.meals[0];
+    if (!priorLog) throw new Error('No prior meal found to copy');
+    const sourceMeal = dedupeMealsByNumber(priorLog.meals)[0];
+    if (!sourceMeal) throw new Error('No prior meal found to copy');
     const plannedItems = sourceMeal.items.filter((item) => item.type === MealItemType.PLANNED);
 
     await tx.mealItem.deleteMany({ where: { mealId, type: MealItemType.PLANNED } });
@@ -511,7 +512,7 @@ async function getSourceMealsForCopy(userId: string, sourceDate: string): Promis
     throw new Error('There is no plan on the selected day to copy.');
   }
 
-  return sourceLog.meals.map((meal) => ({
+  return dedupeMealsByNumber(sourceLog.meals).map((meal) => ({
     mealNumber: meal.mealNumber,
     name: meal.name,
     plannedTime: meal.plannedTime,
@@ -539,9 +540,11 @@ async function applySourceMealsToDailyLog(
   await prisma.$transaction(
     async (tx) => {
       for (const source of sourceMeals) {
-        let target = await tx.meal.findFirst({
-          where: { dailyLogId: log.id, mealNumber: source.mealNumber }
+        const matches = await tx.meal.findMany({
+          where: { dailyLogId: log.id, mealNumber: source.mealNumber },
+          include: { items: true }
         });
+        let target: { id: string } | undefined = dedupeMealsByNumber(matches)[0];
         if (!target) {
           target = await tx.meal.create({
             data: {
