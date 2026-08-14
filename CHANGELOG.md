@@ -7,6 +7,17 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.12.0](https://github.com/bsa717a/metabolic/compare/v0.11.0...v0.12.0) (2026-08-14)
+
+
+### Features
+
+* **dashboard:** add coach home layout and nutrition log tab ([9f97d2b](https://github.com/bsa717a/metabolic/commit/9f97d2bbe144b8ce1a524fd3023cb4fd228b92a9))
+* **exercise:** let users reorder exercises in custom workouts ([d592444](https://github.com/bsa717a/metabolic/commit/d5924446567062d9ef7d08a97a2d486b188666ad))
+* **exercise:** let users reorder exercises in custom workouts ([db7d374](https://github.com/bsa717a/metabolic/commit/db7d374bbe58a4791f51cccd8a20572776ee2537))
+* **nav:** add persistent mobile tabs for primary sections ([fbdd787](https://github.com/bsa717a/metabolic/commit/fbdd7877b7acc43e29f815158fdd338366d3b932))
+* **nav:** mobile tabs, coach home, and nutrition log ([9adedaa](https://github.com/bsa717a/metabolic/commit/9adedaad0322390f8d82d4b3875eef63b3058ab8))
+
 ## [0.11.0](https://github.com/bsa717a/metabolic/compare/v0.10.0...v0.11.0) (2026-08-14)
 
 
