@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Plus, Search, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Check, GripVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import type { ExerciseCatalogItem, ExercisePlanTemplate, ExerciseTemplateItem } from '../../types';
 import { api } from '../../services/api';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
@@ -17,6 +17,33 @@ function parseOptionalNumber(value: string): number | null {
   if (!trimmed) return null;
   const n = Number(trimmed);
   return Number.isFinite(n) ? n : null;
+}
+
+function reorderIds(ids: string[], fromId: string, toId: string) {
+  const fromIndex = ids.indexOf(fromId);
+  const toIndex = ids.indexOf(toId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return ids;
+  const next = [...ids];
+  next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, fromId);
+  return next;
+}
+
+function rowTargetId(clientY: number, orderedIds: string[], rowRefs: Map<string, HTMLElement>) {
+  for (const id of orderedIds) {
+    const el = rowRefs.get(id);
+    if (!el) continue;
+    const rect = el.getBoundingClientRect();
+    if (clientY >= rect.top && clientY <= rect.bottom) return id;
+  }
+  return orderedIds[orderedIds.length - 1] ?? null;
+}
+
+function reconcileOrderedIds(draggedIds: string[], currentIds: string[]) {
+  const currentSet = new Set(currentIds);
+  const kept = draggedIds.filter((id) => currentSet.has(id));
+  const keptSet = new Set(kept);
+  return [...kept, ...currentIds.filter((id) => !keptSet.has(id))];
 }
 
 /**
@@ -46,6 +73,15 @@ export function InlineWorkoutEditor({
   const [deleting, setDeleting] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [orderedIds, setOrderedIds] = useState<string[]>([]);
+  const rowRefs = useRef(new Map<string, HTMLElement>());
+  const orderedIdsRef = useRef<string[]>([]);
+  const activeIdRef = useRef<string | null>(null);
+  const onChangedRef = useRef(onChanged);
+  const workoutItemsRef = useRef<string[]>([]);
+  onChangedRef.current = onChanged;
+  workoutItemsRef.current = workout?.items.map((item) => item.id) ?? [];
 
   const [catalog, setCatalog] = useState<ExerciseCatalogItem[]>([]);
   const [query, setQuery] = useState('');
@@ -70,6 +106,68 @@ export function InlineWorkoutEditor({
     void load();
     api<ExerciseCatalogItem[]>('/api/exercises').then(setCatalog).catch(() => setCatalog([]));
   }, [load]);
+
+  useEffect(() => {
+    if (activeId) return;
+    const ids = workout?.items.map((item) => item.id) ?? [];
+    setOrderedIds(ids);
+    orderedIdsRef.current = ids;
+  }, [workout, activeId]);
+
+  useEffect(() => {
+    orderedIdsRef.current = orderedIds;
+  }, [orderedIds]);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  useEffect(() => {
+    if (!activeId) return;
+
+    function handlePointerMove(event: PointerEvent) {
+      const draggingId = activeIdRef.current;
+      if (!draggingId) return;
+      const targetId = rowTargetId(event.clientY, orderedIdsRef.current, rowRefs.current);
+      if (!targetId || targetId === draggingId) return;
+      setOrderedIds((current) => {
+        const next = reorderIds(current, draggingId, targetId);
+        orderedIdsRef.current = next;
+        return next;
+      });
+    }
+
+    async function finishDrag() {
+      const nextIds = reconcileOrderedIds(orderedIdsRef.current, workoutItemsRef.current);
+      orderedIdsRef.current = nextIds;
+      setOrderedIds(nextIds);
+      setActiveId(null);
+      activeIdRef.current = null;
+      if (nextIds.length === workoutItemsRef.current.length && nextIds.every((id, index) => id === workoutItemsRef.current[index])) {
+        return;
+      }
+      try {
+        const updated = await api<ExercisePlanTemplate>(endpoints.templateReorder(workoutId), {
+          method: 'POST',
+          body: JSON.stringify({ orderedIds: nextIds })
+        });
+        setWorkout(updated);
+        await onChangedRef.current();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to reorder exercises');
+        await load();
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointercancel', finishDrag);
+    };
+  }, [activeId, endpoints, load, workoutId]);
 
   const inWorkoutIds = useMemo(
     () => new Set(workout?.items.map((item) => item.exerciseId) ?? []),
@@ -261,7 +359,7 @@ export function InlineWorkoutEditor({
                   <li key={item.id}>
                     <button
                       type="button"
-                      disabled={busy || addingId != null}
+                      disabled={busy || addingId != null || activeId != null}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => void handleQuickAdd(item)}
                       className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-brand-green/10 disabled:opacity-60"
@@ -293,18 +391,37 @@ export function InlineWorkoutEditor({
             Empty workout — search above and tap an exercise to add it.
           </p>
         ) : (
+          <>
+          <p className="text-xs text-app-text-muted">Drag the handle to reorder exercises.</p>
           <ul className="space-y-2">
-            {workout.items.map((item, index) => (
-              <ExerciseRow
-                key={item.id}
-                index={index + 1}
-                item={item}
-                busy={removingId === item.id}
-                onRemove={() => void handleRemoveItem(item)}
-                onPatch={(patch) => void handlePatchItem(item, patch)}
-              />
-            ))}
+            {orderedIds
+              .map((itemId) => workout.items.find((item) => item.id === itemId))
+              .filter((item): item is ExerciseTemplateItem => Boolean(item))
+              .map((item, index) => (
+                <ExerciseRow
+                  key={item.id}
+                  index={index + 1}
+                  item={item}
+                  busy={removingId === item.id}
+                  dragging={activeId === item.id}
+                  listDragging={Boolean(activeId)}
+                  setRowRef={(node) => {
+                    if (node) rowRefs.current.set(item.id, node);
+                    else rowRefs.current.delete(item.id);
+                  }}
+                  onReorderPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    setActiveId(item.id);
+                    activeIdRef.current = item.id;
+                  }}
+                  onRemove={() => void handleRemoveItem(item)}
+                  onPatch={(patch) => void handlePatchItem(item, patch)}
+                />
+              ))}
           </ul>
+          </>
         )}
       </div>
 
@@ -333,12 +450,20 @@ function ExerciseRow({
   index,
   item,
   busy,
+  dragging,
+  listDragging,
+  setRowRef,
+  onReorderPointerDown,
   onRemove,
   onPatch
 }: {
   index: number;
   item: ExerciseTemplateItem;
   busy: boolean;
+  dragging: boolean;
+  listDragging: boolean;
+  setRowRef: (node: HTMLLIElement | null) => void;
+  onReorderPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
   onPatch: (patch: {
     sets?: number | null;
@@ -389,10 +514,25 @@ function ExerciseRow({
   }
 
   return (
-    <li className="rounded-2xl border border-app-border bg-app-surface px-3 py-2.5">
-      <div className="flex items-center gap-2">
+    <li
+      ref={setRowRef}
+      className={`rounded-2xl border bg-app-surface py-2.5 pl-1 pr-3 ${
+        dragging ? 'border-blue-400 ring-2 ring-blue-100' : 'border-app-border'
+      }`}
+    >
+      <div className="flex items-center gap-1">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Reorder ${item.exercise.name}`}
+          title="Drag to reorder"
+          className="flex shrink-0 touch-none cursor-grab items-center self-stretch rounded-lg px-1 text-app-text-muted hover:bg-app-muted hover:text-app-text active:cursor-grabbing"
+          onPointerDown={onReorderPointerDown}
+        >
+          <GripVertical size={18} />
+        </div>
         <span className="w-5 shrink-0 text-xs font-bold tabular-nums text-app-text-muted">{index}</span>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className={`flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-2 ${listDragging ? 'pointer-events-none select-none' : ''}`}>
           <p className="min-w-[7rem] flex-1 truncate text-sm font-semibold text-app-text">
             {item.exercise.name}
           </p>

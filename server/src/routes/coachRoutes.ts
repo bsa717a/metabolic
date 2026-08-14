@@ -68,6 +68,7 @@ import {
   getClientTemplate,
   getTemplateForActor as getExerciseTemplateForActor,
   listTemplatesForActor as listExerciseTemplatesForActor,
+  reorderClientTemplateItems,
   reorderTemplateItems,
   updateClientTemplate,
   updateClientTemplateItem,
@@ -1032,6 +1033,18 @@ export async function coachRoutes(app: FastifyInstance) {
       return await addClientTemplateItem(userId, id, parsed.data);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+    }
+  });
+
+  app.post('/api/coach/users/:userId/exercise-templates/:id/reorder', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, id } = request.params as { userId: string; id: string };
+    const parsed = exerciseTemplateReorderBody.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid reorder' });
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      return await reorderClientTemplateItems(userId, id, parsed.data.orderedIds);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to reorder exercises' });
     }
   });
 

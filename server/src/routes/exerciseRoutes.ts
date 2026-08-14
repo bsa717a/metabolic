@@ -28,6 +28,7 @@ import {
   getProgramDefaultTemplate,
   getTemplateForActor,
   listTemplatesForUser,
+  reorderTemplateItems,
   updateTemplate,
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
@@ -117,6 +118,8 @@ const templateExerciseItemUpdateBody = templateExerciseItemBody.omit({ exerciseI
   (body) => Object.keys(body).length > 0,
   { message: 'At least one field is required' }
 );
+
+const exerciseTemplateReorderBody = z.object({ orderedIds: z.array(z.string()).min(1) });
 
 async function scheduledExerciseOwnerForActor(actor: { id: string; role: Role }, id: string) {
   const item = await prisma.scheduledExercise.findFirst({ where: { id }, select: { userId: true } });
@@ -276,6 +279,18 @@ export async function exerciseRoutes(app: FastifyInstance) {
       return await addTemplateItem((request.params as { id: string }).id, parsed.data, request.appUser!);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+    }
+  });
+
+  app.post('/api/exercise-templates/:id/reorder', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = exerciseTemplateReorderBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid reorder' });
+    }
+    try {
+      return await reorderTemplateItems((request.params as { id: string }).id, parsed.data.orderedIds, request.appUser!);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to reorder exercises' });
     }
   });
 
