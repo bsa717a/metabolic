@@ -6,13 +6,7 @@ import { coachFabBottom } from '../../utils/floatingActionLayout';
 import { CoachChatModal } from './CoachChatModal';
 import { COACH_CHAT_QUICK_REPLIES } from './coachWelcomeMessage';
 
-export function CoachChatFab({
-  user,
-  nutritionMobileLayout
-}: {
-  user?: AppUser | null;
-  nutritionMobileLayout: boolean;
-}) {
+export function CoachChatFab({ user }: { user?: AppUser | null }) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [chatSessionKey, setChatSessionKey] = useState(0);
@@ -32,10 +26,10 @@ export function CoachChatFab({
           setOpen(true);
         }}
         style={{
-          bottom: coachFabBottom(nutritionMobileLayout),
+          bottom: coachFabBottom(),
           borderColor: coach.accent
         }}
-        className="fixed right-5 z-40 h-[6.5625rem] w-[6.5625rem] overflow-hidden rounded-full border-2 bg-app-surface shadow-lg transition hover:scale-105 hover:shadow-xl sm:right-6"
+        className="fixed right-5 z-40 size-16 overflow-hidden rounded-full border-2 bg-app-surface shadow-lg transition hover:scale-105 hover:shadow-xl sm:right-6 sm:size-[6.5625rem]"
       >
         <img
           src={coach.image}

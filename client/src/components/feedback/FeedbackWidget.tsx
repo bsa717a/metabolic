@@ -48,7 +48,7 @@ function selectedRecordFor(pathname: string, search: string): SelectedRecord | n
 
 const FEATURE_KEYS = Object.keys(FEATURE_MATRIX) as FeatureKey[];
 
-export function FeedbackWidget({ nutritionMobileLayout }: { nutritionMobileLayout: boolean }) {
+export function FeedbackWidget() {
   const { user, canAccess } = useEntitlements();
   const location = useLocation();
 
@@ -120,8 +120,7 @@ export function FeedbackWidget({ nutritionMobileLayout }: { nutritionMobileLayou
     }
   }
 
-  // FAB sits above the /nutrition mobile home bar and respects the safe area.
-  const fabBottom = feedbackFabBottom(nutritionMobileLayout);
+  const fabBottom = feedbackFabBottom();
 
   return (
     <>

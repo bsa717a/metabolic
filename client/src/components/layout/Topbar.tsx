@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LifeBuoy, LineChart, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -14,11 +14,7 @@ import { isAdminRole, isCoachRole } from '../../utils/roles';
 import { planLabel } from '../../utils/entitlements';
 
 const MOBILE_NAV_LINKS = [
-  ['/', 'Home', Gauge],
-  ['/nutrition', 'Nutrition', Apple],
   ['/program', 'Metabolic Blueprint', Target],
-  ['/exercise', 'Exercise', Dumbbell],
-  ['/progress', 'Progress', LineChart],
   ['/level-up', 'Level Up', TrendingUp],
   ['/virtual-coach', 'Virtual Coach', Sparkles],
 ] as const;
@@ -152,7 +148,7 @@ export function Topbar({
           {/* Mobile: M logo as nav trigger */}
           <button
             type="button"
-            aria-label="Open navigation menu"
+            aria-label="Open more pages"
             aria-haspopup="menu"
             aria-expanded={mobileMenuOpen}
             className="flex shrink-0 items-center gap-1 rounded-lg transition-opacity hover:opacity-80 sm:hidden"
@@ -357,7 +353,7 @@ export function Topbar({
           <nav
             className="absolute inset-x-0 top-full z-50 border-b border-app-border bg-app-surface shadow-lg sm:hidden"
             role="menu"
-            aria-label="Navigation menu"
+            aria-label="More pages"
             onClick={(event) => event.stopPropagation()}
           >
             <ul className="py-2">
@@ -365,7 +361,6 @@ export function Topbar({
                 <li key={to}>
                   <NavLink
                     to={to}
-                    end={to === '/'}
                     role="menuitem"
                     className={({ isActive }) =>
                       clsx(
