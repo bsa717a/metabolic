@@ -8,6 +8,7 @@ import { WaterBottle } from '../hydration/WaterBottle';
 import { LevelUpTopbarDrawer } from './LevelUpTopbarDrawer';
 import { ProgressRing } from '../gamification/ProgressRing';
 import { GUIDED_JOURNEY_UPDATED_EVENT } from '../../lib/guidedJourneyEvents';
+import { OPEN_HYDRATION_DRAWER_EVENT } from '../hydration/hydrationEvents';
 import { api, todayDateParam } from '../../services/api';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { GuidedJourneyState } from '../../types/guidedJourney';
@@ -153,6 +154,15 @@ export function TopbarGamification() {
       window.removeEventListener('focus', loadJourney);
     };
   }, [load, loadJourney]);
+
+  useEffect(() => {
+    function openDrawer() {
+      setLevelUpOpen(false);
+      setHydrationOpen(true);
+    }
+    window.addEventListener(OPEN_HYDRATION_DRAWER_EVENT, openDrawer);
+    return () => window.removeEventListener(OPEN_HYDRATION_DRAWER_EVENT, openDrawer);
+  }, []);
 
   const view = getTutorialGamificationData(data, demoMode);
   if (!view) return null;

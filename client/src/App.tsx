@@ -8,6 +8,7 @@ import { AppShell } from './components/layout/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProgramPage } from './pages/ProgramPage';
 import { NutritionPage } from './pages/NutritionPage';
+import { NutritionLogPage } from './pages/NutritionLogPage';
 import { ExerciseAreaLayout } from './pages/exercise/ExerciseAreaLayout';
 import { TodayTab } from './pages/exercise/TodayTab';
 import { PlanTab } from './pages/exercise/PlanTab';
@@ -307,7 +308,8 @@ export default function App() {
             <Route path="store" element={<StorePage user={appUser} />} />
             <Route index element={<DashboardPage user={appUser} />} />
             <Route path="program" element={<ProgramPage user={appUser} />} />
-            <Route path="nutrition" element={<NutritionPage />} />
+            <Route path="nutrition" element={<NutritionLogPage />} />
+            <Route path="nutrition/plan" element={<NutritionPage />} />
             <Route path="exercise" element={<ExerciseAreaLayout />}>
               <Route index element={<TodayTab />} />
               <Route path="plan" element={<PlanTab />} />

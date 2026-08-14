@@ -52,3 +52,20 @@ export function buildCoachChatOpeningMessage(firstName: string | null | undefine
   const motivation = mealProgressMotivation(meals);
   return motivation ? `${greeting}\n\n${motivation}` : greeting;
 }
+
+export function buildCoachHomeBubble(firstName: string | null | undefined, meals: Meal[]) {
+  const name = firstName?.trim();
+  const { logged, planned } = countMealProgress(meals);
+  if (planned > 0 && logged >= planned) {
+    return name
+      ? `You're on track, ${name}. Every meal is logged.`
+      : `You're on track. Every meal is logged.`;
+  }
+  if (planned > 0) {
+    const remaining = planned - logged;
+    return name
+      ? `You're on track, ${name}. Let's stay consistent today and finish ${remaining === planned ? `all ${planned}` : `the remaining`} meal${remaining === 1 ? '' : 's'}.`
+      : `Let's stay consistent today and finish today's meals.`;
+  }
+  return name ? `Let's stay consistent today, ${name}.` : `Let's stay consistent today.`;
+}

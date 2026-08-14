@@ -17,6 +17,8 @@ import { useTutorial } from '../components/tutorial/TutorialContext';
 import { AUTO_START_DASHBOARD_TUTORIAL } from '../components/tutorial/tutorialPresenterTimeline';
 import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useDashboardLayout } from '../utils/dashboardLayoutPreference';
+import { CoachHomeDashboard } from '../components/dashboard/coachHome/CoachHomeDashboard';
 
 function MacroDonut({
   label,
@@ -37,7 +39,7 @@ function MacroDonut({
 
   return (
     <Link
-      to="/nutrition?targets=1"
+      to="/nutrition/plan?targets=1"
       className="block rounded-xl text-center transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
       aria-label={`Adjust ${label} target`}
     >
@@ -88,6 +90,7 @@ function RemainingMacrosDisplay({
 
 export function DashboardPage({ user }: { user?: AppUser | null }) {
   const location = useLocation();
+  const [dashboardLayout] = useDashboardLayout();
   const { startTour, hasAutoStarted, isActive } = useTutorial();
   useWakeLock(true);
   const [data, setData] = useState<Dashboard | null>(null);
@@ -157,7 +160,15 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
 
   useEffect(() => {
     if (!AUTO_START_DASHBOARD_TUTORIAL) return;
-    if (loading || error || !data?.program || user?.dashboardTutorialCompletedAt || hasAutoStarted || isActive) {
+    if (
+      dashboardLayout === 'coachHome' ||
+      loading ||
+      error ||
+      !data?.program ||
+      user?.dashboardTutorialCompletedAt ||
+      hasAutoStarted ||
+      isActive
+    ) {
       return;
     }
 
@@ -173,7 +184,8 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
     user?.dashboardTutorialCompletedAt,
     hasAutoStarted,
     isActive,
-    startTour
+    startTour,
+    dashboardLayout
   ]);
 
   if (loading) return <p className="text-app-text-muted">Loading dashboard...</p>;
@@ -204,6 +216,10 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
         </Link>
       </div>
     );
+  }
+
+  if (dashboardLayout === 'coachHome') {
+    return <CoachHomeDashboard user={user} data={data} />;
   }
 
   return (

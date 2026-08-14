@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { Apple, ChevronDown, CreditCard, Dumbbell, Gauge, LayoutDashboard, LifeBuoy, LineChart, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -12,13 +12,10 @@ import { ColorThemePicker } from './ColorThemePicker';
 import { ThemeToggle } from './ThemeToggle';
 import { isAdminRole, isCoachRole } from '../../utils/roles';
 import { planLabel } from '../../utils/entitlements';
+import { useDashboardLayout } from '../../utils/dashboardLayoutPreference';
 
 const MOBILE_NAV_LINKS = [
-  ['/', 'Home', Gauge],
-  ['/nutrition', 'Nutrition', Apple],
   ['/program', 'Metabolic Blueprint', Target],
-  ['/exercise', 'Exercise', Dumbbell],
-  ['/progress', 'Progress', LineChart],
   ['/level-up', 'Level Up', TrendingUp],
   ['/virtual-coach', 'Virtual Coach', Sparkles],
 ] as const;
@@ -67,6 +64,7 @@ export function Topbar({
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const [dashboardLayout, setDashboardLayout] = useDashboardLayout();
   const isDashboard = location.pathname === '/';
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -152,7 +150,7 @@ export function Topbar({
           {/* Mobile: M logo as nav trigger */}
           <button
             type="button"
-            aria-label="Open navigation menu"
+            aria-label="Open more pages"
             aria-haspopup="menu"
             aria-expanded={mobileMenuOpen}
             className="flex shrink-0 items-center gap-1 rounded-lg transition-opacity hover:opacity-80 sm:hidden"
@@ -313,6 +311,14 @@ export function Topbar({
                       }}
                     />
                   ) : null}
+                  <ProfileMenuItem
+                    label={dashboardLayout === 'coachHome' ? 'Dashboard: Classic' : 'Dashboard: Coach Home'}
+                    icon={LayoutDashboard}
+                    onClick={() => {
+                      setDashboardLayout(dashboardLayout === 'coachHome' ? 'classic' : 'coachHome');
+                      closeProfileMenu();
+                    }}
+                  />
                   <li className="border-t border-app-border px-4 py-3">
                     <ColorThemePicker />
                   </li>
@@ -357,7 +363,7 @@ export function Topbar({
           <nav
             className="absolute inset-x-0 top-full z-50 border-b border-app-border bg-app-surface shadow-lg sm:hidden"
             role="menu"
-            aria-label="Navigation menu"
+            aria-label="More pages"
             onClick={(event) => event.stopPropagation()}
           >
             <ul className="py-2">
@@ -365,7 +371,6 @@ export function Topbar({
                 <li key={to}>
                   <NavLink
                     to={to}
-                    end={to === '/'}
                     role="menuitem"
                     className={({ isActive }) =>
                       clsx(

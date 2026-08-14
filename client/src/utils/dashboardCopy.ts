@@ -65,3 +65,17 @@ export function pickDashboardCopy(firstName?: string) {
     subtitle: pickRandom(TAGLINES)
   };
 }
+
+export function pickCoachHomeGreeting(firstName?: string) {
+  const name = firstName?.trim() || 'there';
+  const period = timeOfDay();
+  const greeting =
+    period === 'morning'
+      ? 'Good morning'
+      : period === 'afternoon'
+        ? 'Good afternoon'
+        : period === 'evening'
+          ? 'Good evening'
+          : 'Hey';
+  return { greeting, name };
+}

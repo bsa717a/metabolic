@@ -48,7 +48,7 @@ function selectedRecordFor(pathname: string, search: string): SelectedRecord | n
 
 const FEATURE_KEYS = Object.keys(FEATURE_MATRIX) as FeatureKey[];
 
-export function FeedbackWidget({ nutritionMobileLayout }: { nutritionMobileLayout: boolean }) {
+export function FeedbackWidget() {
   const { user, canAccess } = useEntitlements();
   const location = useLocation();
 
@@ -120,8 +120,7 @@ export function FeedbackWidget({ nutritionMobileLayout }: { nutritionMobileLayou
     }
   }
 
-  // FAB sits above the /nutrition mobile home bar and respects the safe area.
-  const fabBottom = feedbackFabBottom(nutritionMobileLayout);
+  const fabBottom = feedbackFabBottom();
 
   return (
     <>
@@ -131,7 +130,7 @@ export function FeedbackWidget({ nutritionMobileLayout }: { nutritionMobileLayou
           aria-label="Send feedback"
           onClick={() => setOpen(true)}
           style={{ bottom: fabBottom }}
-          className="fixed right-5 z-40 flex h-12 items-center gap-2 rounded-full bg-brand-green px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-deep sm:right-6"
+          className="fixed left-5 z-40 flex h-12 items-center gap-2 rounded-full bg-brand-green px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-deep sm:left-auto sm:right-6"
         >
           <MessageSquarePlus className="h-5 w-5" />
           <span className="hidden sm:inline">Feedback</span>
