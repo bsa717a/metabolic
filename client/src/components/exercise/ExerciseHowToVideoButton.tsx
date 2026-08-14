@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Play } from 'lucide-react';
 import { Card } from '../ui/Card';
+import { setTransientAudioSession } from '../../utils/sessionCues';
 
 export function ExerciseHowToVideoButton({
   name,
@@ -16,6 +17,8 @@ export function ExerciseHowToVideoButton({
 
   useEffect(() => {
     if (!open) return;
+
+    setTransientAudioSession();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') setOpen(false);
@@ -58,7 +61,14 @@ export function ExerciseHowToVideoButton({
                   Close
                 </button>
               </div>
-              <video controls playsInline autoPlay className="w-full rounded-xl bg-black" src={videoUrl}>
+              <video
+                controls
+                playsInline
+                autoPlay
+                muted
+                className="w-full rounded-xl bg-black"
+                src={videoUrl}
+              >
                 Your browser does not support video playback.
               </video>
             </Card>

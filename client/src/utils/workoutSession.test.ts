@@ -1,13 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ScheduledExercise } from '../types';
 import {
+  SESSION_PREFS_KEY,
   SESSION_STORAGE_KEY,
   actualsForExercise,
   clearSession,
   hasStoredSessionForDate,
   loadSession,
+  loadSessionPrefs,
   remainingMs,
   saveSession,
+  saveSessionPrefs,
   sessionReducer,
   sessionSummary,
   startSession,
@@ -297,6 +300,24 @@ describe('persistence', () => {
     expect(loadSession('2026-07-20')).toEqual(sample);
     expect(loadSession('2026-07-21')).toBeNull();
   });
+
+  it('round-trips session prefs and clamps rest to the 15s step', () => {
+    saveSessionPrefs({ sound: false, restSetSec: 60, restExerciseSec: 30 });
+    expect(loadSessionPrefs()).toEqual({ sound: false, restSetSec: 60, restExerciseSec: 30 });
+
+    const storage = (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage;
+    storage.setItem(
+      SESSION_PREFS_KEY,
+      JSON.stringify({ sound: true, restSetSec: 22, restExerciseSec: 400 })
+    );
+    expect(loadSessionPrefs()).toEqual({ sound: true, restSetSec: 15, restExerciseSec: 300 });
+  });
+
+  it('ignores malformed prefs', () => {
+    const storage = (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage;
+    storage.setItem(SESSION_PREFS_KEY, '{not-json');
+    expect(loadSessionPrefs()).toEqual({});
+  });
 });
 
 describe('empty plan', () => {
@@ -313,5 +334,32 @@ describe('MARK_SYNCED', () => {
     s = sessionReducer(s, { type: 'SKIP_EXERCISE', nowMs: 2000 });
     s = sessionReducer(s, { type: 'MARK_SYNCED', id: 'a', outcome: 'skipped' });
     expect(s.syncedOutcomes.a).toBe('skipped');
+  });
+});
+
+describe('SET_SOUND', () => {
+  it('toggles the session sound setting', () => {
+    let s = startSession('d', [ex('a', 'PLANNED', { sets: 1 })], 1000);
+    expect(s.settings.sound).toBe(true);
+    s = sessionReducer(s, { type: 'SET_SOUND', sound: false });
+    expect(s.settings.sound).toBe(false);
+    expect(s.phase).toBe('exercise');
+    s = sessionReducer(s, { type: 'SET_SOUND', sound: true });
+    expect(s.settings.sound).toBe(true);
+  });
+});
+
+describe('startSession settings', () => {
+  it('seeds sound and rest intervals from prefs', () => {
+    const s = startSession('d', [ex('a', 'PLANNED', { sets: 2 })], 1000, {
+      sound: false,
+      restSetSec: 60,
+      restExerciseSec: 60
+    });
+    expect(s.settings.sound).toBe(false);
+    expect(s.settings.restSetSec).toBe(60);
+    expect(s.settings.restExerciseSec).toBe(60);
+    const rested = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 2000 });
+    expect(rested.restEndsAtMs).toBe(2000 + 60_000);
   });
 });

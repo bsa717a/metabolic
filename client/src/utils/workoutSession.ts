@@ -8,6 +8,7 @@ import type { ScheduledExercise } from '../types';
  */
 
 export const SESSION_STORAGE_KEY = 'metabolic.exerciseSession.v1';
+export const SESSION_PREFS_KEY = 'metabolic.exerciseSession.prefs.v1';
 export const SESSION_VERSION = 1;
 
 export const DEFAULT_SESSION_SETTINGS: WorkoutSessionSettings = {
@@ -98,6 +99,7 @@ export type SessionAction =
   | { type: 'RESUME'; nowMs: number }
   | { type: 'RECONCILE'; exercises: ScheduledExercise[]; nowMs: number }
   | { type: 'MARK_SYNCED'; id: string; outcome: 'done' | 'skipped' }
+  | { type: 'SET_SOUND'; sound: boolean }
   | { type: 'FINISH'; nowMs: number };
 
 // ---------------------------------------------------------------------------
@@ -382,6 +384,9 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
     case 'RECONCILE':
       return reconcile(state, action.exercises, action.nowMs);
 
+    case 'SET_SOUND':
+      return { ...state, settings: { ...state.settings, sound: action.sound } };
+
     case 'FINISH':
       return enterSummary(state, action.nowMs);
 
@@ -565,8 +570,46 @@ export function saveSession(state: WorkoutSessionState): void {
 function normalizeLoadedSession(parsed: WorkoutSessionState): WorkoutSessionState {
   return {
     ...parsed,
-    syncedOutcomes: parsed.syncedOutcomes ?? {}
+    syncedOutcomes: parsed.syncedOutcomes ?? {},
+    settings: {
+      ...DEFAULT_SESSION_SETTINGS,
+      ...parsed.settings,
+      sound: parsed.settings?.sound ?? DEFAULT_SESSION_SETTINGS.sound
+    }
   };
+}
+
+/** Last-used sound + rest intervals, stored separately from the per-date session. */
+export function loadSessionPrefs(): Partial<WorkoutSessionSettings> {
+  try {
+    const raw = window.localStorage.getItem(SESSION_PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<WorkoutSessionSettings>;
+    const prefs: Partial<WorkoutSessionSettings> = {};
+    if (typeof parsed.sound === 'boolean') prefs.sound = parsed.sound;
+    if (typeof parsed.restSetSec === 'number') prefs.restSetSec = clampRestSec(parsed.restSetSec);
+    if (typeof parsed.restExerciseSec === 'number') {
+      prefs.restExerciseSec = clampRestSec(parsed.restExerciseSec);
+    }
+    return prefs;
+  } catch {
+    return {};
+  }
+}
+
+export function saveSessionPrefs(settings: WorkoutSessionSettings): void {
+  try {
+    window.localStorage.setItem(
+      SESSION_PREFS_KEY,
+      JSON.stringify({
+        sound: settings.sound,
+        restSetSec: settings.restSetSec,
+        restExerciseSec: settings.restExerciseSec
+      })
+    );
+  } catch {
+    // ignore quota / unavailable storage
+  }
 }
 
 export function loadSession(date?: string): WorkoutSessionState | null {

@@ -4,14 +4,19 @@ import { fetchExercisesForDates } from '../utils/planExportData';
 import {
   actualsForExercise,
   loadSession,
+  loadSessionPrefs,
   remainingMs,
   saveSession,
+  saveSessionPrefs,
   sessionReducer,
   startSession,
   type WorkoutSessionState
 } from '../utils/workoutSession';
-import { restEndCue } from '../utils/sessionCues';
+import { countdownTick, restEndCue } from '../utils/sessionCues';
 import { useNow } from './useNow';
+
+const COUNTDOWN_MARKS_MS = [3000, 2000, 1000] as const;
+const AUTO_START_AFTER_GO_MS = 800;
 
 export type SessionEvent =
   | { type: 'session_started'; date: string }
@@ -62,7 +67,8 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
   const now = useNow(500, Boolean(state) && state?.phase !== 'summary');
   const syncedRef = useRef<Record<string, 'done' | 'skipped'>>({});
   const pendingSyncRef = useRef<Set<string>>(new Set());
-  const cueFiredRef = useRef<number | null>(null);
+  const cueFiredRef = useRef<Set<string>>(new Set());
+  const autoStartTimeoutRef = useRef<number | null>(null);
   const onEventRef = useRef(onEvent);
   const [syncTick, setSyncTick] = useState(0);
   useEffect(() => {
@@ -106,7 +112,7 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
             return sessionReducer(prev, { type: 'RECONCILE', exercises, nowMs: Date.now() });
           }
           onEventRef.current?.({ type: 'session_started', date });
-          return startSession(date, exercises, Date.now());
+          return startSession(date, exercises, Date.now(), loadSessionPrefs());
         });
       } catch (error) {
         if (!cancelled) {
@@ -125,6 +131,10 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
   // Persist on every change (date-scoped key — safe across `?date=` switches).
   useEffect(() => {
     if (state) saveSession(state);
+  }, [state]);
+
+  useEffect(() => {
+    if (state) saveSessionPrefs(state.settings);
   }, [state]);
 
   // Mirror completions/skips to the server exactly once each. Only mark synced after the API
@@ -179,51 +189,83 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     if (!anyPending) setSyncError(null);
   }, [state, syncTick]);
 
-  // End cue + between-set auto-start. Prefer a precise setTimeout, but also
-  // re-check from absolute remaining via `now` so a backgrounded/throttled tab
-  // still fires when the deadline has passed (useNow refreshes on focus).
+  // Drop a pending between-set auto-start if this rest phase ends another way.
+  useEffect(() => {
+    return () => {
+      if (autoStartTimeoutRef.current != null) {
+        window.clearTimeout(autoStartTimeoutRef.current);
+        autoStartTimeoutRef.current = null;
+      }
+    };
+  }, [state?.phaseStartedAtMs]);
+
+  // 3-2-1 ticks + GO cue. Prefer precise setTimeouts; also re-check from
+  // absolute remaining via `now` so a backgrounded tab still fires GO.
+  // Missed ticks are skipped (no catch-up beeps). Between-set auto-start
+  // waits a short GO beat so the flash is visible.
   useEffect(() => {
     if (!state || state.phase === 'summary') return;
     if (state.pausedRemainingMs != null) return;
 
-    const endsAtMs =
-      state.phase === 'rest'
-        ? state.restEndsAtMs
-        : state.durationEndsAtMs;
+    const endsAtMs = state.phase === 'rest' ? state.restEndsAtMs : state.durationEndsAtMs;
     if (endsAtMs == null) return;
 
     const phaseKey = state.phaseStartedAtMs;
     const sound = state.settings.sound;
     const autoStartNextSet = state.phase === 'rest' && state.currentSet > 1;
+    const timeouts: number[] = [];
 
-    const fire = () => {
-      if (cueFiredRef.current === phaseKey) return;
-      cueFiredRef.current = phaseKey;
-      restEndCue(sound);
-      if (autoStartNextSet) {
+    const fireTick = (sec: 1 | 2 | 3) => {
+      const key = `${phaseKey}:t${sec}`;
+      if (cueFiredRef.current.has(key)) return;
+      cueFiredRef.current.add(key);
+      countdownTick(sound);
+    };
+
+    const scheduleAutoStart = (delayMs: number) => {
+      if (!autoStartNextSet || autoStartTimeoutRef.current != null) return;
+      autoStartTimeoutRef.current = window.setTimeout(() => {
+        autoStartTimeoutRef.current = null;
         setState((prev) => {
           if (!prev || prev.phase !== 'rest') return prev;
           if (prev.phaseStartedAtMs !== phaseKey) return prev;
           if (prev.currentSet <= 1) return prev;
           return sessionReducer(prev, { type: 'SKIP_REST', nowMs: Date.now() });
         });
-      }
+      }, delayMs);
     };
 
-    // Absolute check covers backgrounded tabs where setTimeout was frozen.
-    if (remainingMs(state, now) === 0) {
-      fire();
+    const fireGo = () => {
+      const key = `${phaseKey}:go`;
+      const already = cueFiredRef.current.has(key);
+      if (!already) {
+        cueFiredRef.current.add(key);
+        restEndCue(sound);
+      }
+      // Reschedule if the GO beat timeout was cleared (date switch / remount)
+      // while this rest is still showing "Starting next set…".
+      scheduleAutoStart(already ? 0 : AUTO_START_AFTER_GO_MS);
+    };
+
+    const remaining = remainingMs(state, now);
+    if (remaining === 0) {
+      fireGo();
       return;
     }
 
-    const delay = endsAtMs - Date.now();
-    if (delay <= 0) {
-      fire();
-      return;
+    const scheduledAt = Date.now();
+    for (const markMs of COUNTDOWN_MARKS_MS) {
+      const delay = endsAtMs - markMs - scheduledAt;
+      if (delay > 0) {
+        const sec = (markMs / 1000) as 1 | 2 | 3;
+        timeouts.push(window.setTimeout(() => fireTick(sec), delay));
+      }
     }
+    timeouts.push(window.setTimeout(fireGo, Math.max(0, endsAtMs - scheduledAt)));
 
-    const id = window.setTimeout(fire, delay);
-    return () => window.clearTimeout(id);
+    return () => {
+      for (const id of timeouts) window.clearTimeout(id);
+    };
   }, [state, now]);
 
   const dispatch = useCallback((action: Parameters<typeof sessionReducer>[1]) => {
@@ -257,6 +299,10 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
   );
   const pause = useCallback(() => dispatch({ type: 'PAUSE', nowMs: Date.now() }), [dispatch]);
   const resume = useCallback(() => dispatch({ type: 'RESUME', nowMs: Date.now() }), [dispatch]);
+  const setSound = useCallback(
+    (sound: boolean) => dispatch({ type: 'SET_SOUND', sound }),
+    [dispatch]
+  );
   const finish = useCallback(() => {
     onEventRef.current?.({ type: 'session_finished' });
     dispatch({ type: 'FINISH', nowMs: Date.now() });
@@ -278,6 +324,7 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     adjustRest,
     pause,
     resume,
+    setSound,
     finish
   };
 }

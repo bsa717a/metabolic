@@ -1,10 +1,13 @@
 import { Minus, Pause, Play, Plus, SkipForward } from 'lucide-react';
+import { clsx } from 'clsx';
 import { ExerciseHowToVideoButton } from '../ExerciseHowToVideoButton';
 import { formatPlan } from '../../../utils/exerciseFormat';
-import { repsForSet } from '../../../utils/repSchemes';
+import { repsForSet, repSchemeParts } from '../../../utils/repSchemes';
+import { SessionRepScheme } from './SessionRepScheme';
 import type { PerExerciseState, SessionExerciseMeta } from '../../../utils/workoutSession';
 import { hasSets, isDurationBased, totalSets } from '../../../utils/workoutSession';
-import { formatClock } from './format';
+import { timerCueKind } from './format';
+import { SessionTimerClock } from './SessionTimerCue';
 
 function Stepper({
   label,
@@ -91,6 +94,9 @@ export function SessionExerciseCard({
         ? 'Complete exercise'
         : 'Complete set'
       : 'Mark complete';
+  const durationCue = durationBased
+    ? timerCueKind(durationRemainingMs ?? durationTotalMs, paused)
+    : 'idle';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -101,9 +107,21 @@ export function SessionExerciseCard({
           )}
           <h2 className="mt-1 text-4xl font-bold leading-tight text-white sm:text-5xl">{meta.name}</h2>
           <p className="mt-2 text-lg font-medium text-white/70">
-            {setBased ? `Set ${currentSet} of ${total} · ` : ''}
-            {formatPlan(meta)}
+            {setBased
+              ? [
+                  `Set ${currentSet} of ${total}`,
+                  repSchemeParts(meta.reps).length <= 1 && plannedReps > 0 ? `${plannedReps} reps` : null,
+                  meta.weight != null ? `${meta.weight} lb` : null
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : formatPlan(meta)}
           </p>
+          {setBased && (
+            <div className="mt-3">
+              <SessionRepScheme reps={meta.reps} currentSet={currentSet} align="start" />
+            </div>
+          )}
         </div>
         {meta.howToVideoUrl && (
           <div className="shrink-0 rounded-xl bg-white/10">
@@ -120,9 +138,12 @@ export function SessionExerciseCard({
 
       {durationBased ? (
         <div className="flex shrink-0 flex-col items-center gap-3">
-          <div className="text-6xl font-bold tabular-nums text-white sm:text-7xl">
-            {formatClock(durationRemainingMs ?? durationTotalMs)}
-          </div>
+          <SessionTimerClock
+            remainingMs={durationRemainingMs ?? durationTotalMs}
+            paused={paused}
+            goLabel="Time"
+            size="duration"
+          />
           <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
             <div
               className="h-full rounded-full bg-emerald-400 transition-all"
@@ -153,7 +174,12 @@ export function SessionExerciseCard({
 
       <button
         type="button"
-        className="flex min-h-[12rem] w-full flex-1 items-center justify-center rounded-3xl bg-emerald-500 px-4 py-8 text-3xl font-bold text-white shadow-lg active:bg-emerald-600 sm:min-h-[16rem] sm:text-4xl"
+        className={clsx(
+          'relative z-40 flex min-h-[12rem] w-full flex-1 items-center justify-center rounded-3xl px-4 py-8 text-3xl font-bold shadow-lg sm:min-h-[16rem] sm:text-4xl',
+          durationCue === 'go'
+            ? 'bg-slate-950 text-white active:bg-slate-900'
+            : 'bg-emerald-500 text-white active:bg-emerald-600'
+        )}
         onClick={onCompleteSet}
       >
         {completeLabel}
