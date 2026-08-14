@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { Volume2, VolumeX, X } from 'lucide-react';
+import { clsx } from 'clsx';
 import { todayKey } from '../services/api';
 import { useWorkoutSession } from '../hooks/useWorkoutSession';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -10,6 +11,7 @@ import { SessionProgressBar } from '../components/exercise/session/SessionProgre
 import { SessionExerciseCard } from '../components/exercise/session/SessionExerciseCard';
 import { SessionRestTimer } from '../components/exercise/session/SessionRestTimer';
 import { SessionSummary } from '../components/exercise/session/SessionSummary';
+import { timerCueKind } from '../components/exercise/session/format';
 
 export function WorkoutSessionPage() {
   const [searchParams] = useSearchParams();
@@ -23,6 +25,14 @@ export function WorkoutSessionPage() {
 
   const active = Boolean(state) && state?.phase !== 'summary';
   useWakeLock(active);
+
+  const timerRemaining = remaining ?? 0;
+  const timerPaused = state?.pausedRemainingMs != null;
+  const hasTimer =
+    state != null &&
+    ((state.phase === 'rest' && state.restEndsAtMs != null) ||
+      (state.phase === 'exercise' && state.durationEndsAtMs != null));
+  const cueGo = hasTimer && timerCueKind(timerRemaining, timerPaused) === 'go';
 
   // Warn before leaving mid-workout (refresh / close).
   useEffect(() => {
@@ -89,11 +99,17 @@ export function WorkoutSessionPage() {
 
   const summaryData = state ? sessionSummary(state, now) : null;
   const meta = state ? currentMeta(state) : null;
+  const soundOn = state?.settings.sound ?? true;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-slate-950 px-5 pb-6 pt-5 text-white">
+    <div
+      className={clsx(
+        'flex min-h-dvh flex-col px-5 pb-6 pt-5 text-white',
+        cueGo ? 'animate-session-go-flash bg-emerald-500' : 'bg-slate-950'
+      )}
+    >
       {state && state.phase !== 'summary' && (
-        <div className="flex items-start gap-4">
+        <div className="relative z-40 flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <SessionProgressBar
               total={state.order.length}
@@ -103,6 +119,19 @@ export function WorkoutSessionPage() {
               }
             />
           </div>
+          <button
+            type="button"
+            aria-label={soundOn ? 'Mute workout cues' : 'Unmute workout cues'}
+            aria-pressed={!soundOn}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-white/80 active:bg-white/20"
+            onClick={() => {
+              const next = !soundOn;
+              session.setSound(next);
+              if (next) primeAudio();
+            }}
+          >
+            {soundOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+          </button>
           <button
             type="button"
             aria-label="End workout"
@@ -148,8 +177,12 @@ export function WorkoutSessionPage() {
             }
             upNext={meta}
             upNextIsSameExercise={state.currentSet > 1}
+            currentSet={state.currentSet}
+            paused={state.pausedRemainingMs != null}
             onSkip={prime(session.skipRest)}
             onAdjustRest={session.adjustRest}
+            onPause={session.pause}
+            onResume={session.resume}
           />
         )}
 

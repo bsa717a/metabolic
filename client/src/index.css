@@ -300,6 +300,27 @@ select {
   outline-offset: 0;
 }
 
+@keyframes session-go-flash {
+  0%,
+  18%,
+  36% {
+    background-color: #020617;
+  }
+  6%,
+  24%,
+  42% {
+    background-color: #34d399;
+  }
+  55%,
+  100% {
+    background-color: #10b981;
+  }
+}
+
+.animate-session-go-flash {
+  animation: session-go-flash 1.15s ease-in-out both;
+}
+
 @keyframes badge-zoom-spin {
   0% {
     opacity: 0;
@@ -337,7 +358,8 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-badge-zoom-spin,
-  .animate-badge-content-rise {
+  .animate-badge-content-rise,
+  .animate-session-go-flash {
     animation: none;
   }
 
