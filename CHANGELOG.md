@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.10.0](https://github.com/bsa717a/metabolic/compare/v0.9.0...v0.10.0) (2026-08-14)
+
+
+### Features
+
+* **admin:** style-first meal card editor ([f27bd00](https://github.com/bsa717a/metabolic/commit/f27bd00dab1bf5ac0f0cae87d09a9e935c0f23f3))
+* **admin:** style-first meal card editor with step visibility ([c37ad44](https://github.com/bsa717a/metabolic/commit/c37ad441c28dcf5e3e00cab6d02ff6cd6787ebd3))
+* **exercise:** keep workout cues from stopping music ([917d897](https://github.com/bsa717a/metabolic/commit/917d897808421d42be33bfdf6e2fedf77afad016))
+* **exercise:** keep workout cues from stopping music ([fde7664](https://github.com/bsa717a/metabolic/commit/fde766477c6258b3d79af0ae00910c14755449af))
+
 ## [0.9.0](https://github.com/bsa717a/metabolic/compare/v0.8.0...v0.9.0) (2026-08-11)
 
 
