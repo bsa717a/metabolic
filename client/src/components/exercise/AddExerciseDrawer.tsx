@@ -8,6 +8,7 @@ import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
 import { RepSchemeSelect } from './RepSchemeSelect';
 import { SpeedSchemeSelect } from './SpeedSchemeSelect';
+import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exerciseCatalogFilter';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -76,6 +77,7 @@ function AddExerciseDrawerContent({
 }) {
   const [catalog, setCatalog] = useState<ExerciseCatalogItem[]>([]);
   const [query, setQuery] = useState('');
+  const [hideGym, setHideGym] = useState(false);
   const [selected, setSelected] = useState<ExerciseCatalogItem | null>(null);
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState<string | null>(null);
@@ -114,7 +116,10 @@ function AddExerciseDrawerContent({
     setBodyPart(item.bodyPart ?? '');
   }
 
-  const filtered = catalog.filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = filterExerciseCatalog(catalog, { query, hideGym });
+  const visibleAiItems = (aiResults?.items ?? []).filter(
+    (item) => !(hideGym && item.source === 'existing' && exerciseRequiresGym(item.exercise))
+  );
 
   async function lookupWithAi() {
     const input = aiQuery.trim();
@@ -214,6 +219,10 @@ function AddExerciseDrawerContent({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
+        <label className="flex items-center gap-1.5 text-xs text-app-text-muted">
+          <input type="checkbox" checked={hideGym} onChange={(event) => setHideGym(event.target.checked)} />
+          Hide gym exercises
+        </label>
         <ul className="max-h-[min(45vh,18rem)] space-y-2 overflow-y-auto">
           {filtered.map((item) => {
             const isSelected = selected?.id === item.id;
@@ -231,6 +240,7 @@ function AddExerciseDrawerContent({
                   <span className="font-semibold">{item.name}</span>
                   {item.bodyPart && <span className="ml-2 text-app-text-muted">{item.bodyPart}</span>}
                   {item.category && <span className="ml-2 text-app-text-muted">{item.category}</span>}
+                  {exerciseRequiresGym(item) && <span className="ml-2 text-xs uppercase text-app-text-muted">Gym</span>}
                 </button>
               </li>
             );
@@ -349,9 +359,9 @@ function AddExerciseDrawerContent({
                 {aiLoading ? 'Searching…' : 'Search with AI'}
               </Button>
               {aiError && <p className="mt-2 text-sm text-red-600">{aiError}</p>}
-              {aiResults && aiResults.items.length > 0 && (
+              {aiResults && visibleAiItems.length > 0 && (
                 <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto">
-                  {aiResults.items.map((item) =>
+                  {visibleAiItems.map((item) =>
                     item.source === 'existing' ? (
                       <li key={item.exercise.id}>
                         <button
@@ -394,7 +404,7 @@ function AddExerciseDrawerContent({
                   )}
                 </ul>
               )}
-              {aiResults && aiResults.items.length === 0 && (
+              {aiResults && visibleAiItems.length === 0 && (
                 <p className="mt-3 text-sm text-app-text-muted">No exercises found. Try a different search.</p>
               )}
             </div>

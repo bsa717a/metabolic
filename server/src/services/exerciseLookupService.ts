@@ -14,6 +14,7 @@ export type ExerciseLookupItem =
         defaultReps: number | null;
         defaultDurationMinutes: number | null;
         defaultDistance: number | null;
+        requiresGym: boolean;
       };
     }
   | { source: 'ai'; lookup: { id: string }; estimate: ExerciseEstimate };
@@ -54,7 +55,8 @@ function serializeCatalogExercise(
     defaultSets: exercise.defaultSets,
     defaultReps: exercise.defaultReps,
     defaultDurationMinutes: exercise.defaultDurationMinutes,
-    defaultDistance: exercise.defaultDistance == null ? null : Number(exercise.defaultDistance)
+    defaultDistance: exercise.defaultDistance == null ? null : Number(exercise.defaultDistance),
+    requiresGym: exercise.requiresGym
   };
 }
 

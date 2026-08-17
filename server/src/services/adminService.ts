@@ -42,6 +42,7 @@ export type AdminExerciseUpdate = {
   defaultReps?: number | null;
   defaultDurationMinutes?: number | null;
   defaultDistance?: number | null;
+  requiresGym?: boolean;
 };
 
 export type AdminExerciseCreate = {
@@ -53,6 +54,7 @@ export type AdminExerciseCreate = {
   defaultReps?: number | null;
   defaultDurationMinutes?: number | null;
   defaultDistance?: number | null;
+  requiresGym?: boolean;
 };
 
 const userInclude = {
@@ -145,6 +147,7 @@ export function serializeAdminExercise(exercise: Awaited<ReturnType<typeof listA
     defaultReps: exercise.defaultReps,
     defaultDurationMinutes: exercise.defaultDurationMinutes,
     defaultDistance: exercise.defaultDistance != null ? Number(exercise.defaultDistance) : null,
+    requiresGym: exercise.requiresGym,
     createdAt: exercise.createdAt.toISOString()
   };
 }
@@ -256,7 +259,8 @@ export async function createAdminExercise(data: AdminExerciseCreate) {
       defaultSets: data.defaultSets ?? null,
       defaultReps: data.defaultReps ?? null,
       defaultDurationMinutes: data.defaultDurationMinutes ?? null,
-      defaultDistance: data.defaultDistance ?? null
+      defaultDistance: data.defaultDistance ?? null,
+      requiresGym: data.requiresGym ?? false
     }
   });
 }

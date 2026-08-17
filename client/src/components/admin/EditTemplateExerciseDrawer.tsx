@@ -6,6 +6,7 @@ import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
 import { RepSchemeSelect } from '../exercise/RepSchemeSelect';
 import { SpeedSchemeSelect } from '../exercise/SpeedSchemeSelect';
+import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exerciseCatalogFilter';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -29,6 +30,7 @@ export function EditTemplateExerciseDrawer({
   const isEdit = Boolean(item);
   const [catalog, setCatalog] = useState<ExerciseCatalogItem[]>([]);
   const [query, setQuery] = useState('');
+  const [hideGym, setHideGym] = useState(false);
   const [selected, setSelected] = useState<ExerciseCatalogItem | null>(null);
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export function EditTemplateExerciseDrawer({
     setDurationMinutes(toInput(exercise.defaultDurationMinutes));
   }
 
-  const filtered = catalog.filter((exercise) => exercise.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = filterExerciseCatalog(catalog, { query, hideGym });
 
   async function save() {
     if (!templateId) return;
@@ -133,6 +135,10 @@ export function EditTemplateExerciseDrawer({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
+            <label className="flex items-center gap-1.5 text-xs text-app-text-muted">
+              <input type="checkbox" checked={hideGym} onChange={(event) => setHideGym(event.target.checked)} />
+              Hide gym exercises
+            </label>
             <ul className="max-h-48 space-y-1 overflow-y-auto">
               {filtered.map((exercise) => (
                 <li key={exercise.id}>
@@ -145,6 +151,7 @@ export function EditTemplateExerciseDrawer({
                   >
                     <span className="font-medium">{exercise.name}</span>
                     {exercise.bodyPart && <span className="ml-2 text-xs uppercase text-app-text-muted">{exercise.bodyPart}</span>}
+                    {exerciseRequiresGym(exercise) && <span className="ml-2 text-xs uppercase text-app-text-muted">Gym</span>}
                   </button>
                 </li>
               ))}

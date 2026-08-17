@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { NumberInput } from '../ui/NumberInput';
 import { RepSchemeSelect } from './RepSchemeSelect';
 import { SpeedSchemeSelect } from './SpeedSchemeSelect';
+import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exerciseCatalogFilter';
 
 function toInput(value?: number | null) {
   return value == null ? '' : String(value);
@@ -85,6 +86,7 @@ export function InlineWorkoutEditor({
 
   const [catalog, setCatalog] = useState<ExerciseCatalogItem[]>([]);
   const [query, setQuery] = useState('');
+  const [hideGym, setHideGym] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -175,11 +177,21 @@ export function InlineWorkoutEditor({
   );
 
   const searchResults = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const available = catalog.filter((item) => !inWorkoutIds.has(item.id));
-    if (!q) return available.slice(0, 8);
-    return available.filter((item) => item.name.toLowerCase().includes(q)).slice(0, 12);
-  }, [catalog, query, inWorkoutIds]);
+    const available = filterExerciseCatalog(catalog, { query, hideGym }).filter(
+      (item) => !inWorkoutIds.has(item.id)
+    );
+    if (!query.trim()) return available.slice(0, 8);
+    return available.slice(0, 12);
+  }, [catalog, hideGym, query, inWorkoutIds]);
+
+  const searchEmptyMessage = useMemo(() => {
+    if (query.trim()) return 'No matching exercises.';
+    const visibleCatalog = filterExerciseCatalog(catalog, { hideGym });
+    if (visibleCatalog.length === 0) {
+      return hideGym ? 'No home-friendly exercises in the catalog.' : 'No exercises in the catalog.';
+    }
+    return 'All catalog exercises are already in this workout.';
+  }, [catalog, hideGym, query]);
 
   async function handleSaveName() {
     const trimmed = name.trim();
@@ -312,6 +324,10 @@ export function InlineWorkoutEditor({
 
       {/* One-field add: search → tap result → done */}
       <div className="relative">
+        <label className="mb-2 flex items-center gap-1.5 text-xs text-app-text-muted">
+          <input type="checkbox" checked={hideGym} onChange={(event) => setHideGym(event.target.checked)} />
+          Hide gym exercises
+        </label>
         <div className="flex items-center gap-2 rounded-2xl border border-dashed border-brand-green/40 bg-brand-green/5 px-3 py-2.5">
           <Search className="h-4 w-4 shrink-0 text-brand-green" />
           <input
@@ -350,7 +366,7 @@ export function InlineWorkoutEditor({
           <ul className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-2xl border border-app-border bg-app-surface shadow-lg">
             {searchResults.length === 0 ? (
               <li className="px-3 py-3 text-sm text-app-text-muted">
-                {query.trim() ? 'No matching exercises.' : 'All catalog exercises are already in this workout.'}
+                {searchEmptyMessage}
               </li>
             ) : (
               searchResults.map((item) => {
@@ -372,7 +388,12 @@ export function InlineWorkoutEditor({
                         )}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-app-text">{item.name}</span>
+                        <span className="block truncate text-sm font-medium text-app-text">
+                          {item.name}
+                          {exerciseRequiresGym(item) && (
+                            <span className="ml-2 text-xs font-normal uppercase text-app-text-muted">Gym</span>
+                          )}
+                        </span>
                         <span className="block text-xs text-app-text-muted">Adds as 3×10</span>
                       </span>
                     </button>
