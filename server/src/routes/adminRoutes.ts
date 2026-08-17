@@ -147,7 +147,8 @@ const exerciseCreateBody = z.object({
   defaultSets: z.number().int().min(0).nullable().optional(),
   defaultReps: z.number().int().min(0).nullable().optional(),
   defaultDurationMinutes: z.number().int().min(0).nullable().optional(),
-  defaultDistance: z.number().finite().min(0).nullable().optional()
+  defaultDistance: z.number().finite().min(0).nullable().optional(),
+  requiresGym: z.boolean().optional()
 });
 
 const exerciseUpdateBody = z
@@ -160,7 +161,8 @@ const exerciseUpdateBody = z
     defaultSets: z.number().int().min(0).nullable().optional(),
     defaultReps: z.number().int().min(0).nullable().optional(),
     defaultDurationMinutes: z.number().int().min(0).nullable().optional(),
-    defaultDistance: z.number().finite().min(0).nullable().optional()
+    defaultDistance: z.number().finite().min(0).nullable().optional(),
+    requiresGym: z.boolean().optional()
   })
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field is required' });
 

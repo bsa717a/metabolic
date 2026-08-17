@@ -251,6 +251,7 @@ export type ExerciseCatalogItem = {
   defaultReps?: number | null;
   defaultDurationMinutes?: number | null;
   defaultDistance?: number | null;
+  requiresGym?: boolean;
 };
 export type AdminExercise = ExerciseCatalogItem & {
   createdAt: string;

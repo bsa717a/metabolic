@@ -19,6 +19,7 @@ type ExerciseDraft = {
   defaultReps: string;
   defaultDurationMinutes: string;
   defaultDistance: string;
+  requiresGym: boolean;
 };
 
 function emptyDraft(): ExerciseDraft {
@@ -30,7 +31,8 @@ function emptyDraft(): ExerciseDraft {
     defaultSets: '',
     defaultReps: '',
     defaultDurationMinutes: '',
-    defaultDistance: ''
+    defaultDistance: '',
+    requiresGym: false
   };
 }
 
@@ -43,7 +45,8 @@ function toDraft(exercise: AdminExercise): ExerciseDraft {
     defaultSets: exercise.defaultSets == null ? '' : String(exercise.defaultSets),
     defaultReps: exercise.defaultReps == null ? '' : String(exercise.defaultReps),
     defaultDurationMinutes: exercise.defaultDurationMinutes == null ? '' : String(exercise.defaultDurationMinutes),
-    defaultDistance: exercise.defaultDistance == null ? '' : String(exercise.defaultDistance)
+    defaultDistance: exercise.defaultDistance == null ? '' : String(exercise.defaultDistance),
+    requiresGym: Boolean(exercise.requiresGym)
   };
 }
 
@@ -165,7 +168,8 @@ function EditExerciseDrawerContent({
         defaultSets: parseOptionalInt(draft.defaultSets, 'Default sets'),
         defaultReps: parseOptionalInt(draft.defaultReps, 'Default reps'),
         defaultDurationMinutes: parseOptionalInt(draft.defaultDurationMinutes, 'Default duration'),
-        defaultDistance: parseOptionalNumber(draft.defaultDistance, 'Default distance')
+        defaultDistance: parseOptionalNumber(draft.defaultDistance, 'Default distance'),
+        requiresGym: draft.requiresGym
       };
 
       let updated: AdminExercise;
@@ -245,6 +249,21 @@ function EditExerciseDrawerContent({
             </option>
           ))}
         </select>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm text-app-text">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={draft.requiresGym}
+          onChange={(event) => updateDraft('requiresGym', event.target.checked)}
+        />
+        <span>
+          <span className="font-medium">Requires gym</span>
+          <span className="mt-0.5 block text-xs text-app-text-muted">
+            Hide this when filtering to home-friendly exercises.
+          </span>
+        </span>
       </label>
 
       <label className="block">

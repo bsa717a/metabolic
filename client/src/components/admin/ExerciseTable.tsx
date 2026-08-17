@@ -6,7 +6,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { EditExerciseDrawer } from './EditExerciseDrawer';
 
-type SortKey = 'name' | 'category' | 'bodyPart' | 'video';
+type SortKey = 'name' | 'category' | 'bodyPart' | 'gym' | 'video';
 type SortDirection = 'asc' | 'desc';
 
 function formatDefaults(exercise: AdminExercise) {
@@ -35,6 +35,7 @@ function matchesSearch(exercise: AdminExercise, query: string) {
     exercise.category ?? '',
     exercise.bodyPart ?? '',
     formatDefaults(exercise),
+    exercise.requiresGym ? 'gym yes' : '',
     exercise.howToVideoUrl ? 'video yes' : ''
   ]
     .join(' ')
@@ -83,6 +84,7 @@ export function ExerciseTable() {
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hideGym, setHideGym] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -90,15 +92,17 @@ export function ExerciseTable() {
 
   const visibleExercises = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const filtered = query ? exercises.filter((exercise) => matchesSearch(exercise, query)) : exercises;
+    const searched = query ? exercises.filter((exercise) => matchesSearch(exercise, query)) : exercises;
+    const filtered = hideGym ? searched.filter((exercise) => !exercise.requiresGym) : searched;
 
     return [...filtered].sort((a, b) => {
       if (sortKey === 'name') return compareStrings(a.name, b.name, sortDirection);
       if (sortKey === 'category') return compareStrings(a.category ?? '', b.category ?? '', sortDirection);
       if (sortKey === 'bodyPart') return compareStrings(a.bodyPart ?? '', b.bodyPart ?? '', sortDirection);
+      if (sortKey === 'gym') return compareBooleans(Boolean(a.requiresGym), Boolean(b.requiresGym), sortDirection);
       return compareBooleans(Boolean(a.howToVideoUrl), Boolean(b.howToVideoUrl), sortDirection);
     });
-  }, [exercises, searchQuery, sortDirection, sortKey]);
+  }, [exercises, hideGym, searchQuery, sortDirection, sortKey]);
 
   function handleSort(nextKey: SortKey) {
     if (sortKey === nextKey) {
@@ -165,9 +169,17 @@ export function ExerciseTable() {
               aria-label="Search exercises"
             />
           )}
+          {!loading && !error && (
+            <label className="flex items-center gap-1.5 text-xs text-app-text-muted">
+              <input type="checkbox" checked={hideGym} onChange={(event) => setHideGym(event.target.checked)} />
+              Hide gym exercises
+            </label>
+          )}
           <div className="ml-auto flex shrink-0 items-center gap-3">
             <span className="text-sm text-app-text-muted">
-              {searchQuery.trim() ? `${visibleExercises.length} of ${exercises.length}` : `${exercises.length} total`}
+              {searchQuery.trim() || hideGym
+                ? `${visibleExercises.length} of ${exercises.length}`
+                : `${exercises.length} total`}
             </span>
             {!loading && !error && (
               <Button type="button" onClick={() => { setSelectedExerciseId(null); setCreating(true); }}>
@@ -189,11 +201,12 @@ export function ExerciseTable() {
           <div className="overflow-x-auto">
             <table className="w-full table-fixed text-left text-sm">
               <colgroup>
-                <col className="w-[36%]" />
-                <col className="w-[14%]" />
-                <col className="w-[14%]" />
-                <col className="w-[22%]" />
-                <col className="w-[14%]" />
+                <col className="w-[32%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[20%]" />
+                <col className="w-[12%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-app-border text-app-text-muted">
@@ -215,6 +228,14 @@ export function ExerciseTable() {
                   <SortableHeader
                     label="Body part"
                     sortKey="bodyPart"
+                    activeSortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    className="whitespace-nowrap"
+                  />
+                  <SortableHeader
+                    label="Gym"
+                    sortKey="gym"
                     activeSortKey={sortKey}
                     sortDirection={sortDirection}
                     onSort={handleSort}
@@ -261,6 +282,7 @@ export function ExerciseTable() {
                       </td>
                       <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{exercise.category ?? '—'}</td>
                       <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{exercise.bodyPart ?? '—'}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-app-text-muted">{exercise.requiresGym ? 'Yes' : '—'}</td>
                       <td className="py-3 pr-4 text-app-text-muted">{formatDefaults(exercise)}</td>
                       <td className="py-3 text-app-text-muted">{exercise.howToVideoUrl ? 'Yes' : '—'}</td>
                     </tr>
@@ -270,7 +292,11 @@ export function ExerciseTable() {
             </table>
             {exercises.length === 0 && <p className="py-6 text-center text-sm text-app-text-muted">No exercises found.</p>}
             {exercises.length > 0 && visibleExercises.length === 0 && (
-              <p className="py-6 text-center text-sm text-app-text-muted">No exercises match your search.</p>
+              <p className="py-6 text-center text-sm text-app-text-muted">
+                {searchQuery.trim()
+                  ? 'No exercises match your search.'
+                  : 'No home-friendly exercises.'}
+              </p>
             )}
           </div>
         )}

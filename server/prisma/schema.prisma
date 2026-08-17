@@ -713,6 +713,7 @@ model Exercise {
   defaultReps Int?
   defaultDurationMinutes Int?
   defaultDistance Decimal? @db.Decimal(10, 2)
+  requiresGym Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   scheduledExercises ScheduledExercise[]
