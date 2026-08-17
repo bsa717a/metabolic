@@ -732,7 +732,8 @@ export async function listActiveDiscoveryReminderCandidates(now = new Date()) {
           phone: true,
           timezone: true,
           smsOptedOut: true,
-          guidedJourneyRemindersEnabled: true
+          guidedJourneyRemindersEnabled: true,
+          pushDevices: { select: { token: true } }
         }
       }
     }
@@ -740,7 +741,9 @@ export async function listActiveDiscoveryReminderCandidates(now = new Date()) {
 
   const candidates: Array<{
     userId: string;
-    phone: string;
+    phone: string | null;
+    smsOptedOut: boolean;
+    pushTokens: string[];
     timezone: string | null;
     discoveryId: string;
     prompt: string;
@@ -750,7 +753,11 @@ export async function listActiveDiscoveryReminderCandidates(now = new Date()) {
 
   for (const enrollment of enrollments) {
     const user = enrollment.user;
-    if (!user.phone || user.smsOptedOut || !user.guidedJourneyRemindersEnabled) continue;
+    if (!user.guidedJourneyRemindersEnabled) continue;
+    const phone = user.phone?.trim() || null;
+    const pushTokens = user.pushDevices.map((device) => device.token);
+    const canSms = Boolean(phone) && !user.smsOptedOut;
+    if (!canSms && !pushTokens.length) continue;
     const discoveryId = enrollment.currentDiscoveryId!;
     const discovery = getDiscovery(discoveryId);
     if (!discovery) continue;
@@ -777,7 +784,9 @@ export async function listActiveDiscoveryReminderCandidates(now = new Date()) {
 
     candidates.push({
       userId: user.id,
-      phone: user.phone,
+      phone,
+      smsOptedOut: user.smsOptedOut,
+      pushTokens,
       timezone: user.timezone,
       discoveryId,
       prompt: discovery.reminderPrompt,

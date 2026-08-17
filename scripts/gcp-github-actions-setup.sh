@@ -105,6 +105,7 @@ Required for client build (Firebase web app config):
   VITE_FIREBASE_STORAGE_BUCKET
   VITE_FIREBASE_MESSAGING_SENDER_ID
   VITE_FIREBASE_APP_ID
+  VITE_FIREBASE_VAPID_KEY
   VITE_SMS_PHONE_NUMBER=+13853634403
 
 Also create a GitHub environment named "production" if you want deploy

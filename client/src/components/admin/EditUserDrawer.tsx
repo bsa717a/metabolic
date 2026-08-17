@@ -411,12 +411,12 @@ function EditUserDrawerContent({
             ))}
           </select>
           <span className="mt-1 block text-xs text-app-text-muted">
-            Used to time reminder texts. Reminders are skipped until this is set.
+            Used to time reminders. Reminders are skipped until this is set.
           </span>
         </label>
 
         <div className="space-y-3 rounded-xl border border-app-border bg-app-muted p-4">
-          <p className="text-sm font-semibold text-app-text">Text reminders</p>
+          <p className="text-sm font-semibold text-app-text">Reminders</p>
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
@@ -426,7 +426,8 @@ function EditUserDrawerContent({
               onChange={(event) => setSmsMealRemindersEnabled(event.target.checked)}
             />
             <span className="text-sm text-app-text-muted">
-              Text before planned meals (up to 30 minutes ahead, once per meal).
+              Before planned meals (up to 30 minutes ahead, once per meal). Sent as a text and on devices they
+              enable.
             </span>
           </label>
           <label className="flex items-start gap-3">
@@ -438,7 +439,7 @@ function EditUserDrawerContent({
               onChange={(event) => setSmsEveningRecapEnabled(event.target.checked)}
             />
             <span className="text-sm text-app-text-muted">
-              Short evening check-in around 8:00 PM.
+              Evening check-in around 8:00 PM. Sent as a text and on devices they enable.
             </span>
           </label>
         </div>

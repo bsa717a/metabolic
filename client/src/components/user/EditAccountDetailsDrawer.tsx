@@ -8,6 +8,7 @@ import { UserProfileFields } from './UserProfileFields';
 import { timezoneOptions } from '../../utils/timezoneOptions';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from './userProfileForm';
 import { useTutorial } from '../tutorial/TutorialContext';
+import { PushNotificationsCard } from './PushNotificationsCard';
 
 function labelClassName() {
   return 'mb-1 block text-sm font-medium text-slate-600 dark:text-app-text-muted';
@@ -249,12 +250,12 @@ function EditAccountDetailsDrawerContent({
             ))}
           </select>
           <span className="mt-1 block text-xs text-app-text-muted">
-            Used to time reminder texts. Reminders are skipped until this is set.
+            Used to time reminders. Reminders are skipped until this is set.
           </span>
         </label>
 
         <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
-          <p className="text-sm font-semibold text-app-text">Text reminders</p>
+          <p className="text-sm font-semibold text-app-text">Reminders</p>
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
@@ -263,7 +264,8 @@ function EditAccountDetailsDrawerContent({
               onChange={(event) => updateAccount('smsMealRemindersEnabled', event.target.checked)}
             />
             <span className="text-sm text-slate-600 dark:text-app-text-muted">
-              Text me before planned meals (up to 30 minutes ahead, once per meal).
+              Before planned meals (up to 30 minutes ahead, once per meal). Sent as a text and on devices you
+              enable.
             </span>
           </label>
           <label className="flex items-start gap-3">
@@ -274,10 +276,12 @@ function EditAccountDetailsDrawerContent({
               onChange={(event) => updateAccount('smsEveningRecapEnabled', event.target.checked)}
             />
             <span className="text-sm text-slate-600 dark:text-app-text-muted">
-              Send a short evening check-in around 8:00 PM.
+              Evening check-in around 8:00 PM. Sent as a text and on devices you enable.
             </span>
           </label>
         </div>
+
+        {mode === 'self' && <PushNotificationsCard />}
       </div>
 
       <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />

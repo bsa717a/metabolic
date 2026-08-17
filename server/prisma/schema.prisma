@@ -302,6 +302,7 @@ model User {
   userGuidedJourneySkills UserGuidedJourneySkill[]
   guidedWisdomStones GuidedWisdomStone[]
   guidedJourneyEvents GuidedJourneyEvent[]
+  pushDevices PushDevice[]
 }
 
 model ClientProfile {
@@ -878,6 +879,18 @@ model SmsNudgeLog {
 
   @@unique([userId, kind, date, refId])
   @@index([userId, date])
+}
+
+model PushDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model ProgramTemplate {

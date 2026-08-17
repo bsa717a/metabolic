@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import type { User } from 'firebase/auth';
 import { listenForAuth } from './services/auth';
 import { api } from './services/api';
+import { listenForForegroundPush, syncPushTokenIfGranted } from './services/pushNotifications';
 import type { AppUser } from './types';
 import { AppShell } from './components/layout/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
@@ -255,6 +256,12 @@ export default function App() {
       window.removeEventListener('focus', onVisible);
     };
   }, [firebaseUser, refreshAppUser]);
+
+  useEffect(() => {
+    if (!appUser) return;
+    void syncPushTokenIfGranted();
+    return listenForForegroundPush();
+  }, [appUser?.id]);
 
   const handleSetupComplete = useCallback(async () => {
     setNeedsSetup(false);
