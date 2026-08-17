@@ -39,7 +39,7 @@ export function CoachHomeHero({
   }
 
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-app-muted min-h-[22rem] sm:min-h-[24rem]">
+    <section className="relative overflow-hidden rounded-3xl bg-app-muted min-h-[22rem] sm:min-h-[24rem] lg:min-h-[27.6rem]">
       {coach ? (
         <img
           src={coach.heroImage}
@@ -50,7 +50,7 @@ export function CoachHomeHero({
       ) : null}
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/55" />
 
-      <div className="relative flex min-h-[22rem] flex-col p-4 pb-2.5 sm:min-h-[24rem] sm:p-5 sm:pb-3">
+      <div className="relative flex min-h-[22rem] flex-col p-4 pb-2.5 sm:min-h-[24rem] sm:p-5 sm:pb-3 lg:min-h-[27.6rem]">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
             {greeting},{' '}
