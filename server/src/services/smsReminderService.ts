@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getTodayDashboard } from './dashboardService.js';
+import { sendPushToTokens } from './pushNotificationService.js';
 import { capSms } from './smsIntentService.js';
 import { isTwilioConfigured, isTwilioSenderPhone, resolveOutboundChannel, sendOutboundMessage } from './twilioOutboundService.js';
 import { localTimeParts } from '../utils/dates.js';
@@ -18,8 +19,10 @@ type ReminderUser = {
   phone: string | null;
   timezone: string | null;
   firstName: string;
+  smsOptedOut: boolean;
   smsMealRemindersEnabled: boolean;
   smsEveningRecapEnabled: boolean;
+  pushTokens: string[];
 };
 
 type PlannedMealItem = {
@@ -48,7 +51,19 @@ function isUniqueViolation(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-type NudgeKind = 'MEAL_REMINDER' | 'EVENING_RECAP' | 'GUIDED_DISCOVERY_PROMPT';
+export type NudgeKind = 'MEAL_REMINDER' | 'EVENING_RECAP' | 'GUIDED_DISCOVERY_PROMPT';
+
+export function buildReminderPushTitle(kind: NudgeKind, mealName?: string) {
+  if (kind === 'MEAL_REMINDER') return mealName?.trim() ? `${mealName} coming up` : 'Meal reminder';
+  if (kind === 'EVENING_RECAP') return 'Evening check-in';
+  return 'Metabolic';
+}
+
+export function reminderClickPath(kind: NudgeKind) {
+  if (kind === 'MEAL_REMINDER') return '/nutrition';
+  if (kind === 'GUIDED_DISCOVERY_PROMPT') return '/level-up/journey';
+  return '/';
+}
 
 /** Reserves a nudge via the unique constraint. Returns false if it was already sent. */
 async function reserveNudge(userId: string, kind: NudgeKind, date: string, refId: string) {
@@ -66,7 +81,7 @@ async function releaseNudge(userId: string, kind: NudgeKind, date: string, refId
   await prisma.smsNudgeLog.deleteMany({ where: { userId, kind, date, refId } });
 }
 
-async function deliverNudge(userId: string, phone: string, message: string, intent: string) {
+async function deliverSmsNudge(userId: string, phone: string, message: string, intent: string) {
   const outbound = await prisma.smsMessage.create({
     data: { phone, userId, direction: 'OUTBOUND', message, response: message, intent, status: 'PROCESSED' }
   });
@@ -78,6 +93,43 @@ async function deliverNudge(userId: string, phone: string, message: string, inte
     return false;
   }
   return true;
+}
+
+async function deliverPushNudge(tokens: string[], kind: NudgeKind, message: string, mealName?: string) {
+  if (!tokens.length) return false;
+  try {
+    const sent = await sendPushToTokens(tokens, {
+      title: buildReminderPushTitle(kind, mealName),
+      body: message,
+      url: reminderClickPath(kind)
+    });
+    return sent > 0;
+  } catch (error) {
+    console.error('[sms-reminder] push failed', error);
+    return false;
+  }
+}
+
+function canSendSms(phone: string | null, smsOptedOut: boolean) {
+  return Boolean(phone) && !smsOptedOut && isTwilioConfigured() && !isTwilioSenderPhone(phone!);
+}
+
+async function deliverReminder(options: {
+  userId: string;
+  phone: string | null;
+  smsOptedOut: boolean;
+  tokens: string[];
+  message: string;
+  kind: NudgeKind;
+  mealName?: string;
+}) {
+  const [smsOk, pushOk] = await Promise.all([
+    canSendSms(options.phone, options.smsOptedOut)
+      ? deliverSmsNudge(options.userId, options.phone!, options.message, options.kind)
+      : Promise.resolve(false),
+    deliverPushNudge(options.tokens, options.kind, options.message, options.mealName)
+  ]);
+  return smsOk || pushOk;
 }
 
 function formatPlannedItemLine(item: PlannedMealItem): string | null {
@@ -122,10 +174,12 @@ function buildEveningRecap(
 }
 
 async function processUserReminders(user: ReminderUser, now: Date): Promise<number> {
-  const phone = user.phone?.trim();
+  const phone = user.phone?.trim() || null;
   const timezone = user.timezone?.trim();
-  if (!phone || !timezone) return 0;
-  if (isTwilioSenderPhone(phone)) return 0;
+  if (!timezone) return 0;
+  const canSms = canSendSms(phone, user.smsOptedOut);
+  const canPush = user.pushTokens.length > 0;
+  if (!canSms && !canPush) return 0;
 
   const { dateKey, minutesOfDay, hour, minute } = localTimeParts(timezone, now);
   // Load the user's local calendar day so meal lists and recap totals match the
@@ -146,7 +200,17 @@ async function processUserReminders(user: ReminderUser, now: Date): Promise<numb
       if (!reserved) continue;
 
       const message = capSms(buildMealReminder(user.firstName, meal.name, meal.plannedTime, meal.items));
-      if (await deliverNudge(user.id, phone, message, 'MEAL_REMINDER')) {
+      if (
+        await deliverReminder({
+          userId: user.id,
+          phone,
+          smsOptedOut: user.smsOptedOut,
+          tokens: user.pushTokens,
+          message,
+          kind: 'MEAL_REMINDER',
+          mealName: meal.name
+        })
+      ) {
         sent += 1;
       } else {
         await releaseNudge(user.id, 'MEAL_REMINDER', dateKey, meal.id);
@@ -169,7 +233,16 @@ async function processUserReminders(user: ReminderUser, now: Date): Promise<numb
         n(dashboard.dailyLog.caloriesActual),
         n(dashboard.dailyLog.calorieTarget)
       );
-      if (await deliverNudge(user.id, phone, message, 'EVENING_RECAP')) {
+      if (
+        await deliverReminder({
+          userId: user.id,
+          phone,
+          smsOptedOut: user.smsOptedOut,
+          tokens: user.pushTokens,
+          message,
+          kind: 'EVENING_RECAP'
+        })
+      ) {
         sent += 1;
       } else {
         await releaseNudge(user.id, 'EVENING_RECAP', dateKey, 'day');
@@ -186,8 +259,6 @@ async function processGuidedDiscoveryReminders(now: Date): Promise<number> {
   let sent = 0;
 
   for (const candidate of candidates) {
-    if (isTwilioSenderPhone(candidate.phone)) continue;
-
     const already = await prisma.smsNudgeLog.count({
       where: {
         userId: candidate.userId,
@@ -207,7 +278,16 @@ async function processGuidedDiscoveryReminders(now: Date): Promise<number> {
     if (!reserved) continue;
 
     const message = capSms(candidate.prompt);
-    if (await deliverNudge(candidate.userId, candidate.phone, message, 'GUIDED_DISCOVERY_PROMPT')) {
+    if (
+      await deliverReminder({
+        userId: candidate.userId,
+        phone: candidate.phone,
+        smsOptedOut: candidate.smsOptedOut,
+        tokens: candidate.pushTokens,
+        message,
+        kind: 'GUIDED_DISCOVERY_PROMPT'
+      })
+    ) {
       sent += 1;
     } else {
       await releaseNudge(candidate.userId, 'GUIDED_DISCOVERY_PROMPT', candidate.dateKey, refId);
@@ -219,29 +299,33 @@ async function processGuidedDiscoveryReminders(now: Date): Promise<number> {
 
 /** Sends due pre-meal reminders and evening recaps. Designed to be called every few minutes by a scheduler. */
 export async function runSmsReminderTick(now = new Date()) {
-  if (!isTwilioConfigured()) {
-    return { sent: 0, considered: 0, skipped: 'twilio-not-configured' as const };
-  }
-
   const users = await prisma.user.findMany({
     where: {
-      phone: { not: null },
       timezone: { not: null },
-      smsOptedOut: false,
       status: 'ACTIVE',
-      OR: [{ smsMealRemindersEnabled: true }, { smsEveningRecapEnabled: true }]
+      OR: [{ smsMealRemindersEnabled: true }, { smsEveningRecapEnabled: true }],
+      AND: {
+        OR: [{ phone: { not: null }, smsOptedOut: false }, { pushDevices: { some: {} } }]
+      }
     },
     select: {
       id: true,
       phone: true,
       timezone: true,
       firstName: true,
+      smsOptedOut: true,
       smsMealRemindersEnabled: true,
-      smsEveningRecapEnabled: true
+      smsEveningRecapEnabled: true,
+      pushDevices: { select: { token: true } }
     }
   });
 
-  const eligibleUsers = users.filter((user) => user.phone?.trim() && user.timezone?.trim());
+  const eligibleUsers = users
+    .filter((user) => user.timezone?.trim())
+    .map((user) => ({
+      ...user,
+      pushTokens: user.pushDevices.map((device) => device.token)
+    }));
 
   let sent = 0;
   let errors = 0;

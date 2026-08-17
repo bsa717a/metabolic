@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMealReminder, isMealReminderDue } from './smsReminderService.js';
+import { buildMealReminder, buildReminderPushTitle, isMealReminderDue, reminderClickPath } from './smsReminderService.js';
 import { parsePlannedMinutes, normalizePlannedTimeStorage } from '../utils/meals.js';
 
 describe('parsePlannedMinutes', () => {
@@ -39,6 +39,26 @@ describe('buildMealReminder', () => {
 
   it('keeps a short reminder when no planned items exist', () => {
     assert.equal(buildMealReminder('Earl', 'Meal 3', '12:00pm', []), 'Hey Earl, Meal 3 is coming up around 12:00pm.');
+  });
+});
+
+describe('buildReminderPushTitle', () => {
+  it('uses the meal name for meal reminders', () => {
+    assert.equal(buildReminderPushTitle('MEAL_REMINDER', 'Meal 3'), 'Meal 3 coming up');
+    assert.equal(buildReminderPushTitle('MEAL_REMINDER'), 'Meal reminder');
+  });
+
+  it('labels evening and journey nudges', () => {
+    assert.equal(buildReminderPushTitle('EVENING_RECAP'), 'Evening check-in');
+    assert.equal(buildReminderPushTitle('GUIDED_DISCOVERY_PROMPT'), 'Metabolic');
+  });
+});
+
+describe('reminderClickPath', () => {
+  it('opens nutrition for meals and home for the evening recap', () => {
+    assert.equal(reminderClickPath('MEAL_REMINDER'), '/nutrition');
+    assert.equal(reminderClickPath('EVENING_RECAP'), '/');
+    assert.equal(reminderClickPath('GUIDED_DISCOVERY_PROMPT'), '/level-up/journey');
   });
 });
 

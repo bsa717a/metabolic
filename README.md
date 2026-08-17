@@ -16,6 +16,14 @@ npm run dev
 
 The API runs on `http://localhost:8080` and the client on `http://localhost:5173`. Firebase Auth is the authentication source of truth. PostgreSQL stores roles, profiles, programs, meals, foods, exercises, logs, SMS messages, and AI lookup history. Seed users include placeholder Firebase UIDs and can also be linked on first authenticated request by matching email.
 
+## Browser notifications
+
+Meal and evening reminders can also appear as device notifications (Chrome/Edge/Firefox on computer, and iPhone after adding the site to the Home Screen). They use the same scheduler as SMS.
+
+1. In Firebase Console → Project settings → Cloud Messaging → Web Push certificates, generate a key pair.
+2. Set `VITE_FIREBASE_VAPID_KEY` in `client/.env` (and as a GitHub Actions secret for production).
+3. In the app: Account details → **Enable notifications** on each phone or computer you want to receive them.
+
 ## AI (Gemini)
 
 AI runs on the backend via the [Gemini API](https://ai.google.dev/). Get an API key from [Google AI Studio](https://aistudio.google.com/apikey), then in `server/.env`:
