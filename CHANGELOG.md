@@ -7,6 +7,21 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.13.0](https://github.com/bsa717a/metabolic/compare/v0.12.0...v0.13.0) (2026-08-17)
+
+
+### Features
+
+* **exercise:** mark gym-only catalog exercises so home lists can hide them ([a1f9fac](https://github.com/bsa717a/metabolic/commit/a1f9fac082c4803d750cca63001f9c331149422e))
+* **exercise:** mark gym-only catalog exercises so home lists can hide them ([dd23322](https://github.com/bsa717a/metabolic/commit/dd23322bd9708cb58b09d9ea74ff9969de3a686f))
+* **notifications:** send meal and evening reminders as web push ([e0a8261](https://github.com/bsa717a/metabolic/commit/e0a82610741d319475f6237a2ae07b35d73f6788))
+* **notifications:** send meal and evening reminders as web push ([f04ac8b](https://github.com/bsa717a/metabolic/commit/f04ac8b9d85ac59e716636d8bce918e853f701da))
+
+
+### Bug Fixes
+
+* **dashboard:** coach desktop sizing and mission destinations ([fd22aae](https://github.com/bsa717a/metabolic/commit/fd22aae4ff4c272b133e73663c66f0a2851024b2))
+
 ## [0.12.0](https://github.com/bsa717a/metabolic/compare/v0.11.0...v0.12.0) (2026-08-14)
 
 
