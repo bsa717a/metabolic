@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import type { Exercise, Meal } from '../../../types';
 import { openHydrationDrawer } from '../../hydration/hydrationEvents';
-import { mealMissionDone, mealMissionLabel, workoutDone, workoutLabel } from './deriveMissions';
+import { mealMissionDone, mealMissionLabel, nextUnloggedMeal, workoutDone, workoutLabel } from './deriveMissions';
 
 export function CoachHomeMissions({
   waterDone,
@@ -15,6 +15,7 @@ export function CoachHomeMissions({
   exercises: Exercise[];
 }) {
   const mealDone = mealMissionDone(meals);
+  const nextMeal = nextUnloggedMeal(meals);
   const rows = [
     {
       key: 'water',
@@ -27,14 +28,14 @@ export function CoachHomeMissions({
       key: 'meal',
       label: mealMissionLabel(meals),
       done: mealDone,
-      to: '/nutrition',
+      to: nextMeal ? `/nutrition?meal=${encodeURIComponent(nextMeal.id)}` : '/nutrition',
       onWater: false
     },
     {
       key: 'workout',
       label: workoutLabel(exercises),
       done: workoutDone(exercises),
-      to: exercises.some((item) => item.status === 'PLANNED') ? '/exercise/session' : '/exercise',
+      to: '/exercise',
       onWater: false
     }
   ];

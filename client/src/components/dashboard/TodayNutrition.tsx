@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Camera, ChevronDown, Leaf, Pencil, Plus, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
 import { api, todayDateParam, todayKey } from '../../services/api';
@@ -158,7 +158,17 @@ export function TodayNutrition({
   onChange: () => void | Promise<void>;
 }) {
   const mealsForParse = allMeals ?? meals;
+  const [searchParams] = useSearchParams();
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
+  const openedFromQuery = useRef(false);
+
+  useEffect(() => {
+    if (openedFromQuery.current) return;
+    const requestedId = searchParams.get('meal');
+    if (!requestedId || !meals.some((meal) => meal.id === requestedId)) return;
+    setExpandedMealId(requestedId);
+    openedFromQuery.current = true;
+  }, [meals, searchParams]);
   const [entry, setEntry] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   const [saving, setSaving] = useState(false);

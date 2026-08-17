@@ -32,13 +32,12 @@ export function CoachChatFab({ user }: { user?: AppUser | null }) {
           bottom: coachFabBottom(),
           borderColor: coach.accent
         }}
-        className="fixed right-6 z-40 hidden size-[6.5625rem] overflow-hidden rounded-full border-2 bg-app-surface shadow-lg transition hover:scale-105 hover:shadow-xl sm:block"
+        className="fixed right-6 z-40 hidden h-[6.5625rem] w-[6.5625rem] max-h-[6.5625rem] max-w-[6.5625rem] shrink-0 overflow-hidden rounded-full border-2 bg-app-surface shadow-lg transition hover:scale-105 hover:shadow-xl sm:block"
       >
         <img
-          src={coach.image}
+          src={coach.heroImage}
           alt={coach.name}
-          className="h-full w-full object-cover"
-          style={{ objectPosition: '50% 18%' }}
+          className="block h-[6.5625rem] w-[6.5625rem] max-h-[6.5625rem] max-w-[6.5625rem] object-cover object-[center_18%]"
         />
       </button>
 
