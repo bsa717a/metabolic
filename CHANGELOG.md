@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.14.0](https://github.com/bsa717a/metabolic/compare/v0.13.0...v0.14.0) (2026-08-19)
+
+
+### Features
+
+* **admin:** add AI food search to meal card builder sidebar ([88910d6](https://github.com/bsa717a/metabolic/commit/88910d64dc587d827fbb0067eb425584a49666fb))
+* **admin:** add AI food search to meal card builder sidebar ([c18961a](https://github.com/bsa717a/metabolic/commit/c18961a00a3240457e6fa9a49f95edf4b9eb811e))
+
+
+### Bug Fixes
+
+* **admin:** unify meal builder food search and save AI foods globally ([f7b6ee3](https://github.com/bsa717a/metabolic/commit/f7b6ee37efb79f3fcf09a18697dfd57a781d9e49))
+* **admin:** unify meal builder food search and save AI foods globally ([935a574](https://github.com/bsa717a/metabolic/commit/935a5747aa7dac42b607ab75a95661d24d2b4f2e))
+
 ## [0.13.0](https://github.com/bsa717a/metabolic/compare/v0.12.0...v0.13.0) (2026-08-17)
 
 
