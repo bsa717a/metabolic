@@ -80,11 +80,17 @@ export async function aiRoutes(app: FastifyInstance) {
       mealId: z.string().optional(),
       type: z.enum(['PLANNED', 'ACTUAL']).optional()
     }).parse(request.body);
-    return acceptFoodLookups(request.appUser!.id, body.lookupIds, body.mealId, body.type);
+    return acceptFoodLookups(request.appUser!.id, body.lookupIds, body.mealId, body.type, request.appUser!);
   });
   app.post('/api/ai/food-lookup/:lookupId/accept', { preHandler: requireAuth }, async (request) => {
     const body = z.object({ mealId: z.string().optional(), type: z.enum(['PLANNED', 'ACTUAL']).optional() }).parse(request.body ?? {});
-    return acceptFoodLookup(request.appUser!.id, (request.params as { lookupId: string }).lookupId, body.mealId, body.type);
+    return acceptFoodLookup(
+      request.appUser!.id,
+      (request.params as { lookupId: string }).lookupId,
+      body.mealId,
+      body.type,
+      request.appUser!
+    );
   });
   app.post('/api/ai/exercise-lookup', { preHandler: requireAuth }, async (request, reply) => {
     try {
