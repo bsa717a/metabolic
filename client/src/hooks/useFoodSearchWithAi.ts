@@ -46,7 +46,7 @@ export function pendingToFood(pending: PendingFoodLookup): Food {
   };
 }
 
-export function useFoodSearchWithAi(query: string) {
+export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch?: boolean }) {
   const [local, setLocal] = useState<Food[]>([]);
   const [queue, setQueue] = useState<Food[]>([]);
   const [pending, setPending] = useState<PendingFoodLookup[]>([]);
@@ -63,6 +63,16 @@ export function useFoodSearchWithAi(query: string) {
     setAiOptions([]);
     setAiError(null);
     if (query.trim().length < 2) {
+      setLocal([]);
+      setQueue([]);
+      setPending([]);
+      setSearchError(null);
+      setSearched(false);
+      setSearching(false);
+      return;
+    }
+
+    if (options?.skipLibrarySearch) {
       setLocal([]);
       setQueue([]);
       setPending([]);
@@ -93,7 +103,7 @@ export function useFoodSearchWithAi(query: string) {
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, options?.skipLibrarySearch]);
 
   const hasResults = local.length + queue.length + pending.length > 0;
 

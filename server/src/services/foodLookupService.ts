@@ -1,5 +1,6 @@
-import { FoodSource, Visibility, MealItemType } from '@prisma/client';
+import { FoodSource, Visibility, MealItemType, type Role } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { isAdmin } from '../auth/requireRole.js';
 import { getAiProvider, type FoodEstimate } from './aiService.js';
 import { addMealItem } from './nutritionService.js';
 import { n } from '../utils/numbers.js';
@@ -119,11 +120,26 @@ export function summarizeFoodLookup(result: FoodLookupResult) {
   return { count: names.length, names, calories, protein };
 }
 
-export async function acceptFoodLookup(userId: string, lookupId: string, mealId?: string, type: MealItemType = MealItemType.ACTUAL) {
+export async function acceptFoodLookup(
+  userId: string,
+  lookupId: string,
+  mealId?: string,
+  type: MealItemType = MealItemType.ACTUAL,
+  actor?: { id: string; role: Role }
+) {
+  const promoteToGlobal = actor ? isAdmin(actor) : false;
+
   const food = await prisma.$transaction(async (tx) => {
     const lookup = await tx.aiFoodLookup.findFirstOrThrow({ where: { id: lookupId, userId } });
     if (lookup.accepted && lookup.foodId) {
-      return tx.food.findUniqueOrThrow({ where: { id: lookup.foodId } });
+      const existing = await tx.food.findUniqueOrThrow({ where: { id: lookup.foodId } });
+      if (promoteToGlobal && existing.visibility !== Visibility.GLOBAL) {
+        return tx.food.update({
+          where: { id: existing.id },
+          data: { visibility: Visibility.GLOBAL, verified: true, ownerUserId: null }
+        });
+      }
+      return existing;
     }
     const created = await tx.food.create({
       data: {
@@ -135,11 +151,11 @@ export async function acceptFoodLookup(userId: string, lookupId: string, mealId?
         carbs: lookup.carbs,
         fat: lookup.fat,
         source: FoodSource.AI,
-        visibility: Visibility.USER,
-        ownerUserId: userId,
+        visibility: promoteToGlobal ? Visibility.GLOBAL : Visibility.USER,
+        ownerUserId: promoteToGlobal ? null : userId,
         createdById: userId,
         aiGenerated: true,
-        verified: false
+        verified: promoteToGlobal
       }
     });
     await tx.aiFoodLookup.update({ where: { id: lookupId }, data: { accepted: true, foodId: created.id } });
@@ -167,11 +183,12 @@ export async function acceptFoodLookups(
   userId: string,
   lookupIds: string[],
   mealId?: string,
-  type: MealItemType = MealItemType.ACTUAL
+  type: MealItemType = MealItemType.ACTUAL,
+  actor?: { id: string; role: Role }
 ) {
   const foods = [];
   for (const lookupId of lookupIds) {
-    foods.push(await acceptFoodLookup(userId, lookupId, mealId, type));
+    foods.push(await acceptFoodLookup(userId, lookupId, mealId, type, actor));
   }
   return foods;
 }

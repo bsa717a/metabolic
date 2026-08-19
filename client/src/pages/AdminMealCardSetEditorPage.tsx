@@ -8,7 +8,7 @@ import { Card } from '../components/ui/Card';
 import { NumberInput } from '../components/ui/NumberInput';
 import { FoodSearch } from '../components/nutrition/FoodSearch';
 import { LogDifferentFoodModal } from '../components/nutrition/LogDifferentFoodModal';
-import { foodEmoji } from '../utils/foodEmoji';
+import { formatFoodMacros, useFoodSearchWithAi } from '../hooks/useFoodSearchWithAi';
 import {
   FOOD_GROUPS,
   GROUP_COLORS,
@@ -97,40 +97,6 @@ function scaledPortion(line: AdminOptionFood, factor: number) {
   return { servings: Math.round(servings * 100) / 100, rounded };
 }
 
-function RecentFoodRow({
-  food,
-  canAdd,
-  onAdd
-}: {
-  food: Food;
-  canAdd: boolean;
-  onAdd: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-5 shrink-0 text-center" aria-hidden>
-        {foodEmoji(food.name)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-app-text">{food.name}</p>
-        <p className="truncate text-xs text-app-text-muted">
-          {Math.round(Number(food.calories))} kcal · {Math.round(Number(food.protein))}g P
-        </p>
-      </div>
-      <button
-        type="button"
-        aria-label={`Add ${food.name} as an option`}
-        title={canAdd ? 'Add as an option' : 'Select a step first'}
-        disabled={!canAdd}
-        onClick={onAdd}
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-app-muted text-app-text transition hover:bg-brand-green/20 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <Plus size={15} />
-      </button>
-    </div>
-  );
-}
-
 function FoodMacroSidebar({
   catalog,
   loading,
@@ -151,17 +117,29 @@ function FoodMacroSidebar({
   const [openGroups, setOpenGroups] = useState<Record<FoodGroup, boolean>>(() =>
     Object.fromEntries(FOOD_GROUPS.map((group) => [group, true])) as Record<FoodGroup, boolean>
   );
-  const [recent, setRecent] = useState<Food[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const canAdd = Boolean(selectedSectionLabel) && !busy;
+  const trimmedQuery = query.trim();
+  const {
+    local,
+    queue,
+    pending,
+    searching,
+    searched,
+    hasResults,
+    aiOptions,
+    aiLoading,
+    aiError,
+    runAiSearch,
+    acceptLookup
+  } = useFoodSearchWithAi(query);
 
   useEffect(() => {
-    api<Food[]>('/api/foods/recent')
-      .then(setRecent)
-      .catch(() => setRecent([]));
-  }, []);
+    setAcceptError(null);
+  }, [query]);
 
   useEffect(() => {
     setGroupFilter(suggestedGroup ?? 'all');
@@ -179,7 +157,8 @@ function FoodMacroSidebar({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return FOOD_GROUPS.filter((group) => groupFilter === 'all' || group === groupFilter).map((group) => {
+    const activeGroupFilter = q ? 'all' : groupFilter;
+    return FOOD_GROUPS.filter((group) => activeGroupFilter === 'all' || group === activeGroupFilter).map((group) => {
       const foods = catalog[group].filter((food) => {
         if (!q) return true;
         return food.name.toLowerCase().includes(q) || (food.brand ?? '').toLowerCase().includes(q);
@@ -188,9 +167,43 @@ function FoodMacroSidebar({
     });
   }, [catalog, query, groupFilter]);
 
+  const catalogMatchCount = useMemo(
+    () => filtered.reduce((count, { foods }) => count + foods.length, 0),
+    [filtered]
+  );
+  const showLibraryResults = trimmedQuery.length >= 2 && catalogMatchCount === 0 && hasResults;
+  const showAiFallback =
+    trimmedQuery.length >= 2 && catalogMatchCount === 0 && !hasResults && searched && !searching;
+  const visibleGroups = useMemo(
+    () => (trimmedQuery ? filtered.filter(({ foods }) => foods.length > 0) : filtered),
+    [filtered, trimmedQuery]
+  );
+
+  async function acceptPendingLookup(lookupId: string) {
+    setAcceptError(null);
+    try {
+      const food = await acceptLookup(lookupId);
+      await pickFood(food);
+      setQuery('');
+    } catch (err) {
+      setAcceptError(err instanceof Error ? err.message : 'Could not save that food.');
+    }
+  }
+
+  async function acceptAiOption(lookupId: string) {
+    setAcceptError(null);
+    try {
+      const food = await acceptLookup(lookupId);
+      await pickFood(food);
+      setQuery('');
+    } catch (err) {
+      setAcceptError(err instanceof Error ? err.message : 'Could not save that food.');
+    }
+  }
+
   return (
-    <aside className="nutrition-ui-lg lg:sticky lg:top-[var(--app-sticky-offset)] lg:max-h-[calc(100vh-var(--app-sticky-offset)-1rem)] flex flex-col self-start rounded-2xl border border-app-border bg-app-surface p-4 shadow-sm lg:overflow-hidden">
-      <div>
+    <aside className="nutrition-ui-lg flex max-h-[calc(100dvh-8rem)] w-full min-w-0 flex-col self-start overflow-hidden rounded-2xl border border-app-border bg-app-surface p-4 shadow-sm sm:max-h-[calc(100vh-2rem)] lg:sticky lg:top-[var(--app-sticky-offset)] lg:max-h-[calc(100vh-var(--app-sticky-offset)-1rem)]">
+      <div className="shrink-0">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-app-text-muted">Add foods</h3>
         <p className="mt-1 text-xs text-app-text-muted">
           {selectedSectionLabel ? (
@@ -203,9 +216,12 @@ function FoodMacroSidebar({
         </p>
 
         <div className="mt-3 flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <FoodSearch onSelect={pickFood} />
-          </div>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search foods by name or alias"
+            className="min-w-0 flex-1 rounded-2xl border border-app-border bg-app-surface p-3 text-app-text placeholder:text-app-text-muted"
+          />
           <button
             type="button"
             aria-label="Describe a food for AI to estimate"
@@ -228,128 +244,207 @@ function FoodMacroSidebar({
             }
           }}
         />
+      </div>
 
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-text-muted">Recent</p>
-          {recent.length === 0 ? (
-            <p className="text-sm text-app-text-muted">No recent foods yet.</p>
-          ) : (
-            <div className="space-y-2.5">
-              {recent.slice(0, 10).map((food, index) => (
-                <RecentFoodRow
-                  key={`${food.id}-${index}`}
-                  food={food}
-                  canAdd={canAdd}
-                  onAdd={() => pickFood(food)}
-                />
+      <div className="mt-4 flex min-h-0 flex-1 flex-col border-t border-app-border pt-4">
+        <div className="shrink-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Browse catalog</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setGroupFilter('all')}
+              className={clsx(
+                'rounded-lg border px-2 py-1 text-[11px] font-semibold transition',
+                groupFilter === 'all'
+                  ? 'border-brand-green bg-brand-green/15 text-brand-deep'
+                  : 'border-app-border bg-app-bg text-app-text-muted hover:bg-app-muted'
+              )}
+            >
+              All
+            </button>
+            {FOOD_GROUPS.map((group) => {
+              const colors = GROUP_COLORS[group];
+              const active = groupFilter === group;
+              return (
+                <button
+                  key={group}
+                  type="button"
+                  onClick={() => setGroupFilter(group)}
+                  className="rounded-lg border px-2 py-1 text-[11px] font-semibold transition"
+                  style={
+                    active
+                      ? { backgroundColor: colors.bg, color: colors.text, borderColor: colors.border }
+                      : { backgroundColor: 'transparent', color: colors.text, borderColor: colors.border, opacity: 0.55 }
+                  }
+                >
+                  {group}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2">
+          {loading && <p className="py-3 text-sm text-app-text-muted">Loading foods…</p>}
+          {!loading && searching && trimmedQuery.length >= 2 && catalogMatchCount === 0 && (
+            <p className="px-1 py-2 text-sm text-app-text-muted">Searching…</p>
+          )}
+          {!loading && showLibraryResults && (
+            <div className="space-y-1 px-1">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-text-muted">Foods</p>
+              {local.map((food) => (
+                <button
+                  key={food.id}
+                  type="button"
+                  disabled={!canAdd}
+                  className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void pickFood(food)}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{food.name}</span>
+                    <span className="block text-[11px] text-app-text-muted">
+                      {food.servingSize} {food.servingUnit} · {Math.round(Number(food.calories))} kcal
+                    </span>
+                  </span>
+                  <Plus size={14} className="mt-0.5 shrink-0 text-brand-green" />
+                </button>
               ))}
+              {queue.map((food) => (
+                <button
+                  key={food.id}
+                  type="button"
+                  disabled={!canAdd}
+                  className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void pickFood(food)}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{food.name}</span>
+                    <span className="block text-[11px] text-app-text-muted">
+                      {food.servingSize} {food.servingUnit} · {Math.round(Number(food.calories))} kcal · pending review
+                    </span>
+                  </span>
+                  <Plus size={14} className="mt-0.5 shrink-0 text-brand-green" />
+                </button>
+              ))}
+              {pending.map((item) => (
+                <button
+                  key={item.lookupId}
+                  type="button"
+                  disabled={!canAdd}
+                  className="flex w-full flex-col rounded-lg px-2 py-2 text-left text-sm hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => void acceptPendingLookup(item.lookupId)}
+                >
+                  <span className="font-medium">{item.name}</span>
+                  <span className="text-xs text-brand-green">Saved lookup · {formatFoodMacros(item)}</span>
+                </button>
+              ))}
+              {acceptError && <p className="text-sm text-red-600">{acceptError}</p>}
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="mt-4 min-h-0 flex-1 border-t border-app-border pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Browse catalog</p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => setGroupFilter('all')}
-            className={clsx(
-              'rounded-lg border px-2 py-1 text-[11px] font-semibold transition',
-              groupFilter === 'all'
-                ? 'border-brand-green bg-brand-green/15 text-brand-deep'
-                : 'border-app-border bg-app-bg text-app-text-muted hover:bg-app-muted'
-            )}
-          >
-            All
-          </button>
-          {FOOD_GROUPS.map((group) => {
-            const colors = GROUP_COLORS[group];
-            const active = groupFilter === group;
-            return (
-              <button
-                key={group}
-                type="button"
-                onClick={() => setGroupFilter(group)}
-                className="rounded-lg border px-2 py-1 text-[11px] font-semibold transition"
-                style={
-                  active
-                    ? { backgroundColor: colors.bg, color: colors.text, borderColor: colors.border }
-                    : { backgroundColor: 'transparent', color: colors.text, borderColor: colors.border, opacity: 0.55 }
-                }
-              >
-                {group}
-              </button>
-            );
-          })}
-        </div>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter catalog…"
-          className="mt-2 w-full rounded-xl border border-app-border bg-app-bg px-3 py-1.5 text-sm"
-        />
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto py-2">
-        {loading && <p className="py-3 text-sm text-app-text-muted">Loading foods…</p>}
-        {!loading &&
-          filtered.map(({ group, foods }) => {
-            const colors = GROUP_COLORS[group];
-            const open = groupFilter !== 'all' || openGroups[group];
-            return (
-              <div key={group} className="mb-1">
+          {!loading && showAiFallback && (
+            <div className="space-y-2 px-1">
+              <p className="text-sm text-app-text-muted">
+                No foods in the catalog match &quot;{trimmedQuery}&quot;.
+              </p>
+              {!aiLoading && aiOptions.length === 0 && !aiError && (
                 <button
                   type="button"
-                  onClick={() => setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }))}
-                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-bold uppercase tracking-wide"
-                  style={{ color: colors.text }}
+                  disabled={!canAdd}
+                  className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-sm font-medium text-brand-green hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => void runAiSearch()}
                 >
-                  {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  <span
-                    className="rounded-full px-2 py-0.5"
-                    style={{ backgroundColor: colors.bg, color: colors.text }}
-                  >
-                    {group}
-                  </span>
-                  <span className="font-semibold text-app-text-muted">{foods.length}</span>
+                  <Sparkles size={14} />
+                  Search with AI for &quot;{trimmedQuery}&quot;
                 </button>
-                {open && (
-                  <ul className="mb-1 space-y-0.5 pl-1">
-                    {foods.length === 0 && (
-                      <li className="px-2 py-1 text-xs text-app-text-muted">No foods</li>
-                    )}
-                    {foods.map((food) => {
-                      const used = usedFoodIds.has(food.id);
-                      return (
-                        <li key={food.id}>
-                          <button
-                            type="button"
-                            disabled={!selectedSectionLabel}
-                            title={
-                              selectedSectionLabel
-                                ? `Add “${food.name}” as an option`
-                                : 'Select a step first'
-                            }
-                            onClick={() => void pickFood(food)}
-                            className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate font-semibold">{food.name}</span>
-                              <span className="block text-[11px] text-app-text-muted">
-                                {food.servingSize} {food.servingUnit} · {Math.round(food.calories)} kcal
-                                {used ? ' · already an option' : ''}
+              )}
+              {aiLoading && <p className="text-sm text-app-text-muted">Asking AI for matches…</p>}
+              {aiError && (
+                <p className="text-sm text-red-600">
+                  {aiError}
+                  <button type="button" className="ml-2 font-bold underline" onClick={() => void runAiSearch()}>
+                    Try again
+                  </button>
+                </p>
+              )}
+              {acceptError && <p className="text-sm text-red-600">{acceptError}</p>}
+              {!aiLoading &&
+                aiOptions.map((option) => (
+                  <button
+                    key={option.lookupId}
+                    type="button"
+                    disabled={!canAdd}
+                    className="flex w-full flex-col rounded-lg px-2 py-2 text-left text-sm hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => void acceptAiOption(option.lookupId)}
+                  >
+                    <span className="font-medium">{option.name}</span>
+                    <span className="text-xs text-brand-green">AI estimate · {formatFoodMacros(option)}</span>
+                  </button>
+                ))}
+            </div>
+          )}
+          {!loading &&
+            !showAiFallback &&
+            !showLibraryResults &&
+            visibleGroups.map(({ group, foods }) => {
+              const colors = GROUP_COLORS[group];
+              const open = trimmedQuery.length > 0 || groupFilter !== 'all' || openGroups[group];
+              return (
+                <div key={group} className="mb-1">
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }))}
+                    className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs font-bold uppercase tracking-wide"
+                    style={{ color: colors.text }}
+                  >
+                    {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <span
+                      className="rounded-full px-2 py-0.5"
+                      style={{ backgroundColor: colors.bg, color: colors.text }}
+                    >
+                      {group}
+                    </span>
+                    <span className="font-semibold text-app-text-muted">{foods.length}</span>
+                  </button>
+                  {open && (
+                    <ul className="mb-1 space-y-0.5 pl-1">
+                      {foods.length === 0 && (
+                        <li className="px-2 py-1 text-xs text-app-text-muted">No foods</li>
+                      )}
+                      {foods.map((food) => {
+                        const used = usedFoodIds.has(food.id);
+                        return (
+                          <li key={food.id}>
+                            <button
+                              type="button"
+                              disabled={!selectedSectionLabel}
+                              title={
+                                selectedSectionLabel
+                                  ? `Add “${food.name}” as an option`
+                                  : 'Select a step first'
+                              }
+                              onClick={() => void pickFood(food)}
+                              className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-semibold">{food.name}</span>
+                                <span className="block text-[11px] text-app-text-muted">
+                                  {food.servingSize} {food.servingUnit} · {Math.round(food.calories)} kcal
+                                  {used ? ' · already an option' : ''}
+                                </span>
                               </span>
-                            </span>
-                            <Plus size={14} className="mt-0.5 shrink-0 text-brand-green" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
+                              <Plus size={14} className="mt-0.5 shrink-0 text-brand-green" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          {!loading && !showAiFallback && !showLibraryResults && trimmedQuery && catalogMatchCount === 0 && searched && (
+            <p className="px-1 py-2 text-sm text-app-text-muted">No foods match your search.</p>
+          )}
+        </div>
       </div>
     </aside>
   );
@@ -405,17 +500,21 @@ export function AdminMealCardSetEditorPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load the card set'));
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
+  const reloadFoodCatalog = useCallback(() => {
     setFoodsLoading(true);
     api<FoodsByGroup>('/api/foods/by-group')
       .then(setFoodCatalog)
       .catch(() => setFoodCatalog(EMPTY_FOODS_BY_GROUP))
       .finally(() => setFoodsLoading(false));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    reloadFoodCatalog();
+  }, [reloadFoodCatalog]);
 
   async function call(path: string, method: string, body?: unknown) {
     setError(null);
@@ -467,6 +566,7 @@ export function AdminMealCardSetEditorPage() {
         body: JSON.stringify({ foodId: food.id, baseServings: 1 })
       });
       load();
+      reloadFoodCatalog();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not add option';
       setError(message);
@@ -872,10 +972,13 @@ export function AdminMealCardSetEditorPage() {
                           <FoodSearch
                             compact
                             onSelect={(food) =>
-                              void call(`/api/admin/options/${option.id}/foods`, 'POST', {
-                                foodId: food.id,
-                                baseServings: 1
-                              })
+                              void (async () => {
+                                await call(`/api/admin/options/${option.id}/foods`, 'POST', {
+                                  foodId: food.id,
+                                  baseServings: 1
+                                });
+                                reloadFoodCatalog();
+                              })()
                             }
                           />
                         </div>
