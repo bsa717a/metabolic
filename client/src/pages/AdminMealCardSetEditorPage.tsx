@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Pencil, Plus, Star, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Pencil, Plus, Sparkles, Star, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { NumberInput } from '../components/ui/NumberInput';
+import { FoodSearch } from '../components/nutrition/FoodSearch';
+import { LogDifferentFoodModal } from '../components/nutrition/LogDifferentFoodModal';
+import { foodEmoji } from '../utils/foodEmoji';
 import {
   FOOD_GROUPS,
   GROUP_COLORS,
@@ -94,54 +97,36 @@ function scaledPortion(line: AdminOptionFood, factor: number) {
   return { servings: Math.round(servings * 100) / 100, rounded };
 }
 
-function FoodSearch({ onPick }: { onPick: (food: Food) => void }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Food[]>([]);
-
-  useEffect(() => {
-    const trimmed = query.trim();
-    const timer = window.setTimeout(() => {
-      if (trimmed.length < 2) {
-        setResults([]);
-        return;
-      }
-      api<Food[]>(`/api/foods?query=${encodeURIComponent(trimmed)}`)
-        .then(setResults)
-        .catch(() => setResults([]));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [query]);
-
+function RecentFoodRow({
+  food,
+  canAdd,
+  onAdd
+}: {
+  food: Food;
+  canAdd: boolean;
+  onAdd: () => void;
+}) {
   return (
-    <div className="relative">
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search foods to add…"
-        className="w-56 rounded-xl border border-app-border bg-app-surface px-3 py-1.5 text-sm"
-      />
-      {results.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-72 overflow-y-auto rounded-xl border border-app-border bg-app-surface shadow-lg">
-          {results.map((food) => (
-            <li key={food.id}>
-              <button
-                type="button"
-                className="w-full px-3 py-2 text-left text-sm hover:bg-app-muted"
-                onClick={() => {
-                  onPick(food);
-                  setQuery('');
-                  setResults([]);
-                }}
-              >
-                <span className="font-semibold">{food.name}</span>{' '}
-                <span className="text-xs text-app-text-muted">
-                  {food.servingSize} {food.servingUnit} · {Math.round(Number(food.calories))} kcal
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="flex items-center gap-2">
+      <span className="w-5 shrink-0 text-center" aria-hidden>
+        {foodEmoji(food.name)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-app-text">{food.name}</p>
+        <p className="truncate text-xs text-app-text-muted">
+          {Math.round(Number(food.calories))} kcal · {Math.round(Number(food.protein))}g P
+        </p>
+      </div>
+      <button
+        type="button"
+        aria-label={`Add ${food.name} as an option`}
+        title={canAdd ? 'Add as an option' : 'Select a step first'}
+        disabled={!canAdd}
+        onClick={onAdd}
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-app-muted text-app-text transition hover:bg-brand-green/20 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Plus size={15} />
+      </button>
     </div>
   );
 }
@@ -159,17 +144,38 @@ function FoodMacroSidebar({
   usedFoodIds: Set<string>;
   selectedSectionLabel: string | null;
   suggestedGroup: FoodGroup | null;
-  onPick: (food: BuilderFood) => void;
+  onPick: (food: Pick<BuilderFood, 'id' | 'name'>) => void | Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<FoodGroup | 'all'>('all');
   const [openGroups, setOpenGroups] = useState<Record<FoodGroup, boolean>>(() =>
     Object.fromEntries(FOOD_GROUPS.map((group) => [group, true])) as Record<FoodGroup, boolean>
   );
+  const [recent, setRecent] = useState<Food[]>([]);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const canAdd = Boolean(selectedSectionLabel) && !busy;
+
+  useEffect(() => {
+    api<Food[]>('/api/foods/recent')
+      .then(setRecent)
+      .catch(() => setRecent([]));
+  }, []);
 
   useEffect(() => {
     setGroupFilter(suggestedGroup ?? 'all');
   }, [suggestedGroup]);
+
+  async function pickFood(food: Pick<BuilderFood, 'id' | 'name'>) {
+    if (!selectedSectionLabel || busy) return;
+    setBusy(true);
+    try {
+      await onPick(food);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -183,14 +189,67 @@ function FoodMacroSidebar({
   }, [catalog, query, groupFilter]);
 
   return (
-    <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-hidden flex flex-col rounded-2xl border border-app-border bg-app-surface">
-      <div className="border-b border-app-border px-3 py-3">
-        <h2 className="text-sm font-bold">Food options</h2>
-        <p className="mt-0.5 text-xs text-app-text-muted">
-          {selectedSectionLabel
-            ? `Click to add as a choosable option under “${selectedSectionLabel}”`
-            : 'Select a step on the left, then click a food to add it as an option'}
+    <aside className="nutrition-ui-lg lg:sticky lg:top-[var(--app-sticky-offset)] lg:max-h-[calc(100vh-var(--app-sticky-offset)-1rem)] flex flex-col self-start rounded-2xl border border-app-border bg-app-surface p-4 shadow-sm lg:overflow-hidden">
+      <div>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-app-text-muted">Add foods</h3>
+        <p className="mt-1 text-xs text-app-text-muted">
+          {selectedSectionLabel ? (
+            <>
+              Adding to <span className="font-medium text-app-text">{selectedSectionLabel}</span>
+            </>
+          ) : (
+            'Select a step on the left to add foods as options.'
+          )}
         </p>
+
+        <div className="mt-3 flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <FoodSearch onSelect={pickFood} />
+          </div>
+          <button
+            type="button"
+            aria-label="Describe a food for AI to estimate"
+            title={canAdd ? 'Describe a food (AI estimate)' : 'Select a step first'}
+            disabled={!canAdd}
+            onClick={() => setAiOpen(true)}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-app-border bg-app-surface text-brand-green transition hover:bg-brand-green/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Sparkles size={20} />
+          </button>
+        </div>
+
+        <LogDifferentFoodModal
+          open={aiOpen}
+          title={selectedSectionLabel ? `Add food to ${selectedSectionLabel}` : 'Add food'}
+          onClose={() => setAiOpen(false)}
+          onFoodAccepted={async (foods) => {
+            for (const food of foods) {
+              await pickFood(food);
+            }
+          }}
+        />
+
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-text-muted">Recent</p>
+          {recent.length === 0 ? (
+            <p className="text-sm text-app-text-muted">No recent foods yet.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {recent.slice(0, 10).map((food, index) => (
+                <RecentFoodRow
+                  key={`${food.id}-${index}`}
+                  food={food}
+                  canAdd={canAdd}
+                  onAdd={() => pickFood(food)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 min-h-0 flex-1 border-t border-app-border pt-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Browse catalog</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <button
             type="button"
@@ -227,12 +286,12 @@ function FoodMacroSidebar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter foods…"
+          placeholder="Filter catalog…"
           className="mt-2 w-full rounded-xl border border-app-border bg-app-bg px-3 py-1.5 text-sm"
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {loading && <p className="px-2 py-3 text-sm text-app-text-muted">Loading foods…</p>}
+      <div className="min-h-0 flex-1 overflow-y-auto py-2">
+        {loading && <p className="py-3 text-sm text-app-text-muted">Loading foods…</p>}
         {!loading &&
           filtered.map(({ group, foods }) => {
             const colors = GROUP_COLORS[group];
@@ -271,7 +330,7 @@ function FoodMacroSidebar({
                                 ? `Add “${food.name}” as an option`
                                 : 'Select a step first'
                             }
-                            onClick={() => onPick(food)}
+                            onClick={() => void pickFood(food)}
                             className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <span className="min-w-0 flex-1">
@@ -391,7 +450,7 @@ export function AdminMealCardSetEditorPage() {
   /** Create a new choosable option on a step, with the food as its portion line. */
   async function addFoodAsOption(
     cardId: string,
-    food: BuilderFood,
+    food: Pick<BuilderFood, 'id' | 'name'>,
     visibleWhenOptionId: string | null
   ) {
     setError(null);
@@ -409,7 +468,9 @@ export function AdminMealCardSetEditorPage() {
       });
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add option');
+      const message = err instanceof Error ? err.message : 'Could not add option';
+      setError(message);
+      throw err instanceof Error ? err : new Error(message);
     }
   }
 
@@ -570,7 +631,7 @@ export function AdminMealCardSetEditorPage() {
       )}
       {error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-6">
           {visibleCards.map((card, cardIndex) => {
             const isStyleCard = card.role === 'STYLE';
@@ -807,9 +868,17 @@ export function AdminMealCardSetEditorPage() {
                           </label>
                         )}
                         <span className="ml-auto" />
-                        <FoodSearch
-                          onPick={(food) => void call(`/api/admin/options/${option.id}/foods`, 'POST', { foodId: food.id, baseServings: 1 })}
-                        />
+                        <div className="w-56">
+                          <FoodSearch
+                            compact
+                            onSelect={(food) =>
+                              void call(`/api/admin/options/${option.id}/foods`, 'POST', {
+                                foodId: food.id,
+                                baseServings: 1
+                              })
+                            }
+                          />
+                        </div>
                         <button
                           type="button"
                           title="Delete option"
@@ -984,7 +1053,7 @@ export function AdminMealCardSetEditorPage() {
           suggestedGroup={selectedSection ? ROLE_TO_FOOD_GROUP[selectedSection.role] ?? null : null}
           onPick={(food) => {
             if (!selectedSection) return;
-            void addFoodAsOption(selectedSection.id, food, gateForNewOptions);
+            return addFoodAsOption(selectedSection.id, food, gateForNewOptions);
           }}
         />
       </div>
