@@ -40,10 +40,12 @@ function FoodResultButton({
 
 export function FoodSearch({
   onSelect,
-  dropUp = false
+  dropUp = false,
+  compact = false
 }: {
   onSelect: (food: Food) => void;
   dropUp?: boolean;
+  compact?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [acceptError, setAcceptError] = useState<string | null>(null);
@@ -98,8 +100,12 @@ export function FoodSearch({
   return (
     <div className="relative">
       <input
-        className="w-full rounded-2xl border border-app-border bg-app-surface p-3 text-app-text placeholder:text-app-text-muted"
-        placeholder="Search foods by name or alias"
+        className={
+          compact
+            ? 'w-full rounded-xl border border-app-border bg-app-surface px-3 py-1.5 text-sm text-app-text placeholder:text-app-text-muted'
+            : 'w-full rounded-2xl border border-app-border bg-app-surface p-3 text-app-text placeholder:text-app-text-muted'
+        }
+        placeholder={compact ? 'Search foods to add…' : 'Search foods by name or alias'}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />

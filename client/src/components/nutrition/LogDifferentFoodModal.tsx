@@ -3,6 +3,7 @@ import { Camera, X } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import type { Food } from '../../types';
 import type { GamificationCelebration } from '../../types/gamification';
 
 type LookupResult = {
@@ -39,7 +40,8 @@ export function LogDifferentFoodModal({
   title = 'What did you have instead?',
   itemType = 'ACTUAL',
   onClose,
-  onSaved
+  onSaved,
+  onFoodAccepted
 }: {
   open: boolean;
   mealId?: string;
@@ -47,6 +49,8 @@ export function LogDifferentFoodModal({
   itemType?: 'PLANNED' | 'ACTUAL';
   onClose: () => void;
   onSaved?: (celebrations: GamificationCelebration[]) => void;
+  /** When set, accepts lookups as foods without attaching to a meal (e.g. admin meal builder). */
+  onFoodAccepted?: (foods: Food[]) => void | Promise<void>;
 }) {
   const [description, setDescription] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
@@ -103,7 +107,7 @@ export function LogDifferentFoodModal({
   async function logDifferentFood() {
     const input = description.trim();
     if (!input && !photo) return;
-    if (!mealId) {
+    if (!mealId && !onFoodAccepted) {
       setError('Select a meal first.');
       return;
     }
@@ -133,6 +137,37 @@ export function LogDifferentFoodModal({
         if (!existingFoods.length) {
           throw new Error('Could not estimate nutrition for that food. Try adding a portion, like "1 cup" or "6 oz".');
         }
+      }
+
+      if (onFoodAccepted) {
+        const acceptedFoods: Food[] = [];
+
+        for (const lookupId of lookupIds) {
+          acceptedFoods.push(
+            await api<Food>(`/api/ai/food-lookup/${lookupId}/accept`, {
+              method: 'POST',
+              body: JSON.stringify({})
+            })
+          );
+        }
+
+        for (const item of lookup.items.filter((entry) => entry.source === 'existing' && entry.food)) {
+          const existing = item.food!;
+          acceptedFoods.push({
+            id: existing.id,
+            name: existing.name,
+            servingSize: 1,
+            servingUnit: existing.servingUnit,
+            calories: Number(existing.calories),
+            protein: Number(existing.protein),
+            carbs: Number(existing.carbs),
+            fat: Number(existing.fat)
+          });
+        }
+
+        await onFoodAccepted(acceptedFoods);
+        close();
+        return;
       }
 
       if (lookupIds.length) {
@@ -236,9 +271,11 @@ export function LogDifferentFoodModal({
           </div>
         )}
         <p className="text-xs text-app-text-muted">
-          {itemType === 'ACTUAL'
-            ? 'AI will estimate the nutrition from your text or photo and add it as actual food for this meal.'
-            : 'AI will estimate the nutrition from your text or photo and add it to the plan for this meal.'}
+          {onFoodAccepted
+            ? 'AI will estimate the nutrition from your text or photo so you can add it to this meal step.'
+            : itemType === 'ACTUAL'
+              ? 'AI will estimate the nutrition from your text or photo and add it as actual food for this meal.'
+              : 'AI will estimate the nutrition from your text or photo and add it to the plan for this meal.'}
         </p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <Button
