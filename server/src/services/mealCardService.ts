@@ -94,7 +94,7 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
           template: { select: { calorieTarget: true, proteinTarget: true, carbTarget: true, fatTarget: true } }
         }
       }),
-      prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude }),
+      prisma.mealCardSet.findMany({ orderBy: { sortOrder: 'asc' }, include: cardSetInclude }),
       getMealStructure(),
       prisma.planPeriod.findFirst({
         where: { programId: program.id, effectiveDate: { lte: day }, calorieTarget: { not: null } },
@@ -182,7 +182,7 @@ async function resolveCardMealsForDate(userId: string, date: string): Promise<Re
 
   const [structure, sets] = await Promise.all([
     getMealStructure(),
-    prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude })
+    prisma.mealCardSet.findMany({ orderBy: { sortOrder: 'asc' }, include: cardSetInclude })
   ]);
   const dayTargets = {
     protein: Math.round(n(period.proteinTarget)),
