@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -10,6 +11,7 @@ export type AdminCardSetSummary = {
   name: string;
   slotType: 'BREAKFAST' | 'SNACK' | 'LUNCH' | 'DINNER';
   referenceCalories: number;
+  sortOrder: number;
   _count: { cards: number; templateMeals: number; userPicks: number };
 };
 
@@ -17,6 +19,7 @@ export function MealCardSetsTable() {
   const [sets, setSets] = useState<AdminCardSetSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [movingId, setMovingId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: '', slotType: 'DINNER' as AdminCardSetSummary['slotType'], referenceCalories: 500 });
 
   const load = useCallback(() => {
@@ -44,6 +47,23 @@ export function MealCardSetsTable() {
     }
   }
 
+  async function move(set: AdminCardSetSummary, direction: 'up' | 'down') {
+    if (movingId) return;
+    setMovingId(set.id);
+    setError(null);
+    try {
+      await api(`/api/admin/card-sets/${set.id}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ direction })
+      });
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reorder the card set');
+    } finally {
+      setMovingId(null);
+    }
+  }
+
   return (
     <Card className="space-y-4">
       <div>
@@ -65,11 +85,12 @@ export function MealCardSetsTable() {
             <th>Cards</th>
             <th>Plan slots</th>
             <th>Users w/ picks</th>
+            <th className="text-right">Reorder</th>
             <th />
           </tr>
         </thead>
         <tbody>
-          {sets.map((set) => (
+          {sets.map((set, index) => (
             <tr key={set.id} className="border-b border-app-muted">
               <td className="py-2 font-semibold text-app-text">{set.name}</td>
               <td>{set.slotType}</td>
@@ -77,6 +98,28 @@ export function MealCardSetsTable() {
               <td className="tabular-nums">{set._count.cards}</td>
               <td className="tabular-nums">{set._count.templateMeals}</td>
               <td className="tabular-nums">{set._count.userPicks}</td>
+              <td>
+                <div className="flex justify-end gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Move ${set.name} up`}
+                    disabled={index === 0 || movingId !== null}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-app-border text-app-text transition hover:bg-app-muted disabled:opacity-40"
+                    onClick={() => void move(set, 'up')}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Move ${set.name} down`}
+                    disabled={index === sets.length - 1 || movingId !== null}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-app-border text-app-text transition hover:bg-app-muted disabled:opacity-40"
+                    onClick={() => void move(set, 'down')}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </td>
               <td className="text-right">
                 <Link to={`/admin/meal-cards/${set.id}`} className="font-semibold text-brand-green hover:text-brand-deep">
                   Edit →
@@ -86,7 +129,7 @@ export function MealCardSetsTable() {
           ))}
           {!sets.length && (
             <tr>
-              <td colSpan={7} className="py-4 text-app-text-muted">
+              <td colSpan={8} className="py-4 text-app-text-muted">
                 No card sets yet.
               </td>
             </tr>

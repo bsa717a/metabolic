@@ -55,7 +55,7 @@ export async function applyTemplateMealsToLog(
 
   // The user's standing card-builder picks: card-backed meals materialize from these
   // (scaled to the meal's target) instead of the template's fixed items.
-  const allSets = await tx.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude });
+  const allSets = await tx.mealCardSet.findMany({ orderBy: { sortOrder: 'asc' }, include: cardSetInclude });
   const structureSlots = (await getMealStructure()).slots;
   const cardSetIds = [
     ...new Set(

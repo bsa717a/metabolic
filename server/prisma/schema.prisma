@@ -1100,6 +1100,7 @@ model MealCardSet {
   referenceProtein Decimal? @db.Decimal(10, 2)
   referenceCarbs Decimal? @db.Decimal(10, 2)
   referenceFat Decimal? @db.Decimal(10, 2)
+  sortOrder Int @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   createdBy User? @relation("MealCardSetCreator", fields: [createdById], references: [id], onDelete: SetNull)

@@ -109,15 +109,16 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
   /* ---------- sets ---------- */
   app.get('/api/admin/card-sets', { preHandler: adminOnly }, async () =>
     prisma.mealCardSet.findMany({
-      orderBy: { name: 'asc' },
+      orderBy: { sortOrder: 'asc' },
       include: { _count: { select: { cards: true, templateMeals: true, userPicks: true } } }
     })
   );
 
   app.post('/api/admin/card-sets', { preHandler: adminOnly }, async (request) => {
     const body = setBodySchema.parse(request.body);
+    const max = await prisma.mealCardSet.aggregate({ _max: { sortOrder: true } });
     return prisma.mealCardSet.create({
-      data: { ...body, createdById: request.appUser!.id },
+      data: { ...body, sortOrder: (max._max.sortOrder ?? 0) + 1, createdById: request.appUser!.id },
       include: setInclude
     });
   });
@@ -153,6 +154,23 @@ export async function mealCardAdminRoutes(app: FastifyInstance) {
     }
     await prisma.mealCardSet.delete({ where: { id } });
     return { deleted: true };
+  });
+
+  app.post('/api/admin/card-sets/:id/move', { preHandler: adminOnly }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const { direction } = z.object({ direction: z.enum(['up', 'down']) }).parse(request.body);
+    const cardSet = await prisma.mealCardSet.findUnique({ where: { id } });
+    if (!cardSet) return notFound(reply);
+    const neighbor = await prisma.mealCardSet.findFirst({
+      where: { sortOrder: direction === 'up' ? { lt: cardSet.sortOrder } : { gt: cardSet.sortOrder } },
+      orderBy: { sortOrder: direction === 'up' ? 'desc' : 'asc' }
+    });
+    if (!neighbor) return { moved: false };
+    await prisma.$transaction([
+      prisma.mealCardSet.update({ where: { id: cardSet.id }, data: { sortOrder: neighbor.sortOrder } }),
+      prisma.mealCardSet.update({ where: { id: neighbor.id }, data: { sortOrder: cardSet.sortOrder } })
+    ]);
+    return { moved: true };
   });
 
   /* ---------- cards ---------- */

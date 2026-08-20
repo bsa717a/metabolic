@@ -37,7 +37,7 @@ export async function applyStructureMealsToLog(userId: string, dailyLogId: strin
 
   const [structure, sets, standingPicks] = await Promise.all([
     getMealStructure(),
-    prisma.mealCardSet.findMany({ orderBy: { createdAt: 'asc' }, include: cardSetInclude }),
+    prisma.mealCardSet.findMany({ orderBy: { sortOrder: 'asc' }, include: cardSetInclude }),
     prisma.userMealCardPicks.findMany({ where: { userId } })
   ]);
   const slots = slotTargets(n(period.calorieTarget), structure);
