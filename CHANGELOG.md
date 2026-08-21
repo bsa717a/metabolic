@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.15.0](https://github.com/bsa717a/metabolic/compare/v0.14.0...v0.15.0) (2026-08-21)
+
+
+### Features
+
+* **admin:** let meal card sets be reordered ([f162fd9](https://github.com/bsa717a/metabolic/commit/f162fd916b807e4eefacf845d7115fbeacc3b6c1))
+* **admin:** let meal card sets be reordered ([322efa2](https://github.com/bsa717a/metabolic/commit/322efa244f1674ae9e59b8177a7cd1a24a080321))
+* **exercise:** apply day-title sets, reps, and speed to every exercise ([69ce659](https://github.com/bsa717a/metabolic/commit/69ce65998092ecf1cbf64f04de7603d888e3b0d1))
+* **exercise:** apply day-title sets, reps, and speed to every exercise ([c177a09](https://github.com/bsa717a/metabolic/commit/c177a09f46a45468b425cf2286d81f23a1604e15))
+
 ## [0.14.0](https://github.com/bsa717a/metabolic/compare/v0.13.0...v0.14.0) (2026-08-19)
 
 
