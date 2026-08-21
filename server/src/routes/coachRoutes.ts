@@ -76,6 +76,7 @@ import {
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
 import {
+  applyRoutineDayItemOverrides,
   getRoutineForUser,
   upsertRoutine,
   upsertRoutineDayItemOverride
@@ -914,6 +915,34 @@ export async function coachRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
     }
   });
+
+  app.patch(
+    '/api/coach/users/:userId/exercise-routine/days/:weekday/items',
+    { preHandler: coachOnly },
+    async (request, reply) => {
+      const params = z
+        .object({
+          userId: z.string().min(1),
+          weekday: z.coerce.number().int().min(0).max(6)
+        })
+        .safeParse(request.params);
+      if (!params.success) {
+        return reply.code(400).send({ error: params.error.issues[0]?.message ?? 'Invalid request' });
+      }
+      const parsed = templateExerciseItemUpdateBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid prescription' });
+      }
+      try {
+        await requireCoachClient(request.appUser!, params.data.userId);
+        return await applyRoutineDayItemOverrides(params.data.userId, params.data.weekday, parsed.data);
+      } catch (error) {
+        return reply
+          .code(400)
+          .send({ error: error instanceof Error ? error.message : 'Unable to update day prescription' });
+      }
+    }
+  );
 
   app.patch(
     '/api/coach/users/:userId/exercise-routine/days/:weekday/items/:templateItemId',

@@ -10,6 +10,7 @@ export function exercisePlanApi(clientId?: string) {
       templateItems: (id: string) => `/api/exercise-templates/${id}/items`,
       templateReorder: (id: string) => `/api/exercise-templates/${id}/reorder`,
       templateItem: (id: string) => `/api/exercise-template-items/${id}`,
+      routineDayItems: (weekday: number) => `/api/exercise-routine/days/${weekday}/items`,
       routineDayItem: (weekday: number, templateItemId: string) =>
         `/api/exercise-routine/days/${weekday}/items/${encodeURIComponent(templateItemId)}`
     };
@@ -26,6 +27,7 @@ export function exercisePlanApi(clientId?: string) {
     templateItems: (id: string) => `${base}/exercise-templates/${id}/items`,
     templateReorder: (id: string) => `${base}/exercise-templates/${id}/reorder`,
     templateItem: (id: string) => `${base}/exercise-template-items/${id}`,
+    routineDayItems: (weekday: number) => `${base}/exercise-routine/days/${weekday}/items`,
     routineDayItem: (weekday: number, templateItemId: string) =>
       `${base}/exercise-routine/days/${weekday}/items/${encodeURIComponent(templateItemId)}`
   };
