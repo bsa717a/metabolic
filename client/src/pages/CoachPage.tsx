@@ -51,7 +51,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState('');
   const [workspaceView, setWorkspaceView] = useState<'list' | 'calendar'>(() =>
-    searchParams.get('view') === 'calendar' ? 'calendar' : 'list'
+    searchParams.get('view') === 'calendar' && searchParams.get('checkIn') ? 'calendar' : 'list'
   );
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -73,7 +73,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   }, [setSearchParams]);
 
   useEffect(() => {
-    if (searchParams.get('view') === 'calendar') {
+    if (searchParams.get('view') === 'calendar' && searchParams.get('checkIn')) {
       setWorkspaceView('calendar');
     }
   }, [searchParams]);

@@ -88,7 +88,7 @@ export function UpcomingCheckInsCard() {
           <p className="text-sm text-app-text-muted">Next scheduled sessions with your clients.</p>
         </div>
         <Link
-          to="/coach?view=calendar"
+          to="/coach"
           className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-brand-navy transition hover:opacity-80 dark:text-brand-green"
         >
           Coach workspace

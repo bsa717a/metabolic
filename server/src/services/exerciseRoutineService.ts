@@ -416,17 +416,49 @@ export async function upsertRoutine(
   return { routine: serialized, undoSnapshot };
 }
 
-export async function upsertRoutineDayItemOverride(
-  userId: string,
-  weekday: number,
-  templateItemId: string,
-  patch: RoutineDayItemOverrideInput
-) {
+type OverrideBase = {
+  sets: number | null;
+  reps: string | null;
+  speed: string | null;
+  durationMinutes: number | null;
+  distance: number | null;
+  weight: number | null;
+};
+
+function overrideBaseFrom(
+  source: {
+    sets: number | null;
+    reps: string | null;
+    speed: string | null;
+    durationMinutes: number | null;
+    distance: unknown;
+    weight: unknown;
+  }
+): OverrideBase {
+  return {
+    sets: source.sets,
+    reps: source.reps,
+    speed: source.speed,
+    durationMinutes: source.durationMinutes,
+    distance: source.distance == null ? null : Number(source.distance),
+    weight: source.weight == null ? null : Number(source.weight)
+  };
+}
+
+function mergedOverrideValues(base: OverrideBase, patch: RoutineDayItemOverrideInput): OverrideBase {
+  return {
+    sets: patch.sets !== undefined ? patch.sets : base.sets,
+    reps: patch.reps !== undefined ? normalizeRepScheme(patch.reps) : base.reps,
+    speed: patch.speed !== undefined ? normalizeSpeedScheme(patch.speed) : base.speed,
+    durationMinutes: patch.durationMinutes !== undefined ? patch.durationMinutes : base.durationMinutes,
+    distance: patch.distance !== undefined ? patch.distance : base.distance,
+    weight: patch.weight !== undefined ? patch.weight : base.weight
+  };
+}
+
+async function loadAssignedRoutineDay(userId: string, weekday: number) {
   if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
     throw new Error('Invalid weekday');
-  }
-  if (!Object.keys(patch).length) {
-    throw new Error('At least one field is required');
   }
 
   const program = await getActiveProgram(userId);
@@ -448,6 +480,85 @@ export async function upsertRoutineDayItemOverride(
     throw new Error('That weekday is a rest day');
   }
 
+  return { program, routineDay };
+}
+
+async function upsertDayItemOverride(
+  routineDay: {
+    id: string;
+    templateId: string | null;
+    itemOverrides: Array<{
+      templateItemId: string;
+      sets: number | null;
+      reps: string | null;
+      speed: string | null;
+      durationMinutes: number | null;
+      distance: unknown;
+      weight: unknown;
+    }>;
+  },
+  templateItem: {
+    id: string;
+    templateId: string;
+    sets: number | null;
+    reps: string | null;
+    speed: string | null;
+    durationMinutes: number | null;
+    distance: unknown;
+    weight: unknown;
+  },
+  patch: RoutineDayItemOverrideInput,
+  db: Pick<typeof prisma, 'exerciseRoutineDayItem'> = prisma
+) {
+  if (!routineDay.templateId || templateItem.templateId !== routineDay.templateId) {
+    throw new Error("Exercise is not part of this weekday's workout");
+  }
+
+  const existing = routineDay.itemOverrides.find((item) => item.templateItemId === templateItem.id);
+  const next = mergedOverrideValues(overrideBaseFrom(existing ?? templateItem), patch);
+
+  return db.exerciseRoutineDayItem.upsert({
+    where: {
+      routineDayId_templateItemId: {
+        routineDayId: routineDay.id,
+        templateItemId: templateItem.id
+      }
+    },
+    create: {
+      routineDayId: routineDay.id,
+      templateItemId: templateItem.id,
+      ...next
+    },
+    update: next
+  });
+}
+
+async function applyRoutineForwardForWeekday(userId: string, programId: string, weekday: number) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+  const today = parseDateParam(userDayKey(user?.timezone ?? null));
+  const days = await getRoutineDaysForProgram(programId);
+  const dayInputs: RoutineDayInput[] = (days ?? []).map((day) => ({
+    weekday: day.weekday,
+    templateId: day.templateId
+  }));
+
+  return applyRoutineForward(userId, dayInputs, today, {
+    weekdayFilter: weekday
+  });
+}
+
+export async function upsertRoutineDayItemOverride(
+  userId: string,
+  weekday: number,
+  templateItemId: string,
+  patch: RoutineDayItemOverrideInput
+) {
+  if (!Object.keys(patch).length) {
+    throw new Error('At least one field is required');
+  }
+
+  const { program, routineDay } = await loadAssignedRoutineDay(userId, weekday);
+
   const templateItem = await prisma.exerciseTemplateItem.findUnique({
     where: { id: templateItemId }
   });
@@ -455,63 +566,47 @@ export async function upsertRoutineDayItemOverride(
     throw new Error("Exercise is not part of this weekday's workout");
   }
 
-  const existing = routineDay.itemOverrides.find((item) => item.templateItemId === templateItemId);
-  const base = existing
-    ? {
-        sets: existing.sets,
-        reps: existing.reps,
-        speed: existing.speed,
-        durationMinutes: existing.durationMinutes,
-        distance: existing.distance == null ? null : Number(existing.distance),
-        weight: existing.weight == null ? null : Number(existing.weight)
-      }
-    : {
-        sets: templateItem.sets,
-        reps: templateItem.reps,
-        speed: templateItem.speed,
-        durationMinutes: templateItem.durationMinutes,
-        distance: templateItem.distance == null ? null : Number(templateItem.distance),
-        weight: templateItem.weight == null ? null : Number(templateItem.weight)
-      };
-
-  const next = {
-    sets: patch.sets !== undefined ? patch.sets : base.sets,
-    reps: patch.reps !== undefined ? normalizeRepScheme(patch.reps) : base.reps,
-    speed: patch.speed !== undefined ? normalizeSpeedScheme(patch.speed) : base.speed,
-    durationMinutes: patch.durationMinutes !== undefined ? patch.durationMinutes : base.durationMinutes,
-    distance: patch.distance !== undefined ? patch.distance : base.distance,
-    weight: patch.weight !== undefined ? patch.weight : base.weight
-  };
-
-  const override = await prisma.exerciseRoutineDayItem.upsert({
-    where: {
-      routineDayId_templateItemId: {
-        routineDayId: routineDay.id,
-        templateItemId
-      }
-    },
-    create: {
-      routineDayId: routineDay.id,
-      templateItemId,
-      ...next
-    },
-    update: next
-  });
-
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
-  const today = parseDateParam(userDayKey(user?.timezone ?? null));
-  const days = await getRoutineDaysForProgram(program.id);
-  const dayInputs: RoutineDayInput[] = (days ?? []).map((day) => ({
-    weekday: day.weekday,
-    templateId: day.templateId
-  }));
-
-  const { undoSnapshot, appliedDays } = await applyRoutineForward(userId, dayInputs, today, {
-    weekdayFilter: weekday
-  });
+  const override = await upsertDayItemOverride(routineDay, templateItem, patch);
+  const { undoSnapshot, appliedDays } = await applyRoutineForwardForWeekday(userId, program.id, weekday);
 
   return {
     override: serializeItemOverride(override),
+    appliedDays,
+    undoSnapshot
+  };
+}
+
+export async function applyRoutineDayItemOverrides(
+  userId: string,
+  weekday: number,
+  patch: RoutineDayItemOverrideInput
+) {
+  if (!Object.keys(patch).length) {
+    throw new Error('At least one field is required');
+  }
+
+  const { program, routineDay } = await loadAssignedRoutineDay(userId, weekday);
+  const templateId = routineDay.templateId;
+  if (!templateId) {
+    throw new Error('That weekday is a rest day');
+  }
+
+  const templateItems = await prisma.exerciseTemplateItem.findMany({
+    where: { templateId }
+  });
+
+  const overrides = await prisma.$transaction(async (tx) => {
+    const nextOverrides = [];
+    for (const templateItem of templateItems) {
+      nextOverrides.push(await upsertDayItemOverride(routineDay, templateItem, patch, tx));
+    }
+    return nextOverrides;
+  });
+
+  const { undoSnapshot, appliedDays } = await applyRoutineForwardForWeekday(userId, program.id, weekday);
+
+  return {
+    overrides: overrides.map(serializeItemOverride),
     appliedDays,
     undoSnapshot
   };

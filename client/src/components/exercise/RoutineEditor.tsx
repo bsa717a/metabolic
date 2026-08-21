@@ -13,6 +13,7 @@ import type {
 import type { ExercisePlanUndoSnapshot } from '../../types/exercisePlanUndo';
 import { formatPlanShort } from '../../utils/exerciseFormat';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
+import { sharedField } from '../../utils/sharedPrescription';
 import { WEEKDAY_LABELS, type WeekdayIndex } from '../../utils/weekdayPattern';
 import { Button } from '../ui/Button';
 import { NumberInput } from '../ui/NumberInput';
@@ -88,6 +89,86 @@ function PrescriptionNumberChip({
       />
       <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">{label}</span>
     </label>
+  );
+}
+
+function DayTitlePrescription({
+  items,
+  disabled,
+  onApply
+}: {
+  items: ExerciseTemplateItem[];
+  disabled?: boolean;
+  onApply: (patch: { sets?: number | null; reps?: string | null; speed?: string | null }) => void;
+}) {
+  const sharedSets = sharedField(items, (item) => item.sets);
+  const sharedReps = sharedField(items, (item) => item.reps);
+  const sharedSpeed = sharedField(items, (item) => item.speed);
+  const committedSets = typeof sharedSets === 'number' ? sharedSets : null;
+  const committedReps = typeof sharedReps === 'string' ? sharedReps : null;
+  const committedSpeed = typeof sharedSpeed === 'string' ? sharedSpeed : null;
+
+  const [sets, setSets] = useState(toInput(committedSets));
+  const [reps, setReps] = useState<string | null>(committedReps);
+  const [speed, setSpeed] = useState<string | null>(committedSpeed);
+
+  useEffect(() => {
+    setSets(toInput(committedSets));
+    setReps(committedReps);
+    setSpeed(committedSpeed);
+  }, [committedSets, committedReps, committedSpeed]);
+
+  function commit(next: { reps?: string | null; speed?: string | null } = {}) {
+    if (disabled) return;
+    const nextSets = parseOptionalNumber(sets);
+    const nextReps = next.reps !== undefined ? next.reps : reps;
+    const nextSpeed = next.speed !== undefined ? next.speed : speed;
+    const patch: { sets?: number | null; reps?: string | null; speed?: string | null } = {};
+    if (nextSets !== committedSets) patch.sets = nextSets;
+    if (nextReps !== committedReps) patch.reps = nextReps;
+    if (nextSpeed !== committedSpeed) patch.speed = nextSpeed;
+    if (!Object.keys(patch).length) return;
+    onApply(patch);
+  }
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-1">
+      <PrescriptionNumberChip
+        label="sets"
+        value={sets}
+        onChange={setSets}
+        onCommit={() => commit()}
+        ariaLabel="Sets for all exercises"
+        disabled={disabled}
+      />
+      <span className="text-xs text-app-text-muted">×</span>
+      <label className="inline-flex flex-col items-center rounded-lg border border-app-border bg-app-muted/40 px-1.5 py-1">
+        <RepSchemeSelect
+          value={reps}
+          disabled={disabled}
+          aria-label="Reps for all exercises"
+          onChange={(next) => {
+            setReps(next);
+            commit({ reps: next });
+          }}
+          className="w-[5.5rem] bg-transparent text-center text-xs font-semibold text-app-text outline-none disabled:opacity-50"
+        />
+        <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">reps</span>
+      </label>
+      <label className="inline-flex flex-col items-center rounded-lg border border-app-border bg-app-muted/40 px-1.5 py-1">
+        <SpeedSchemeSelect
+          value={speed}
+          disabled={disabled}
+          aria-label="Speed for all exercises"
+          onChange={(next) => {
+            setSpeed(next);
+            commit({ speed: next });
+          }}
+          className="w-14 bg-transparent text-center text-xs font-semibold text-app-text outline-none disabled:opacity-50"
+        />
+        <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">speed</span>
+      </label>
+    </div>
   );
 }
 
@@ -350,7 +431,8 @@ function WeekdayAssignmentRow({
   onActivate,
   onPointerDown,
   onEnsureSaved,
-  onOverrideSaved
+  onOverridesSaved,
+  onApplied
 }: {
   weekday: WeekdayIndex;
   templateId: string | null;
@@ -363,16 +445,21 @@ function WeekdayAssignmentRow({
   onActivate: () => void;
   onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onEnsureSaved: () => Promise<void>;
-  onOverrideSaved: (override: ExerciseRoutineDayItemOverride) => void;
+  onOverridesSaved: (
+    overrides: ExerciseRoutineDayItemOverride[],
+    undoSnapshot?: ExercisePlanUndoSnapshot
+  ) => void;
+  onApplied?: () => void | Promise<void>;
 }) {
   const endpoints = useMemo(() => exercisePlanApi(clientId), [clientId]);
   const [open, setOpen] = useState(false);
   const [patchError, setPatchError] = useState('');
+  const [applyingAll, setApplyingAll] = useState(false);
   const hasRoutine = Boolean(templateId);
   const assignmentSaved = Boolean(templateId && savedTemplateId && templateId === savedTemplateId);
   const { items, loading, loadError } = useRoutineExercisePreview(
     hasRoutine ? templateId : null,
-    open && hasRoutine,
+    hasRoutine,
     clientId
   );
 
@@ -399,13 +486,43 @@ function WeekdayAssignmentRow({
     setPatchError('');
     try {
       if (!assignmentSaved) await onEnsureSaved();
-      const result = await api<{ override: ExerciseRoutineDayItemOverride }>(
-        endpoints.routineDayItem(weekday, item.id),
-        { method: 'PATCH', body: JSON.stringify(patch) }
-      );
-      onOverrideSaved(result.override);
+      const result = await api<{
+        override: ExerciseRoutineDayItemOverride;
+        undoSnapshot?: ExercisePlanUndoSnapshot;
+      }>(endpoints.routineDayItem(weekday, item.id), {
+        method: 'PATCH',
+        body: JSON.stringify(patch)
+      });
+      onOverridesSaved([result.override], result.undoSnapshot);
+      await onApplied?.();
     } catch (err) {
       setPatchError(err instanceof Error ? err.message : 'Unable to update prescription');
+    }
+  }
+
+  async function handleApplyAll(patch: {
+    sets?: number | null;
+    reps?: string | null;
+    speed?: string | null;
+  }) {
+    if (!templateId) return;
+    setPatchError('');
+    setApplyingAll(true);
+    try {
+      if (!assignmentSaved) await onEnsureSaved();
+      const result = await api<{
+        overrides: ExerciseRoutineDayItemOverride[];
+        undoSnapshot?: ExercisePlanUndoSnapshot;
+      }>(endpoints.routineDayItems(weekday), {
+        method: 'PATCH',
+        body: JSON.stringify(patch)
+      });
+      onOverridesSaved(result.overrides, result.undoSnapshot);
+      await onApplied?.();
+    } catch (err) {
+      setPatchError(err instanceof Error ? err.message : 'Unable to update prescription');
+    } finally {
+      setApplyingAll(false);
     }
   }
 
@@ -420,47 +537,56 @@ function WeekdayAssignmentRow({
             : 'border-app-border bg-app-surface'
       }`}
     >
-      <button
-        type="button"
-        aria-expanded={hasRoutine ? open : undefined}
-        aria-label={
-          awaitingAssign
-            ? `Assign selected routine to ${WEEKDAY_LABELS[weekday]}`
-            : hasRoutine
-              ? open
-                ? `Hide exercises for ${label}`
-                : `Show exercises for ${label}`
-              : `${WEEKDAY_LABELS[weekday]} · ${label}`
-        }
-        onPointerDown={onPointerDown}
-        onClick={() => {
-          if (awaitingAssign) {
-            onActivate();
-            return;
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+        <button
+          type="button"
+          aria-expanded={hasRoutine ? open : undefined}
+          aria-label={
+            awaitingAssign
+              ? `Assign selected routine to ${WEEKDAY_LABELS[weekday]}`
+              : hasRoutine
+                ? open
+                  ? `Hide exercises for ${label}`
+                  : `Show exercises for ${label}`
+                : `${WEEKDAY_LABELS[weekday]} · ${label}`
           }
-          if (hasRoutine) setOpen((current) => !current);
-        }}
-        className={`flex w-full touch-none items-center gap-3 px-3 py-2.5 text-left transition hover:bg-app-muted/40 ${
-          hasRoutine || awaitingAssign ? 'cursor-pointer' : 'cursor-grab'
-        }`}
-      >
-        <span className="w-10 shrink-0 text-sm font-semibold text-app-text">
-          {WEEKDAY_LABELS[weekday]}
-        </span>
-        <span
-          className={`min-w-0 flex-1 truncate text-sm ${
-            hasRoutine ? 'font-medium text-app-text' : 'text-app-text-muted'
+          onPointerDown={onPointerDown}
+          onClick={() => {
+            if (awaitingAssign) {
+              onActivate();
+              return;
+            }
+            if (hasRoutine) setOpen((current) => !current);
+          }}
+          className={`flex min-w-0 flex-1 touch-none items-center gap-3 text-left transition hover:bg-app-muted/40 ${
+            hasRoutine || awaitingAssign ? 'cursor-pointer' : 'cursor-grab'
           }`}
         >
-          {label}
-        </span>
-        {hasRoutine && (
-          <ChevronDown
-            aria-hidden
-            className={`h-4 w-4 shrink-0 text-app-text-muted transition ${open ? 'rotate-180' : ''}`}
+          <span className="w-10 shrink-0 text-sm font-semibold text-app-text">
+            {WEEKDAY_LABELS[weekday]}
+          </span>
+          <span
+            className={`min-w-0 flex-1 truncate text-sm ${
+              hasRoutine ? 'font-medium text-app-text' : 'text-app-text-muted'
+            }`}
+          >
+            {label}
+          </span>
+          {hasRoutine && (
+            <ChevronDown
+              aria-hidden
+              className={`h-4 w-4 shrink-0 text-app-text-muted transition ${open ? 'rotate-180' : ''}`}
+            />
+          )}
+        </button>
+        {hasRoutine && !awaitingAssign && (
+          <DayTitlePrescription
+            items={mergedItems}
+            disabled={applyingAll || Boolean(loadError) || (!loading && mergedItems.length === 0)}
+            onApply={(patch) => void handleApplyAll(patch)}
           />
         )}
-      </button>
+      </div>
       {hasRoutine && open && (
         <div className="border-t border-app-border bg-app-muted/30 px-3 py-2">
           {loading && <p className="text-xs text-app-text-muted">Loading…</p>}
@@ -939,14 +1065,13 @@ export function RoutineEditorContent({
     }
   }
 
-  function handleDayOverrideSaved(weekday: WeekdayIndex, override: ExerciseRoutineDayItemOverride) {
+  function handleDayOverridesSaved(weekday: WeekdayIndex, overrides: ExerciseRoutineDayItemOverride[]) {
     setSavedRoutineDays((current) =>
       current.map((day) => {
         if (day.weekday !== weekday) return day;
-        const without = day.itemOverrides.filter(
-          (entry) => entry.templateItemId !== override.templateItemId
-        );
-        return { ...day, itemOverrides: [...without, override] };
+        const incoming = new Map(overrides.map((entry) => [entry.templateItemId, entry]));
+        const kept = day.itemOverrides.filter((entry) => !incoming.has(entry.templateItemId));
+        return { ...day, itemOverrides: [...kept, ...overrides] };
       })
     );
   }
@@ -1136,8 +1261,9 @@ export function RoutineEditorContent({
           <h3 className="text-sm font-semibold text-app-text">Weekly routine</h3>
           <p className="text-sm text-app-text-muted">
             Choose an exercise plan to pre-fill the week (first routine → Mon, next → Tue, and so on).
-            Drag days to swap them, or drag from the work area / Rest to replace a day. Your schedule
-            repeats every week and fills in upcoming days automatically.
+            Drag days to swap them, or drag from the work area / Rest to replace a day. Set sets, reps,
+            and speed on a day title to apply them to every exercise that day. Your schedule repeats
+            every week and fills in upcoming days automatically.
           </p>
 
           {loading ? (
@@ -1192,7 +1318,10 @@ export function RoutineEditorContent({
                           handleWeekdayPointerDown(day.weekday, day.templateId, event)
                         }
                         onEnsureSaved={ensureAssignmentsSaved}
-                        onOverrideSaved={(override) => handleDayOverrideSaved(day.weekday, override)}
+                        onOverridesSaved={(overrides) => {
+                          handleDayOverridesSaved(day.weekday, overrides);
+                        }}
+                        onApplied={onSaved}
                       />
                     );
                   })}

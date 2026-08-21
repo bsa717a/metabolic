@@ -128,7 +128,6 @@ export function ExercisePlanEditor({
         open={manualOpen}
         clientId={clientId}
         planDate={planDate}
-        exerciseTemplates={exerciseTemplates}
         onClose={() => {
           onManualOpenChange(false);
           void loadExercises();

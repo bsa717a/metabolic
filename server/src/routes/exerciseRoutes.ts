@@ -33,6 +33,7 @@ import {
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
 import {
+  applyRoutineDayItemOverrides,
   getRoutineForUser,
   upsertRoutine,
   upsertRoutineDayItemOverride
@@ -347,6 +348,22 @@ export async function exerciseRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
     }
   });
+
+  app.patch(
+    '/api/exercise-routine/days/:weekday/items',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z.object({ weekday: z.coerce.number().int().min(0).max(6) }).parse(request.params);
+      const body = templateExerciseItemUpdateBody.parse(request.body);
+      try {
+        return await applyRoutineDayItemOverrides(request.appUser!.id, params.weekday, body);
+      } catch (error) {
+        return reply
+          .code(400)
+          .send({ error: error instanceof Error ? error.message : 'Unable to update day prescription' });
+      }
+    }
+  );
 
   app.patch(
     '/api/exercise-routine/days/:weekday/items/:templateItemId',
