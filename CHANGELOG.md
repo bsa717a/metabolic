@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.16.0](https://github.com/bsa717a/metabolic/compare/v0.15.0...v0.16.0) (2026-09-01)
+
+
+### Features
+
+* **nutrition:** mark a meal eaten from Today's Nutrition ([bbea5d9](https://github.com/bsa717a/metabolic/commit/bbea5d9f256869f1b884389db7bc12b3c9eb33dd))
+* **nutrition:** mark a meal eaten from Today's Nutrition ([db37907](https://github.com/bsa717a/metabolic/commit/db37907d266b71b971ac1bc11a3f6fb6d24485d6))
+
+
+### Bug Fixes
+
+* **ci:** authenticate Artifact Registry before the image push ([d27eede](https://github.com/bsa717a/metabolic/commit/d27eedea8c956c08ba34b579df92d13a7174e930))
+* **ci:** authenticate Artifact Registry before the image push ([038dac4](https://github.com/bsa717a/metabolic/commit/038dac4662e8fc1dc335ed38fbf1c5c4e4ce3a1a))
+
 ## [0.15.0](https://github.com/bsa717a/metabolic/compare/v0.14.0...v0.15.0) (2026-08-21)
 
 
