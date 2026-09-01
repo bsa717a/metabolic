@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.16.1](https://github.com/bsa717a/metabolic/compare/v0.16.0...v0.16.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* **dashboard:** hide upcoming check-ins when none are scheduled ([fe68114](https://github.com/bsa717a/metabolic/commit/fe68114e07902b8245d8279af78ba26c76896f7e))
+
 ## [0.16.0](https://github.com/bsa717a/metabolic/compare/v0.15.0...v0.16.0) (2026-09-01)
 
 
