@@ -6,7 +6,7 @@ import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
 import { parseFoodEntry } from '../../utils/foodEntryParse';
 import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
-import { Badge } from '../ui/Badge';
+import { MealStatusMenu } from '../nutrition/MealStatusMenu';
 import { Card } from '../ui/Card';
 import { Drawer } from '../ui/Drawer';
 
@@ -464,14 +464,14 @@ export function TodayNutrition({
           const plannedTime = formatPlannedTime(meal.plannedTime);
 
           return (
-            <div key={meal.id} className="overflow-hidden rounded-2xl bg-app-muted">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-3 p-3 text-left"
-                onClick={() => toggleMeal(meal.id)}
-                aria-expanded={expanded}
-              >
-                <div className="min-w-0 flex-1">
+            <div key={meal.id} className="rounded-2xl bg-app-muted">
+              <div className="flex items-center gap-2 p-3">
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => toggleMeal(meal.id)}
+                  aria-expanded={expanded}
+                >
                   <p className="font-semibold text-app-text">
                     {meal.mealNumber}. {plannedTime ? `${meal.name} - ${plannedTime}` : meal.name}
                   </p>
@@ -479,17 +479,18 @@ export function TodayNutrition({
                     {Math.round(Number(meal.actualCalories))} / {Math.round(Number(meal.plannedCalories))} kcal
                     {plannedCount > 0 && ` · ${plannedCount} item${plannedCount === 1 ? '' : 's'}`}
                   </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge tone={meal.status.includes('EATEN') ? 'green' : 'slate'}>
-                    {meal.status.replaceAll('_', ' ')}
-                  </Badge>
-                  <ChevronDown
-                    size={18}
-                    className={`text-app-text-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
-                  />
-                </div>
-              </button>
+                </button>
+                <MealStatusMenu meal={meal} onChange={onChange} />
+                <button
+                  type="button"
+                  className="grid h-8 w-8 shrink-0 place-items-center text-app-text-muted"
+                  onClick={() => toggleMeal(meal.id)}
+                  aria-expanded={expanded}
+                  aria-label={expanded ? `Collapse ${meal.name}` : `Expand ${meal.name}`}
+                >
+                  <ChevronDown size={18} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
               {expanded && <PlannedItemChecklist meal={meal} onChange={onChange} />}
             </div>
           );
