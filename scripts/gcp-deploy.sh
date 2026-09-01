@@ -25,6 +25,10 @@ fi
 
 echo "==> Configure Docker for Artifact Registry"
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+# Buildx's container driver often gets 401 on Artifact Registry layer PUTs when
+# it only has the gcloud credential helper. An explicit access-token login is
+# what docker push (and the docker driver) can use reliably.
+gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin "${REGION}-docker.pkg.dev"
 
 echo "==> Build and push API image (linux/amd64 for Cloud Run)"
 docker buildx build \
