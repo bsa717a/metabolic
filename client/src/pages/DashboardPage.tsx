@@ -249,11 +249,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
         <PlanStatusCard />
       </div>
 
-      {isCoachRole(user?.role) && (
-        <section>
-          <UpcomingCheckInsCard />
-        </section>
-      )}
+      {isCoachRole(user?.role) && <UpcomingCheckInsCard />}
 
       <section className="grid gap-6 lg:grid-cols-2">
         <div data-tour="today-nutrition">

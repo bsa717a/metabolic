@@ -80,60 +80,62 @@ export function UpcomingCheckInsCard() {
     [clients]
   );
 
-  return (
-    <Card className="sm:col-span-2 lg:col-span-3">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-app-text">Upcoming check-ins</h2>
-          <p className="text-sm text-app-text-muted">Next scheduled sessions with your clients.</p>
-        </div>
-        <Link
-          to="/coach"
-          className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-brand-navy transition hover:opacity-80 dark:text-brand-green"
-        >
-          Coach workspace
-          <ChevronRight className="h-4 w-4" aria-hidden />
-        </Link>
-      </div>
+  if (loading || (!error && upcomingCheckIns.length === 0)) {
+    return null;
+  }
 
-      {loading ? (
-        <p className="text-sm text-app-text-muted">Loading check-ins…</p>
-      ) : error ? (
-        <div>
-          <p className="text-sm text-red-700">{error}</p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="mt-2 text-sm font-semibold text-brand-green transition hover:text-brand-deep"
+  return (
+    <section>
+      <Card className="sm:col-span-2 lg:col-span-3">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-app-text">Upcoming check-ins</h2>
+            <p className="text-sm text-app-text-muted">Next scheduled sessions with your clients.</p>
+          </div>
+          <Link
+            to="/coach"
+            className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-brand-navy transition hover:opacity-80 dark:text-brand-green"
           >
-            Try again
-          </button>
+            Coach workspace
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </Link>
         </div>
-      ) : upcomingCheckIns.length === 0 ? (
-        <p className="text-sm text-app-text-muted">No upcoming check-ins scheduled.</p>
-      ) : (
-        <ul className="space-y-2">
-          {upcomingCheckIns.map((client) => (
-            <li key={client.id}>
-              <Link
-                to={coachCheckInHref(client)}
-                className="flex items-center gap-3 rounded-xl border border-app-border bg-app-surface px-3 py-2.5 transition hover:bg-app-muted"
-              >
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-300">
-                  <CalendarClock className="h-4 w-4" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-app-text">{clientName(client)}</span>
-                  <span className="block text-sm text-app-text-muted">
-                    {formatCheckInWhen(client.nextCheckInAt!)}
+
+        {error ? (
+          <div>
+            <p className="text-sm text-red-700">{error}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="mt-2 text-sm font-semibold text-brand-green transition hover:text-brand-deep"
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {upcomingCheckIns.map((client) => (
+              <li key={client.id}>
+                <Link
+                  to={coachCheckInHref(client)}
+                  className="flex items-center gap-3 rounded-xl border border-app-border bg-app-surface px-3 py-2.5 transition hover:bg-app-muted"
+                >
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-300">
+                    <CalendarClock className="h-4 w-4" aria-hidden />
                   </span>
-                </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-app-text-muted" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-app-text">{clientName(client)}</span>
+                    <span className="block text-sm text-app-text-muted">
+                      {formatCheckInWhen(client.nextCheckInAt!)}
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-app-text-muted" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </section>
   );
 }
