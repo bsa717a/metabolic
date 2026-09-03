@@ -30,6 +30,7 @@ export type AppUser = {
   gracePeriodEndsAt?: string | null;
   nextPlanAfterCoach?: PlanSlug | null;
   assignedCoach?: UserSummary | null;
+  coachRequestedAt?: string | null;
   coachRelationshipStatus?: CoachRelationshipStatusSlug | null;
   storeEnabled?: boolean;
   feedbackEnabled?: boolean;

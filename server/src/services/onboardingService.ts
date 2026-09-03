@@ -1,4 +1,4 @@
-import { ProgramMode, ProgramStatus, Role, Visibility, MealItemType, type ProgramMetric, type Prisma } from '@prisma/client';
+import { ProgramMode, ProgramStatus, Visibility, MealItemType, type ProgramMetric, type Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey, userDayKey } from '../utils/dates.js';
 import { normalizeGender } from './bloodPanelMetrics.js';
@@ -9,6 +9,7 @@ import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
 import { applyStructureMealsToLog } from './structureMealsApply.js';
 import { freezeTargetsOnPeriod } from './targetService.js';
 import { notifyCoachRequest } from './coachRequestNotificationService.js';
+import { applyCoachSupport, findCoachByCode, normalizeCoachCode } from './coachSupportService.js';
 import { isVirtualCoachId } from '../data/virtualCoachPersonas.js';
 import { normalizePhone } from '../utils/phone.js';
 
@@ -152,11 +153,6 @@ type SetupInput = {
   selectedVirtualCoachId?: string;
 };
 
-function normalizeCoachCode(value?: string) {
-  const normalized = value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return normalized || null;
-}
-
 function normalizeSetupPhone(value?: string) {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
@@ -211,14 +207,6 @@ async function upsertClientProfileFromSetup(
   });
 }
 
-async function findCoachByCode(code: string | null) {
-  if (!code) return null;
-  return prisma.user.findFirst({
-    where: { role: { in: [Role.COACH, Role.SUPER_ADMIN] }, coachCode: { equals: code, mode: 'insensitive' } },
-    select: { id: true, defaultNutritionTemplateId: true, defaultExerciseTemplateId: true }
-  });
-}
-
 async function findGlobalNutritionTemplate() {
   return prisma.nutritionPlanTemplate.findFirst({
     where: { visibility: Visibility.GLOBAL },
@@ -245,71 +233,6 @@ async function findGlobalExerciseTemplate() {
     orderBy: { updatedAt: 'desc' },
     select: { id: true }
   });
-}
-
-type CoachSupportResult = {
-  coach: Awaited<ReturnType<typeof findCoachByCode>>;
-  shouldNotifyCoachRequest: boolean;
-};
-
-async function applyCoachSupport(
-  userId: string,
-  input: SetupInput,
-  options?: { programId?: string }
-): Promise<CoachSupportResult> {
-  const coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
-
-  if (coach) {
-    const now = new Date();
-    await prisma.$transaction(async (tx) => {
-      await tx.coachAssignment.updateMany({
-        where: { userId, status: 'ACTIVE' },
-        data: { status: 'COMPLETED', accessEndsAt: now }
-      });
-      await tx.coachAssignment.create({
-        data: { coachId: coach.id, userId, status: 'ACTIVE', accessStartedAt: now }
-      });
-      if (options?.programId) {
-        await tx.program.update({
-          where: { id: options.programId },
-          data: { coachId: coach.id }
-        });
-      }
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          plan: 'COACH_LED',
-          subscriptionStatus: 'COACH_MANAGED',
-          gracePeriodEndsAt: null,
-          nextPlanAfterCoach: null,
-          ...(input.wantsCoach || input.coachCode?.trim() ? { coachRequestedAt: null } : {})
-        }
-      });
-    });
-    return { coach, shouldNotifyCoachRequest: false };
-  }
-
-  if (input.wantsCoach || input.coachCode?.trim()) {
-    const existing = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { coachRequestedAt: true }
-    });
-    const hadPriorCoachRequest = Boolean(existing?.coachRequestedAt);
-
-    if (!hadPriorCoachRequest) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { coachRequestedAt: new Date() }
-      });
-    }
-
-    return {
-      coach: null,
-      shouldNotifyCoachRequest: Boolean(input.wantsCoach) && !hadPriorCoachRequest
-    };
-  }
-
-  return { coach: null, shouldNotifyCoachRequest: false };
 }
 
 async function updateActiveProgramFromSetup(
@@ -471,9 +394,7 @@ async function updateActiveProgramFromSetup(
     }
   });
 
-  const { shouldNotifyCoachRequest } = trackingOnly
-    ? { shouldNotifyCoachRequest: false }
-    : await applyCoachSupport(userId, input, { programId: program.id });
+  const { shouldNotifyCoachRequest } = await applyCoachSupport(userId, input, { programId: program.id });
 
   const programWithMetrics = await prisma.program.findUniqueOrThrow({
     where: { id: program.id },
@@ -598,9 +519,7 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     return created;
   });
 
-  const { shouldNotifyCoachRequest } = trackingOnly
-    ? { shouldNotifyCoachRequest: false }
-    : await applyCoachSupport(userId, input, { programId: program.id });
+  const { shouldNotifyCoachRequest } = await applyCoachSupport(userId, input, { programId: program.id });
 
   const programWithMetrics = await prisma.program.findUniqueOrThrow({
     where: { id: program.id },

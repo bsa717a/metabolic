@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { UserAccountDetails } from '../../types';
+import type { AppUser, UserAccountDetails } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
@@ -33,15 +33,19 @@ export function EditAccountDetailsDrawer({
   userId,
   title,
   mode,
+  user,
   onClose,
-  onSaved
+  onSaved,
+  onUserUpdated
 }: {
   open: boolean;
   userId: string;
   title: string;
   mode: 'self' | 'coach';
+  user?: AppUser | null;
   onClose: () => void;
   onSaved?: (details: UserAccountDetails) => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   return (
     <EditAccountDetailsDrawerContent
@@ -49,8 +53,10 @@ export function EditAccountDetailsDrawer({
       userId={userId}
       title={title}
       mode={mode}
+      user={user}
       onClose={onClose}
       onSaved={onSaved}
+      onUserUpdated={onUserUpdated}
     />
   );
 }
@@ -60,15 +66,19 @@ function EditAccountDetailsDrawerContent({
   userId,
   title,
   mode,
+  user,
   onClose,
-  onSaved
+  onSaved,
+  onUserUpdated
 }: {
   open: boolean;
   userId: string;
   title: string;
   mode: 'self' | 'coach';
+  user?: AppUser | null;
   onClose: () => void;
   onSaved?: (details: UserAccountDetails) => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   const navigate = useNavigate();
   const { startTour } = useTutorial();
@@ -86,13 +96,22 @@ function EditAccountDetailsDrawerContent({
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [coachSaving, setCoachSaving] = useState(false);
   const [error, setError] = useState('');
+  const [assignedCoach, setAssignedCoach] = useState(user?.assignedCoach ?? null);
+  const [coachRequestedAt, setCoachRequestedAt] = useState(user?.coachRequestedAt ?? null);
+  const [coachCode, setCoachCode] = useState('');
+  const [wantsCoach, setWantsCoach] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setLoaded(false);
     setError('');
+    setAssignedCoach(user?.assignedCoach ?? null);
+    setCoachRequestedAt(user?.coachRequestedAt ?? null);
+    setCoachCode('');
+    setWantsCoach(Boolean(user?.coachRequestedAt) && !user?.assignedCoach);
     api<UserAccountDetails>(`/api/users/${userId}/profile`)
       .then((details) => {
         setAccountDraft({
@@ -112,7 +131,7 @@ function EditAccountDetailsDrawerContent({
         setError(err instanceof Error ? err.message : 'Unable to load account details');
       })
       .finally(() => setLoading(false));
-  }, [userId, open]);
+  }, [userId, open, user?.assignedCoach?.id, user?.coachRequestedAt]);
 
   function updateAccount<K extends keyof AccountDraft>(field: K, value: AccountDraft[K]) {
     setAccountDraft((current) => ({ ...current, [field]: value }));
@@ -120,6 +139,42 @@ function EditAccountDetailsDrawerContent({
 
   function updateProfile<K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) {
     setProfileDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function applyCoachUser(next: AppUser) {
+    setAssignedCoach(next.assignedCoach ?? null);
+    setCoachRequestedAt(next.coachRequestedAt ?? null);
+    setCoachCode('');
+    setWantsCoach(Boolean(next.coachRequestedAt) && !next.assignedCoach);
+    onUserUpdated?.(next);
+  }
+
+  async function saveCoachSupport() {
+    const trimmedCode = coachCode.trim();
+    if (!trimmedCode && !wantsCoach) {
+      throw new Error('Enter a coach code or request a real coach.');
+    }
+    const next = await api<{ user: AppUser }>('/api/me/coach-support', {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...(trimmedCode ? { coachCode: trimmedCode } : {}),
+        ...(wantsCoach ? { wantsCoach: true } : {})
+      })
+    });
+    applyCoachUser(next.user);
+  }
+
+  async function turnOffCoach() {
+    setCoachSaving(true);
+    setError('');
+    try {
+      const next = await api<{ user: AppUser }>('/api/me/coach-support', { method: 'DELETE' });
+      applyCoachUser(next.user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to turn off coach support');
+    } finally {
+      setCoachSaving(false);
+    }
   }
 
   async function save() {
@@ -148,6 +203,9 @@ function EditAccountDetailsDrawerContent({
         method: 'PATCH',
         body: JSON.stringify(payload)
       });
+      if (mode === 'self' && !assignedCoach && (coachCode.trim() || wantsCoach)) {
+        await saveCoachSupport();
+      }
       onSaved?.(saved);
       onClose();
     } catch (err) {
@@ -169,10 +227,10 @@ function EditAccountDetailsDrawerContent({
       headerActions={
         loaded ? (
           <>
-            <Button disabled={saving} onClick={save}>
+            <Button disabled={saving || coachSaving} onClick={save}>
               {saving ? 'Saving…' : 'Save account details'}
             </Button>
-            <Button variant="secondary" disabled={saving} onClick={onClose}>
+            <Button variant="secondary" disabled={saving || coachSaving} onClick={onClose}>
               Cancel
             </Button>
           </>
@@ -253,6 +311,93 @@ function EditAccountDetailsDrawerContent({
             Used to time reminders. Reminders are skipped until this is set.
           </span>
         </label>
+
+        {mode === 'self' ? (
+          <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
+            <div>
+              <p className="text-sm font-semibold text-app-text">Real coach</p>
+              <p className="mt-1 text-sm text-app-text-muted">
+                Optional. Your virtual coach stays available either way.
+              </p>
+            </div>
+
+            {assignedCoach ? (
+              <>
+                <p className="text-sm text-app-text">
+                  Assigned to{' '}
+                  <span className="font-medium">
+                    {`${assignedCoach.firstName} ${assignedCoach.lastName}`.trim() || assignedCoach.email}
+                  </span>
+                  .
+                </p>
+                <Button variant="secondary" disabled={coachSaving || saving} onClick={() => void turnOffCoach()}>
+                  {coachSaving ? 'Turning off…' : 'Turn off coach'}
+                </Button>
+              </>
+            ) : coachRequestedAt ? (
+              <>
+                <p className="text-sm text-app-text">Coach requested. We&apos;ll connect you when a coach is available.</p>
+                <label className="block">
+                  <span className={labelClassName()}>Coach initials or code</span>
+                  <input
+                    className={`${inputClassName()} uppercase`}
+                    value={coachCode}
+                    maxLength={20}
+                    placeholder="DF"
+                    onChange={(event) => setCoachCode(event.target.value.toUpperCase())}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    disabled={coachSaving || saving || !coachCode.trim()}
+                    onClick={() => {
+                      void (async () => {
+                        setCoachSaving(true);
+                        setError('');
+                        try {
+                          await saveCoachSupport();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Unable to update coach support');
+                        } finally {
+                          setCoachSaving(false);
+                        }
+                      })();
+                    }}
+                  >
+                    {coachSaving ? 'Saving…' : 'Save coach code'}
+                  </Button>
+                  <Button variant="secondary" disabled={coachSaving || saving} onClick={() => void turnOffCoach()}>
+                    {coachSaving ? 'Canceling…' : 'Cancel request'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="block">
+                  <span className={labelClassName()}>Coach initials or code</span>
+                  <input
+                    className={`${inputClassName()} uppercase`}
+                    value={coachCode}
+                    maxLength={20}
+                    placeholder="DF"
+                    onChange={(event) => setCoachCode(event.target.value.toUpperCase())}
+                  />
+                </label>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
+                    checked={wantsCoach}
+                    onChange={(event) => setWantsCoach(event.target.checked)}
+                  />
+                  <span className="text-sm text-slate-600 dark:text-app-text-muted">
+                    I&apos;d like to work with a real coach.
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+        ) : null}
 
         <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
           <p className="text-sm font-semibold text-app-text">Reminders</p>

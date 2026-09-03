@@ -56,10 +56,12 @@ function ProfileMenuItem({
 
 export function Topbar({
   user,
-  onOpenCoachIntro
+  onOpenCoachIntro,
+  onUserUpdated
 }: {
   user?: AppUser | null;
   onOpenCoachIntro?: () => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -401,7 +403,9 @@ export function Topbar({
           userId={user.id}
           title="Account details"
           mode="self"
+          user={user}
           onClose={() => setAccountDetailsOpen(false)}
+          onUserUpdated={onUserUpdated}
         />
       ) : null}
     </>

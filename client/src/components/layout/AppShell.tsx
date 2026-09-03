@@ -14,10 +14,12 @@ import { recordNavigation } from '../../services/diagnostics';
 
 export function AppShell({
   user,
-  onTutorialComplete
+  onTutorialComplete,
+  onUserUpdated
 }: {
   user?: AppUser | null;
   onTutorialComplete?: (user: AppUser) => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
@@ -48,7 +50,11 @@ export function AppShell({
     <EntitlementsProvider user={user ?? null}>
     <TutorialProvider user={user} onComplete={onTutorialComplete}>
       <div className="flex min-h-dvh flex-col bg-app-bg transition-colors duration-200 max-sm:h-dvh max-sm:overflow-hidden">
-        <Topbar user={user} onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)} />
+        <Topbar
+          user={user}
+          onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)}
+          onUserUpdated={onUserUpdated}
+        />
         <main
           ref={mainRef}
           className="mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto p-4 sm:overflow-visible sm:p-6 lg:p-8"
