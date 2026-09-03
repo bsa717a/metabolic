@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.17.0](https://github.com/bsa717a/metabolic/compare/v0.16.1...v0.17.0) (2026-09-03)
+
+
+### Features
+
+* **coach:** default food plan date to tomorrow ([bb64862](https://github.com/bsa717a/metabolic/commit/bb64862a5eb9dac980ed7da3a2bb1a74244c42db))
+* **coach:** default food plan date to tomorrow ([a38ce6e](https://github.com/bsa717a/metabolic/commit/a38ce6e975a9f13e4c18d5bd33eb233df4c4c015))
+* **exercise:** store duration in seconds with min/sec toggle ([c931d50](https://github.com/bsa717a/metabolic/commit/c931d5008aa1c6c6890775aafbe8f511d1f88375))
+* **exercise:** store duration in seconds with min/sec toggle ([715e578](https://github.com/bsa717a/metabolic/commit/715e57802cc8423b193086dcae08ff73259594ff))
+
 ## [0.16.1](https://github.com/bsa717a/metabolic/compare/v0.16.0...v0.16.1) (2026-09-01)
 
 
