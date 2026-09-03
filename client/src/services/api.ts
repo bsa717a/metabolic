@@ -120,6 +120,10 @@ export function addDays(date: string, days: number) {
   return toDateKey(d);
 }
 
+export function tomorrowKey(date = new Date()) {
+  return addDays(todayKey(date), 1);
+}
+
 export function startOfWeek(date: string) {
   const d = parseDateKey(date);
   const day = d.getUTCDay();
