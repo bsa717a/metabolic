@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.18.0](https://github.com/bsa717a/metabolic/compare/v0.17.0...v0.18.0) (2026-09-03)
+
+
+### Features
+
+* **dashboard:** land new signups on Coach Home once ([8ee46e8](https://github.com/bsa717a/metabolic/commit/8ee46e83fdbed06db2028b6c0000bed2fa59037b))
+* **dashboard:** land new signups on Coach Home once ([973c8a7](https://github.com/bsa717a/metabolic/commit/973c8a74fd1c3f6447f9e252d6eef98001204b08))
+
+
+### Bug Fixes
+
+* **gamification:** hide level ladder when Guided Journey is off ([505ca39](https://github.com/bsa717a/metabolic/commit/505ca39e5696ffd9476fc033390fb5b0a3e1e97f))
+* **gamification:** hide level ladder when Guided Journey is off ([95adfb6](https://github.com/bsa717a/metabolic/commit/95adfb6744292dc03f49bdc7ad4af97e3ebc7d8a))
+
 ## [0.17.0](https://github.com/bsa717a/metabolic/compare/v0.16.1...v0.17.0) (2026-09-03)
 
 
