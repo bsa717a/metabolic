@@ -25,6 +25,8 @@ export type CoachOnboardingStage =
   | 'smsAsk'
   | 'timezone'
   | 'phone'
+  | 'realCoachAsk'
+  | 'realCoachCode'
   | 'readyToSubmit';
 
 export type CoachOnboardingQuickReply = {
@@ -403,12 +405,42 @@ function phoneTurn(): CoachOnboardingTurn {
   };
 }
 
-function readyToSubmitTurn(trackingOnly: boolean): CoachOnboardingTurn {
+function realCoachAskTurn(): CoachOnboardingTurn {
+  return {
+    stage: 'realCoachAsk',
+    assistantMessage: `Do you also work with a real Metabolic coach? You can keep chatting with me either way.`,
+    quickReplies: [
+      { label: 'I have a coach code', mobileLabel: 'Code', value: 'code' },
+      { label: "I'd like a real coach", mobileLabel: 'Request', value: 'request' },
+      { label: 'No thanks', mobileLabel: 'No', value: 'skip' }
+    ]
+  };
+}
+
+function realCoachCodeTurn(): CoachOnboardingTurn {
+  return {
+    stage: 'realCoachCode',
+    assistantMessage: `What's their coach code or initials?`,
+    quickReplies: [{ label: 'Skip', value: 'skip' }]
+  };
+}
+
+function parseCoachCode(text: string): string | null {
+  const normalized = text.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (normalized.length < 2 || normalized.length > 20) return null;
+  return normalized;
+}
+
+function readyToSubmitTurn(
+  trackingOnly: boolean,
+  realCoachNote?: string
+): CoachOnboardingTurn {
+  const planLine = trackingOnly
+    ? `All set — I'll finish setting up tracking for you now.`
+    : `All set — I'll create your starter plan now.`;
   return {
     stage: 'readyToSubmit',
-    assistantMessage: trackingOnly
-      ? `All set — I'll finish setting up tracking for you now.`
-      : `All set — I'll create your starter plan now.`,
+    assistantMessage: [planLine, realCoachNote].filter(Boolean).join('\n\n'),
     quickReplies: [
       {
         label: trackingOnly ? 'Start tracking' : 'Create my plan',
@@ -695,7 +727,7 @@ export function advanceCoachOnboarding(
         const timezone = form.timezone.trim() || detectedTimezone();
         return {
           formPatch: { timezone, phone: '' },
-          next: readyToSubmitTurn(form.trackingOnly)
+          next: realCoachAskTurn()
         };
       }
       return { error: 'Tap Yes or No.', next: smsAskTurn(coach) };
@@ -740,7 +772,7 @@ export function advanceCoachOnboarding(
       if (isSkip(input)) {
         return {
           formPatch: { phone: '' },
-          next: readyToSubmitTurn(form.trackingOnly)
+          next: realCoachAskTurn()
         };
       }
       const digits = input.replace(/\D/g, '');
@@ -752,7 +784,72 @@ export function advanceCoachOnboarding(
       }
       return {
         formPatch: { phone: input.trim() },
-        next: readyToSubmitTurn(form.trackingOnly)
+        next: realCoachAskTurn()
+      };
+    }
+
+    case 'realCoachAsk': {
+      const value = normalizeChoice(input);
+      if (
+        isYes(input) ||
+        value === 'code' ||
+        value.includes('coach code') ||
+        value.includes('initials') ||
+        value.includes('work with a real')
+      ) {
+        return { next: realCoachCodeTurn() };
+      }
+      if (value === 'request' || value.includes('like a real') || value.includes('want a real')) {
+        return {
+          formPatch: { wantsCoach: true, coachCode: '' },
+          next: readyToSubmitTurn(
+            form.trackingOnly,
+            "I'll also put in a request for a real coach. You can keep chatting with me either way."
+          )
+        };
+      }
+      if (isSkip(input) || isNo(input) || value.includes('no thanks')) {
+        return {
+          formPatch: { wantsCoach: false, coachCode: '' },
+          next: readyToSubmitTurn(form.trackingOnly)
+        };
+      }
+      const typedCode = parseCoachCode(input);
+      if (typedCode) {
+        return {
+          formPatch: { coachCode: typedCode, wantsCoach: false },
+          next: readyToSubmitTurn(
+            form.trackingOnly,
+            `Got it — I'll use coach code ${typedCode} to connect you with a real coach.`
+          )
+        };
+      }
+      return {
+        error: 'Pick one of the options, or type a coach code.',
+        next: realCoachAskTurn()
+      };
+    }
+
+    case 'realCoachCode': {
+      if (isSkip(input)) {
+        return {
+          formPatch: { coachCode: '', wantsCoach: false },
+          next: readyToSubmitTurn(form.trackingOnly)
+        };
+      }
+      const coachCode = parseCoachCode(input);
+      if (!coachCode) {
+        return {
+          error: 'Enter a short coach code or initials, or skip.',
+          next: realCoachCodeTurn()
+        };
+      }
+      return {
+        formPatch: { coachCode, wantsCoach: false },
+        next: readyToSubmitTurn(
+          form.trackingOnly,
+          `Got it — I'll use coach code ${coachCode} to connect you with a real coach.`
+        )
       };
     }
 

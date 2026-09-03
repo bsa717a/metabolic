@@ -60,6 +60,7 @@ export async function serializeAppUser(user: User) {
           email: assignment.coach.email
         }
       : null,
+    coachRequestedAt: user.coachRequestedAt?.toISOString() ?? null,
     coachRelationshipStatus: assignment?.status?.toLowerCase() ?? null
   };
 }

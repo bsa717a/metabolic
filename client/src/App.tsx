@@ -310,7 +310,7 @@ export default function App() {
           <Route path="exercise/export" element={<ExerciseExportPage />} />
           <Route path="exercise/session" element={<WorkoutSessionPage />} />
           <Route path="progress/export" element={<ProgressExportPage />} />
-          <Route element={<AppShell user={appUser} onTutorialComplete={setAppUser} />}>
+          <Route element={<AppShell user={appUser} onTutorialComplete={setAppUser} onUserUpdated={setAppUser} />}>
             <Route path="upgrade" element={<UpgradePage user={appUser} />} />
             <Route path="store" element={<StorePage user={appUser} />} />
             <Route index element={<DashboardPage user={appUser} />} />

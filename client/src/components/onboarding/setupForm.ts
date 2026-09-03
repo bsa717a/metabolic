@@ -64,13 +64,11 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(heightInches !== undefined && Number.isFinite(heightInches) ? { heightInches } : {}),
     ...(form.occupation.trim() ? { occupation: form.occupation.trim() } : {}),
     ...(form.activityLevel ? { activityLevel: Number(form.activityLevel) } : {}),
-    ...(form.trackingOnly ? {} : form.coachCode.trim() ? { coachCode: form.coachCode.trim() } : {}),
-    ...(form.trackingOnly ? {} : form.wantsCoach ? { wantsCoach: true } : {}),
-    ...(form.trackingOnly || form.coachCode.trim() || form.wantsCoach
-      ? {}
-      : form.selectedVirtualCoachId
-        ? { selectedVirtualCoachId: form.selectedVirtualCoachId as VirtualCoachId }
-        : {}),
+    ...(form.coachCode.trim() ? { coachCode: form.coachCode.trim() } : {}),
+    ...(form.wantsCoach ? { wantsCoach: true } : {}),
+    ...(form.selectedVirtualCoachId
+      ? { selectedVirtualCoachId: form.selectedVirtualCoachId as VirtualCoachId }
+      : {}),
     ...(form.trackingOnly ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),

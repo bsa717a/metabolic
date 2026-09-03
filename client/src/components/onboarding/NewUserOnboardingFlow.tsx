@@ -56,12 +56,12 @@ export function NewUserOnboardingFlow({
     try {
       const latest = formRef.current;
       const timezone = latest.timezone.trim() || detectedTimezone();
-      const coachId = latest.trackingOnly ? undefined : latest.selectedVirtualCoachId.trim() || undefined;
+      const coachId = latest.selectedVirtualCoachId.trim() || undefined;
 
       await submitSetupForm({
         ...latest,
         timezone: timezone || latest.timezone,
-        selectedVirtualCoachId: latest.trackingOnly ? '' : latest.selectedVirtualCoachId
+        selectedVirtualCoachId: latest.selectedVirtualCoachId
       });
 
       if (coachId) {
