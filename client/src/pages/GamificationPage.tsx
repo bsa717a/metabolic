@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Map, Award, ArrowLeft, Route } from 'lucide-react';
 import { api } from '../services/api';
 import type { GamificationCelebration, GamificationDashboard } from '../types/gamification';
-import { CurrentLevelCard } from '../components/gamification/CurrentLevelCard';
 import { MomentumCard } from '../components/gamification/MomentumCard';
 import { RecentBadgesCard } from '../components/gamification/RecentBadgesCard';
 import { CelebrationModal } from '../components/gamification/CelebrationModal';
@@ -72,18 +71,22 @@ export function GamificationPage() {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            to="/level-up/journey"
-            className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
-          >
-            <Map size={16} /> Journey
-          </Link>
-          <Link
-            to="/level-up/path"
-            className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
-          >
-            <Route size={16} /> Level path
-          </Link>
+          {guidedJourneyOn && (
+            <>
+              <Link
+                to="/level-up/journey"
+                className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
+              >
+                <Map size={16} /> Journey
+              </Link>
+              <Link
+                to="/level-up/path"
+                className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
+              >
+                <Route size={16} /> Level path
+              </Link>
+            </>
+          )}
           <Link
             to="/level-up/badges"
             className="inline-flex items-center gap-2 rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold hover:border-brand-green/50"
@@ -93,24 +96,14 @@ export function GamificationPage() {
         </div>
       </div>
 
-      {/* Immersive world — primary experience on this page */}
+      {/* Immersive world — primary experience when Guided Journey is enabled */}
       <JourneyInvitePanel onEnabledChange={setGuidedJourneyOn} />
 
-      {data?.currentLevel ? (
-        <section
-          className={
-            guidedJourneyOn ? 'grid gap-6 sm:grid-cols-2' : 'grid gap-6 lg:grid-cols-3'
-          }
-        >
-          {/* Task ladder is superseded by Guided Journey when the flag is on. */}
-          {!guidedJourneyOn && <CurrentLevelCard level={data.currentLevel} />}
+      {data ? (
+        <section className="grid gap-6 sm:grid-cols-2">
           <MomentumCard momentum={data.momentum} />
           <RecentBadgesCard badges={data.recentBadges} />
         </section>
-      ) : !guidedJourneyOn ? (
-        <Card>
-          <p className="text-app-text-muted">Your progression will appear here once your program is active.</p>
-        </Card>
       ) : null}
 
       <Card className="border-dashed bg-brand-green/5">

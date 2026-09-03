@@ -174,7 +174,8 @@ export function AdminSettingsPanel() {
           <span className="text-sm font-medium text-app-text">Guided Journey enabled</span>
         </label>
         <span className="-mt-3 block text-xs text-app-text-muted">
-          When on, Plus users see the optional Guided Journey invite on Level Up. Off by default for safe rollout.
+          When on, Plus users see the optional Guided Journey invite on Level Up. When off, Level Up
+          shows badges and momentum only (no legacy level ladder). Off by default for safe rollout.
         </span>
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
