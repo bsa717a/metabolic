@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
-import { todayKey } from '../../services/api';
+import { todayKey, tomorrowKey } from '../../services/api';
 import type { CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
@@ -103,7 +103,9 @@ export function ClientDetailTabs({
   snapshots: ProgramMetricSnapshot[];
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
-  const [planDate, setPlanDate] = useState(() => todayKey());
+  // Food defaults to tomorrow so the coach plans ahead while the client is still on today.
+  const [foodPlanDate, setFoodPlanDate] = useState(() => tomorrowKey());
+  const [exercisePlanDate, setExercisePlanDate] = useState(() => todayKey());
   const [weeklyFoodReportOpen, setWeeklyFoodReportOpen] = useState(false);
   const [weeklyExerciseReportOpen, setWeeklyExerciseReportOpen] = useState(false);
   const [foodManualOpen, setFoodManualOpen] = useState(false);
@@ -182,8 +184,12 @@ export function ClientDetailTabs({
               <input
                 type="date"
                 className="rounded-xl border border-app-border bg-app-surface px-3 py-1.5"
-                value={planDate}
-                onChange={(event) => setPlanDate(event.target.value)}
+                value={activeTab === 'food' ? foodPlanDate : exercisePlanDate}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (activeTab === 'food') setFoodPlanDate(next);
+                  else setExercisePlanDate(next);
+                }}
               />
             </label>
             {activeTab === 'food' && (
@@ -317,7 +323,7 @@ export function ClientDetailTabs({
         {activeTab === 'food' && (
           <FoodPlanEditor
             clientId={client.id}
-            planDate={planDate}
+            planDate={foodPlanDate}
             nutritionTemplates={nutritionTemplates}
             planStatus={planStatus}
             saving={saving}
@@ -333,7 +339,7 @@ export function ClientDetailTabs({
         {activeTab === 'exercise' && (
           <ExercisePlanEditor
             clientId={client.id}
-            planDate={planDate}
+            planDate={exercisePlanDate}
             exerciseTemplates={exerciseTemplates}
             saving={saving}
             manualOpen={exerciseManualOpen}
@@ -363,7 +369,7 @@ export function ClientDetailTabs({
         open={weeklyFoodReportOpen}
         clientId={client.id}
         clientName={clientName(client)}
-        anchorDate={planDate}
+        anchorDate={foodPlanDate}
         onClose={() => setWeeklyFoodReportOpen(false)}
       />
 
@@ -371,7 +377,7 @@ export function ClientDetailTabs({
         open={weeklyExerciseReportOpen}
         clientId={client.id}
         clientName={clientName(client)}
-        anchorDate={planDate}
+        anchorDate={exercisePlanDate}
         onClose={() => setWeeklyExerciseReportOpen(false)}
       />
     </Card>
