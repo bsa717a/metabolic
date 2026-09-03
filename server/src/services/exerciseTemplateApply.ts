@@ -12,7 +12,7 @@ export type TemplateItemPrescriptionOverride = {
   sets?: number | null;
   reps?: string | null;
   speed?: string | null;
-  durationMinutes?: number | null;
+  durationSeconds?: number | null;
   distance?: number | null;
   weight?: number | null;
 };
@@ -48,7 +48,7 @@ export async function applyTemplateExercisesToDate(
           sets: override ? (override.sets ?? null) : item.sets,
           reps: override ? (override.reps ?? null) : item.reps,
           speed: override ? (override.speed ?? null) : item.speed,
-          durationMinutes: override ? (override.durationMinutes ?? null) : item.durationMinutes,
+          durationSeconds: override ? (override.durationSeconds ?? null) : item.durationSeconds,
           distance: override ? (override.distance ?? null) : item.distance,
           weight: override ? (override.weight ?? null) : item.weight,
           status: ExerciseStatus.PLANNED,

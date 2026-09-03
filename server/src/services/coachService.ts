@@ -362,7 +362,7 @@ export async function createCoachClientScheduledExercise(
     sets?: number | null;
     reps?: string | number | null;
     speed?: string | number | null;
-    durationMinutes?: number | null;
+    durationSeconds?: number | null;
     distance?: number | null;
     weight?: number | null;
     description?: string | null;

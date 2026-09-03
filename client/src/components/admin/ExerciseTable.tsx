@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { api } from '../../services/api';
 import type { AdminExercise } from '../../types';
+import { formatDuration } from '../../utils/duration';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { EditExerciseDrawer } from './EditExerciseDrawer';
@@ -13,7 +14,10 @@ function formatDefaults(exercise: AdminExercise) {
   const parts: string[] = [];
   if (exercise.defaultSets != null) parts.push(`${exercise.defaultSets} sets`);
   if (exercise.defaultReps != null) parts.push(`${exercise.defaultReps} reps`);
-  if (exercise.defaultDurationMinutes != null) parts.push(`${exercise.defaultDurationMinutes} min`);
+  if (exercise.defaultDurationSeconds != null) {
+    const label = formatDuration(exercise.defaultDurationSeconds);
+    if (label) parts.push(label);
+  }
   if (exercise.defaultDistance != null) parts.push(`${exercise.defaultDistance} mi`);
   return parts.length ? parts.join(' · ') : '—';
 }

@@ -78,10 +78,10 @@ async function main() {
   }
 
   const exercises = await Promise.all([
-    prisma.exercise.create({ data: { name: 'Morning walk', category: 'Cardio', defaultDurationMinutes: 30 } }),
+    prisma.exercise.create({ data: { name: 'Morning walk', category: 'Cardio', defaultDurationSeconds: 30 * 60 } }),
     prisma.exercise.create({ data: { name: 'Goblet squat', category: 'Strength', bodyPart: 'Legs', defaultSets: 3, defaultReps: 10 } }),
     prisma.exercise.create({ data: { name: 'Push-up', category: 'Strength', bodyPart: 'Chest', defaultSets: 3, defaultReps: 8 } }),
-    prisma.exercise.create({ data: { name: 'Mobility flow', category: 'Recovery', defaultDurationMinutes: 15 } })
+    prisma.exercise.create({ data: { name: 'Mobility flow', category: 'Recovery', defaultDurationSeconds: 15 * 60 } })
   ]);
   for (const [index, exercise] of exercises.entries()) {
     const scheduled = await prisma.scheduledExercise.create({
@@ -92,12 +92,12 @@ async function main() {
         scheduledDate: today,
         sets: exercise.defaultSets,
         reps: exercise.defaultReps == null ? null : String(exercise.defaultReps),
-        durationMinutes: exercise.defaultDurationMinutes,
+        durationSeconds: exercise.defaultDurationSeconds,
         status: index === 0 ? 'DONE' : 'PLANNED',
         sortOrder: index
       }
     });
-    if (index === 0) await prisma.exerciseLog.create({ data: { scheduledExerciseId: scheduled.id, userId: user.id, completed: true, completedAt: new Date(), actualDurationMinutes: 30, difficulty: 'NORMAL' } });
+    if (index === 0) await prisma.exerciseLog.create({ data: { scheduledExerciseId: scheduled.id, userId: user.id, completed: true, completedAt: new Date(), actualDurationSeconds: 30 * 60, difficulty: 'NORMAL' } });
   }
 
   await prisma.dailyLog.update({ where: { id: log.id }, data: { caloriesActual: 710, proteinActual: 69, carbsActual: 67, fatActual: 16, mealsCompleted: 2, exercisesCompleted: 1, complianceScore: 33 } });
@@ -116,7 +116,7 @@ async function main() {
           sortOrder: index,
           sets: exercise.defaultSets,
           reps: exercise.defaultReps == null ? null : String(exercise.defaultReps),
-          durationMinutes: exercise.defaultDurationMinutes
+          durationSeconds: exercise.defaultDurationSeconds
         }))
       }
     }
@@ -132,7 +132,7 @@ async function main() {
         create: [
           { exerciseId: exercises[1].id, sortOrder: 0, sets: 4, reps: '8' },
           { exerciseId: exercises[2].id, sortOrder: 1, sets: 4, reps: '10' },
-          { exerciseId: exercises[0].id, sortOrder: 2, durationMinutes: 20 }
+          { exerciseId: exercises[0].id, sortOrder: 2, durationSeconds: 20 * 60 }
         ]
       }
     }

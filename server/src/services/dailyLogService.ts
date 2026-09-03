@@ -131,7 +131,7 @@ async function copyExercisesForDate(programId: string, userId: string, targetDat
       sets: exercise.sets,
       reps: exercise.reps,
       speed: exercise.speed,
-      durationMinutes: exercise.durationMinutes,
+      durationSeconds: exercise.durationSeconds,
       distance: exercise.distance,
       weight: exercise.weight,
       status: 'PLANNED',

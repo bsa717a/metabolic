@@ -62,7 +62,7 @@ const scheduleFields = {
   sets: (value: unknown) => (value === null || value === undefined ? null : Number(value)),
   reps: (value: unknown) => normalizeRepScheme(value),
   speed: (value: unknown) => normalizeSpeedScheme(value),
-  durationMinutes: (value: unknown) => (value === null || value === undefined ? null : Number(value)),
+  durationSeconds: (value: unknown) => (value === null || value === undefined ? null : Number(value)),
   distance: (value: unknown) => (value === null || value === undefined ? null : value),
   weight: (value: unknown) => (value === null || value === undefined ? null : value)
 };
@@ -75,7 +75,7 @@ export async function createScheduledExercise(
     sets?: number | null;
     reps?: string | number | null;
     speed?: string | number | null;
-    durationMinutes?: number | null;
+    durationSeconds?: number | null;
     distance?: number | null;
     weight?: number | null;
     description?: string | null;
@@ -105,7 +105,7 @@ export async function createScheduledExercise(
       sets: data.sets ?? catalog.defaultSets,
       reps: data.reps !== undefined ? normalizeRepScheme(data.reps) : defaultRepsToScheme(catalog.defaultReps),
       speed: data.speed !== undefined ? normalizeSpeedScheme(data.speed) : null,
-      durationMinutes: data.durationMinutes ?? catalog.defaultDurationMinutes,
+      durationSeconds: data.durationSeconds ?? catalog.defaultDurationSeconds,
       distance: data.distance ?? catalog.defaultDistance,
       weight: data.weight ?? null,
       status: ExerciseStatus.PLANNED,
@@ -127,7 +127,7 @@ export async function updateScheduledExercise(
     sets: number | null;
     reps: string | number | null;
     speed: string | number | null;
-    durationMinutes: number | null;
+    durationSeconds: number | null;
     distance: number | null;
     weight: number | null;
     description: string | null;
@@ -151,7 +151,7 @@ export async function updateScheduledExercise(
       ...(data.sets !== undefined ? { sets: scheduleFields.sets(data.sets) } : {}),
       ...(data.reps !== undefined ? { reps: scheduleFields.reps(data.reps) } : {}),
       ...(data.speed !== undefined ? { speed: scheduleFields.speed(data.speed) } : {}),
-      ...(data.durationMinutes !== undefined ? { durationMinutes: scheduleFields.durationMinutes(data.durationMinutes) } : {}),
+      ...(data.durationSeconds !== undefined ? { durationSeconds: scheduleFields.durationSeconds(data.durationSeconds) } : {}),
       ...(data.distance !== undefined ? { distance: scheduleFields.distance(data.distance) } : {}),
       ...(data.weight !== undefined ? { weight: scheduleFields.weight(data.weight) } : {})
     },
@@ -196,7 +196,7 @@ async function copyExercisesToDate(
       sets: item.sets,
       reps: item.reps,
       speed: item.speed,
-      durationMinutes: item.durationMinutes,
+      durationSeconds: item.durationSeconds,
       distance: item.distance,
       weight: item.weight,
       status: ExerciseStatus.PLANNED,
@@ -330,7 +330,7 @@ export async function markScheduledExercise(userId: string, id: string, status: 
 export type ExerciseActuals = {
   actualSets?: number | null;
   actualReps?: number | null;
-  actualDurationMinutes?: number | null;
+  actualDurationSeconds?: number | null;
   actualDistance?: number | null;
   actualWeight?: number | null;
   difficulty?: Difficulty | null;
@@ -412,7 +412,7 @@ export type ExercisePlanSnapshotItem = {
   /** String scheme; number allowed for legacy undo snapshots. */
   reps: string | number | null;
   speed?: string | number | null;
-  durationMinutes: number | null;
+  durationSeconds: number | null;
   distance: number | null;
   weight: number | null;
   status: ExerciseStatus;
@@ -436,7 +436,7 @@ function toSnapshotItem(
     sets: item.sets,
     reps: item.reps,
     speed: item.speed,
-    durationMinutes: item.durationMinutes,
+    durationSeconds: item.durationSeconds,
     distance: item.distance == null ? null : Number(item.distance),
     weight: item.weight == null ? null : Number(item.weight),
     status: item.status,
@@ -479,7 +479,7 @@ export async function restoreExercisePlanSnapshot(userId: string, days: Exercise
             sets: item.sets,
             reps: normalizeRepScheme(item.reps),
             speed: normalizeSpeedScheme(item.speed),
-            durationMinutes: item.durationMinutes,
+            durationSeconds: item.durationSeconds,
             distance: item.distance,
             weight: item.weight,
             status: item.status,

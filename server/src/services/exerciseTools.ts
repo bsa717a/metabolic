@@ -62,7 +62,7 @@ export type DayExerciseState = {
   status: string;
   sets: number | null;
   reps: string | null;
-  durationMinutes: number | null;
+  durationSeconds: number | null;
   weight: number | null;
   distance: number | null;
 };
@@ -95,14 +95,17 @@ function resolveDate(dateArg: string | undefined, todayKey: string): { dateKey: 
 function formatPrescription(ex: {
   sets: number | null;
   reps: string | null;
-  durationMinutes: number | null;
+  durationSeconds: number | null;
   weight: number | null;
   distance: number | null;
 }): string {
   const bits: string[] = [];
   if (ex.sets != null && ex.reps != null) bits.push(`${ex.sets}x${ex.reps}`);
   else if (ex.reps != null) bits.push(`${ex.reps} reps`);
-  else if (ex.durationMinutes != null) bits.push(`${ex.durationMinutes} min`);
+  else if (ex.durationSeconds != null) {
+    const s = ex.durationSeconds;
+    bits.push(s % 60 === 0 ? `${s / 60} min` : `${s}s`);
+  }
   if (ex.weight != null) bits.push(`${Number(ex.weight)} lb`);
   if (ex.distance != null) bits.push(`${Number(ex.distance)} mi`);
   return bits.join(', ');
@@ -117,7 +120,7 @@ function toDayState(
     status: item.status,
     sets: item.sets,
     reps: item.reps,
-    durationMinutes: item.durationMinutes,
+    durationSeconds: item.durationSeconds,
     weight: item.weight == null ? null : Number(item.weight),
     distance: item.distance == null ? null : Number(item.distance)
   }));
@@ -199,7 +202,7 @@ async function resolveCatalogExercise(userId: string, name: string) {
           bodyPart: aiHit.estimate.bodyPart,
           defaultSets: aiHit.estimate.defaultSets,
           defaultReps: aiHit.estimate.defaultReps,
-          defaultDurationMinutes: aiHit.estimate.defaultDurationMinutes
+          defaultDurationSeconds: aiHit.estimate.defaultDurationSeconds
         }
       : {};
 
@@ -249,7 +252,7 @@ export function buildExerciseToolDeclarations(): FunctionDeclaration[] {
             type: Type.STRING,
             description: 'Rep scheme: "10", "15/12/10", or "20/17/15".'
           },
-          durationMinutes: { type: Type.NUMBER, description: 'Duration in minutes for timed exercises.' },
+          durationSeconds: { type: Type.NUMBER, description: 'Duration in seconds for timed exercises (e.g. 30 for a plank, 1200 for a 20-minute run).' },
           weight: { type: Type.NUMBER, description: 'Weight in pounds, if applicable.' },
           distance: { type: Type.NUMBER, description: 'Distance in miles, if applicable.' }
         },
@@ -271,7 +274,7 @@ export function buildExerciseToolDeclarations(): FunctionDeclaration[] {
             type: Type.STRING,
             description: 'Rep scheme: "10", "15/12/10", or "20/17/15".'
           },
-          durationMinutes: { type: Type.NUMBER },
+          durationSeconds: { type: Type.NUMBER },
           weight: { type: Type.NUMBER },
           distance: { type: Type.NUMBER }
         }
@@ -313,7 +316,7 @@ export function buildExerciseToolDeclarations(): FunctionDeclaration[] {
           date: { type: Type.STRING, description: DATE_DESC },
           actualSets: { type: Type.NUMBER },
           actualReps: { type: Type.NUMBER },
-          actualDurationMinutes: { type: Type.NUMBER },
+          actualDurationSeconds: { type: Type.NUMBER },
           actualWeight: { type: Type.NUMBER },
           actualDistance: { type: Type.NUMBER }
         }
@@ -380,8 +383,10 @@ export async function executeExerciseTool(
             const presc =
               ex.defaultSets != null && ex.defaultReps != null
                 ? `${ex.defaultSets}x${ex.defaultReps}`
-                : ex.defaultDurationMinutes != null
-                  ? `${ex.defaultDurationMinutes} min`
+                : ex.defaultDurationSeconds != null
+                  ? ex.defaultDurationSeconds % 60 === 0
+                    ? `${ex.defaultDurationSeconds / 60} min`
+                    : `${ex.defaultDurationSeconds}s`
                   : '';
             return {
               number: index + 1,
@@ -391,15 +396,17 @@ export async function executeExerciseTool(
               exerciseId: ex.id,
               sets: ex.defaultSets,
               reps: ex.defaultReps,
-              durationMinutes: ex.defaultDurationMinutes
+              durationSeconds: ex.defaultDurationSeconds
             };
           }
           const est = item.estimate;
           const presc =
             est.defaultSets != null && est.defaultReps != null
               ? `${est.defaultSets}x${est.defaultReps}`
-              : est.defaultDurationMinutes != null
-                ? `${est.defaultDurationMinutes} min`
+              : est.defaultDurationSeconds != null
+                ? est.defaultDurationSeconds % 60 === 0
+                  ? `${est.defaultDurationSeconds / 60} min`
+                  : `${est.defaultDurationSeconds}s`
                 : '';
           return {
             number: index + 1,
@@ -409,7 +416,7 @@ export async function executeExerciseTool(
             lookupId: item.lookup.id,
             sets: est.defaultSets,
             reps: est.defaultReps,
-            durationMinutes: est.defaultDurationMinutes
+            durationSeconds: est.defaultDurationSeconds
           };
         });
 
@@ -445,7 +452,7 @@ export async function executeExerciseTool(
             args.reps !== undefined
               ? normalizeRepScheme(args.reps)
               : defaultRepsToScheme(catalog.defaultReps),
-          durationMinutes: nullableNum(args.durationMinutes) ?? catalog.defaultDurationMinutes,
+          durationSeconds: nullableNum(args.durationSeconds) ?? catalog.defaultDurationSeconds,
           weight: nullableNum(args.weight),
           distance: nullableNum(args.distance)
         });
@@ -453,7 +460,7 @@ export async function executeExerciseTool(
         const presc = formatPrescription({
           sets: scheduled.sets,
           reps: scheduled.reps,
-          durationMinutes: scheduled.durationMinutes,
+          durationSeconds: scheduled.durationSeconds,
           weight: scheduled.weight == null ? null : Number(scheduled.weight),
           distance: scheduled.distance == null ? null : Number(scheduled.distance)
         });
@@ -484,8 +491,8 @@ export async function executeExerciseTool(
         const patch = {
           ...(args.sets !== undefined ? { sets: nullableNum(args.sets) ?? null } : {}),
           ...(args.reps !== undefined ? { reps: normalizeRepScheme(args.reps) } : {}),
-          ...(args.durationMinutes !== undefined
-            ? { durationMinutes: nullableNum(args.durationMinutes) ?? null }
+          ...(args.durationSeconds !== undefined
+            ? { durationSeconds: nullableNum(args.durationSeconds) ?? null }
             : {}),
           ...(args.weight !== undefined ? { weight: nullableNum(args.weight) ?? null } : {}),
           ...(args.distance !== undefined ? { distance: nullableNum(args.distance) ?? null } : {})
@@ -498,7 +505,7 @@ export async function executeExerciseTool(
         const presc = formatPrescription({
           sets: updated.sets,
           reps: updated.reps,
-          durationMinutes: updated.durationMinutes,
+          durationSeconds: updated.durationSeconds,
           weight: updated.weight == null ? null : Number(updated.weight),
           distance: updated.distance == null ? null : Number(updated.distance)
         });
@@ -583,8 +590,8 @@ export async function executeExerciseTool(
         const actuals: ExerciseActuals = {
           ...(args.actualSets !== undefined ? { actualSets: nullableNum(args.actualSets) ?? null } : {}),
           ...(args.actualReps !== undefined ? { actualReps: nullableNum(args.actualReps) ?? null } : {}),
-          ...(args.actualDurationMinutes !== undefined
-            ? { actualDurationMinutes: nullableNum(args.actualDurationMinutes) ?? null }
+          ...(args.actualDurationSeconds !== undefined
+            ? { actualDurationSeconds: nullableNum(args.actualDurationSeconds) ?? null }
             : {}),
           ...(args.actualWeight !== undefined ? { actualWeight: nullableNum(args.actualWeight) ?? null } : {}),
           ...(args.actualDistance !== undefined

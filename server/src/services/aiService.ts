@@ -32,7 +32,7 @@ export type ExerciseEstimate = {
   bodyPart: string | null;
   defaultSets: number | null;
   defaultReps: number | null;
-  defaultDurationMinutes: number | null;
+  defaultDurationSeconds: number | null;
   confidence: number;
 };
 
@@ -371,7 +371,7 @@ const exerciseEstimateSchema = z.object({
   bodyPart: exerciseBodyPartSchema,
   defaultSets: optionalInt,
   defaultReps: optionalInt,
-  defaultDurationMinutes: optionalInt,
+  defaultDurationSeconds: optionalInt,
   confidence: z
     .union([z.number(), z.string(), z.null()])
     .optional()
@@ -441,7 +441,7 @@ Return JSON only: { "items": [ { "normalizedFoodName": string (include portion i
 Return between 1 and 3 items. Never return more than 3.`;
 
 const EXERCISE_LOOKUP_PROMPT = `Suggest relevant exercises for the user's query.
-Return JSON only: { "items": [ { "name": string, "description": string (1 short sentence on form and cues), "category": "Strength"|"Cardio"|"Recovery"|null, "bodyPart": "Chest"|"Back"|"Shoulders"|"Biceps"|"Triceps"|"Forearms"|"Core"|"Legs"|"Glutes"|"Calves"|"Full Body"|null, "defaultSets": number|null, "defaultReps": number|null, "defaultDurationMinutes": number|null, "confidence": 0-1 }, ... ] }
+Return JSON only: { "items": [ { "name": string, "description": string (1 short sentence on form and cues), "category": "Strength"|"Cardio"|"Recovery"|null, "bodyPart": "Chest"|"Back"|"Shoulders"|"Biceps"|"Triceps"|"Forearms"|"Core"|"Legs"|"Glutes"|"Calves"|"Full Body"|null, "defaultSets": number|null, "defaultReps": number|null, "defaultDurationSeconds": number|null (timed holds/cardio in seconds, e.g. 30 or 1200), "confidence": 0-1 }, ... ] }
 Return exactly 4 distinct exercises. Keep descriptions under 140 characters. Use Strength for resistance work, Cardio for endurance, Recovery for mobility/stretching. Set bodyPart to the primary muscle group trained.`;
 
 const MEAL_SUGGESTION_PROMPT = `Suggest restaurant or meal choices that fit the user's current macro context.
@@ -716,7 +716,7 @@ function normalizeExerciseEstimate(parsed: z.infer<typeof exerciseEstimateSchema
     bodyPart: parsed.bodyPart ?? null,
     defaultSets: parsed.defaultSets ?? null,
     defaultReps: parsed.defaultReps ?? null,
-    defaultDurationMinutes: parsed.defaultDurationMinutes ?? null,
+    defaultDurationSeconds: parsed.defaultDurationSeconds ?? null,
     confidence: roundConfidence(parsed.confidence)
   };
 }
@@ -1277,7 +1277,7 @@ export class MockAiProvider implements AiProvider {
           bodyPart: 'Biceps',
           defaultSets: 3,
           defaultReps: 10,
-          defaultDurationMinutes: null,
+          defaultDurationSeconds: null,
           confidence: 0.84
         },
         {
@@ -1287,7 +1287,7 @@ export class MockAiProvider implements AiProvider {
           bodyPart: 'Biceps',
           defaultSets: 3,
           defaultReps: 10,
-          defaultDurationMinutes: null,
+          defaultDurationSeconds: null,
           confidence: 0.82
         },
         {
@@ -1297,7 +1297,7 @@ export class MockAiProvider implements AiProvider {
           bodyPart: 'Biceps',
           defaultSets: 3,
           defaultReps: 12,
-          defaultDurationMinutes: null,
+          defaultDurationSeconds: null,
           confidence: 0.8
         }
       ];
@@ -1312,7 +1312,7 @@ export class MockAiProvider implements AiProvider {
           bodyPart: 'Core',
           defaultSets: 3,
           defaultReps: null,
-          defaultDurationMinutes: 1,
+          defaultDurationSeconds: 60,
           confidence: 0.86
         },
         {
@@ -1322,7 +1322,7 @@ export class MockAiProvider implements AiProvider {
           bodyPart: 'Core',
           defaultSets: 3,
           defaultReps: 10,
-          defaultDurationMinutes: null,
+          defaultDurationSeconds: null,
           confidence: 0.84
         },
         {
@@ -1332,7 +1332,7 @@ export class MockAiProvider implements AiProvider {
           bodyPart: 'Core',
           defaultSets: 3,
           defaultReps: 20,
-          defaultDurationMinutes: null,
+          defaultDurationSeconds: null,
           confidence: 0.82
         },
         {
@@ -1342,7 +1342,7 @@ export class MockAiProvider implements AiProvider {
           bodyPart: 'Core',
           defaultSets: 3,
           defaultReps: null,
-          defaultDurationMinutes: 1,
+          defaultDurationSeconds: 60,
           confidence: 0.8
         }
       ];
@@ -1356,7 +1356,7 @@ export class MockAiProvider implements AiProvider {
         bodyPart: null,
         defaultSets: 3,
         defaultReps: 10,
-        defaultDurationMinutes: null,
+        defaultDurationSeconds: null,
         confidence: 0.65
       }
     ];

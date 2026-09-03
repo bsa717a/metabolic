@@ -3,11 +3,13 @@
  * `ExerciseTemplateItem` carry the same prescription fields, so this accepts a
  * structural subset rather than either concrete type.
  */
+import { formatDuration } from './duration';
+
 export type ExercisePrescription = {
   sets?: number | null;
   reps?: string | number | null;
   speed?: string | number | null;
-  durationMinutes?: number | null;
+  durationSeconds?: number | null;
   distance?: number | null;
   weight?: number | null;
 };
@@ -24,7 +26,10 @@ export function formatPlan(item: ExercisePrescription): string {
     const repsLabel = item.reps == null || item.reps === '' ? '—' : String(item.reps);
     return `${item.sets} sets × ${repsLabel} reps${weight}${speedSuffix(item.speed)}`;
   }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min${speedSuffix(item.speed)}`;
+  if (item.durationSeconds != null) {
+    const label = formatDuration(item.durationSeconds);
+    return label ? `${label}${speedSuffix(item.speed)}` : 'No prescription set';
+  }
   if (item.distance != null) return `${item.distance} mi`;
   if (item.weight != null) return `${item.weight} lbs`;
   return 'No prescription set';
@@ -37,7 +42,10 @@ export function formatPlanShort(item: ExercisePrescription): string {
     const repsLabel = item.reps == null || item.reps === '' ? '—' : String(item.reps);
     return `${item.sets}×${repsLabel}${weight}${speedSuffix(item.speed)}`;
   }
-  if (item.durationMinutes != null) return `${item.durationMinutes} min${speedSuffix(item.speed)}`;
+  if (item.durationSeconds != null) {
+    const label = formatDuration(item.durationSeconds);
+    return label ? `${label}${speedSuffix(item.speed)}` : '—';
+  }
   if (item.distance != null) return `${item.distance} mi`;
   if (item.weight != null) return `${item.weight} lbs`;
   return '—';

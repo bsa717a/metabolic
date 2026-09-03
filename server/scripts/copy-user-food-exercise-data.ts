@@ -214,7 +214,7 @@ async function main() {
         scheduledDate: scheduled.scheduledDate,
         sets: scheduled.sets,
         reps: scheduled.reps,
-        durationMinutes: scheduled.durationMinutes,
+        durationSeconds: scheduled.durationSeconds,
         distance: scheduled.distance,
         weight: scheduled.weight,
         status: scheduled.status
@@ -230,7 +230,7 @@ async function main() {
           completedAt: scheduled.log.completedAt,
           actualSets: scheduled.log.actualSets,
           actualReps: scheduled.log.actualReps,
-          actualDurationMinutes: scheduled.log.actualDurationMinutes,
+          actualDurationSeconds: scheduled.log.actualDurationSeconds,
           actualDistance: scheduled.log.actualDistance,
           actualWeight: scheduled.log.actualWeight,
           difficulty: scheduled.log.difficulty,
@@ -270,7 +270,7 @@ async function main() {
         bodyPart: lookup.bodyPart,
         defaultSets: lookup.defaultSets,
         defaultReps: lookup.defaultReps,
-        defaultDurationMinutes: lookup.defaultDurationMinutes,
+        defaultDurationSeconds: lookup.defaultDurationSeconds,
         confidence: lookup.confidence,
         accepted: lookup.accepted,
         exerciseId: lookup.exerciseId

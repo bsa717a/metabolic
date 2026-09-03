@@ -3,9 +3,11 @@ import type { ExerciseCatalogItem } from '../../types';
 import { EXERCISE_BODY_PARTS, EXERCISE_CATEGORIES } from '../../types';
 import { api } from '../../services/api';
 import { coachDailyExercisesApi } from '../../utils/coachExerciseApi';
+import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
+import { DurationField } from './DurationField';
 import { RepSchemeSelect } from './RepSchemeSelect';
 import { SpeedSchemeSelect } from './SpeedSchemeSelect';
 import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exerciseCatalogFilter';
@@ -30,7 +32,7 @@ type ExerciseLookupResult = {
           bodyPart: string | null;
           defaultSets: number | null;
           defaultReps: number | null;
-          defaultDurationMinutes: number | null;
+          defaultDurationSeconds: number | null;
           confidence: number;
         };
       }
@@ -82,7 +84,8 @@ function AddExerciseDrawerContent({
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState<string | null>(null);
   const [speed, setSpeed] = useState<string | null>(null);
-  const [durationMinutes, setDurationMinutes] = useState('');
+  const [durationValue, setDurationValue] = useState('');
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>('min');
   const [weight, setWeight] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -110,7 +113,9 @@ function AddExerciseDrawerContent({
     setSets(toInput(item.defaultSets));
     setReps(item.defaultReps == null ? null : String(item.defaultReps));
     setSpeed(null);
-    setDurationMinutes(toInput(item.defaultDurationMinutes));
+    const duration = secondsToInput(item.defaultDurationSeconds);
+    setDurationValue(duration.value);
+    setDurationUnit(duration.unit);
     setDescription(item.description ?? '');
     setCategory(item.category ?? '');
     setBodyPart(item.bodyPart ?? '');
@@ -166,7 +171,7 @@ function AddExerciseDrawerContent({
           sets: sets === '' ? null : Number(sets),
           reps,
           speed,
-          durationMinutes: durationMinutes === '' ? null : Number(durationMinutes),
+          durationSeconds: inputToSeconds(durationValue, durationUnit),
           weight: weight === '' ? null : Number(weight),
           description: description.trim() || null,
           category: category.trim() || null,
@@ -277,15 +282,16 @@ function AddExerciseDrawerContent({
                   className="exercise-metric-input w-full"
                 />
               </label>
-              <label className="text-sm">
-                <span className="font-medium text-app-text">Minutes</span>
-                <NumberInput
-                  min={0}
-                  className="exercise-metric-input"
-                  value={durationMinutes}
-                  onChange={setDurationMinutes}
-                />
-              </label>
+              <DurationField
+                valueSeconds={null}
+                onChangeSeconds={() => {}}
+                value={durationValue}
+                unit={durationUnit}
+                onChangeValue={setDurationValue}
+                onChangeUnit={setDurationUnit}
+                className="text-sm text-app-text"
+                inputClassName="exercise-metric-input"
+              />
               <label className="text-sm">
                 <span className="font-medium text-app-text">Weight (lbs)</span>
                 <NumberInput

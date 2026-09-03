@@ -23,7 +23,7 @@ function ex(id: string, status: string, presc: Partial<ScheduledExercise> = {}):
     status,
     sets: null,
     reps: null,
-    durationMinutes: null,
+    durationSeconds: null,
     distance: null,
     weight: null,
     exercise: { name: id, bodyPart: null, description: null, howToVideoUrl: null },
@@ -55,8 +55,8 @@ describe('startSession', () => {
   });
 
   it('arms a duration countdown for duration-based exercises', () => {
-    const s = startSession('2026-07-20', [ex('c', 'PLANNED', { durationMinutes: 2 })], 1000);
-    expect(s.durationEndsAtMs).toBe(1000 + 2 * 60_000);
+    const s = startSession('2026-07-20', [ex('c', 'PLANNED', { durationSeconds: 120 })], 1000);
+    expect(s.durationEndsAtMs).toBe(1000 + 120 * 1000);
     expect(remainingMs(s, 1000)).toBe(120_000);
   });
 });
@@ -196,22 +196,22 @@ describe('RECONCILE', () => {
 });
 
 describe('actualsForExercise', () => {
-  it('logs elapsed duration minutes (not only the prescription)', () => {
-    let s = startSession('d', [ex('c', 'PLANNED', { durationMinutes: 20 })], 1000);
+  it('logs elapsed duration seconds (not only the prescription)', () => {
+    let s = startSession('d', [ex('c', 'PLANNED', { durationSeconds: 20 * 60 })], 1000);
     // ~10 minutes into a 20-minute block
     s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 1000 + 10 * 60_000 });
-    expect(actualsForExercise(s, 'c')).toEqual({ actualDurationMinutes: 10 });
+    expect(actualsForExercise(s, 'c')).toEqual({ actualDurationSeconds: 10 * 60 });
   });
 
   it('keeps a manually adjusted duration when completing', () => {
-    let s = startSession('d', [ex('c', 'PLANNED', { durationMinutes: 20 })], 1000);
+    let s = startSession('d', [ex('c', 'PLANNED', { durationSeconds: 20 * 60 })], 1000);
     s = sessionReducer(s, {
       type: 'ADJUST_ACTUALS',
-      patch: { durationMinutes: 12 },
+      patch: { durationSeconds: 12 * 60 },
       nowMs: 1500
     });
     s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 2000 });
-    expect(actualsForExercise(s, 'c')).toEqual({ actualDurationMinutes: 12 });
+    expect(actualsForExercise(s, 'c')).toEqual({ actualDurationSeconds: 12 * 60 });
   });
 
   it('sends actualDistance for distance-based exercises', () => {

@@ -24,7 +24,7 @@ function serializeTemplateItem(item: {
   sets: number | null;
   reps: string | null;
   speed: string | null;
-  durationMinutes: number | null;
+  durationSeconds: number | null;
   distance: unknown;
   weight: unknown;
   exercise: {
@@ -41,7 +41,7 @@ function serializeTemplateItem(item: {
     sets: item.sets,
     reps: item.reps,
     speed: item.speed,
-    durationMinutes: item.durationMinutes,
+    durationSeconds: item.durationSeconds,
     distance: item.distance == null ? null : n(item.distance),
     weight: item.weight == null ? null : n(item.weight),
     exercise: {
@@ -234,7 +234,7 @@ async function deepCopyTemplate(sourceId: string, overrides: { name: string; cre
           sets: item.sets,
           reps: item.reps,
           speed: item.speed,
-          durationMinutes: item.durationMinutes,
+          durationSeconds: item.durationSeconds,
           distance: item.distance,
           weight: item.weight
         }))
@@ -281,7 +281,7 @@ export async function cloneDailyLogToTemplate(
           sets: item.sets,
           reps: item.reps,
           speed: item.speed,
-          durationMinutes: item.durationMinutes,
+          durationSeconds: item.durationSeconds,
           distance: item.distance,
           weight: item.weight
         }))
@@ -386,10 +386,10 @@ export async function addTemplateItem(templateId: string, data: Record<string, u
           ? defaultRepsToScheme(exercise.defaultReps)
           : normalizeRepScheme(data.reps),
       speed: data.speed === undefined ? null : normalizeSpeedScheme(data.speed),
-      durationMinutes:
-        data.durationMinutes === undefined || data.durationMinutes === null
-          ? exercise.defaultDurationMinutes
-          : Number(data.durationMinutes),
+      durationSeconds:
+        data.durationSeconds === undefined || data.durationSeconds === null
+          ? exercise.defaultDurationSeconds
+          : Number(data.durationSeconds),
       distance:
         data.distance === undefined || data.distance === null
           ? exercise.defaultDistance
@@ -409,12 +409,12 @@ export async function updateTemplateItem(itemId: string, data: Record<string, un
       sets: data.sets === undefined ? undefined : data.sets === null ? null : Number(data.sets),
       reps: data.reps === undefined ? undefined : normalizeRepScheme(data.reps),
       speed: data.speed === undefined ? undefined : normalizeSpeedScheme(data.speed),
-      durationMinutes:
-        data.durationMinutes === undefined
+      durationSeconds:
+        data.durationSeconds === undefined
           ? undefined
-          : data.durationMinutes === null
+          : data.durationSeconds === null
             ? null
-            : Number(data.durationMinutes),
+            : Number(data.durationSeconds),
       distance:
         data.distance === undefined ? undefined : data.distance === null ? null : Number(data.distance),
       weight: data.weight === undefined ? undefined : data.weight === null ? null : Number(data.weight)

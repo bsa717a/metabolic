@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { Check, GripVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import type { ExerciseCatalogItem, ExercisePlanTemplate, ExerciseTemplateItem } from '../../types';
 import { api } from '../../services/api';
+import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import { Button } from '../ui/Button';
 import { NumberInput } from '../ui/NumberInput';
+import { DurationChip } from './DurationField';
 import { RepSchemeSelect } from './RepSchemeSelect';
 import { SpeedSchemeSelect } from './SpeedSchemeSelect';
 import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exerciseCatalogFilter';
@@ -217,14 +219,14 @@ export function InlineWorkoutEditor({
     setAddingId(item.id);
     setError('');
     try {
-      // Always start at 3×10 — even for timed moves like plank (user can switch to minutes).
+      // Always start at 3×10 — even for timed moves like plank (user can switch to duration).
       const updated = await api<ExercisePlanTemplate>(endpoints.templateItems(workoutId), {
         method: 'POST',
         body: JSON.stringify({
           exerciseId: item.id,
           sets: 3,
           reps: '10',
-          durationMinutes: null,
+          durationSeconds: null,
           weight: null
         })
       });
@@ -245,7 +247,7 @@ export function InlineWorkoutEditor({
       sets?: number | null;
       reps?: string | null;
       speed?: string | null;
-      durationMinutes?: number | null;
+      durationSeconds?: number | null;
       weight?: number | null;
     }
   ) {
@@ -490,37 +492,50 @@ function ExerciseRow({
     sets?: number | null;
     reps?: string | null;
     speed?: string | null;
-    durationMinutes?: number | null;
+    durationSeconds?: number | null;
     weight?: number | null;
   }) => void;
 }) {
-  // Always expose sets/reps AND minutes (like the previous editors) — some exercises
+  // Always expose sets/reps AND duration (like the previous editors) — some exercises
   // (planks, carries, cardio) are timed instead of (or in addition to) rep-based.
+  const initialDuration = secondsToInput(item.durationSeconds);
   const [sets, setSets] = useState(toInput(item.sets));
   const [reps, setReps] = useState(item.reps ?? null);
   const [speed, setSpeed] = useState<string | null>(item.speed ?? null);
-  const [minutes, setMinutes] = useState(toInput(item.durationMinutes));
+  const [durationValue, setDurationValue] = useState(initialDuration.value);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(initialDuration.unit);
   const [weight, setWeight] = useState(toInput(item.weight));
 
   useEffect(() => {
+    const next = secondsToInput(item.durationSeconds);
     setSets(toInput(item.sets));
     setReps(item.reps ?? null);
     setSpeed(item.speed ?? null);
-    setMinutes(toInput(item.durationMinutes));
+    setDurationValue(next.value);
+    setDurationUnit(next.unit);
     setWeight(toInput(item.weight));
-  }, [item.id, item.sets, item.reps, item.speed, item.durationMinutes, item.weight]);
+  }, [item.id, item.sets, item.reps, item.speed, item.durationSeconds, item.weight]);
 
-  function commit(next: { reps?: string | null; speed?: string | null } = {}) {
+  function commit(
+    next: {
+      reps?: string | null;
+      speed?: string | null;
+      unit?: DurationUnit;
+      durationValue?: string;
+    } = {}
+  ) {
     const nextSets = parseOptionalNumber(sets);
     const nextReps = next.reps !== undefined ? next.reps : reps;
     const nextSpeed = next.speed !== undefined ? next.speed : speed;
-    const nextMinutes = parseOptionalNumber(minutes);
+    const unit = next.unit ?? durationUnit;
+    const value = next.durationValue ?? durationValue;
+    const nextSeconds = inputToSeconds(value, unit);
     const nextWeight = parseOptionalNumber(weight);
     if (
       nextSets === (item.sets ?? null) &&
       nextReps === (item.reps ?? null) &&
       nextSpeed === (item.speed ?? null) &&
-      nextMinutes === (item.durationMinutes ?? null) &&
+      nextSeconds === (item.durationSeconds ?? null) &&
       nextWeight === (item.weight == null ? null : Number(item.weight))
     ) {
       return;
@@ -529,7 +544,7 @@ function ExerciseRow({
       sets: nextSets,
       reps: nextReps,
       speed: nextSpeed,
-      durationMinutes: nextMinutes,
+      durationSeconds: nextSeconds,
       weight: nextWeight
     });
   }
@@ -582,12 +597,16 @@ function ExerciseRow({
               />
               <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">speed</span>
             </label>
-            <NumberChip
-              label="min"
-              value={minutes}
-              onChange={setMinutes}
+            <DurationChip
+              value={durationValue}
+              unit={durationUnit}
+              onChangeValue={setDurationValue}
+              onChangeUnit={(next, converted) => {
+                setDurationValue(converted);
+                setDurationUnit(next);
+                commit({ unit: next, durationValue: converted });
+              }}
               onCommit={() => commit()}
-              ariaLabel="Minutes"
               optional
             />
             <NumberChip

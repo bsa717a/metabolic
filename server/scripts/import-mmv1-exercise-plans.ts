@@ -92,13 +92,13 @@ function parseIntLoose(value: unknown): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function parseDurationMinutes(reps: unknown): number | null {
+function parseDurationSeconds(reps: unknown): number | null {
   if (typeof reps !== 'string') return null;
   const lower = reps.toLowerCase();
   const sec = lower.match(/(\d+)\s*sec/);
-  if (sec) return Math.max(1, Math.round(Number(sec[1]) / 60)) || 1;
+  if (sec) return Math.max(1, Number(sec[1]));
   const min = lower.match(/(\d+)\s*min/);
-  if (min) return Number(min[1]);
+  if (min) return Number(min[1]) * 60;
   return null;
 }
 
@@ -264,7 +264,7 @@ async function main() {
         sortOrder: number;
         sets: number | null;
         reps: number | null;
-        durationMinutes: number | null;
+        durationSeconds: number | null;
         weight: number | null;
       }[] = [];
 
@@ -284,14 +284,14 @@ async function main() {
         }
         const sets = parseIntLoose(item.sets);
         const reps = parseIntLoose(item.reps);
-        const durationMinutes = reps == null ? parseDurationMinutes(item.reps) : null;
+        const durationSeconds = reps == null ? parseDurationSeconds(item.reps) : null;
         const weight = parseIntLoose(item.weight);
         itemCreates.push({
           exerciseId,
           sortOrder: typeof item.lcount === 'number' ? item.lcount : itemIndex,
           sets,
           reps,
-          durationMinutes,
+          durationSeconds,
           weight
         });
       }
@@ -309,7 +309,7 @@ async function main() {
               sortOrder: entry.sortOrder,
               sets: entry.sets,
               reps: entry.reps,
-              durationMinutes: entry.durationMinutes,
+              durationSeconds: entry.durationSeconds,
               weight: entry.weight
             }))
           }

@@ -11,6 +11,7 @@ import type {
   ExerciseTemplateItem
 } from '../../types';
 import type { ExercisePlanUndoSnapshot } from '../../types/exercisePlanUndo';
+import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { formatPlanShort } from '../../utils/exerciseFormat';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import { sharedField } from '../../utils/sharedPrescription';
@@ -18,6 +19,7 @@ import { WEEKDAY_LABELS, type WeekdayIndex } from '../../utils/weekdayPattern';
 import { Button } from '../ui/Button';
 import { NumberInput } from '../ui/NumberInput';
 import { Drawer } from '../ui/Drawer';
+import { DurationChip } from './DurationField';
 import { InlineWorkoutEditor } from './InlineWorkoutEditor';
 import { RepSchemeSelect } from './RepSchemeSelect';
 import { SpeedSchemeSelect } from './SpeedSchemeSelect';
@@ -53,8 +55,8 @@ function mergeItemWithOverride(
     sets: override.sets !== undefined ? override.sets : item.sets,
     reps: override.reps !== undefined ? override.reps : item.reps,
     speed: override.speed !== undefined ? override.speed : item.speed,
-    durationMinutes:
-      override.durationMinutes !== undefined ? override.durationMinutes : item.durationMinutes,
+    durationSeconds:
+      override.durationSeconds !== undefined ? override.durationSeconds : item.durationSeconds,
     distance: override.distance !== undefined ? override.distance : item.distance,
     weight: override.weight !== undefined ? override.weight : item.weight
   };
@@ -185,36 +187,49 @@ function EditableDayExerciseRow({
     sets?: number | null;
     reps?: string | null;
     speed?: string | null;
-    durationMinutes?: number | null;
+    durationSeconds?: number | null;
     weight?: number | null;
   }) => void;
 }) {
+  const initialDuration = secondsToInput(item.durationSeconds);
   const [sets, setSets] = useState(toInput(item.sets));
   const [reps, setReps] = useState<string | null>(item.reps ?? null);
   const [speed, setSpeed] = useState<string | null>(item.speed ?? null);
-  const [minutes, setMinutes] = useState(toInput(item.durationMinutes));
+  const [durationValue, setDurationValue] = useState(initialDuration.value);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(initialDuration.unit);
   const [weight, setWeight] = useState(toInput(item.weight));
 
   useEffect(() => {
+    const next = secondsToInput(item.durationSeconds);
     setSets(toInput(item.sets));
     setReps(item.reps ?? null);
     setSpeed(item.speed ?? null);
-    setMinutes(toInput(item.durationMinutes));
+    setDurationValue(next.value);
+    setDurationUnit(next.unit);
     setWeight(toInput(item.weight));
-  }, [item.id, item.sets, item.reps, item.speed, item.durationMinutes, item.weight]);
+  }, [item.id, item.sets, item.reps, item.speed, item.durationSeconds, item.weight]);
 
-  function commit(next: { reps?: string | null; speed?: string | null } = {}) {
+  function commit(
+    next: {
+      reps?: string | null;
+      speed?: string | null;
+      unit?: DurationUnit;
+      durationValue?: string;
+    } = {}
+  ) {
     if (disabled) return;
     const nextSets = parseOptionalNumber(sets);
     const nextReps = next.reps !== undefined ? next.reps : reps;
     const nextSpeed = next.speed !== undefined ? next.speed : speed;
-    const nextMinutes = parseOptionalNumber(minutes);
+    const unit = next.unit ?? durationUnit;
+    const value = next.durationValue ?? durationValue;
+    const nextSeconds = inputToSeconds(value, unit);
     const nextWeight = parseOptionalNumber(weight);
     if (
       nextSets === (item.sets ?? null) &&
       nextReps === (item.reps ?? null) &&
       nextSpeed === (item.speed ?? null) &&
-      nextMinutes === (item.durationMinutes ?? null) &&
+      nextSeconds === (item.durationSeconds ?? null) &&
       nextWeight === (item.weight == null ? null : Number(item.weight))
     ) {
       return;
@@ -223,7 +238,7 @@ function EditableDayExerciseRow({
       sets: nextSets,
       reps: nextReps,
       speed: nextSpeed,
-      durationMinutes: nextMinutes,
+      durationSeconds: nextSeconds,
       weight: nextWeight
     });
   }
@@ -272,13 +287,18 @@ function EditableDayExerciseRow({
               />
               <span className="text-[10px] font-medium uppercase tracking-wide text-app-text-muted">speed</span>
             </label>
-            <PrescriptionNumberChip
-              label="min"
-              value={minutes}
-              onChange={setMinutes}
+            <DurationChip
+              value={durationValue}
+              unit={durationUnit}
+              onChangeValue={setDurationValue}
+              onChangeUnit={(next, converted) => {
+                setDurationValue(converted);
+                setDurationUnit(next);
+                commit({ unit: next, durationValue: converted });
+              }}
               onCommit={() => commit()}
-              ariaLabel="Minutes"
               disabled={disabled}
+              optional
             />
             <PrescriptionNumberChip
               label="lb"
@@ -478,7 +498,7 @@ function WeekdayAssignmentRow({
       sets?: number | null;
       reps?: string | null;
       speed?: string | null;
-      durationMinutes?: number | null;
+      durationSeconds?: number | null;
       weight?: number | null;
     }
   ) {
