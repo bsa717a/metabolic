@@ -19,6 +19,7 @@ import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useDashboardLayout } from '../utils/dashboardLayoutPreference';
 import { CoachHomeDashboard } from '../components/dashboard/coachHome/CoachHomeDashboard';
+import { ClassicDashboardHint } from '../components/dashboard/ClassicDashboardHint';
 
 function MacroDonut({
   label,
@@ -224,6 +225,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
 
   return (
     <div className="space-y-8">
+      <ClassicDashboardHint />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div data-tour="welcome">
           <DashboardWelcome firstName={user?.firstName} />
