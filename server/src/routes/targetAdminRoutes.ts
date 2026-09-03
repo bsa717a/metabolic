@@ -5,19 +5,25 @@ import { requireAuth } from '../auth/requireAuth.js';
 import { requireRole } from '../auth/requireRole.js';
 import { prisma } from '../db/prisma.js';
 import { n } from '../utils/numbers.js';
+import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { normalizeGender } from '../services/bloodPanelMetrics.js';
 import {
   computeFormulaTargets,
+  DEFAULT_MEAL_STRUCTURE,
   DEFAULT_TARGET_FORMULA,
+  getMealStructure,
   getTargetFormulaConfig,
+  MEAL_STRUCTURE_SETTING_KEY,
+  mealStructureSchema,
   pickOverrideBand,
   TARGET_FORMULA_SETTING_KEY,
   targetFormulaConfigSchema
 } from '../services/targetService.js';
 
 /**
- * Tommy's oversight surface: tune the formula constants, pin override bands, and
- * review the population grid (segments × client counts × formula-vs-override).
+ * Tommy's oversight surface: tune the formula constants, meal structure, pin
+ * override bands, and review the population grid (segments × client counts ×
+ * formula-vs-override).
  */
 
 const adminOnly = [requireAuth, requireRole(['SUPER_ADMIN', 'ADMIN'])];
@@ -61,6 +67,39 @@ export async function targetAdminRoutes(app: FastifyInstance) {
       update: { value: JSON.stringify(config) }
     });
     return { config, isDefault: false };
+  });
+
+  /* ---------- meal structure (day skeleton for formula-era plans) ---------- */
+  app.get('/api/admin/targets/meal-structure', { preHandler: adminOnly }, async () => {
+    const structure = await getMealStructure();
+    const stored = await prisma.appSetting.findUnique({ where: { key: MEAL_STRUCTURE_SETTING_KEY } });
+    return { structure, isDefault: !stored, defaults: DEFAULT_MEAL_STRUCTURE };
+  });
+
+  app.put('/api/admin/targets/meal-structure', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = mealStructureSchema.parse(request.body);
+    const slots = [];
+    for (let index = 0; index < parsed.slots.length; index += 1) {
+      const slot = parsed.slots[index];
+      const rawTime = slot.plannedTime?.trim() || null;
+      let plannedTime: string | null = null;
+      if (rawTime) {
+        plannedTime = normalizePlannedTimeStorage(rawTime);
+        if (!plannedTime) {
+          return reply.code(400).send({
+            error: `Invalid planned time for meal ${index + 1} (${slot.name}): use HH:MM or a time like 7:30am.`
+          });
+        }
+      }
+      slots.push({ ...slot, mealNumber: index + 1, plannedTime });
+    }
+    const structure = { slots };
+    await prisma.appSetting.upsert({
+      where: { key: MEAL_STRUCTURE_SETTING_KEY },
+      create: { key: MEAL_STRUCTURE_SETTING_KEY, value: JSON.stringify(structure) },
+      update: { value: JSON.stringify(structure) }
+    });
+    return { structure, isDefault: false };
   });
 
   app.post('/api/admin/targets/preview', { preHandler: adminOnly }, async (request) => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -16,6 +16,18 @@ type FormulaConfig = {
 };
 
 type Targets = { calories: number; protein: number; carbs: number; fat: number };
+
+type MealSlotType = 'BREAKFAST' | 'SNACK' | 'LUNCH' | 'DINNER';
+
+type MealSlot = {
+  mealNumber: number;
+  name: string;
+  plannedTime: string | null;
+  sharePct: number;
+  slotType: MealSlotType;
+};
+
+type MealStructure = { slots: MealSlot[] };
 
 type OverrideBand = {
   id: string;
@@ -42,6 +54,8 @@ type PopulationRow = {
   override: { id: string; calorieTarget: number; proteinTarget: number } | null;
 };
 
+const SLOT_TYPES: MealSlotType[] = ['BREAKFAST', 'SNACK', 'LUNCH', 'DINNER'];
+
 const EMPTY_BAND = {
   gender: 'f' as 'm' | 'f',
   heightMinInches: 60,
@@ -57,17 +71,38 @@ const EMPTY_BAND = {
   notes: ''
 };
 
+function newSlot(mealNumber: number): MealSlot {
+  return {
+    mealNumber,
+    name: 'Snack',
+    plannedTime: '15:30',
+    sharePct: 15,
+    slotType: 'SNACK'
+  };
+}
+
 export function AdminTargetsPanel() {
   const [config, setConfig] = useState<FormulaConfig | null>(null);
+  const [structure, setStructure] = useState<MealStructure | null>(null);
+  const [structureIsDefault, setStructureIsDefault] = useState(true);
+  const [structureDefaults, setStructureDefaults] = useState<MealStructure | null>(null);
   const [bands, setBands] = useState<OverrideBand[]>([]);
   const [population, setPopulation] = useState<{ rows: PopulationRow[]; incompleteProfiles: number; totalUsers: number } | null>(null);
   const [preview, setPreview] = useState<{ formula: Targets; override: { calorieTarget: number; proteinTarget: number; notes: string | null } | null } | null>(null);
   const [example, setExample] = useState({ gender: 'f' as 'm' | 'f', heightInches: 64, weightLbs: 150, activityLevel: 2 });
   const [draft, setDraft] = useState({ ...EMPTY_BAND });
   const [status, setStatus] = useState<string | null>(null);
+  const [structureStatus, setStructureStatus] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api<{ config: FormulaConfig }>('/api/admin/targets/formula').then((r) => setConfig(r.config)).catch(() => undefined);
+    api<{ structure: MealStructure; isDefault: boolean; defaults: MealStructure }>('/api/admin/targets/meal-structure')
+      .then((r) => {
+        setStructure(r.structure);
+        setStructureIsDefault(r.isDefault);
+        setStructureDefaults(r.defaults);
+      })
+      .catch(() => undefined);
     api<OverrideBand[]>('/api/admin/targets/bands').then(setBands).catch(() => undefined);
     api<{ rows: PopulationRow[]; incompleteProfiles: number; totalUsers: number }>('/api/admin/targets/population')
       .then(setPopulation)
@@ -102,6 +137,67 @@ export function AdminTargetsPanel() {
     }
   }
 
+  async function saveStructure() {
+    if (!structure) return;
+    setStructureStatus(null);
+    const shareTotal = structure.slots.reduce((sum, slot) => sum + slot.sharePct, 0);
+    if (structure.slots.length === 0) {
+      setStructureStatus('Add at least one meal slot.');
+      return;
+    }
+    if (structure.slots.some((slot) => !slot.name.trim())) {
+      setStructureStatus('Every slot needs a name.');
+      return;
+    }
+    try {
+      const saved = await api<{ structure: MealStructure; isDefault: boolean }>('/api/admin/targets/meal-structure', {
+        method: 'PUT',
+        body: JSON.stringify({
+          slots: structure.slots.map((slot, index) => ({
+            ...slot,
+            mealNumber: index + 1,
+            name: slot.name.trim(),
+            plannedTime: slot.plannedTime?.trim() || null
+          }))
+        })
+      });
+      setStructure(saved.structure);
+      setStructureIsDefault(saved.isDefault);
+      setStructureStatus(
+        shareTotal === 100
+          ? `Meal structure saved (${saved.structure.slots.length} meals). New days and new signups use this skeleton; food still comes from meal card defaults.`
+          : `Meal structure saved (${saved.structure.slots.length} meals). Shares total ${shareTotal}% — calories are still split proportionally.`
+      );
+    } catch (err) {
+      setStructureStatus(err instanceof Error ? err.message : 'Save failed');
+    }
+  }
+
+  function updateSlot(index: number, patch: Partial<MealSlot>) {
+    if (!structure) return;
+    setStructure({
+      slots: structure.slots.map((slot, i) => (i === index ? { ...slot, ...patch } : slot))
+    });
+  }
+
+  function addSlot() {
+    if (!structure) return;
+    setStructure({ slots: [...structure.slots, newSlot(structure.slots.length + 1)] });
+  }
+
+  function removeSlot(index: number) {
+    if (!structure || structure.slots.length <= 1) return;
+    setStructure({
+      slots: structure.slots.filter((_, i) => i !== index).map((slot, i) => ({ ...slot, mealNumber: i + 1 }))
+    });
+  }
+
+  function resetStructureToDefaults() {
+    if (!structureDefaults) return;
+    setStructure({ slots: structureDefaults.slots.map((slot) => ({ ...slot })) });
+    setStructureStatus('Reset to code defaults — click Save meal structure to apply.');
+  }
+
   async function addBand() {
     setStatus(null);
     try {
@@ -122,7 +218,9 @@ export function AdminTargetsPanel() {
     load();
   }
 
-  if (!config) return <Card><p className="text-app-text-muted">Loading targets…</p></Card>;
+  if (!config || !structure) return <Card><p className="text-app-text-muted">Loading targets…</p></Card>;
+
+  const shareTotal = structure.slots.reduce((sum, slot) => sum + slot.sharePct, 0);
 
   const numField = (label: string, value: number, onChange: (v: number) => void, step = 1) => (
     <label className="text-sm">
@@ -180,6 +278,99 @@ export function AdminTargetsPanel() {
           <Button type="button" onClick={() => void saveConfig()}>Save formula</Button>
         </div>
         {status && <p className="text-sm text-brand-deep">{status}</p>}
+      </Card>
+
+      <Card className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-bold">Default meal structure</h2>
+            <p className="text-sm text-app-text-muted">
+              Day skeleton for new signups and new formula-era days: how many meals, when, and each slot&apos;s
+              share of the day&apos;s calories. Food still comes from meal card defaults for that slot type.
+              {structureIsDefault ? ' Currently using code defaults (not saved yet).' : ''}
+            </p>
+          </div>
+          <p className={`text-sm font-semibold tabular-nums ${shareTotal === 100 ? 'text-brand-deep' : 'text-amber-800'}`}>
+            {structure.slots.length} meals · {shareTotal}% share
+          </p>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-app-border text-left text-xs uppercase tracking-wide text-app-text-muted">
+              <th className="py-1 w-10">#</th>
+              <th>Name</th>
+              <th>Time</th>
+              <th>Share %</th>
+              <th>Card type</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {structure.slots.map((slot, index) => (
+              <tr key={`${slot.mealNumber}-${index}`} className="border-b border-app-muted">
+                <td className="py-1.5 tabular-nums text-app-text-muted">{index + 1}</td>
+                <td className="py-1.5 pr-2">
+                  <input
+                    value={slot.name}
+                    onChange={(e) => updateSlot(index, { name: e.target.value })}
+                    className="w-full min-w-28 rounded-xl border border-app-border bg-app-surface px-2 py-1.5 text-sm"
+                  />
+                </td>
+                <td className="py-1.5 pr-2">
+                  <input
+                    value={slot.plannedTime ?? ''}
+                    onChange={(e) => updateSlot(index, { plannedTime: e.target.value || null })}
+                    placeholder="HH:MM"
+                    className="w-24 rounded-xl border border-app-border bg-app-surface px-2 py-1.5 text-sm tabular-nums"
+                  />
+                </td>
+                <td className="py-1.5 pr-2">
+                  <NumberInput
+                    step={1}
+                    value={slot.sharePct}
+                    onChange={(v) => updateSlot(index, { sharePct: v })}
+                    className="w-20 rounded-xl border border-app-border bg-app-surface px-2 py-1.5 tabular-nums"
+                  />
+                </td>
+                <td className="py-1.5 pr-2">
+                  <select
+                    value={slot.slotType}
+                    onChange={(e) => updateSlot(index, { slotType: e.target.value as MealSlotType })}
+                    className="rounded-xl border border-app-border bg-app-surface px-2 py-1.5 text-sm"
+                  >
+                    {SLOT_TYPES.map((type) => (
+                      <option key={type} value={type}>{type.charAt(0) + type.slice(1).toLowerCase()}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => removeSlot(index)}
+                    disabled={structure.slots.length <= 1}
+                    className="text-red-400 hover:text-red-600 disabled:opacity-30"
+                    aria-label={`Remove meal ${index + 1}`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex flex-wrap items-center gap-2 border-t border-app-border pt-3">
+          <Button type="button" variant="secondary" onClick={addSlot}>
+            <Plus size={14} className="mr-1 inline" />
+            Add meal
+          </Button>
+          {structureDefaults && (
+            <Button type="button" variant="secondary" onClick={resetStructureToDefaults}>
+              Reset to defaults
+            </Button>
+          )}
+          <Button type="button" onClick={() => void saveStructure()}>Save meal structure</Button>
+        </div>
+        {structureStatus && <p className="text-sm text-brand-deep">{structureStatus}</p>}
       </Card>
 
       <Card className="space-y-3">
