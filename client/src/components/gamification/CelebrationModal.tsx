@@ -33,9 +33,9 @@ export function CelebrationModal({
                 <p className="mt-1 font-semibold">{celebration.nextLevelName}</p>
               </div>
             )}
-            <Link to="/level-up/path" onClick={onClose}>
+            <Link to="/level-up" onClick={onClose}>
               <Button className="w-full">
-                {celebration.nextLevelName ? `Start ${celebration.nextLevelName}` : 'View level path'}
+                {celebration.nextLevelName ? `Continue on Level Up` : 'Back to Level Up'}
               </Button>
             </Link>
           </>

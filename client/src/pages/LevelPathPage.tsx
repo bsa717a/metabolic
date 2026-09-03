@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, Check, Lock, Circle } from 'lucide-react';
 import { api } from '../services/api';
 import type { JourneyLevel } from '../types/gamification';
+import type { GuidedJourneyState } from '../types/guidedJourney';
 import { Card } from '../components/ui/Card';
 import { ProgressRing } from '../components/gamification/ProgressRing';
 
@@ -15,10 +16,27 @@ const statusIcon = {
 
 export function LevelPathPage() {
   const [levels, setLevels] = useState<JourneyLevel[]>([]);
+  const [journeyEnabled, setJourneyEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
-    api<JourneyLevel[]>('/api/gamification/journey').then(setLevels);
+    api<GuidedJourneyState>('/api/guided-journey')
+      .then((state) => setJourneyEnabled(state.enabled))
+      .catch(() => setJourneyEnabled(false));
   }, []);
+
+  useEffect(() => {
+    if (journeyEnabled !== true) return;
+    api<JourneyLevel[]>('/api/gamification/journey').then(setLevels);
+  }, [journeyEnabled]);
+
+  if (journeyEnabled === null) {
+    return <p className="text-app-text-muted">Loading…</p>;
+  }
+
+  // Legacy level ladder is only available while Guided Journey is enabled.
+  if (!journeyEnabled) {
+    return <Navigate to="/level-up/badges" replace />;
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
