@@ -154,7 +154,7 @@ const templateExerciseItemBody = z.object({
   sets: z.number().int().min(0).nullable().optional(),
   reps: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
   speed: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
-  durationMinutes: z.number().int().min(0).nullable().optional(),
+  durationSeconds: z.number().int().min(0).nullable().optional(),
   distance: z.number().finite().min(0).nullable().optional(),
   weight: z.number().finite().min(0).nullable().optional()
 });
@@ -446,7 +446,7 @@ export async function coachRoutes(app: FastifyInstance) {
         sets: optionalNumber,
         reps: optionalRepScheme,
         speed: optionalRepScheme,
-        durationMinutes: optionalNumber,
+        durationSeconds: optionalNumber,
         distance: optionalNumber,
         weight: optionalNumber,
         description: optionalString,
@@ -517,7 +517,7 @@ export async function coachRoutes(app: FastifyInstance) {
                   sets: optionalNumber,
                   reps: optionalRepScheme,
                   speed: z.union([z.string(), z.number(), z.null()]).optional(),
-                  durationMinutes: optionalNumber,
+                  durationSeconds: optionalNumber,
                   distance: optionalNumber,
                   weight: optionalNumber,
                   status: z.enum(['PLANNED', 'DONE', 'SKIPPED', 'MISSED']),

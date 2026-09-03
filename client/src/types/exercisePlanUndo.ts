@@ -3,7 +3,7 @@ export type ExercisePlanSnapshotItem = {
   sets?: number | null;
   reps?: string | number | null;
   speed?: string | number | null;
-  durationMinutes?: number | null;
+  durationSeconds?: number | null;
   distance?: number | null;
   weight?: number | null;
   status: string;

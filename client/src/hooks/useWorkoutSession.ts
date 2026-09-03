@@ -281,7 +281,7 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     (patch: {
       reps?: number | null;
       weight?: number | null;
-      durationMinutes?: number | null;
+      durationSeconds?: number | null;
       distance?: number | null;
     }) => dispatch({ type: 'ADJUST_ACTUALS', patch, nowMs: Date.now() }),
     [dispatch]

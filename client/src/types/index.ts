@@ -249,7 +249,7 @@ export type ExerciseCatalogItem = {
   howToVideoUrl?: string | null;
   defaultSets?: number | null;
   defaultReps?: number | null;
-  defaultDurationMinutes?: number | null;
+  defaultDurationSeconds?: number | null;
   defaultDistance?: number | null;
   requiresGym?: boolean;
 };
@@ -278,7 +278,7 @@ export type ScheduledExercise = {
   reps?: string | null;
   /** Tempo/speed scheme, e.g. "1/3", "1/2", "1/1". */
   speed?: string | null;
-  durationMinutes?: number | null;
+  durationSeconds?: number | null;
   distance?: number | null;
   weight?: number | null;
   exercise: {
@@ -384,7 +384,7 @@ export type ExerciseTemplateItem = {
   reps?: string | null;
   /** Tempo/speed scheme, e.g. "1/3", "1/2", "1/1". */
   speed?: string | null;
-  durationMinutes?: number | null;
+  durationSeconds?: number | null;
   distance?: number | null;
   weight?: number | null;
   exercise: {
@@ -427,7 +427,7 @@ export type ExerciseRoutineDayItemOverride = {
   sets?: number | null;
   reps?: string | null;
   speed?: string | null;
-  durationMinutes?: number | null;
+  durationSeconds?: number | null;
   distance?: number | null;
   weight?: number | null;
 };

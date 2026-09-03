@@ -40,7 +40,7 @@ export type AdminExerciseUpdate = {
   howToVideoUrl?: string | null;
   defaultSets?: number | null;
   defaultReps?: number | null;
-  defaultDurationMinutes?: number | null;
+  defaultDurationSeconds?: number | null;
   defaultDistance?: number | null;
   requiresGym?: boolean;
 };
@@ -52,7 +52,7 @@ export type AdminExerciseCreate = {
   description?: string | null;
   defaultSets?: number | null;
   defaultReps?: number | null;
-  defaultDurationMinutes?: number | null;
+  defaultDurationSeconds?: number | null;
   defaultDistance?: number | null;
   requiresGym?: boolean;
 };
@@ -145,7 +145,7 @@ export function serializeAdminExercise(exercise: Awaited<ReturnType<typeof listA
     howToVideoUrl: exercise.howToVideoUrl,
     defaultSets: exercise.defaultSets,
     defaultReps: exercise.defaultReps,
-    defaultDurationMinutes: exercise.defaultDurationMinutes,
+    defaultDurationSeconds: exercise.defaultDurationSeconds,
     defaultDistance: exercise.defaultDistance != null ? Number(exercise.defaultDistance) : null,
     requiresGym: exercise.requiresGym,
     createdAt: exercise.createdAt.toISOString()
@@ -258,7 +258,7 @@ export async function createAdminExercise(data: AdminExerciseCreate) {
       description: data.description ?? null,
       defaultSets: data.defaultSets ?? null,
       defaultReps: data.defaultReps ?? null,
-      defaultDurationMinutes: data.defaultDurationMinutes ?? null,
+      defaultDurationSeconds: data.defaultDurationSeconds ?? null,
       defaultDistance: data.defaultDistance ?? null,
       requiresGym: data.requiresGym ?? false
     }

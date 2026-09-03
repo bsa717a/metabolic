@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { ExerciseCatalogItem, ExerciseTemplateItem } from '../../types';
 import { api } from '../../services/api';
+import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
+import { DurationField } from '../exercise/DurationField';
 import { RepSchemeSelect } from '../exercise/RepSchemeSelect';
 import { SpeedSchemeSelect } from '../exercise/SpeedSchemeSelect';
 import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exerciseCatalogFilter';
@@ -35,7 +37,8 @@ export function EditTemplateExerciseDrawer({
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState<string | null>(null);
   const [speed, setSpeed] = useState<string | null>(null);
-  const [durationMinutes, setDurationMinutes] = useState('');
+  const [durationValue, setDurationValue] = useState('');
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>('min');
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -50,12 +53,14 @@ export function EditTemplateExerciseDrawer({
     queueMicrotask(() => {
       setError('');
       if (item) {
+        const duration = secondsToInput(item.durationSeconds);
         setSelected(null);
         setQuery('');
         setSets(toInput(item.sets));
         setReps(item.reps ?? null);
         setSpeed(item.speed ?? null);
-        setDurationMinutes(toInput(item.durationMinutes));
+        setDurationValue(duration.value);
+        setDurationUnit(duration.unit);
         setWeight(toInput(item.weight));
         return;
       }
@@ -64,17 +69,20 @@ export function EditTemplateExerciseDrawer({
       setSets('');
       setReps(null);
       setSpeed(null);
-      setDurationMinutes('');
+      setDurationValue('');
+      setDurationUnit('min');
       setWeight('');
     });
   }, [open, item]);
 
   function selectExercise(exercise: ExerciseCatalogItem) {
+    const duration = secondsToInput(exercise.defaultDurationSeconds);
     setSelected(exercise);
     setSets(toInput(exercise.defaultSets));
     setReps(exercise.defaultReps == null ? null : String(exercise.defaultReps));
     setSpeed(null);
-    setDurationMinutes(toInput(exercise.defaultDurationMinutes));
+    setDurationValue(duration.value);
+    setDurationUnit(duration.unit);
   }
 
   const filtered = filterExerciseCatalog(catalog, { query, hideGym });
@@ -88,7 +96,7 @@ export function EditTemplateExerciseDrawer({
         sets: sets ? Number(sets) : null,
         reps,
         speed,
-        durationMinutes: durationMinutes ? Number(durationMinutes) : null,
+        durationSeconds: inputToSeconds(durationValue, durationUnit),
         weight: weight ? Number(weight) : null
       };
 
@@ -186,15 +194,16 @@ export function EditTemplateExerciseDrawer({
               className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold text-app-text"
             />
           </label>
-          <label className="text-sm">
-            <span className="mb-1 block font-medium text-app-text">Duration (min)</span>
-            <NumberInput
-              min={0}
-              className="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
-              value={durationMinutes}
-              onChange={setDurationMinutes}
-            />
-          </label>
+          <DurationField
+            valueSeconds={null}
+            onChangeSeconds={() => {}}
+            value={durationValue}
+            unit={durationUnit}
+            onChangeValue={setDurationValue}
+            onChangeUnit={setDurationUnit}
+            className="text-sm"
+            inputClassName="w-full rounded-xl border border-app-border bg-app-surface text-app-text px-3 py-2"
+          />
           <label className="text-sm">
             <span className="mb-1 block font-medium text-app-text">Weight (lbs)</span>
             <NumberInput

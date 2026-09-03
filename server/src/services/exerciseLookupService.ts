@@ -12,7 +12,7 @@ export type ExerciseLookupItem =
         description: string | null;
         defaultSets: number | null;
         defaultReps: number | null;
-        defaultDurationMinutes: number | null;
+        defaultDurationSeconds: number | null;
         defaultDistance: number | null;
         requiresGym: boolean;
       };
@@ -54,7 +54,7 @@ function serializeCatalogExercise(
     description: exercise.description,
     defaultSets: exercise.defaultSets,
     defaultReps: exercise.defaultReps,
-    defaultDurationMinutes: exercise.defaultDurationMinutes,
+    defaultDurationSeconds: exercise.defaultDurationSeconds,
     defaultDistance: exercise.defaultDistance == null ? null : Number(exercise.defaultDistance),
     requiresGym: exercise.requiresGym
   };
@@ -81,7 +81,7 @@ export async function lookupExercise(userId: string, inputText: string): Promise
         bodyPart: estimate.bodyPart,
         defaultSets: estimate.defaultSets,
         defaultReps: estimate.defaultReps,
-        defaultDurationMinutes: estimate.defaultDurationMinutes,
+        defaultDurationSeconds: estimate.defaultDurationSeconds,
         confidence: estimate.confidence
       }
     });
@@ -116,7 +116,7 @@ export async function acceptExerciseLookup(userId: string, lookupId: string) {
         bodyPart: lookup.bodyPart,
         defaultSets: lookup.defaultSets,
         defaultReps: lookup.defaultReps,
-        defaultDurationMinutes: lookup.defaultDurationMinutes
+        defaultDurationSeconds: lookup.defaultDurationSeconds
       }
     });
 

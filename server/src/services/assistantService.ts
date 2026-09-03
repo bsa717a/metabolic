@@ -141,7 +141,7 @@ function exerciseSummary(exercises: Awaited<ReturnType<typeof getTodayDashboard>
     status: entry.status,
     sets: entry.sets,
     reps: entry.reps,
-    durationMinutes: entry.durationMinutes,
+    durationSeconds: entry.durationSeconds,
     weight: entry.weight == null ? null : Number(entry.weight),
     scheduledDate: entry.scheduledDate.toISOString().slice(0, 10)
   }));

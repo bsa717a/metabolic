@@ -146,7 +146,7 @@ const exerciseCreateBody = z.object({
   description: z.string().trim().nullable().optional(),
   defaultSets: z.number().int().min(0).nullable().optional(),
   defaultReps: z.number().int().min(0).nullable().optional(),
-  defaultDurationMinutes: z.number().int().min(0).nullable().optional(),
+  defaultDurationSeconds: z.number().int().min(0).nullable().optional(),
   defaultDistance: z.number().finite().min(0).nullable().optional(),
   requiresGym: z.boolean().optional()
 });
@@ -160,7 +160,7 @@ const exerciseUpdateBody = z
     howToVideoUrl: z.string().trim().url().nullable().optional(),
     defaultSets: z.number().int().min(0).nullable().optional(),
     defaultReps: z.number().int().min(0).nullable().optional(),
-    defaultDurationMinutes: z.number().int().min(0).nullable().optional(),
+    defaultDurationSeconds: z.number().int().min(0).nullable().optional(),
     defaultDistance: z.number().finite().min(0).nullable().optional(),
     requiresGym: z.boolean().optional()
   })
@@ -217,7 +217,7 @@ const templateExerciseItemBody = z.object({
   sets: z.number().int().min(0).nullable().optional(),
   reps: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
   speed: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
-  durationMinutes: z.number().int().min(0).nullable().optional(),
+  durationSeconds: z.number().int().min(0).nullable().optional(),
   distance: z.number().finite().min(0).nullable().optional(),
   weight: z.number().finite().min(0).nullable().optional()
 });
@@ -227,7 +227,7 @@ const templateExerciseItemUpdateBody = z
     sets: z.number().int().min(0).nullable().optional(),
     reps: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
     speed: z.union([z.string().trim().max(32), z.number(), z.null()]).optional(),
-    durationMinutes: z.number().int().min(0).nullable().optional(),
+    durationSeconds: z.number().int().min(0).nullable().optional(),
     distance: z.number().finite().min(0).nullable().optional(),
     weight: z.number().finite().min(0).nullable().optional()
   })

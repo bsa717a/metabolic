@@ -6,9 +6,11 @@ import {
   uploadExerciseHowToVideo,
   validateExerciseVideoFile
 } from '../../services/exerciseVideoStorage';
+import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
+import { DurationField } from '../exercise/DurationField';
 
 type ExerciseDraft = {
   name: string;
@@ -17,7 +19,8 @@ type ExerciseDraft = {
   description: string;
   defaultSets: string;
   defaultReps: string;
-  defaultDurationMinutes: string;
+  defaultDurationValue: string;
+  defaultDurationUnit: DurationUnit;
   defaultDistance: string;
   requiresGym: boolean;
 };
@@ -30,13 +33,15 @@ function emptyDraft(): ExerciseDraft {
     description: '',
     defaultSets: '',
     defaultReps: '',
-    defaultDurationMinutes: '',
+    defaultDurationValue: '',
+    defaultDurationUnit: 'min',
     defaultDistance: '',
     requiresGym: false
   };
 }
 
 function toDraft(exercise: AdminExercise): ExerciseDraft {
+  const duration = secondsToInput(exercise.defaultDurationSeconds);
   return {
     name: exercise.name,
     category: exercise.category ?? '',
@@ -44,7 +49,8 @@ function toDraft(exercise: AdminExercise): ExerciseDraft {
     description: exercise.description ?? '',
     defaultSets: exercise.defaultSets == null ? '' : String(exercise.defaultSets),
     defaultReps: exercise.defaultReps == null ? '' : String(exercise.defaultReps),
-    defaultDurationMinutes: exercise.defaultDurationMinutes == null ? '' : String(exercise.defaultDurationMinutes),
+    defaultDurationValue: duration.value,
+    defaultDurationUnit: duration.unit,
     defaultDistance: exercise.defaultDistance == null ? '' : String(exercise.defaultDistance),
     requiresGym: Boolean(exercise.requiresGym)
   };
@@ -167,7 +173,7 @@ function EditExerciseDrawerContent({
         description: draft.description.trim() ? draft.description.trim() : null,
         defaultSets: parseOptionalInt(draft.defaultSets, 'Default sets'),
         defaultReps: parseOptionalInt(draft.defaultReps, 'Default reps'),
-        defaultDurationMinutes: parseOptionalInt(draft.defaultDurationMinutes, 'Default duration'),
+        defaultDurationSeconds: inputToSeconds(draft.defaultDurationValue, draft.defaultDurationUnit),
         defaultDistance: parseOptionalNumber(draft.defaultDistance, 'Default distance'),
         requiresGym: draft.requiresGym
       };
@@ -340,16 +346,17 @@ function EditExerciseDrawerContent({
             onChange={(value) => updateDraft('defaultReps', value)}
           />
         </label>
-        <label className="block">
-          <span className={labelClassName()}>Default duration (min)</span>
-          <NumberInput
-            className={inputClassName()}
-            min={0}
-            step={1}
-            value={draft.defaultDurationMinutes}
-            onChange={(value) => updateDraft('defaultDurationMinutes', value)}
-          />
-        </label>
+        <DurationField
+          label="Default duration"
+          valueSeconds={null}
+          onChangeSeconds={() => {}}
+          value={draft.defaultDurationValue}
+          unit={draft.defaultDurationUnit}
+          onChangeValue={(value) => updateDraft('defaultDurationValue', value)}
+          onChangeUnit={(unit) => setDraft((prev) => ({ ...prev, defaultDurationUnit: unit }))}
+          className="block text-sm"
+          inputClassName={inputClassName()}
+        />
         <label className="block">
           <span className={labelClassName()}>Default distance (mi)</span>
           <NumberInput

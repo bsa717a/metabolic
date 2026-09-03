@@ -156,7 +156,7 @@ async function run() {
 
     console.log('add + mark_all_exercises_done');
     const a = await executeExerciseTool(ctx, 'add_exercise', { name: 'E2E Coach Squats', date, sets: 2, reps: 12 });
-    const b = await executeExerciseTool(ctx, 'add_exercise', { name: 'E2E Coach Plank', date, durationMinutes: 1 });
+    const b = await executeExerciseTool(ctx, 'add_exercise', { name: 'E2E Coach Plank', date, durationSeconds: 60 });
     noError('second add succeeds', a);
     noError('third add succeeds', b);
     const allDone = await executeExerciseTool(ctx, 'mark_all_exercises_done', { date });

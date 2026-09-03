@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { ExercisePlanTemplate, ExerciseTemplateItem } from '../../types';
+import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { formatPlan } from '../../utils/exerciseFormat';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { NumberInput } from '../ui/NumberInput';
+import { DurationField } from '../exercise/DurationField';
 import { RepSchemeSelect } from '../exercise/RepSchemeSelect';
 import { SpeedSchemeSelect } from '../exercise/SpeedSchemeSelect';
 
@@ -28,7 +30,8 @@ export function CoachManualExerciseTemplateDrawer({
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState<string | null>(null);
   const [speed, setSpeed] = useState<string | null>(null);
-  const [durationMinutes, setDurationMinutes] = useState('');
+  const [durationValue, setDurationValue] = useState('');
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>('min');
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -52,11 +55,13 @@ export function CoachManualExerciseTemplateDrawer({
   }, [load, open]);
 
   function startEdit(item: ExerciseTemplateItem) {
+    const duration = secondsToInput(item.durationSeconds);
     setEditItem(item);
     setSets(toInput(item.sets));
     setReps(item.reps ?? null);
     setSpeed(item.speed ?? null);
-    setDurationMinutes(toInput(item.durationMinutes));
+    setDurationValue(duration.value);
+    setDurationUnit(duration.unit);
     setWeight(toInput(item.weight));
   }
 
@@ -71,7 +76,7 @@ export function CoachManualExerciseTemplateDrawer({
           sets: sets ? Number(sets) : null,
           reps,
           speed,
-          durationMinutes: durationMinutes ? Number(durationMinutes) : null,
+          durationSeconds: inputToSeconds(durationValue, durationUnit),
           weight: weight ? Number(weight) : null
         })
       });
@@ -140,15 +145,16 @@ export function CoachManualExerciseTemplateDrawer({
                     className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2 text-sm font-semibold text-app-text"
                   />
                 </label>
-                <label className="text-sm">
-                  <span className="mb-1 block text-app-text-muted">Duration (min)</span>
-                  <NumberInput
-                    min={0}
-                    className="w-full rounded-xl border border-app-border px-3 py-2"
-                    value={durationMinutes}
-                    onChange={setDurationMinutes}
-                  />
-                </label>
+                <DurationField
+                  valueSeconds={null}
+                  onChangeSeconds={() => {}}
+                  value={durationValue}
+                  unit={durationUnit}
+                  onChangeValue={setDurationValue}
+                  onChangeUnit={setDurationUnit}
+                  className="text-sm"
+                  inputClassName="w-full rounded-xl border border-app-border px-3 py-2"
+                />
                 <label className="text-sm">
                   <span className="mb-1 block text-app-text-muted">Weight (lbs)</span>
                   <NumberInput

@@ -711,7 +711,7 @@ model Exercise {
   howToVideoUrl String?
   defaultSets Int?
   defaultReps Int?
-  defaultDurationMinutes Int?
+  defaultDurationSeconds Int?
   defaultDistance Decimal? @db.Decimal(10, 2)
   requiresGym Boolean @default(false)
   createdAt DateTime @default(now())
@@ -732,7 +732,7 @@ model ScheduledExercise {
   reps String?
   /// Tempo/speed scheme, e.g. "1/3", "1/2", "1/1".
   speed String?
-  durationMinutes Int?
+  durationSeconds Int?
   distance Decimal? @db.Decimal(10, 2)
   weight Decimal? @db.Decimal(10, 2)
   status ExerciseStatus @default(PLANNED)
@@ -753,7 +753,7 @@ model ExerciseLog {
   completedAt DateTime?
   actualSets Int?
   actualReps Int?
-  actualDurationMinutes Int?
+  actualDurationSeconds Int?
   actualDistance Decimal? @db.Decimal(10, 2)
   actualWeight Decimal? @db.Decimal(10, 2)
   difficulty Difficulty?
@@ -791,7 +791,7 @@ model AiExerciseLookup {
   bodyPart String?
   defaultSets Int?
   defaultReps Int?
-  defaultDurationMinutes Int?
+  defaultDurationSeconds Int?
   confidence Decimal? @db.Decimal(5, 2)
   accepted Boolean @default(false)
   exerciseId String?
@@ -965,7 +965,7 @@ model ExerciseTemplateItem {
   reps String?
   /// Tempo/speed scheme, e.g. "1/3", "1/2", "1/1".
   speed String?
-  durationMinutes Int?
+  durationSeconds Int?
   distance Decimal? @db.Decimal(10, 2)
   weight Decimal? @db.Decimal(10, 2)
   createdAt DateTime @default(now())
@@ -1005,7 +1005,7 @@ model ExerciseRoutineDay {
   @@unique([routineId, weekday])
 }
 
-/// Per-weekday prescription overrides for a template item (sets/reps/min/lbs can differ by day).
+/// Per-weekday prescription overrides for a template item (sets/reps/duration/lbs can differ by day).
 model ExerciseRoutineDayItem {
   id String @id @default(cuid())
   routineDayId String
@@ -1015,7 +1015,7 @@ model ExerciseRoutineDayItem {
   reps String?
   /// Tempo/speed scheme, e.g. "1/3", "1/2", "1/1".
   speed String?
-  durationMinutes Int?
+  durationSeconds Int?
   distance Decimal? @db.Decimal(10, 2)
   weight Decimal? @db.Decimal(10, 2)
   createdAt DateTime @default(now())

@@ -1,4 +1,5 @@
 import { Check, SkipForward } from 'lucide-react';
+import { formatDuration } from '../../../utils/duration';
 import type { SessionSummary as SessionSummaryData } from '../../../utils/workoutSession';
 import { formatClock } from './format';
 
@@ -27,10 +28,12 @@ export function SessionSummary({
         {summary.perExercise.map(({ meta, state }, index) => {
           const done = state.outcome === 'done';
           const skipped = state.outcome === 'skipped';
+          const durationLabel = formatDuration(state.actualDurationSeconds);
           const actual = [
             state.setsDone ? `${state.setsDone} set${state.setsDone === 1 ? '' : 's'}` : null,
             state.actualReps != null ? `${state.actualReps} reps` : null,
-            state.actualWeight != null ? `${state.actualWeight} lb` : null
+            state.actualWeight != null ? `${state.actualWeight} lb` : null,
+            durationLabel || null
           ]
             .filter(Boolean)
             .join(' · ');

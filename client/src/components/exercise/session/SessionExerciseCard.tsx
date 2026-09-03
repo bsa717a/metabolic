@@ -1,11 +1,14 @@
 import { Minus, Pause, Play, Plus, SkipForward } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { clsx } from 'clsx';
 import { ExerciseHowToVideoButton } from '../ExerciseHowToVideoButton';
 import { formatPlan } from '../../../utils/exerciseFormat';
+import { type DurationUnit, formatDuration, secondsToInput } from '../../../utils/duration';
 import { repsForSet, repSchemeParts } from '../../../utils/repSchemes';
 import { SessionRepScheme } from './SessionRepScheme';
 import type { PerExerciseState, SessionExerciseMeta } from '../../../utils/workoutSession';
 import { hasSets, isDurationBased, totalSets } from '../../../utils/workoutSession';
+import { DurationField } from '../DurationField';
 import { timerCueKind } from './format';
 import { SessionTimerClock } from './SessionTimerCue';
 
@@ -69,7 +72,7 @@ export function SessionExerciseCard({
   durationRemainingMs: number | null;
   paused: boolean;
   onCompleteSet: () => void;
-  onAdjust: (patch: { reps?: number; weight?: number }) => void;
+  onAdjust: (patch: { reps?: number; weight?: number; durationSeconds?: number | null }) => void;
   onSkip: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -81,11 +84,22 @@ export function SessionExerciseCard({
   const plannedReps = repsForSet(meta.reps, currentSet);
   const reps = per.actualReps ?? plannedReps;
   const weight = per.actualWeight ?? meta.weight ?? 0;
-  const durationTotalMs = (meta.durationMinutes ?? 0) * 60_000;
+  const durationTotalMs = (meta.durationSeconds ?? 0) * 1000;
   const durationElapsedFrac =
     durationRemainingMs != null && durationTotalMs > 0
       ? Math.min(1, Math.max(0, 1 - durationRemainingMs / durationTotalMs))
       : 0;
+
+  const actualOrPlannedSeconds = per.actualDurationSeconds ?? meta.durationSeconds ?? null;
+  const initialDuration = secondsToInput(actualOrPlannedSeconds);
+  const [durationValue, setDurationValue] = useState(initialDuration.value);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(initialDuration.unit);
+
+  useEffect(() => {
+    const next = secondsToInput(per.actualDurationSeconds ?? meta.durationSeconds ?? null);
+    setDurationValue(next.value);
+    setDurationUnit(next.unit);
+  }, [meta.id, meta.durationSeconds, per.actualDurationSeconds]);
 
   const completeLabel = durationBased
     ? 'Done'
@@ -158,6 +172,23 @@ export function SessionExerciseCard({
             {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
             {paused ? 'Resume' : 'Pause'}
           </button>
+          <DurationField
+            label="Actual duration"
+            tone="dark"
+            valueSeconds={actualOrPlannedSeconds}
+            onChangeSeconds={(seconds) => onAdjust({ durationSeconds: seconds })}
+            value={durationValue}
+            unit={durationUnit}
+            onChangeValue={setDurationValue}
+            onChangeUnit={setDurationUnit}
+            className="w-full max-w-xs text-sm"
+            inputClassName="mt-1 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-center text-lg font-semibold tabular-nums text-white outline-none"
+          />
+          {per.actualDurationSeconds != null && (
+            <p className="text-xs text-white/45">
+              Logging {formatDuration(per.actualDurationSeconds) || '—'} when you tap Done
+            </p>
+          )}
         </div>
       ) : setBased ? (
         <div className="flex shrink-0 gap-3">

@@ -43,7 +43,7 @@ export type RoutineDayItemOverrideInput = {
   sets?: number | null;
   reps?: string | number | null;
   speed?: string | number | null;
-  durationMinutes?: number | null;
+  durationSeconds?: number | null;
   distance?: number | null;
   weight?: number | null;
 };
@@ -53,7 +53,7 @@ function serializeItemOverride(item: {
   sets: number | null;
   reps: string | null;
   speed: string | null;
-  durationMinutes: number | null;
+  durationSeconds: number | null;
   distance: unknown;
   weight: unknown;
 }) {
@@ -62,7 +62,7 @@ function serializeItemOverride(item: {
     sets: item.sets,
     reps: item.reps,
     speed: item.speed,
-    durationMinutes: item.durationMinutes,
+    durationSeconds: item.durationSeconds,
     distance: item.distance == null ? null : Number(item.distance),
     weight: item.weight == null ? null : Number(item.weight)
   };
@@ -120,7 +120,7 @@ function overridesToMap(
     sets: number | null;
     reps: string | null;
     speed: string | null;
-    durationMinutes: number | null;
+    durationSeconds: number | null;
     distance: unknown;
     weight: unknown;
   }[]
@@ -132,7 +132,7 @@ function overridesToMap(
         sets: item.sets,
         reps: item.reps,
         speed: item.speed,
-        durationMinutes: item.durationMinutes,
+        durationSeconds: item.durationSeconds,
         distance: item.distance == null ? null : Number(item.distance),
         weight: item.weight == null ? null : Number(item.weight)
       }
@@ -420,7 +420,7 @@ type OverrideBase = {
   sets: number | null;
   reps: string | null;
   speed: string | null;
-  durationMinutes: number | null;
+  durationSeconds: number | null;
   distance: number | null;
   weight: number | null;
 };
@@ -430,7 +430,7 @@ function overrideBaseFrom(
     sets: number | null;
     reps: string | null;
     speed: string | null;
-    durationMinutes: number | null;
+    durationSeconds: number | null;
     distance: unknown;
     weight: unknown;
   }
@@ -439,7 +439,7 @@ function overrideBaseFrom(
     sets: source.sets,
     reps: source.reps,
     speed: source.speed,
-    durationMinutes: source.durationMinutes,
+    durationSeconds: source.durationSeconds,
     distance: source.distance == null ? null : Number(source.distance),
     weight: source.weight == null ? null : Number(source.weight)
   };
@@ -450,7 +450,7 @@ function mergedOverrideValues(base: OverrideBase, patch: RoutineDayItemOverrideI
     sets: patch.sets !== undefined ? patch.sets : base.sets,
     reps: patch.reps !== undefined ? normalizeRepScheme(patch.reps) : base.reps,
     speed: patch.speed !== undefined ? normalizeSpeedScheme(patch.speed) : base.speed,
-    durationMinutes: patch.durationMinutes !== undefined ? patch.durationMinutes : base.durationMinutes,
+    durationSeconds: patch.durationSeconds !== undefined ? patch.durationSeconds : base.durationSeconds,
     distance: patch.distance !== undefined ? patch.distance : base.distance,
     weight: patch.weight !== undefined ? patch.weight : base.weight
   };
@@ -492,7 +492,7 @@ async function upsertDayItemOverride(
       sets: number | null;
       reps: string | null;
       speed: string | null;
-      durationMinutes: number | null;
+      durationSeconds: number | null;
       distance: unknown;
       weight: unknown;
     }>;
@@ -503,7 +503,7 @@ async function upsertDayItemOverride(
     sets: number | null;
     reps: string | null;
     speed: string | null;
-    durationMinutes: number | null;
+    durationSeconds: number | null;
     distance: unknown;
     weight: unknown;
   },

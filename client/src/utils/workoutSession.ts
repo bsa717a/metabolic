@@ -9,7 +9,7 @@ import type { ScheduledExercise } from '../types';
 
 export const SESSION_STORAGE_KEY = 'metabolic.exerciseSession.v1';
 export const SESSION_PREFS_KEY = 'metabolic.exerciseSession.prefs.v1';
-export const SESSION_VERSION = 1;
+export const SESSION_VERSION = 2;
 
 export const DEFAULT_SESSION_SETTINGS: WorkoutSessionSettings = {
   restSetSec: 45,
@@ -39,7 +39,7 @@ export type SessionExerciseMeta = {
   reps: string | null;
   speed: string | null;
   weight: number | null;
-  durationMinutes: number | null;
+  durationSeconds: number | null;
   distance: number | null;
 };
 
@@ -47,7 +47,7 @@ export type PerExerciseState = {
   setsDone: number;
   actualReps?: number | null;
   actualWeight?: number | null;
-  actualDurationMinutes?: number | null;
+  actualDurationSeconds?: number | null;
   actualDistance?: number | null;
   outcome?: 'done' | 'skipped';
 };
@@ -86,7 +86,7 @@ export type SessionAction =
       patch: {
         reps?: number | null;
         weight?: number | null;
-        durationMinutes?: number | null;
+        durationSeconds?: number | null;
         distance?: number | null;
       };
       nowMs: number;
@@ -117,7 +117,7 @@ export function toMeta(exercise: ScheduledExercise): SessionExerciseMeta {
     reps: exercise.reps ?? null,
     speed: exercise.speed ?? null,
     weight: exercise.weight ?? null,
-    durationMinutes: exercise.durationMinutes ?? null,
+    durationSeconds: exercise.durationSeconds ?? null,
     distance: exercise.distance ?? null
   };
 }
@@ -131,7 +131,7 @@ export function totalSets(meta: SessionExerciseMeta): number {
 }
 
 export function isDurationBased(meta: SessionExerciseMeta): boolean {
-  return !hasSets(meta) && meta.durationMinutes != null && meta.durationMinutes > 0;
+  return !hasSets(meta) && meta.durationSeconds != null && meta.durationSeconds > 0;
 }
 
 export function isDistanceBased(meta: SessionExerciseMeta): boolean {
@@ -150,7 +150,7 @@ export function isDistanceBased(meta: SessionExerciseMeta): boolean {
 function enterExercise(state: WorkoutSessionState, index: number, currentSet: number, nowMs: number): WorkoutSessionState {
   const meta = state.plan[state.order[index]];
   const durationEndsAtMs =
-    meta && isDurationBased(meta) ? nowMs + (meta.durationMinutes as number) * 60_000 : null;
+    meta && isDurationBased(meta) ? nowMs + (meta.durationSeconds as number) * 1000 : null;
   return {
     ...state,
     currentIndex: index,
@@ -263,9 +263,9 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
         ...nextPer[currentId],
         ...(isDurationBased(meta)
           ? {
-              actualDurationMinutes:
-                nextPer[currentId].actualDurationMinutes ??
-                elapsedDurationMinutes(state, action.nowMs, meta.durationMinutes)
+              actualDurationSeconds:
+                nextPer[currentId].actualDurationSeconds ??
+                elapsedDurationSeconds(state, action.nowMs, meta.durationSeconds)
             }
           : {}),
         ...(isDistanceBased(meta)
@@ -298,8 +298,8 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
             ...per,
             ...(action.patch.reps !== undefined ? { actualReps: action.patch.reps } : {}),
             ...(action.patch.weight !== undefined ? { actualWeight: action.patch.weight } : {}),
-            ...(action.patch.durationMinutes !== undefined
-              ? { actualDurationMinutes: action.patch.durationMinutes }
+            ...(action.patch.durationSeconds !== undefined
+              ? { actualDurationSeconds: action.patch.durationSeconds }
               : {}),
             ...(action.patch.distance !== undefined ? { actualDistance: action.patch.distance } : {})
           }
@@ -464,20 +464,20 @@ export function remainingMs(state: WorkoutSessionState, nowMs: number): number |
   return null;
 }
 
-/** Elapsed duration minutes for a timed exercise (prescribed − remaining), min 1. */
-export function elapsedDurationMinutes(
+/** Elapsed duration seconds for a timed exercise (prescribed − remaining), min 1. */
+export function elapsedDurationSeconds(
   state: WorkoutSessionState,
   nowMs: number,
-  prescribedMinutes: number | null
+  prescribedSeconds: number | null
 ): number {
-  const prescribed = prescribedMinutes && prescribedMinutes > 0 ? prescribedMinutes : null;
+  const prescribed = prescribedSeconds && prescribedSeconds > 0 ? prescribedSeconds : null;
   if (prescribed != null && (state.durationEndsAtMs != null || state.pausedRemainingMs != null)) {
     const rem = remainingMs(state, nowMs) ?? 0;
-    const elapsedMs = Math.max(0, prescribed * 60_000 - rem);
-    return Math.max(1, Math.round(elapsedMs / 60_000));
+    const elapsedMs = Math.max(0, prescribed * 1000 - rem);
+    return Math.max(1, Math.round(elapsedMs / 1000));
   }
   const elapsedMs = Math.max(0, nowMs - state.phaseStartedAtMs);
-  return Math.max(1, Math.round(elapsedMs / 60_000));
+  return Math.max(1, Math.round(elapsedMs / 1000));
 }
 
 export function currentMeta(state: WorkoutSessionState): SessionExerciseMeta | null {
@@ -524,7 +524,7 @@ export function actualsForExercise(state: WorkoutSessionState, id: string) {
   if (!per) return {};
   if (meta && isDurationBased(meta)) {
     return {
-      actualDurationMinutes: per.actualDurationMinutes ?? meta.durationMinutes ?? undefined
+      actualDurationSeconds: per.actualDurationSeconds ?? meta.durationSeconds ?? undefined
     };
   }
   if (meta && isDistanceBased(meta)) {
@@ -535,7 +535,7 @@ export function actualsForExercise(state: WorkoutSessionState, id: string) {
   return {
     actualReps: per.actualReps ?? undefined,
     actualWeight: per.actualWeight ?? undefined,
-    actualDurationMinutes: per.actualDurationMinutes ?? undefined,
+    actualDurationSeconds: per.actualDurationSeconds ?? undefined,
     actualSets: per.setsDone || undefined
   };
 }

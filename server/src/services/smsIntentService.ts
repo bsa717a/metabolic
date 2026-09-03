@@ -909,7 +909,10 @@ export async function handleExerciseDetails(userId: string, todayKey: string, _t
   const lines = exercises.map((ex, index) => {
     const bits: string[] = [];
     if (ex.sets != null && ex.reps != null) bits.push(`${ex.sets}x${ex.reps}`);
-    else if (ex.durationMinutes != null) bits.push(`${ex.durationMinutes} min`);
+    else if (ex.durationSeconds != null) {
+      const s = ex.durationSeconds;
+      bits.push(s % 60 === 0 ? `${s / 60} min` : `${s}s`);
+    }
     if (ex.weight != null) bits.push(`${n(ex.weight)} lb`);
     if (ex.distance != null) bits.push(`${n(ex.distance)} mi`);
     const detail = bits.length ? ` (${bits.join(', ')})` : '';

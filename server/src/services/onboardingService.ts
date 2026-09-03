@@ -15,10 +15,10 @@ import { normalizePhone } from '../utils/phone.js';
 const DEFAULT_PROGRAM_NAME = 'Master Your Metabolic';
 
 const DEFAULT_EXERCISES = [
-  { name: 'Morning walk', category: 'Cardio', defaultDurationMinutes: 30 },
+  { name: 'Morning walk', category: 'Cardio', defaultDurationSeconds: 30 * 60 },
   { name: 'Goblet squat', category: 'Strength', bodyPart: 'Legs', defaultSets: 3, defaultReps: 10 },
   { name: 'Push-up', category: 'Strength', bodyPart: 'Chest', defaultSets: 3, defaultReps: 8 },
-  { name: 'Mobility flow', category: 'Recovery', defaultDurationMinutes: 15 }
+  { name: 'Mobility flow', category: 'Recovery', defaultDurationSeconds: 15 * 60 }
 ] as const;
 
 export async function userNeedsSetup(userId: string) {
@@ -99,8 +99,8 @@ async function findOrCreateExercise(
       bodyPart: 'bodyPart' in definition ? definition.bodyPart : undefined,
       defaultSets: 'defaultSets' in definition ? definition.defaultSets : undefined,
       defaultReps: 'defaultReps' in definition ? definition.defaultReps : undefined,
-      defaultDurationMinutes:
-        'defaultDurationMinutes' in definition ? definition.defaultDurationMinutes : undefined
+      defaultDurationSeconds:
+        'defaultDurationSeconds' in definition ? definition.defaultDurationSeconds : undefined
     }
   });
 }
@@ -121,7 +121,7 @@ async function seedDefaultExercises(userId: string, programId: string, date: Dat
         scheduledDate: date,
         sets: exercise.defaultSets,
         reps: exercise.defaultReps == null ? null : String(exercise.defaultReps),
-        durationMinutes: exercise.defaultDurationMinutes,
+        durationSeconds: exercise.defaultDurationSeconds,
         status: 'PLANNED',
         sortOrder: index
       }
