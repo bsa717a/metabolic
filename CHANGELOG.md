@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.19.0](https://github.com/bsa717a/metabolic/compare/v0.18.0...v0.19.0) (2026-09-03)
+
+
+### Features
+
+* **admin:** edit default meal structure on Targets ([d4c04f6](https://github.com/bsa717a/metabolic/commit/d4c04f6e9a3b529ee3cd6eb50b2186b955a461cb))
+* **admin:** edit default meal structure on Targets ([052f78e](https://github.com/bsa717a/metabolic/commit/052f78edff90a0dd51fc486d675a3aef34f78a29))
+* **onboarding:** restore real-coach selection and self-serve turn-off ([14beabd](https://github.com/bsa717a/metabolic/commit/14beabdfee4c6bb05d4d96ede30a6905c8e40a9f))
+* **onboarding:** restore real-coach selection and self-serve turn-off ([661be75](https://github.com/bsa717a/metabolic/commit/661be75913428f6715091c81c91102a976ffcfba))
+
 ## [0.18.0](https://github.com/bsa717a/metabolic/compare/v0.17.0...v0.18.0) (2026-09-03)
 
 
