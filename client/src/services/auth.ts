@@ -10,6 +10,7 @@ import {
   type User
 } from 'firebase/auth';
 import { auth } from './firebase';
+import { clearSignupDashboardFirstSession } from '../utils/signupDashboardExperience';
 
 export function login(email: string, password: string) {
   if (!auth) throw new Error('Firebase is not configured. Add VITE_FIREBASE_* values to client/.env.');
@@ -38,6 +39,7 @@ export function resetPassword(email: string) {
 }
 
 export function logout() {
+  clearSignupDashboardFirstSession();
   if (!auth) return Promise.resolve();
   return signOut(auth);
 }

@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react';
+import {
+  DASHBOARD_LAYOUT_CHANGED_EVENT,
+  getDashboardLayout,
+  setDashboardLayout,
+  type DashboardLayout
+} from './signupDashboardExperience';
 
-export type DashboardLayout = 'classic' | 'coachHome';
-
-export const DASHBOARD_LAYOUT_STORAGE_KEY = 'metabolic-dashboard-layout';
-export const DASHBOARD_LAYOUT_CHANGED_EVENT = 'dashboard-layout-changed';
-
-export function getDashboardLayout(): DashboardLayout {
-  try {
-    return localStorage.getItem(DASHBOARD_LAYOUT_STORAGE_KEY) === 'coachHome' ? 'coachHome' : 'classic';
-  } catch {
-    return 'classic';
-  }
-}
-
-export function setDashboardLayout(layout: DashboardLayout) {
-  localStorage.setItem(DASHBOARD_LAYOUT_STORAGE_KEY, layout);
-  window.dispatchEvent(new Event(DASHBOARD_LAYOUT_CHANGED_EVENT));
-}
+export type { DashboardLayout };
+export {
+  DASHBOARD_LAYOUT_CHANGED_EVENT,
+  DASHBOARD_LAYOUT_STORAGE_KEY,
+  beginSignupCoachHomeExperience,
+  clearSignupDashboardFirstSession,
+  dismissClassicDashboardHint,
+  getDashboardLayout,
+  setDashboardLayout,
+  shouldShowClassicDashboardHint,
+  SIGNUP_DASHBOARD_FLOW_KEY
+} from './signupDashboardExperience';
 
 export function useDashboardLayout(): [DashboardLayout, (layout: DashboardLayout) => void] {
   const [layout, setLayout] = useState<DashboardLayout>(() =>

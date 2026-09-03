@@ -8,6 +8,7 @@ import { submitSetupForm } from './setupForm';
 import { ThemeToggle } from '../layout/ThemeToggle';
 import { coachWelcomeGoalsFromForm } from '../virtualCoach/coachWelcomeMessage';
 import { setPendingCoachWelcome } from '../virtualCoach/coachWelcomePending';
+import { beginSignupCoachHomeExperience } from '../../utils/signupDashboardExperience';
 import { getVirtualCoach, type VirtualCoachId } from '../../data/virtualCoaches';
 import { detectedTimezone } from '../../utils/timezoneOptions';
 import type { SetupFormState } from '../../types/onboarding';
@@ -70,6 +71,7 @@ export function NewUserOnboardingFlow({
         });
       }
 
+      beginSignupCoachHomeExperience();
       onComplete();
       navigate('/', {
         replace: true,
