@@ -216,11 +216,20 @@ async function main(): Promise<void> {
       unresolved += 1;
       continue;
     }
-    await prisma.coachAssignment.upsert({
-      where: { userId },
-      create: { coachId, userId },
-      update: { coachId }
+    const existing = await prisma.coachAssignment.findFirst({
+      where: { userId, status: 'ACTIVE' }
     });
+    if (existing?.coachId === coachId) {
+      assignments += 1;
+      continue;
+    }
+    if (existing) {
+      await prisma.coachAssignment.update({
+        where: { id: existing.id },
+        data: { status: 'COMPLETED', accessEndsAt: new Date() }
+      });
+    }
+    await prisma.coachAssignment.create({ data: { coachId, userId, status: 'ACTIVE' } });
     assignments += 1;
   }
   console.log(`  Coach assignments: ${assignments} (${unresolved} unresolved owner_id)`);

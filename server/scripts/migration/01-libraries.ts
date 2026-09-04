@@ -222,7 +222,7 @@ async function upsertExerciseTemplate(
     exerciseId: string;
     sortOrder: number;
     sets: number | null;
-    reps: number | null;
+    reps: string | null;
     weight: number | null;
   }[] = [];
   let sortOrder = 0;
@@ -233,7 +233,7 @@ async function upsertExerciseTemplate(
       exerciseId,
       sortOrder: sortOrder++,
       sets: toInt(item.sets ?? null),
-      reps: toInt(item.reps ?? null),
+      reps: item.reps != null && String(item.reps).trim() ? String(item.reps).trim() : null,
       weight: numPositive(item.weight ?? null)
     });
   }

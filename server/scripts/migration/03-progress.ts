@@ -126,7 +126,7 @@ async function main(): Promise<void> {
     const sessions = dedupeByDay(rawSessions);
     if (sessions.length === 0) continue;
 
-    const coachAssignment = await prisma.coachAssignment.findUnique({ where: { userId } });
+    const coachAssignment = await prisma.coachAssignment.findFirst({ where: { userId, status: 'ACTIVE' } });
     const startDate = sessions[0].date;
 
     // Program (idempotent via idmap or natural lookup).

@@ -258,7 +258,7 @@ async function materializeDay(
 
   // Build planned scheduled exercises from the exercise plan.
   const circuits = plan.exercise ? parseCircuits(plan.exercise.row.circuits) : [];
-  const exercisePayloads: { exerciseId: string; sets: number | null; reps: number | null; weight: number | null; sortOrder: number }[] = [];
+  const exercisePayloads: { exerciseId: string; sets: number | null; reps: string | null; weight: number | null; sortOrder: number }[] = [];
   let sortOrder = 0;
   for (const circuit of circuits) {
     for (const item of circuitItems(circuit)) {
@@ -267,7 +267,7 @@ async function materializeDay(
       exercisePayloads.push({
         exerciseId,
         sets: parseIntLoose(item.sets),
-        reps: parseIntLoose(item.reps),
+        reps: item.reps != null && String(item.reps).trim() ? String(item.reps).trim() : null,
         weight: parseWeight(item.weight),
         sortOrder: sortOrder++
       });

@@ -18,7 +18,7 @@ if (preservedDatabaseUrl) {
 /** Path to the legacy MySQL dump. Override with LEGACY_DUMP_PATH. */
 export const DUMP_PATH = process.env.LEGACY_DUMP_PATH
   ? resolve(process.env.LEGACY_DUMP_PATH)
-  : '/Users/derekfowler/repo/mmv1/mmv1/astermet_app.sql';
+  : '/Users/derekfowler/Downloads/astermet_app.sql';
 
 /** Deterministic Firebase UID / linkage key for a legacy user id. */
 export function legacyUid(legacyId: string | number): string {
