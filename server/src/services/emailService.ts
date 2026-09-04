@@ -1,12 +1,10 @@
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
-import sgMail from '@sendgrid/mail';
+import { isEmailConfigured, sendEmail } from './emailTransport.js';
 import { env } from '../config/env.js';
 import type { ResultsReadyLinks } from './resultsReadyNotification.js';
 
-export function isEmailConfigured() {
-  return Boolean(env.SENDGRID_API_KEY && env.SENDGRID_FROM_EMAIL);
-}
+export { isEmailConfigured } from './emailTransport.js';
 
 function resolveEmailAsset(filename: string) {
   const candidates = [
@@ -20,7 +18,16 @@ function resolveEmailAsset(filename: string) {
   throw new Error(`Missing email asset: ${filename}`);
 }
 
-/** Welcome email for brand-new signups. Requires SendGrid to be configured. */
+async function sendOrThrow(label: string, send: () => Promise<void>) {
+  try {
+    await send();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown Resend error';
+    throw new Error(`${label}: ${detail.slice(0, 300)}`);
+  }
+}
+
+/** Welcome email for brand-new signups. Requires Resend to be configured. */
 export async function sendWelcomeEmail(options: { to: string; firstName?: string | null }) {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured.');
@@ -53,37 +60,23 @@ export async function sendWelcomeEmail(options: { to: string; firstName?: string
     '— Metabolic OS'
   ].join('\n');
 
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
-  try {
-    await sgMail.send({
+  await sendOrThrow('Could not send welcome email', () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
       subject: 'Welcome to Metabolic OS',
       text,
       html,
-      // SendGrid API expects content_id; @sendgrid/mail leaves camelCase contentId unconverted.
       attachments: [
         {
-          content: image.toString('base64'),
-          filename: 'welcome-dashboard.png',
-          type: 'image/png',
-          disposition: 'inline',
-          content_id: 'welcome-dashboard'
-        } as { content: string; filename: string; type: string; disposition: string; content_id: string }
+          name: 'welcome-dashboard.png',
+          contentType: 'image/png',
+          contentBytes: image.toString('base64'),
+          contentId: 'welcome-dashboard',
+          isInline: true
+        }
       ]
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send welcome email: ${detail.slice(0, 300)}`);
-  }
+    })
+  );
 }
 
 export type { ResultsReadyLinks };
@@ -97,8 +90,6 @@ export async function sendResultsReadyEmail(options: {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured.');
   }
-
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
 
   const subject = 'Your results are ready';
   const greeting = options.clientFirstName.trim() || 'there';
@@ -127,26 +118,14 @@ export async function sendResultsReadyEmail(options: {
     '<p>— Master Metabolic</p>'
   ].join('');
 
-  try {
-    await sgMail.send({
+  await sendOrThrow('Could not send email', () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
       subject,
       text,
       html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send email: ${detail.slice(0, 300)}`);
-  }
+    })
+  );
 }
 
 export async function sendCoachRequestNotificationEmail(options: {
@@ -163,8 +142,6 @@ export async function sendCoachRequestNotificationEmail(options: {
   if (!isEmailConfigured()) {
     return;
   }
-
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
 
   const clientName = `${options.client.firstName} ${options.client.lastName}`.trim() || 'A new user';
   const subject = `Coach requested: ${clientName}`;
@@ -197,26 +174,14 @@ export async function sendCoachRequestNotificationEmail(options: {
     '<p>— Master Metabolic</p>'
   ].join('');
 
-  try {
-    await sgMail.send({
+  await sendOrThrow('Could not send coach request email', () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
       subject,
       text,
       html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send coach request email: ${detail.slice(0, 300)}`);
-  }
+    })
+  );
 }
 
 export async function sendStoreOrderNotificationEmail(options: {
@@ -231,8 +196,6 @@ export async function sendStoreOrderNotificationEmail(options: {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured.');
   }
-
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
 
   const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
   const subject = `New store order — ${dollars(options.totalCents)} from ${options.customerName || options.customerEmail}`;
@@ -268,50 +231,21 @@ export async function sendStoreOrderNotificationEmail(options: {
     '<p>— Master Metabolic</p>'
   ].join('');
 
-  try {
-    await sgMail.send({
+  await sendOrThrow('Could not send store order email', () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
       subject,
       text,
       html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send store order email: ${detail.slice(0, 300)}`);
-  }
+    })
+  );
 }
 
 async function sendSimpleEmail(to: string, subject: string, lines: string[]) {
   if (!isEmailConfigured()) throw new Error('Email is not configured.');
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
   const text = lines.join('\n');
   const html = lines.map((line) => (line ? `<p>${escapeHtml(line)}</p>` : '<br />')).join('');
-  try {
-    await sgMail.send({
-      to,
-      from: { email: env.SENDGRID_FROM_EMAIL, name: env.SENDGRID_FROM_NAME },
-      subject,
-      text,
-      html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send email: ${detail.slice(0, 300)}`);
-  }
+  await sendOrThrow('Could not send email', () => sendEmail({ to, subject, text, html }));
 }
 
 /** Immediate alert to the team for a blocking / error-heavy feedback report. */

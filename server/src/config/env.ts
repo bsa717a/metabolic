@@ -37,7 +37,9 @@ const envSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   TWILIO_WEBHOOK_URL: z.string().optional().default(""),
-  SENDGRID_API_KEY: z.string().optional().default(""),
+  RESEND_API_KEY: z.string().optional().default(""),
+  RESEND_FROM_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
+  RESEND_FROM_NAME: z.string().optional().default(""),
   SENDGRID_FROM_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   SENDGRID_FROM_NAME: z.string().optional().default("Master Metabolic"),
   CLIENT_URL: z.string().url().default("http://localhost:5173"),
