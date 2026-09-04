@@ -8,7 +8,7 @@ import {
 } from './categories.js';
 import { wrapEmailHtml, htmlToPlainText } from './htmlUtils.js';
 import { inlineEmailImages } from './emailImageInliner.js';
-import { sendCommunicationEmail } from './sendgridEmail.js';
+import { sendCommunicationEmail } from './resendEmail.js';
 import { getClientPublicUrl } from './storage.js';
 import { generateToken } from './unsubscribeToken.js';
 import { buildUnsubscribeMatcherForCategory } from './unsubscribeService.js';

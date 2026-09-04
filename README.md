@@ -67,7 +67,7 @@ echo -n https://metabolic-v1.web.app | gcloud secrets create CLIENT_URL --data-f
 echo -n YOUR_TWILIO_ACCOUNT_SID | gcloud secrets create TWILIO_ACCOUNT_SID --data-file=-
 echo -n YOUR_TWILIO_AUTH_TOKEN | gcloud secrets create TWILIO_AUTH_TOKEN --data-file=-
 echo -n YOUR_TWILIO_PHONE_NUMBER | gcloud secrets create TWILIO_PHONE_NUMBER --data-file=-
-echo -n YOUR_SENDGRID_API_KEY | gcloud secrets create SENDGRID_API_KEY --data-file=-
+echo -n YOUR_RESEND_API_KEY | gcloud secrets create RESEND_API_KEY --data-file=-
 echo -n DoNotReply@MasterMetabolic.com | gcloud secrets create SENDGRID_FROM_EMAIL --data-file=-
 echo -n 'Master Metabolic' | gcloud secrets create SENDGRID_FROM_NAME --data-file=-
 # Shared secret for the proactive SMS reminder scheduler
@@ -85,7 +85,7 @@ Grant the Cloud Run service account access after first deploy:
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe metabolic-v1 --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY OPENAI_API_KEY UNSUBSCRIBE_TOKEN_SECRET CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME CRON_SECRET; do
+for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY OPENAI_API_KEY UNSUBSCRIBE_TOKEN_SECRET CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER RESEND_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME CRON_SECRET; do
   gcloud secrets add-iam-policy-binding "$s" \
     --member="serviceAccount:${SA}" \
     --role="roles/secretmanager.secretAccessor"
