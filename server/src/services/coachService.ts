@@ -22,6 +22,7 @@ import { getUserNutritionTargets, setUserNutritionTargets } from './nutritionTar
 import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { saveProgramMetricSnapshot } from './programService.js';
 import { sendResultsReadyEmail } from './emailService.js';
+import { sendCoachSessionRecapEmail } from './sessionRecapService.js';
 import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsReadyNotification.js';
 import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, resolveOutboundChannel } from './twilioOutboundService.js';
 import { normalizePhone } from '../utils/phone.js';
@@ -478,7 +479,7 @@ async function linkSessionToSnapshot(sessionId: string, snapshotId: string, note
 }
 
 export async function saveCoachSessionComplete(
-  actor: { id: string; role: Role },
+  actor: { id: string; role: Role; firstName: string; lastName: string },
   data: { userId: string; notes: string; sessionId?: string }
 ) {
   await requireCoachClient(actor, data.userId);
@@ -511,7 +512,7 @@ export async function saveCoachSessionComplete(
     }
 
     const session = await linkSessionToSnapshot(data.sessionId, snapshot.id, notes);
-    return serializeCoachSession(session);
+    return withSessionRecap(actor, data.userId, notes, session);
   }
 
   const todayEnd = addUtcDays(today, 1);
@@ -541,7 +542,22 @@ export async function saveCoachSessionComplete(
         });
       });
 
-  return serializeCoachSession(session);
+  return withSessionRecap(actor, data.userId, notes, session);
+}
+
+async function withSessionRecap(
+  actor: { id: string; firstName: string; lastName: string },
+  userId: string,
+  notes: string,
+  session: Parameters<typeof serializeCoachSession>[0]
+) {
+  const recap = await sendCoachSessionRecapEmail(actor, userId, notes);
+  return {
+    ...serializeCoachSession(session),
+    recapEmailSent: recap.sent,
+    recapEmailTo: recap.to ?? null,
+    recapEmailError: recap.error ?? null
+  };
 }
 
 async function requireLinkedCheckInForSession(

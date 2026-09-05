@@ -517,6 +517,9 @@ export type CoachSession = {
   linkedSnapshotId: string | null;
   createdAt: string;
   updatedAt: string;
+  recapEmailSent?: boolean;
+  recapEmailTo?: string | null;
+  recapEmailError?: string | null;
 };
 export type ClientGroup = {
   id: string;

@@ -3,6 +3,7 @@ import path from 'path';
 import { isEmailConfigured, sendEmail } from './emailTransport.js';
 import { env } from '../config/env.js';
 import type { ResultsReadyLinks } from './resultsReadyNotification.js';
+import type { SessionRecapEmail } from './sessionRecapEmail.js';
 
 export { isEmailConfigured } from './emailTransport.js';
 
@@ -124,6 +125,21 @@ export async function sendResultsReadyEmail(options: {
       subject,
       text,
       html
+    })
+  );
+}
+
+export async function sendSessionRecapEmail(options: { to: string } & SessionRecapEmail) {
+  if (!isEmailConfigured()) {
+    throw new Error('Email is not configured.');
+  }
+
+  await sendOrThrow('Could not send session recap email', () =>
+    sendEmail({
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html
     })
   );
 }
