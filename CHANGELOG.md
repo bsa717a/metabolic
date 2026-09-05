@@ -7,6 +7,16 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.20.0](https://github.com/bsa717a/metabolic/compare/v0.19.0...v0.20.0) (2026-09-05)
+
+
+### Features
+
+* **coach:** email a fun session recap when the coach saves ([be140ca](https://github.com/bsa717a/metabolic/commit/be140ca59f75bf8c370d0214507b82f10b583673))
+* **coach:** email a fun session recap when the coach saves ([6b83b70](https://github.com/bsa717a/metabolic/commit/6b83b70cd802fcddb9fa732e53a70765dec6a20e))
+* **email:** send outbound mail through Resend ([6728172](https://github.com/bsa717a/metabolic/commit/67281726e0b8a49b57641c0c8ac8526d35ad09d8))
+* **email:** send outbound mail through Resend ([6741c48](https://github.com/bsa717a/metabolic/commit/6741c48e4ce75504eaa52914e1a7b65959a5a887))
+
 ## [0.19.0](https://github.com/bsa717a/metabolic/compare/v0.18.0...v0.19.0) (2026-09-03)
 
 
