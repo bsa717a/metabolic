@@ -59,6 +59,7 @@ export function SessionNotesPanel({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const todayUtc = toDateKey(new Date());
@@ -92,8 +93,9 @@ export function SessionNotesPanel({
     }
     setSaving(true);
     setError('');
+    setSuccess('');
     try {
-      await api<CoachSession>('/api/coach/sessions/complete', {
+      const result = await api<CoachSession>('/api/coach/sessions/complete', {
         method: 'POST',
         body: JSON.stringify({
           userId: clientId,
@@ -103,6 +105,11 @@ export function SessionNotesPanel({
       });
       await load();
       await onSessionSaved?.();
+      if (result.recapEmailSent) {
+        setSuccess(`Boom — recap emailed${result.recapEmailTo ? ` to ${result.recapEmailTo}` : ''}.`);
+      } else if (result.recapEmailError) {
+        setError(`Session saved, but the recap email didn't go through: ${result.recapEmailError}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save session');
     } finally {
@@ -132,10 +139,15 @@ export function SessionNotesPanel({
       />
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {success && <p className="mt-2 text-sm text-emerald-700">{success}</p>}
 
       <Button className="mt-3 w-full" disabled={saving || loading || !programId} onClick={() => void saveSession()}>
         {saving ? 'Saving...' : activeSessionId ? 'Update session' : 'Save session'}
       </Button>
+      <p className="mt-2 text-xs text-app-text-muted">
+        Saves today's notes and emails {clientName} a recap: notes first, next session, tomorrow's meals, and this week's
+        workouts.
+      </p>
       {!programId && (
         <p className="mt-2 text-xs text-app-text-muted">An active program is required before saving a session.</p>
       )}
