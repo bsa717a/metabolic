@@ -7,6 +7,19 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.22.0](https://github.com/bsa717a/metabolic/compare/v0.21.0...v0.22.0) (2026-09-07)
+
+
+### Features
+
+* **coach:** invite links with join confirmation ([a881e11](https://github.com/bsa717a/metabolic/commit/a881e1190551e3b2d8cb539ed82dfc0067afce86))
+
+
+### Bug Fixes
+
+* **coach:** connect invite clients after login and onboarding ([9624f03](https://github.com/bsa717a/metabolic/commit/9624f034859bae7513a8b8e51b2d1dfff3e5b26c))
+* **onboarding:** auto-detect timezone with clear copy ([c53797c](https://github.com/bsa717a/metabolic/commit/c53797c089c45f5d9e1366e6fef7f6d8cc046f9b))
+
 ## [0.21.0](https://github.com/bsa717a/metabolic/compare/v0.20.0...v0.21.0) (2026-09-07)
 
 
