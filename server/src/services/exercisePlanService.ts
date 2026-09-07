@@ -73,8 +73,8 @@ export async function listExercisePlansForAdmin() {
 }
 
 export async function listExercisePlansForActor(actor: { id: string; role: Role }, clientId?: string) {
-  if (isAdmin(actor)) return listExercisePlansForAdmin();
   if (clientId) return listExercisePlansForUser(clientId);
+  if (isAdmin(actor)) return listExercisePlansForAdmin();
   const plans = await prisma.exercisePlan.findMany({
     where: {
       OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }]
