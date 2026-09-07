@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import type { User } from 'firebase/auth';
-import { listenForAuth } from './services/auth';
+import { listenForAuth, reloadCurrentUser } from './services/auth';
 import { api } from './services/api';
 import { listenForForegroundPush, syncPushTokenIfGranted } from './services/pushNotifications';
 import type { AppUser } from './types';
 import { AppShell } from './components/layout/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { ProgramPage } from './pages/ProgramPage';
 import { NutritionPage } from './pages/NutritionPage';
 import { NutritionLogPage } from './pages/NutritionLogPage';
@@ -53,6 +54,7 @@ import { PricingPage } from './pages/PricingPage';
 import { UpgradePage } from './pages/UpgradePage';
 import { StorePage } from './pages/StorePage';
 import { isAdminRole, isCoachRole } from './utils/roles';
+import { isEmailVerificationRequired } from './utils/emailVerification';
 
 function LoadingScreen() {
   return (
@@ -66,15 +68,18 @@ function Protected({
   firebaseUser,
   authChecked,
   onboardingChecked,
-  needsSetup
+  needsSetup,
+  emailVerified
 }: {
   firebaseUser: User | null;
   authChecked: boolean;
   onboardingChecked: boolean;
   needsSetup: boolean;
+  emailVerified: boolean;
 }) {
   if (!authChecked) return <LoadingScreen />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
+  if (!emailVerified) return <Navigate to="/verify-email" replace />;
   if (!onboardingChecked) return <LoadingScreen />;
   if (needsSetup) return <Navigate to="/setup" replace />;
   return <Outlet />;
@@ -86,6 +91,7 @@ function SetupRoute({
   authChecked,
   onboardingChecked,
   needsSetup,
+  emailVerified,
   onComplete,
   refreshOnboardingStatus
 }: {
@@ -94,6 +100,7 @@ function SetupRoute({
   authChecked: boolean;
   onboardingChecked: boolean;
   needsSetup: boolean;
+  emailVerified: boolean;
   onComplete: () => void;
   refreshOnboardingStatus: () => Promise<void>;
 }) {
@@ -105,6 +112,7 @@ function SetupRoute({
 
   if (!authChecked || refreshing) return <LoadingScreen />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
+  if (!emailVerified) return <Navigate to="/verify-email" replace />;
   if (!onboardingChecked) return <LoadingScreen />;
   if (!needsSetup) return <Navigate to="/" replace />;
   return <FirstTimeSetupPage user={appUser} onComplete={onComplete} />;
@@ -196,6 +204,7 @@ export default function App() {
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   const refreshOnboardingStatus = useCallback(async () => {
     try {
@@ -223,6 +232,7 @@ export default function App() {
       listenForAuth(async (user) => {
         setFirebaseUser(user);
         setAuthChecked(true);
+        setEmailVerified(!isEmailVerificationRequired(user));
         if (user) {
           try {
             const me = await api<{ user: AppUser }>('/api/me');
@@ -242,12 +252,24 @@ export default function App() {
     [refreshOnboardingStatus]
   );
 
+  const refreshEmailVerification = useCallback(async () => {
+    const user = await reloadCurrentUser();
+    if (user) {
+      setFirebaseUser(user);
+      setEmailVerified(!isEmailVerificationRequired(user));
+    }
+  }, []);
+
   // Role changes are admin-side DB updates; re-fetch /api/me when the tab is focused
   // so coach/admin access appears without requiring sign-out.
+  // Also refresh email verification status in case user verified in another tab.
   useEffect(() => {
     if (!firebaseUser) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void refreshAppUser();
+      if (document.visibilityState === 'visible') {
+        void refreshAppUser();
+        void refreshEmailVerification();
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
@@ -255,7 +277,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, [firebaseUser, refreshAppUser]);
+  }, [firebaseUser, refreshAppUser, refreshEmailVerification]);
 
   useEffect(() => {
     if (!appUser) return;
@@ -273,6 +295,17 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage authenticated={Boolean(firebaseUser)} appUser={appUser} />} />
+        <Route
+          path="/verify-email"
+          element={
+            <VerifyEmailPage
+              emailVerified={emailVerified}
+              authChecked={authChecked}
+              isAuthenticated={Boolean(firebaseUser)}
+              onRefreshVerification={refreshEmailVerification}
+            />
+          }
+        />
         <Route path="/pricing" element={<PricingPage authenticated={Boolean(firebaseUser)} />} />
         <Route path="/sms-opt-in" element={<SmsOptInPage />} />
         <Route path="/campaign-policy" element={<CampaignPolicyPage />} />
@@ -288,6 +321,7 @@ export default function App() {
               authChecked={authChecked}
               onboardingChecked={onboardingChecked}
               needsSetup={needsSetup}
+              emailVerified={emailVerified}
               refreshOnboardingStatus={refreshOnboardingStatus}
               onComplete={() => {
                 void handleSetupComplete();
@@ -302,6 +336,7 @@ export default function App() {
               authChecked={authChecked}
               onboardingChecked={onboardingChecked}
               needsSetup={needsSetup}
+              emailVerified={emailVerified}
             />
           }
         >

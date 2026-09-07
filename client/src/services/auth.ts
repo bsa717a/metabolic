@@ -2,6 +2,7 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -23,7 +24,31 @@ export async function signUp(email: string, password: string, displayName: strin
   if (displayName.trim()) {
     await updateProfile(credential.user, { displayName: displayName.trim() });
   }
+  await sendEmailVerification(credential.user, {
+    url: `${window.location.origin}/login`
+  });
   return credential;
+}
+
+export async function resendVerificationEmail() {
+  if (!auth?.currentUser) throw new Error('No user is signed in.');
+  return sendEmailVerification(auth.currentUser, {
+    url: `${window.location.origin}/login`
+  });
+}
+
+export async function reloadCurrentUser(): Promise<User | null> {
+  if (!auth?.currentUser) return null;
+  await auth.currentUser.reload();
+  return auth.currentUser;
+}
+
+export function isEmailVerified(): boolean {
+  return auth?.currentUser?.emailVerified ?? false;
+}
+
+export function getCurrentUserEmail(): string | null {
+  return auth?.currentUser?.email ?? null;
 }
 
 export function loginWithGoogle() {
