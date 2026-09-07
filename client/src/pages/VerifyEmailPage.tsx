@@ -1,0 +1,236 @@
+import { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
+import { Mail, RefreshCw, CheckCircle, LogOut } from 'lucide-react';
+import { BrandLogo } from '../components/brand/BrandLogo';
+import {
+  applyEmailActionCode,
+  logout,
+  getCurrentUserEmail,
+  requestVerificationEmail
+} from '../services/auth';
+import { oobCodeFromActionUrl, formatAuthActionError } from '../utils/authAction';
+
+const RESEND_COOLDOWN_SECONDS = 60;
+
+interface VerifyEmailPageProps {
+  emailVerified: boolean;
+  authChecked: boolean;
+  isAuthenticated: boolean;
+  onRefreshVerification?: () => Promise<void>;
+}
+
+export function VerifyEmailPage({ emailVerified, authChecked, isAuthenticated, onRefreshVerification }: VerifyEmailPageProps) {
+  const [resending, setResending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [loadingLink, setLoadingLink] = useState(false);
+  const [actionUrl, setActionUrl] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+  const email = getCurrentUserEmail();
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    if (!isAuthenticated || emailVerified) return;
+    let cancelled = false;
+    setLoadingLink(true);
+    void requestVerificationEmail(false)
+      .then((result) => {
+        if (!cancelled && result.actionUrl) setActionUrl(result.actionUrl);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(formatAuthActionError(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLink(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, emailVerified]);
+
+  if (!authChecked) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-app-bg p-4 text-app-text-muted">
+        Loading…
+      </main>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (emailVerified) {
+    return <Navigate to="/" replace />;
+  }
+
+  async function handleVerifyNow() {
+    const oobCode = oobCodeFromActionUrl(actionUrl);
+    if (!oobCode) {
+      setError('Verification is not ready yet. Try again in a moment.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setVerifying(true);
+    try {
+      await applyEmailActionCode(oobCode);
+      setSuccess('Email verified! Redirecting…');
+      if (onRefreshVerification) await onRefreshVerification();
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
+        setActionUrl('');
+        try {
+          const result = await requestVerificationEmail(false, true);
+          if (result.actionUrl) setActionUrl(result.actionUrl);
+        } catch {
+          // Keep the apply error; a replacement link is optional.
+        }
+      }
+      setError(formatAuthActionError(err));
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  async function handleResend() {
+    setError('');
+    setSuccess('');
+    setResending(true);
+    try {
+      const result = await requestVerificationEmail(true);
+      if (result.actionUrl) setActionUrl(result.actionUrl);
+      setSuccess(
+        result.sent
+          ? 'Verification email sent! Check your inbox (and spam folder).'
+          : 'Use Verify now below. Outbound email is not configured on this server.'
+      );
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch (err) {
+      setError(formatAuthActionError(err));
+    } finally {
+      setResending(false);
+    }
+  }
+
+  async function handleLogout() {
+    await logout();
+  }
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-app-bg px-4 py-12 text-app-text">
+      <div className="w-full max-w-md rounded-3xl border border-app-border/60 bg-app-surface p-8 shadow-lg sm:p-10">
+        <div className="mb-8">
+          <BrandLogo showTagline markSize={44} />
+          <div className="mt-6 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-green/10">
+              <Mail className="h-6 w-6 text-brand-green" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-brand-navy dark:text-brand-off-white">
+                Verify your email
+              </h1>
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-relaxed text-app-text-muted">
+            Confirm <span className="font-medium text-app-text">{email || 'your email'}</span> to continue.
+            You can verify in this window, or we can email you a link.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={handleVerifyNow}
+            disabled={verifying || loadingLink || !actionUrl}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-navy px-6 py-3.5 text-sm font-semibold text-brand-off-white shadow-md transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+          >
+            {verifying || loadingLink ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                {verifying ? 'Verifying…' : 'Preparing…'}
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4" />
+                Verify now
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resending || resendCooldown > 0}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-app-border bg-app-surface px-6 py-3.5 text-sm font-medium text-app-text shadow-sm transition hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resending ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Sending…
+              </>
+            ) : resendCooldown > 0 ? (
+              `Resend in ${resendCooldown}s`
+            ) : (
+              <>
+                <Mail className="h-4 w-4" />
+                Email me a verification link
+              </>
+            )}
+          </button>
+        </div>
+
+        {success && (
+          <div className="mt-4 rounded-2xl border border-brand-green/30 bg-brand-green/10 p-4 text-sm text-brand-green dark:text-brand-green-light">
+            {success}
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-500">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-6 border-t border-app-border pt-6">
+          <p className="text-center text-sm text-app-text-muted">
+            Didn't receive an email? Outbound mail is only sent when Resend is configured. You can always{' '}
+            <button
+              type="button"
+              className="font-medium text-brand-green hover:underline dark:text-brand-green-light"
+              onClick={handleVerifyNow}
+              disabled={verifying || loadingLink || !actionUrl}
+            >
+              verify now
+            </button>
+            .
+          </p>
+          <p className="mt-4 text-center text-sm text-app-text-muted">
+            Wrong email?{' '}
+            <button
+              type="button"
+              className="font-medium text-brand-green hover:underline dark:text-brand-green-light"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-1 inline h-3.5 w-3.5" />
+              Sign out
+            </button>{' '}
+            and create a new account.
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-8 max-w-md text-center text-sm text-app-text-muted">
+        Email verification helps us reach you with important account updates and ensures your coach can contact
+        you.
+      </p>
+    </main>
+  );
+}
