@@ -121,14 +121,22 @@ export async function listTemplatesForAdmin() {
 }
 
 export async function listTemplatesForActor(actor: { id: string; role: Role }, clientId?: string) {
-  if (isAdmin(actor)) return listTemplatesForAdmin();
   if (clientId) return listTemplatesForUser(clientId);
+  if (isAdmin(actor)) return listTemplatesForAdmin();
   const templates = await prisma.exerciseTemplate.findMany({
     where: { OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }] },
     include: templateListInclude,
     orderBy: { updatedAt: 'desc' }
   });
   return templates.map(serializeTemplateSummary);
+}
+
+/** Templates a client (or a coach acting for them) may read: global plans, or that client's own workouts. */
+export function clientCanAccessExerciseTemplate(
+  template: { visibility: Visibility; createdById: string | null },
+  clientId: string
+) {
+  return template.visibility === Visibility.GLOBAL || template.createdById === clientId;
 }
 
 async function ensureTemplateManageable(templateId: string, actor?: { id: string; role: Role }) {
@@ -460,7 +468,10 @@ async function ensureClientOwnedUserTemplate(templateId: string, clientId: strin
 }
 
 export async function getClientTemplate(clientId: string, templateId: string) {
-  await ensureClientOwnedUserTemplate(templateId, clientId);
+  const template = await prisma.exerciseTemplate.findUnique({ where: { id: templateId } });
+  if (!template || !clientCanAccessExerciseTemplate(template, clientId)) {
+    throw new Error('Plan not found');
+  }
   return getTemplate(templateId);
 }
 
