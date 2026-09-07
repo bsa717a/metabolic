@@ -2,6 +2,16 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { isEmailConfigured, sendEmail } from './emailTransport.js';
 import { env } from '../config/env.js';
+import { getFirebaseAdmin } from '../auth/firebaseAdmin.js';
+import { toAppAuthActionLink } from './authActionLink.js';
+import {
+  clearVerificationActionUrl,
+  peekVerificationActionUrl,
+  rememberVerificationActionUrl,
+  isTooManyVerificationAttempts,
+  isVerificationGenerateBlocked,
+  markVerificationGenerateBlocked
+} from './verificationLinkCache.js';
 import type { ResultsReadyLinks } from './resultsReadyNotification.js';
 import type { SessionRecapEmail } from './sessionRecapEmail.js';
 
@@ -78,6 +88,154 @@ export async function sendWelcomeEmail(options: { to: string; firstName?: string
       ]
     })
   );
+}
+
+function appOrigin() {
+  return env.CLIENT_URL.replace(/\/$/, '');
+}
+
+function renderAuthActionEmail(replacements: {
+  heading: string;
+  preheader: string;
+  body: string;
+  buttonLabel: string;
+  actionUrl: string;
+  footerNote: string;
+}) {
+  let html = readFileSync(resolveEmailAsset('auth-action.html'), 'utf8');
+  for (const [key, value] of Object.entries(replacements)) {
+    html = html.replaceAll(`{{${key}}}`, escapeHtml(value));
+  }
+  return html;
+}
+
+async function sendAuthActionEmail(options: {
+  to: string;
+  subject: string;
+  heading: string;
+  preheader: string;
+  body: string;
+  buttonLabel: string;
+  actionUrl: string;
+  footerNote: string;
+  text: string;
+}) {
+  if (!isEmailConfigured()) {
+    throw new Error('Email is not configured.');
+  }
+  const html = renderAuthActionEmail({
+    heading: options.heading,
+    preheader: options.preheader,
+    body: options.body,
+    buttonLabel: options.buttonLabel,
+    actionUrl: options.actionUrl,
+    footerNote: options.footerNote
+  });
+  await sendOrThrow(`Could not send ${options.subject.toLowerCase()}`, () =>
+    sendEmail({
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html
+    })
+  );
+}
+
+/** Builds a Metabolic OS verification URL from a Firebase oob code. Does not send mail. */
+export async function createEmailVerificationActionUrl(email: string, forceNew = false) {
+  if (forceNew) {
+    clearVerificationActionUrl(email);
+  } else {
+    const cached = peekVerificationActionUrl(email);
+    if (cached) return cached;
+  }
+  if (isVerificationGenerateBlocked(email)) {
+    const cached = peekVerificationActionUrl(email);
+    if (cached) return cached;
+    const error = new Error('TOO_MANY_ATTEMPTS_TRY_LATER');
+    (error as Error & { code: string }).code = 'auth/too-many-requests';
+    throw error;
+  }
+  try {
+    const continueUrl = `${appOrigin()}/login`;
+    const firebaseLink = await getFirebaseAdmin().auth().generateEmailVerificationLink(email, {
+      url: continueUrl
+    });
+    const actionUrl = toAppAuthActionLink(firebaseLink, env.CLIENT_URL);
+    rememberVerificationActionUrl(email, actionUrl);
+    return actionUrl;
+  } catch (error) {
+    if (isTooManyVerificationAttempts(error)) {
+      markVerificationGenerateBlocked(email);
+    }
+    throw error;
+  }
+}
+
+/** Branded verification email whose button opens Metabolic OS, not Firebase's hosted page. */
+export async function sendEmailVerificationLink(options: {
+  email: string;
+  firstName?: string | null;
+  deliver?: boolean;
+  forceNew?: boolean;
+}): Promise<{ actionUrl: string; sent: boolean }> {
+  const actionUrl = await createEmailVerificationActionUrl(options.email, options.forceNew);
+  if (options.deliver === false || !isEmailConfigured()) {
+    return { actionUrl, sent: false };
+  }
+
+  const firstName = options.firstName?.trim();
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+
+  await sendAuthActionEmail({
+    to: options.email,
+    subject: 'Verify your Metabolic OS email',
+    heading: 'Verify your email',
+    preheader: 'Confirm your email to finish setting up Metabolic OS.',
+    body: `${greeting} Confirm this email address so we can reach you with your plan, coach messages, and account updates.`,
+    buttonLabel: 'Verify email →',
+    actionUrl,
+    footerNote: "You're receiving this because you created a Metabolic OS account.",
+    text: [
+      'Verify your Metabolic OS email',
+      '',
+      `${greeting} Confirm this email address so we can reach you with your plan, coach messages, and account updates.`,
+      '',
+      `Verify: ${actionUrl}`,
+      '',
+      '— Metabolic OS'
+    ].join('\n')
+  });
+  return { actionUrl, sent: true };
+}
+
+/** Branded password-reset email whose button opens Metabolic OS. */
+export async function sendPasswordResetLink(options: { email: string }) {
+  const continueUrl = `${appOrigin()}/login`;
+  const firebaseLink = await getFirebaseAdmin().auth().generatePasswordResetLink(options.email, {
+    url: continueUrl
+  });
+  const actionUrl = toAppAuthActionLink(firebaseLink, env.CLIENT_URL);
+
+  await sendAuthActionEmail({
+    to: options.email,
+    subject: 'Reset your Metabolic OS password',
+    heading: 'Choose a new password',
+    preheader: 'Set a new password for your Metabolic OS account.',
+    body: 'Use the button below to choose a new password. If you did not ask for this, you can ignore the email.',
+    buttonLabel: 'Reset password →',
+    actionUrl,
+    footerNote: "You're receiving this because a password reset was requested for this email.",
+    text: [
+      'Reset your Metabolic OS password',
+      '',
+      'Use this link to choose a new password. If you did not ask for this, you can ignore the email.',
+      '',
+      `Reset: ${actionUrl}`,
+      '',
+      '— Metabolic OS'
+    ].join('\n')
+  });
 }
 
 export type { ResultsReadyLinks };

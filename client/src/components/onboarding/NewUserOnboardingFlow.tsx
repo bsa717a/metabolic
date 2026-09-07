@@ -10,7 +10,7 @@ import { coachWelcomeGoalsFromForm } from '../virtualCoach/coachWelcomeMessage';
 import { setPendingCoachWelcome } from '../virtualCoach/coachWelcomePending';
 import { beginSignupCoachHomeExperience } from '../../utils/signupDashboardExperience';
 import { getVirtualCoach, type VirtualCoachId } from '../../data/virtualCoaches';
-import { detectedTimezone } from '../../utils/timezoneOptions';
+import { resolveTimezone } from '../../utils/timezoneOptions';
 import type { SetupFormState } from '../../types/onboarding';
 
 type NewUserOnboardingFlowProps = {
@@ -55,7 +55,7 @@ export function NewUserOnboardingFlow({
     setError('');
     try {
       const latest = formRef.current;
-      const timezone = latest.timezone.trim() || detectedTimezone();
+      const timezone = resolveTimezone(latest.timezone);
       const coachId = latest.selectedVirtualCoachId.trim() || undefined;
 
       await submitSetupForm({

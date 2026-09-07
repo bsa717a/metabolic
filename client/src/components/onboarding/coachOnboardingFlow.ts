@@ -1,7 +1,7 @@
 import type { VirtualCoach } from '../../data/virtualCoaches';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
 import { hasValidCurrentWeight } from '../../utils/onboardingWeight';
-import { detectedTimezone } from '../../utils/timezoneOptions';
+import { detectedTimezone, resolveTimezone } from '../../utils/timezoneOptions';
 import { displayToIso } from '../ui/BirthDateInput';
 import type { SetupFormState } from '../../types/onboarding';
 
@@ -386,10 +386,10 @@ function smsAskTurn(coach: VirtualCoach): CoachOnboardingTurn {
 }
 
 function timezoneTurn(currentTimezone: string): CoachOnboardingTurn {
-  const detected = currentTimezone.trim() || detectedTimezone() || 'America/Denver';
+  const detected = resolveTimezone(currentTimezone);
   return {
     stage: 'timezone',
-    assistantMessage: `Is your timezone ${detected}? If not, type the correct one (for example America/Denver).`,
+    assistantMessage: `I've got your timezone as ${detected} — this is used for meal reminders and scheduling. Is that right?`,
     quickReplies: [
       { label: `Yes — ${detected}`, mobileLabel: 'Yes', value: `yes:${detected}` },
       { label: "I'll type it", mobileLabel: 'Type', value: 'type' }
@@ -747,14 +747,14 @@ export function advanceCoachOnboarding(
 
     case 'smsAsk': {
       if (isYes(input)) {
-        const timezone = form.timezone.trim() || detectedTimezone();
+        const timezone = resolveTimezone(form.timezone);
         return {
           formPatch: { timezone },
           next: timezoneTurn(timezone)
         };
       }
       if (isNo(input)) {
-        const timezone = form.timezone.trim() || detectedTimezone();
+        const timezone = resolveTimezone(form.timezone);
         const patched = { ...form, timezone, phone: '' };
         return {
           formPatch: { timezone, phone: '' },
@@ -766,20 +766,21 @@ export function advanceCoachOnboarding(
 
     case 'timezone': {
       if (normalizeChoice(input) === 'type') {
+        const detected = detectedTimezone();
         return {
           next: {
             stage: 'timezone',
             assistantMessage: `Type your timezone (for example America/Chicago or America/Los_Angeles).`,
-            quickReplies: [{ label: `Use ${detectedTimezone() || 'detected'}`, mobileLabel: 'Detected', value: `yes:${detectedTimezone()}` }]
+            quickReplies: [{ label: `Use ${detected}`, mobileLabel: 'Detected', value: `yes:${detected}` }]
           }
         };
       }
       if (input.toLowerCase().startsWith('yes:')) {
-        const timezone = input.slice(4).trim() || detectedTimezone();
+        const timezone = resolveTimezone(input.slice(4));
         if (!isValidTimezone(timezone)) {
           return {
             error: 'That timezone looks invalid. Try America/Denver.',
-            next: timezoneTurn(form.timezone || detectedTimezone())
+            next: timezoneTurn(resolveTimezone(form.timezone))
           };
         }
         return {
@@ -795,7 +796,7 @@ export function advanceCoachOnboarding(
       }
       return {
         error: 'Confirm with the button or type a timezone like America/Denver.',
-        next: timezoneTurn(form.timezone || detectedTimezone())
+        next: timezoneTurn(resolveTimezone(form.timezone))
       };
     }
 

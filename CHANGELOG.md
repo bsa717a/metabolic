@@ -7,6 +7,21 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.21.0](https://github.com/bsa717a/metabolic/compare/v0.20.0...v0.21.0) (2026-09-07)
+
+
+### Features
+
+* **auth:** branded verification emails and in-app verify ([73cdc3e](https://github.com/bsa717a/metabolic/commit/73cdc3e80ccfecd8b0ea3ddb67201e98f4265d5d))
+* **auth:** send branded verification mail and verify in-app ([c124cc3](https://github.com/bsa717a/metabolic/commit/c124cc351318f72b34e85f673a90ac386c206a1b))
+
+
+### Bug Fixes
+
+* **auth:** require Firebase email verification before app access ([7fb53bf](https://github.com/bsa717a/metabolic/commit/7fb53bf15265e8b5f10248e16b7261e4cd16778e))
+* **nutrition:** include quantity 1 on printed meal plans ([1dc7922](https://github.com/bsa717a/metabolic/commit/1dc79225e30360dab3087a421742fd0f5b65c63f))
+* **nutrition:** include quantity 1 on printed meal plans ([089615a](https://github.com/bsa717a/metabolic/commit/089615ae21c86dd750ee0f968abe722f342838be))
+
 ## [0.20.0](https://github.com/bsa717a/metabolic/compare/v0.19.0...v0.20.0) (2026-09-05)
 
 
