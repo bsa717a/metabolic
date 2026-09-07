@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { detectedTimezone } from '../utils/timezoneOptions';
+import { resolveTimezone } from '../utils/timezoneOptions';
 import { isMigratedOnboardingUser } from '../utils/onboardingWeight';
 import { normalizeBirthDateKey, normalizeSetupGender } from '../utils/setupDraft';
 import { LoadingOnboardingState } from '../components/onboarding/LoadingOnboardingState';
@@ -27,7 +27,7 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
     ...createEmptySetupForm(),
     gender: normalizeSetupGender(user?.gender),
     birthDate: normalizeBirthDateKey(user?.birthDate),
-    timezone: user?.timezone?.trim() || detectedTimezone()
+    timezone: resolveTimezone(user?.timezone)
   }));
 
   const loadProfile = useCallback(async () => {

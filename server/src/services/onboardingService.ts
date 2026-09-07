@@ -251,7 +251,9 @@ async function updateActiveProgramFromSetup(
   const hasTimezone = Boolean(existingUser?.timezone?.trim());
 
   if (!hasTimezone && !input.timezone?.trim()) {
-    throw new Error('A timezone is required to finish setup.');
+    throw new Error(
+      'We need your timezone to schedule meal reminders and check-ins at the right time. Please go back and select your timezone.'
+    );
   }
 
   const trackingOnly = input.trackingOnly === true;
