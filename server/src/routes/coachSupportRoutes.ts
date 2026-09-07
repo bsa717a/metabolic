@@ -70,7 +70,7 @@ export async function coachSupportRoutes(app: FastifyInstance) {
       where: { userId, status: ProgramStatus.ACTIVE }
     });
 
-    const { shouldNotifyCoachRequest } = await applyCoachSupport(
+    const supportResult = await applyCoachSupport(
       userId,
       { coachCode: normalizedCode ?? undefined },
       { programId: activeProgram?.id }
@@ -81,7 +81,8 @@ export async function coachSupportRoutes(app: FastifyInstance) {
     return {
       success: true,
       coachDisplayName: coachInfo?.displayName ?? 'Your Coach',
-      notifiedCoach: shouldNotifyCoachRequest
+      notifiedCoach: Boolean(supportResult.newClientNotification),
+      emailSent: supportResult.newClientNotification?.emailSent ?? false
     };
   });
 }
