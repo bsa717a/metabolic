@@ -7,6 +7,19 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.23.0](https://github.com/bsa717a/metabolic/compare/v0.22.0...v0.23.0) (2026-09-07)
+
+
+### Features
+
+* **coach:** notify coach when client links via invite ([#257](https://github.com/bsa717a/metabolic/issues/257)) ([b3acce9](https://github.com/bsa717a/metabolic/commit/b3acce933d50cd5435bae468b035ef30a4a24b0e))
+
+
+### Bug Fixes
+
+* **exercise:** let coaches load global weekly routine days ([516e521](https://github.com/bsa717a/metabolic/commit/516e5210ca55c3d0655337a9ea112dd99b61d32e))
+* **exercise:** let coaches load global weekly routine days ([58d5f4f](https://github.com/bsa717a/metabolic/commit/58d5f4fe9925da1bfa09081996c8d921af9e356d))
+
 ## [0.22.0](https://github.com/bsa717a/metabolic/compare/v0.21.0...v0.22.0) (2026-09-07)
 
 
