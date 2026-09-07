@@ -36,8 +36,9 @@ export function formatShortDayLabel(date: string) {
 
 export function formatItemQuantityLine(quantity: number, unit: string, name: string) {
   const qty = Number(quantity);
-  const qtyLabel = qty === 1 ? '' : `${qty} ${unit} `;
-  return `${qtyLabel}${name}`.trim();
+  const unitLabel = unit?.trim();
+  const portion = unitLabel ? `${qty} ${unitLabel}` : `${qty}`;
+  return `${portion} ${name}`.trim();
 }
 
 export function formatMacroLine(calories: number, protein: number, carbs: number, fat: number) {
