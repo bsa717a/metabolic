@@ -373,7 +373,7 @@ export default function App() {
           <Route element={<AppShell user={appUser} onTutorialComplete={setAppUser} onUserUpdated={setAppUser} />}>
             <Route path="upgrade" element={<UpgradePage user={appUser} />} />
             <Route path="store" element={<StorePage user={appUser} />} />
-            <Route index element={<DashboardPage user={appUser} />} />
+            <Route index element={<DashboardPage user={appUser} onUserUpdated={setAppUser} />} />
             <Route path="program" element={<ProgramPage user={appUser} />} />
             <Route path="nutrition" element={<NutritionLogPage />} />
             <Route path="nutrition/plan" element={<NutritionPage />} />

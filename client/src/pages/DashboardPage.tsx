@@ -20,6 +20,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useDashboardLayout } from '../utils/dashboardLayoutPreference';
 import { CoachHomeDashboard } from '../components/dashboard/coachHome/CoachHomeDashboard';
 import { ClassicDashboardHint } from '../components/dashboard/ClassicDashboardHint';
+import { FirstDayChecklist } from '../components/dashboard/FirstDayChecklist';
 
 function MacroDonut({
   label,
@@ -89,7 +90,13 @@ function RemainingMacrosDisplay({
 }
 
 
-export function DashboardPage({ user }: { user?: AppUser | null }) {
+export function DashboardPage({
+  user,
+  onUserUpdated
+}: {
+  user?: AppUser | null;
+  onUserUpdated?: (user: AppUser) => void;
+}) {
   const location = useLocation();
   const [dashboardLayout] = useDashboardLayout();
   const { startTour, hasAutoStarted, isActive } = useTutorial();
@@ -97,6 +104,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [checklistDismissed, setChecklistDismissed] = useState(false);
 
   const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -219,12 +227,30 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
     );
   }
 
+  const showChecklist =
+    !checklistDismissed && !user?.firstDayChecklistDismissedAt && data?.program;
+
+  function handleChecklistDismiss(updatedUser: AppUser) {
+    setChecklistDismissed(true);
+    onUserUpdated?.(updatedUser);
+  }
+
   if (dashboardLayout === 'coachHome') {
-    return <CoachHomeDashboard user={user} data={data} />;
+    return (
+      <div className="space-y-5">
+        {showChecklist && (
+          <FirstDayChecklist user={user} data={data} onDismiss={handleChecklistDismiss} />
+        )}
+        <CoachHomeDashboard user={user} data={data} />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-8">
+      {showChecklist && (
+        <FirstDayChecklist user={user} data={data} onDismiss={handleChecklistDismiss} />
+      )}
       <ClassicDashboardHint />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div data-tour="welcome">

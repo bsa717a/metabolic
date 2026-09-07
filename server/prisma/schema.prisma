@@ -227,6 +227,7 @@ model User {
   dashboardTutorialCompletedAt DateTime?
   smsRemindersIntroCompletedAt DateTime?
   coachWelcomeCompletedAt DateTime?
+  firstDayChecklistDismissedAt DateTime?
   selectedVirtualCoachId String?
   virtualCoachCheckInDay Int?
   plan PlanTier @default(STARTER)
