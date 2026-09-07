@@ -54,6 +54,7 @@ import { ProgressExportPage } from './pages/export/ProgressExportPage';
 import { PricingPage } from './pages/PricingPage';
 import { UpgradePage } from './pages/UpgradePage';
 import { StorePage } from './pages/StorePage';
+import { JoinCoachPage } from './pages/JoinCoachPage';
 import { isAdminRole, isCoachRole } from './utils/roles';
 import { AUTH_ACTION_PATH } from './utils/authAction';
 import { isEmailVerificationRequired } from './utils/emailVerification';
@@ -323,6 +324,19 @@ export default function App() {
         <Route path="/campaign-terms" element={<CampaignTermsPage />} />
         <Route path="/support" element={<SupportPage />} />
         <Route path="/unsubscribe" element={<UnsubscribePage />} />
+        <Route
+          path="/join"
+          element={
+            <JoinCoachPage
+              authenticated={Boolean(firebaseUser)}
+              authChecked={authChecked}
+              onboardingChecked={onboardingChecked}
+              needsSetup={needsSetup}
+              appUser={appUser}
+              onUserUpdated={setAppUser}
+            />
+          }
+        />
         <Route
           path="/setup"
           element={

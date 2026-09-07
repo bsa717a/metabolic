@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { resolveTimezone } from '../../utils/timezoneOptions';
 import { hasValidCurrentWeight } from '../../utils/onboardingWeight';
 import { normalizeBirthDateKey, normalizeSetupGender } from '../../utils/setupDraft';
+import { getPendingCoachInvite, clearPendingCoachInvite } from '../../utils/pendingCoachInvite';
 import type { SetupFormState } from '../../types/onboarding';
 
 type SubmitOptions = {
@@ -69,7 +70,7 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(form.selectedVirtualCoachId
       ? { selectedVirtualCoachId: form.selectedVirtualCoachId as VirtualCoachId }
       : {}),
-    ...(form.trackingOnly ? { trackingOnly: true } : {}),
+    ...(form.trackingOnly && !form.coachCode.trim() ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
     ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
@@ -89,9 +90,12 @@ export async function submitSetupForm(form: SetupFormState, options: SubmitOptio
     method: 'POST',
     body: JSON.stringify(buildSetupPayload(form))
   });
+
+  clearPendingCoachInvite();
 }
 
 export function createEmptySetupForm(): SetupFormState {
+  const pendingInvite = getPendingCoachInvite();
   return {
     weight: '',
     goalWeight: '',
@@ -101,7 +105,7 @@ export function createEmptySetupForm(): SetupFormState {
     heightInches: '',
     occupation: '',
     activityLevel: '',
-    coachCode: '',
+    coachCode: pendingInvite || '',
     wantsCoach: false,
     selectedVirtualCoachId: '',
     trackingOnly: false,

@@ -42,6 +42,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [clientNutritionTemplates, setClientNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
   const [exerciseTemplates, setExerciseTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
   const [coachCodeDraft, setCoachCodeDraft] = useState('');
+  const [savedCoachCode, setSavedCoachCode] = useState('');
   const [defaultNutritionTemplateId, setDefaultNutritionTemplateId] = useState('');
   const [defaultExerciseTemplateId, setDefaultExerciseTemplateId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -168,6 +169,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       setNutritionTemplates(nutritionRows);
       setExerciseTemplates(exerciseRows);
       setCoachCodeDraft(coachSettings.coachCode ?? '');
+      setSavedCoachCode(coachSettings.coachCode ?? '');
       setDefaultNutritionTemplateId(coachSettings.defaultNutritionTemplateId ?? '');
       setDefaultExerciseTemplateId(coachSettings.defaultExerciseTemplateId ?? '');
       setSelectedGroupId((current) => (current && groupRows.some((group) => group.id === current) ? current : ''));
@@ -399,6 +401,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
         })
       });
       setCoachCodeDraft(updated.coachCode ?? '');
+      setSavedCoachCode(updated.coachCode ?? '');
       setDefaultNutritionTemplateId(updated.defaultNutritionTemplateId ?? '');
       setDefaultExerciseTemplateId(updated.defaultExerciseTemplateId ?? '');
     } catch (err) {
@@ -585,6 +588,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       <CoachSettingsDrawer
         open={settingsOpen}
         coachCodeDraft={coachCodeDraft}
+        savedCoachCode={savedCoachCode}
         defaultNutritionTemplateId={defaultNutritionTemplateId}
         defaultExerciseTemplateId={defaultExerciseTemplateId}
         nutritionTemplates={nutritionTemplates}

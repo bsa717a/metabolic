@@ -37,6 +37,7 @@ import {
 } from './routes/communicationAdminRoutes.js';
 import { unsubscribeRoutes } from './routes/unsubscribeRoutes.js';
 import { pushRoutes } from './routes/pushRoutes.js';
+import { publicRoutes } from './routes/publicRoutes.js';
 
 async function main() {
   const app = Fastify({
@@ -93,6 +94,7 @@ async function main() {
   await app.register(communicationAssetRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(pushRoutes);
+  await app.register(publicRoutes);
   await app.register(internalRoutes);
 
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

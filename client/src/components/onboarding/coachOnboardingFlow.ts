@@ -431,6 +431,24 @@ function parseCoachCode(text: string): string | null {
   return normalized;
 }
 
+function hasInviteCoachCode(form: SetupFormState) {
+  return Boolean(form.coachCode.trim());
+}
+
+function inviteCoachNote(form: SetupFormState): string | undefined {
+  if (!form.coachCode.trim()) return undefined;
+  return form.trackingOnly
+    ? `You're also connected to your real coach from the invite you used. Tracking just means I won't build a meal plan up front — they can still work with you.`
+    : `You're also connected to your real coach from the invite you used.`;
+}
+
+function nextAfterContact(form: SetupFormState): CoachOnboardingTurn {
+  if (hasInviteCoachCode(form)) {
+    return readyToSubmitTurn(form.trackingOnly, inviteCoachNote(form));
+  }
+  return realCoachAskTurn();
+}
+
 function readyToSubmitTurn(
   trackingOnly: boolean,
   realCoachNote?: string
@@ -461,9 +479,21 @@ export function advanceCoachOnboarding(
 
   switch (stage) {
     case 'intro':
+      if (hasInviteCoachCode(form)) {
+        return {
+          formPatch: { trackingOnly: false },
+          next: weightTurn()
+        };
+      }
       return { next: trackingModeTurn() };
 
     case 'trackingMode': {
+      if (hasInviteCoachCode(form)) {
+        return {
+          formPatch: { trackingOnly: false },
+          next: weightTurn()
+        };
+      }
       const value = normalizeChoice(input);
       const wantsTrack =
         value === 'track' ||
@@ -725,9 +755,10 @@ export function advanceCoachOnboarding(
       }
       if (isNo(input)) {
         const timezone = resolveTimezone(form.timezone);
+        const patched = { ...form, timezone, phone: '' };
         return {
           formPatch: { timezone, phone: '' },
-          next: realCoachAskTurn()
+          next: nextAfterContact(patched)
         };
       }
       return { error: 'Tap Yes or No.', next: smsAskTurn(coach) };
@@ -771,9 +802,10 @@ export function advanceCoachOnboarding(
 
     case 'phone': {
       if (isSkip(input)) {
+        const patched = { ...form, phone: '' };
         return {
           formPatch: { phone: '' },
-          next: realCoachAskTurn()
+          next: nextAfterContact(patched)
         };
       }
       const digits = input.replace(/\D/g, '');
@@ -783,9 +815,10 @@ export function advanceCoachOnboarding(
           next: phoneTurn()
         };
       }
+      const patched = { ...form, phone: input.trim() };
       return {
         formPatch: { phone: input.trim() },
-        next: realCoachAskTurn()
+        next: nextAfterContact(patched)
       };
     }
 
@@ -802,7 +835,7 @@ export function advanceCoachOnboarding(
       }
       if (value === 'request' || value.includes('like a real') || value.includes('want a real')) {
         return {
-          formPatch: { wantsCoach: true, coachCode: '' },
+          formPatch: { wantsCoach: true },
           next: readyToSubmitTurn(
             form.trackingOnly,
             "I'll also put in a request for a real coach. You can keep chatting with me either way."
@@ -811,7 +844,7 @@ export function advanceCoachOnboarding(
       }
       if (isSkip(input) || isNo(input) || value.includes('no thanks')) {
         return {
-          formPatch: { wantsCoach: false, coachCode: '' },
+          formPatch: { wantsCoach: false },
           next: readyToSubmitTurn(form.trackingOnly)
         };
       }
@@ -834,7 +867,7 @@ export function advanceCoachOnboarding(
     case 'realCoachCode': {
       if (isSkip(input)) {
         return {
-          formPatch: { coachCode: '', wantsCoach: false },
+          formPatch: { wantsCoach: false },
           next: readyToSubmitTurn(form.trackingOnly)
         };
       }
