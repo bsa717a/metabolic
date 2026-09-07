@@ -30,14 +30,7 @@ async function wasAlreadyLinked(coachId: string, clientId: string): Promise<bool
 
 /**
  * Notify the coach that a new client has linked to them.
- * Uses both push notifications (in-app) and email (if configured).
- *
- * This is called AFTER the coach-client link is successfully created,
- * specifically from the confirm-coach-invite endpoint.
- *
- * @param coachId - The coach's user ID
- * @param client - The newly linked client's info
- * @param options.checkAlreadyLinked - If true, skip if already linked (default: true)
+ * Push and email failures are non-fatal so they cannot roll back the link.
  */
 export async function notifyCoachNewClient(
   coachId: string,
@@ -65,11 +58,16 @@ export async function notifyCoachNewClient(
   const clientName = `${client.firstName} ${client.lastName}`.trim() || client.email;
   const clientsUrl = `${env.CLIENT_URL}/coach`;
 
-  const pushSent = await sendPushToUser(coachId, {
-    title: 'New client connected',
-    body: `${clientName} just linked to you via your invite code.`,
-    url: '/coach'
-  });
+  let pushSent = 0;
+  try {
+    pushSent = await sendPushToUser(coachId, {
+      title: 'New client connected',
+      body: `${clientName} just linked to you via your invite code.`,
+      url: '/coach'
+    });
+  } catch {
+    // Push failure is non-fatal
+  }
 
   let emailSent = false;
   if (isEmailConfigured()) {

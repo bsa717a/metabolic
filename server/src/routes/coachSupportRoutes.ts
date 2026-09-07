@@ -11,7 +11,6 @@ import {
   updateCoachSupport
 } from '../services/coachSupportService.js';
 import { getPublicCoachInfo } from './publicRoutes.js';
-import { notifyCoachNewClient } from '../services/newClientNotificationService.js';
 
 const updateBody = z
   .object({
@@ -62,24 +61,16 @@ export async function coachSupportRoutes(app: FastifyInstance) {
     }
 
     const userId = request.appUser!.id;
-    const appUser = request.appUser!;
 
     if (coach.id === userId) {
       return reply.code(400).send({ error: 'This is your invite link. Share it with clients instead of joining it.' });
     }
 
-    const notificationResult = await notifyCoachNewClient(coach.id, {
-      id: userId,
-      firstName: appUser.firstName,
-      lastName: appUser.lastName,
-      email: appUser.email
-    });
-
     const activeProgram = await prisma.program.findFirst({
       where: { userId, status: ProgramStatus.ACTIVE }
     });
 
-    await applyCoachSupport(
+    const supportResult = await applyCoachSupport(
       userId,
       { coachCode: normalizedCode ?? undefined },
       { programId: activeProgram?.id }
@@ -90,7 +81,8 @@ export async function coachSupportRoutes(app: FastifyInstance) {
     return {
       success: true,
       coachDisplayName: coachInfo?.displayName ?? 'Your Coach',
-      notifiedCoach: !notificationResult.skipped
+      notifiedCoach: Boolean(supportResult.newClientNotification),
+      emailSent: supportResult.newClientNotification?.emailSent ?? false
     };
   });
 }

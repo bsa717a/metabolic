@@ -2,6 +2,10 @@ import { CoachRelationshipStatus, PlanTier, Role, SubscriptionStatus } from '@pr
 import { prisma } from '../db/prisma.js';
 import { archiveActiveCoachAssignments, upsertCoachAssignment } from './coachAssignmentHelpers.js';
 import { notifyCoachRequest } from './coachRequestNotificationService.js';
+import {
+  notifyCoachNewClient,
+  type NotifyCoachNewClientResult
+} from './newClientNotificationService.js';
 import { serializeAppUser } from './userSerialization.js';
 
 export type CoachSupportInput = {
@@ -12,6 +16,7 @@ export type CoachSupportInput = {
 export type CoachSupportResult = {
   coach: Awaited<ReturnType<typeof findCoachByCode>>;
   shouldNotifyCoachRequest: boolean;
+  newClientNotification?: NotifyCoachNewClientResult;
 };
 
 export function normalizeCoachCode(value?: string) {
@@ -36,6 +41,10 @@ export async function applyCoachSupport(
 
   if (coach) {
     const now = new Date();
+    const alreadyLinked = await prisma.coachAssignment.findUnique({
+      where: { coachId_userId: { coachId: coach.id, userId } },
+      select: { id: true }
+    });
     await prisma.$transaction(async (tx) => {
       await archiveActiveCoachAssignments(tx, userId, now);
       await upsertCoachAssignment(tx, userId, coach.id, now);
@@ -61,7 +70,25 @@ export async function applyCoachSupport(
         }
       });
     });
-    return { coach, shouldNotifyCoachRequest: false };
+
+    let newClientNotification: NotifyCoachNewClientResult | undefined;
+    if (!alreadyLinked) {
+      const client = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, firstName: true, lastName: true, email: true }
+      });
+      if (client) {
+        try {
+          newClientNotification = await notifyCoachNewClient(coach.id, client, {
+            checkAlreadyLinked: false
+          });
+        } catch {
+          // Notification must not fail the coach-client link.
+        }
+      }
+    }
+
+    return { coach, shouldNotifyCoachRequest: false, newClientNotification };
   }
 
   if (input.wantsCoach || input.coachCode?.trim()) {
