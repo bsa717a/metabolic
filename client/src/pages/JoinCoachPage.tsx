@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, UserPlus } from 'lucide-react';
 import { api } from '../services/api';
@@ -18,14 +18,25 @@ type CoachInviteInfo = {
 
 type JoinCoachPageProps = {
   authenticated: boolean;
+  authChecked?: boolean;
+  onboardingChecked?: boolean;
+  needsSetup?: boolean;
   appUser?: AppUser | null;
   onUserUpdated?: (user: AppUser) => void;
 };
 
-export function JoinCoachPage({ authenticated, onUserUpdated }: JoinCoachPageProps) {
+export function JoinCoachPage({
+  authenticated,
+  authChecked = true,
+  onboardingChecked = true,
+  needsSetup = false,
+  appUser,
+  onUserUpdated
+}: JoinCoachPageProps) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const codeFromUrl = searchParams.get('coach') || searchParams.get('code');
+  const autoConfirmStarted = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [coachInfo, setCoachInfo] = useState<CoachInviteInfo | null>(null);
@@ -64,14 +75,8 @@ export function JoinCoachPage({ authenticated, onUserUpdated }: JoinCoachPagePro
     }
   }, [codeFromUrl, lookupCoach]);
 
-  async function handleConfirm() {
+  const confirmInvite = useCallback(async () => {
     if (!coachInfo?.coachCode) return;
-
-    if (!authenticated) {
-      setPendingCoachInvite(coachInfo.coachCode);
-      navigate('/login', { state: { returnTo: '/join', coachCode: coachInfo.coachCode } });
-      return;
-    }
 
     setConfirming(true);
     setError(null);
@@ -100,18 +105,60 @@ export function JoinCoachPage({ authenticated, onUserUpdated }: JoinCoachPagePro
     } finally {
       setConfirming(false);
     }
-  }
+  }, [coachInfo?.coachCode, onUserUpdated]);
+
+  useEffect(() => {
+    if (!authChecked || !authenticated || !onboardingChecked) return;
+    if (!coachInfo?.coachCode || loading || confirmed) return;
+    if (
+      appUser?.coachCode &&
+      appUser.coachCode.trim().toUpperCase() === coachInfo.coachCode.trim().toUpperCase()
+    ) {
+      return;
+    }
+
+    if (needsSetup) {
+      setPendingCoachInvite(coachInfo.coachCode);
+      navigate('/setup', { replace: true });
+      return;
+    }
+
+    if (autoConfirmStarted.current || confirming) return;
+    autoConfirmStarted.current = true;
+    void confirmInvite();
+  }, [
+    authChecked,
+    authenticated,
+    onboardingChecked,
+    needsSetup,
+    appUser?.coachCode,
+    coachInfo?.coachCode,
+    loading,
+    confirmed,
+    confirming,
+    confirmInvite,
+    navigate
+  ]);
 
   function handleGoToDashboard() {
     navigate('/', { replace: true });
   }
 
-  function handleSignUp() {
+  function handleSignIn() {
     if (coachInfo?.coachCode) {
       setPendingCoachInvite(coachInfo.coachCode);
     }
-    navigate('/login');
+    navigate('/login', { state: { returnTo: '/join' } });
   }
+
+  const waitingForSession = !authChecked || (authenticated && !onboardingChecked);
+  const isOwnInvite = Boolean(
+    appUser?.coachCode &&
+      coachInfo?.coachCode &&
+      appUser.coachCode.trim().toUpperCase() === coachInfo.coachCode.trim().toUpperCase()
+  );
+  const redirectingToSetup =
+    authenticated && onboardingChecked && needsSetup && Boolean(coachInfo?.coachCode) && !isOwnInvite;
 
   if (confirmed) {
     return (
@@ -146,10 +193,12 @@ export function JoinCoachPage({ authenticated, onUserUpdated }: JoinCoachPagePro
           <BrandLogo showTagline markSize={44} />
         </div>
 
-        {loading ? (
+        {loading || waitingForSession || redirectingToSetup ? (
           <div className="flex flex-col items-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-brand-green" />
-            <p className="mt-3 text-sm text-app-text-muted">Looking up your coach...</p>
+            <p className="mt-3 text-sm text-app-text-muted">
+              {loading || !authChecked ? 'Looking up your coach...' : 'Connecting...'}
+            </p>
           </div>
         ) : error && !coachInfo ? (
           <div className="flex flex-col items-center py-6 text-center">
@@ -179,21 +228,39 @@ export function JoinCoachPage({ authenticated, onUserUpdated }: JoinCoachPagePro
               Join {coachInfo.displayName}
             </h1>
             <p className="mt-2 text-app-text-muted">
-              You've been invited to work with{' '}
-              <span className="font-semibold text-app-text">{coachInfo.displayName}</span>.
-              Confirm below to connect and let them personalize your plan.
+              {isOwnInvite ? (
+                <>
+                  This is the invite for{' '}
+                  <span className="font-semibold text-app-text">{coachInfo.displayName}</span>.
+                </>
+              ) : (
+                <>
+                  You've been invited to work with{' '}
+                  <span className="font-semibold text-app-text">{coachInfo.displayName}</span>.
+                  {authenticated
+                    ? ' Connecting your accounts so they can personalize your plan.'
+                    : ' Sign in to connect and let them personalize your plan.'}
+                </>
+              )}
             </p>
 
             {error ? <p className="mt-4 text-sm text-red-500">{error}</p> : null}
 
-            {authenticated ? (
+            {isOwnInvite ? (
+              <p className="mt-6 text-sm text-app-text-muted">
+                This is your invite link. Share it with clients so they can connect to you.
+              </p>
+            ) : authenticated ? (
               <button
                 type="button"
-                disabled={confirming}
-                onClick={handleConfirm}
+                disabled={confirming || !error}
+                onClick={() => {
+                  autoConfirmStarted.current = true;
+                  void confirmInvite();
+                }}
                 className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-brand-navy px-6 py-3.5 text-sm font-semibold text-brand-off-white shadow-md transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
               >
-                {confirming ? (
+                {confirming || !error ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Connecting...
@@ -209,7 +276,7 @@ export function JoinCoachPage({ authenticated, onUserUpdated }: JoinCoachPagePro
               <div className="mt-6 space-y-3">
                 <button
                   type="button"
-                  onClick={handleSignUp}
+                  onClick={handleSignIn}
                   className="w-full rounded-full bg-brand-navy px-6 py-3.5 text-sm font-semibold text-brand-off-white shadow-md transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
                 >
                   Sign in or Create Account

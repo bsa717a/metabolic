@@ -52,6 +52,7 @@ export async function serializeAppUser(user: User) {
     subscriptionCurrentPeriodEnd: user.subscriptionCurrentPeriodEnd?.toISOString() ?? null,
     gracePeriodEndsAt: user.gracePeriodEndsAt?.toISOString() ?? null,
     nextPlanAfterCoach: user.nextPlanAfterCoach ? planToSlug(user.nextPlanAfterCoach) : null,
+    coachCode: user.coachCode,
     assignedCoach: assignment?.coach
       ? {
           id: assignment.coach.id,

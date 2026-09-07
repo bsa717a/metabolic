@@ -70,7 +70,7 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(form.selectedVirtualCoachId
       ? { selectedVirtualCoachId: form.selectedVirtualCoachId as VirtualCoachId }
       : {}),
-    ...(form.trackingOnly ? { trackingOnly: true } : {}),
+    ...(form.trackingOnly && !form.coachCode.trim() ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
     ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),

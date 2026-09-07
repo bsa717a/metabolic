@@ -62,6 +62,10 @@ export async function coachSupportRoutes(app: FastifyInstance) {
 
     const userId = request.appUser!.id;
 
+    if (coach.id === userId) {
+      return reply.code(400).send({ error: 'This is your invite link. Share it with clients instead of joining it.' });
+    }
+
     const activeProgram = await prisma.program.findFirst({
       where: { userId, status: ProgramStatus.ACTIVE }
     });

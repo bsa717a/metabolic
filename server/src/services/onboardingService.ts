@@ -254,16 +254,14 @@ async function updateActiveProgramFromSetup(
     throw new Error('A timezone is required to finish setup.');
   }
 
-  const trackingOnly = input.trackingOnly === true;
+  const coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
+  const trackingOnly = input.trackingOnly === true && !coach;
   const timezone = input.timezone?.trim() || existingUser?.timezone || null;
   const today = parseDateParam(userDayKey(timezone));
   const todayKey = userDayKey(timezone);
-
-  let coach: Awaited<ReturnType<typeof findCoachByCode>> = null;
   let defaultNutritionTemplateId: string | null = null;
   let defaultExerciseTemplateId: string | null = null;
   if (!trackingOnly) {
-    coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
     defaultNutritionTemplateId = await resolveDefaultNutritionTemplateId(input, coach);
     defaultExerciseTemplateId =
       coach?.defaultExerciseTemplateId ??
@@ -450,7 +448,8 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
   ]);
   // Log-only ("just track my food"): a SELF_DIRECTED program with no coach, no templates, and no
   // exercise scaffolding — but it still captures the user's calorie/protein goals as metrics.
-  const trackingOnly = input.trackingOnly === true;
+  // Invite links always get a coached plan; tracking-only is only for people without a real coach.
+  const trackingOnly = input.trackingOnly === true && !coach;
   const defaultNutritionTemplateId = trackingOnly
     ? null
     : await resolveDefaultNutritionTemplateId(input, coach);
@@ -489,7 +488,7 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     const created = await tx.program.create({
       data: {
         userId,
-        coachId: trackingOnly ? null : coach?.id ?? null,
+        coachId: coach?.id ?? null,
         name: programName,
         status: ProgramStatus.ACTIVE,
         mode: trackingOnly ? ProgramMode.SELF_DIRECTED : ProgramMode.COACHED,

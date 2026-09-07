@@ -29,6 +29,7 @@ export type AppUser = {
   subscriptionCurrentPeriodEnd?: string | null;
   gracePeriodEndsAt?: string | null;
   nextPlanAfterCoach?: PlanSlug | null;
+  coachCode?: string | null;
   assignedCoach?: UserSummary | null;
   coachRequestedAt?: string | null;
   coachRelationshipStatus?: CoachRelationshipStatusSlug | null;

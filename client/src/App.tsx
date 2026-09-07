@@ -285,6 +285,9 @@ export default function App() {
           element={
             <JoinCoachPage
               authenticated={Boolean(firebaseUser)}
+              authChecked={authChecked}
+              onboardingChecked={onboardingChecked}
+              needsSetup={needsSetup}
               appUser={appUser}
               onUserUpdated={setAppUser}
             />

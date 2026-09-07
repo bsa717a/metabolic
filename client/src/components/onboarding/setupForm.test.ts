@@ -28,18 +28,15 @@ describe('buildSetupPayload', () => {
     expect(payload.coachCode).toBe('DF');
   });
 
-  it('keeps the virtual coach for tracking-only setup and still sends real-coach fields', () => {
+  it('does not send tracking-only when a real coach invite is present', () => {
     const payload = buildSetupPayload({
       ...formWithVirtualCoach(),
       trackingOnly: true,
-      wantsCoach: true,
       coachCode: 'DF'
     });
 
-    expect(payload.selectedVirtualCoachId).toBe('kali');
-    expect(payload.trackingOnly).toBe(true);
+    expect(payload.trackingOnly).toBeUndefined();
     expect(payload.coachCode).toBe('DF');
-    expect(payload.wantsCoach).toBe(true);
   });
 });
 
@@ -48,7 +45,7 @@ describe('real coach onboarding stage', () => {
 
   it('requests a real coach and continues to submit', () => {
     const result = advanceCoachOnboarding('realCoachAsk', 'request', base, coach);
-    expect(result.formPatch).toEqual({ wantsCoach: true, coachCode: '' });
+    expect(result.formPatch).toEqual({ wantsCoach: true });
     expect(result.next.stage).toBe('readyToSubmit');
     expect(result.next.assistantMessage).toContain('request for a real coach');
   });
@@ -69,9 +66,45 @@ describe('real coach onboarding stage', () => {
     expect(coded.next.assistantMessage).toContain('coach code DF');
   });
 
-  it('skips real coach support', () => {
+  it('skips real coach support without wiping an existing invite code', () => {
     const result = advanceCoachOnboarding('realCoachAsk', 'skip', base, coach);
-    expect(result.formPatch).toEqual({ wantsCoach: false, coachCode: '' });
+    expect(result.formPatch).toEqual({ wantsCoach: false });
     expect(result.next.stage).toBe('readyToSubmit');
+  });
+
+  it('keeps a pending invite code when skipping the real-coach question', () => {
+    const invited = { ...base, coachCode: 'DF' };
+    const result = advanceCoachOnboarding('realCoachAsk', 'skip', invited, coach);
+    expect(result.formPatch).toEqual({ wantsCoach: false });
+    expect(invited.coachCode).toBe('DF');
+  });
+
+  it('skips the real-coach question when an invite code is already on the form', () => {
+    const invited = { ...base, coachCode: 'DF' };
+    const result = advanceCoachOnboarding('phone', 'skip', invited, coach);
+    expect(result.next.stage).toBe('readyToSubmit');
+    expect(result.next.assistantMessage).toContain('invite you used');
+  });
+});
+
+describe('invite onboarding', () => {
+  const invited = { ...formWithVirtualCoach(), coachCode: 'DF' };
+
+  it('skips the track-or-plan question after intro when an invite code is present', () => {
+    const result = advanceCoachOnboarding('intro', 'continue', invited, coach);
+    expect(result.formPatch).toEqual({ trackingOnly: false });
+    expect(result.next.stage).toBe('weight');
+  });
+
+  it('skips tracking-only even if trackingMode is reached with an invite code', () => {
+    const result = advanceCoachOnboarding('trackingMode', 'track', invited, coach);
+    expect(result.formPatch).toEqual({ trackingOnly: false });
+    expect(result.next.stage).toBe('weight');
+  });
+
+  it('still offers tracking-only when there is no invite code', () => {
+    const result = advanceCoachOnboarding('intro', 'continue', formWithVirtualCoach(), coach);
+    expect(result.next.stage).toBe('trackingMode');
+    expect(result.next.quickReplies?.some((reply) => reply.value === 'track')).toBe(true);
   });
 });

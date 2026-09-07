@@ -12,6 +12,7 @@ function buildInviteUrl(coachCode: string): string {
 export function CoachSettingsDrawer({
   open,
   coachCodeDraft,
+  savedCoachCode,
   defaultNutritionTemplateId,
   defaultExerciseTemplateId,
   nutritionTemplates,
@@ -25,6 +26,7 @@ export function CoachSettingsDrawer({
 }: {
   open: boolean;
   coachCodeDraft: string;
+  savedCoachCode: string;
   defaultNutritionTemplateId: string;
   defaultExerciseTemplateId: string;
   nutritionTemplates: NutritionPlanTemplateSummary[];
@@ -37,10 +39,11 @@ export function CoachSettingsDrawer({
   onClose: () => void;
 }) {
   const [linkCopied, setLinkCopied] = useState(false);
+  const inviteCode = savedCoachCode.trim();
 
   async function handleCopyInviteLink() {
-    if (!coachCodeDraft.trim()) return;
-    const url = buildInviteUrl(coachCodeDraft.trim());
+    if (!inviteCode) return;
+    const url = buildInviteUrl(inviteCode);
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
@@ -75,13 +78,13 @@ export function CoachSettingsDrawer({
         />
       </label>
 
-      {coachCodeDraft.trim() ? (
+      {inviteCode ? (
         <div className="mt-3">
           <p className="mb-2 text-xs font-medium text-app-text-muted">Invite link</p>
           <div className="flex items-center gap-2 rounded-xl border border-app-border bg-app-muted/50 px-3 py-2">
             <Link className="h-4 w-4 flex-shrink-0 text-app-text-muted" />
             <span className="flex-1 truncate text-sm text-app-text">
-              {buildInviteUrl(coachCodeDraft.trim())}
+              {buildInviteUrl(inviteCode)}
             </span>
             <button
               type="button"
@@ -97,9 +100,13 @@ export function CoachSettingsDrawer({
             </button>
           </div>
           <p className="mt-1.5 text-xs text-app-text-muted">
-            Share this link with new clients. They'll see your name and confirm before joining.
+            {coachCodeDraft.trim().toUpperCase() === inviteCode.toUpperCase()
+              ? "Share this link with new clients. They'll see your name and confirm before joining."
+              : 'Save your coach code to update this invite link.'}
           </p>
         </div>
+      ) : coachCodeDraft.trim() ? (
+        <p className="mt-3 text-xs text-app-text-muted">Save your coach code to get an invite link.</p>
       ) : null}
 
       <label className="mt-4 block text-sm">

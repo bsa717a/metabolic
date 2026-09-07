@@ -40,3 +40,11 @@ export function clearPendingCoachInvite(): void {
     // localStorage unavailable
   }
 }
+
+/** After login, resume a coach invite before falling back to an in-app return path. */
+export function postLoginPath(options: { pendingCoachCode?: string | null; returnTo?: string | null }): string {
+  if (options.pendingCoachCode) return '/join';
+  const returnTo = options.returnTo?.trim() ?? '';
+  if (returnTo.startsWith('/') && !returnTo.startsWith('//')) return returnTo;
+  return '/';
+}
