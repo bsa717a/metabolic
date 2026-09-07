@@ -32,6 +32,7 @@ import { CoachPage } from './pages/CoachPage';
 import { VirtualCoachPage } from './pages/VirtualCoachPage';
 import { VirtualCoachDetailPage } from './pages/VirtualCoachDetailPage';
 import { LoginPage } from './pages/LoginPage';
+import { AuthActionPage } from './pages/AuthActionPage';
 import { FirstTimeSetupPage } from './pages/FirstTimeSetupPage';
 import { CampaignPolicyPage } from './pages/CampaignPolicyPage';
 import { CampaignTermsPage } from './pages/CampaignTermsPage';
@@ -54,6 +55,7 @@ import { PricingPage } from './pages/PricingPage';
 import { UpgradePage } from './pages/UpgradePage';
 import { StorePage } from './pages/StorePage';
 import { isAdminRole, isCoachRole } from './utils/roles';
+import { AUTH_ACTION_PATH } from './utils/authAction';
 import { isEmailVerificationRequired } from './utils/emailVerification';
 
 function LoadingScreen() {
@@ -295,6 +297,15 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage authenticated={Boolean(firebaseUser)} appUser={appUser} />} />
+        <Route
+          path={AUTH_ACTION_PATH}
+          element={
+            <AuthActionPage
+              authenticated={Boolean(firebaseUser)}
+              onActionComplete={refreshEmailVerification}
+            />
+          }
+        />
         <Route
           path="/verify-email"
           element={

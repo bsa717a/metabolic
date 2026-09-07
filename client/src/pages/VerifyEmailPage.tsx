@@ -2,7 +2,13 @@ import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Mail, RefreshCw, CheckCircle, LogOut } from 'lucide-react';
 import { BrandLogo } from '../components/brand/BrandLogo';
-import { resendVerificationEmail, reloadCurrentUser, logout, getCurrentUserEmail } from '../services/auth';
+import {
+  applyEmailActionCode,
+  logout,
+  getCurrentUserEmail,
+  requestVerificationEmail
+} from '../services/auth';
+import { oobCodeFromActionUrl, formatAuthActionError } from '../utils/authAction';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -15,7 +21,9 @@ interface VerifyEmailPageProps {
 
 export function VerifyEmailPage({ emailVerified, authChecked, isAuthenticated, onRefreshVerification }: VerifyEmailPageProps) {
   const [resending, setResending] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [loadingLink, setLoadingLink] = useState(false);
+  const [actionUrl, setActionUrl] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -26,6 +34,25 @@ export function VerifyEmailPage({ emailVerified, authChecked, isAuthenticated, o
     const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendCooldown]);
+
+  useEffect(() => {
+    if (!isAuthenticated || emailVerified) return;
+    let cancelled = false;
+    setLoadingLink(true);
+    void requestVerificationEmail(false)
+      .then((result) => {
+        if (!cancelled && result.actionUrl) setActionUrl(result.actionUrl);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(formatAuthActionError(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLink(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, emailVerified]);
 
   if (!authChecked) {
     return (
@@ -43,43 +70,53 @@ export function VerifyEmailPage({ emailVerified, authChecked, isAuthenticated, o
     return <Navigate to="/" replace />;
   }
 
+  async function handleVerifyNow() {
+    const oobCode = oobCodeFromActionUrl(actionUrl);
+    if (!oobCode) {
+      setError('Verification is not ready yet. Try again in a moment.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setVerifying(true);
+    try {
+      await applyEmailActionCode(oobCode);
+      setSuccess('Email verified! Redirecting…');
+      if (onRefreshVerification) await onRefreshVerification();
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
+        setActionUrl('');
+        try {
+          const result = await requestVerificationEmail(false, true);
+          if (result.actionUrl) setActionUrl(result.actionUrl);
+        } catch {
+          // Keep the apply error; a replacement link is optional.
+        }
+      }
+      setError(formatAuthActionError(err));
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function handleResend() {
     setError('');
     setSuccess('');
     setResending(true);
     try {
-      await resendVerificationEmail();
-      setSuccess('Verification email sent! Check your inbox (and spam folder).');
+      const result = await requestVerificationEmail(true);
+      if (result.actionUrl) setActionUrl(result.actionUrl);
+      setSuccess(
+        result.sent
+          ? 'Verification email sent! Check your inbox (and spam folder).'
+          : 'Use Verify now below. Outbound email is not configured on this server.'
+      );
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
-      if (err instanceof Error && err.message.includes('too-many-requests')) {
-        setError('Too many attempts. Please wait a few minutes before trying again.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to send verification email.');
-      }
+      setError(formatAuthActionError(err));
     } finally {
       setResending(false);
-    }
-  }
-
-  async function handleCheckVerification() {
-    setError('');
-    setSuccess('');
-    setChecking(true);
-    try {
-      const user = await reloadCurrentUser();
-      if (user?.emailVerified) {
-        setSuccess('Email verified! Redirecting…');
-        if (onRefreshVerification) {
-          await onRefreshVerification();
-        }
-      } else {
-        setError('Email not verified yet. Check your inbox and click the verification link.');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not check verification status.');
-    } finally {
-      setChecking(false);
     }
   }
 
@@ -103,28 +140,27 @@ export function VerifyEmailPage({ emailVerified, authChecked, isAuthenticated, o
             </div>
           </div>
           <p className="mt-4 text-sm leading-relaxed text-app-text-muted">
-            We sent a verification link to{' '}
-            <span className="font-medium text-app-text">{email || 'your email'}</span>. Click the link in
-            the email to verify your account.
+            Confirm <span className="font-medium text-app-text">{email || 'your email'}</span> to continue.
+            You can verify in this window, or we can email you a link.
           </p>
         </div>
 
         <div className="space-y-4">
           <button
             type="button"
-            onClick={handleCheckVerification}
-            disabled={checking}
+            onClick={handleVerifyNow}
+            disabled={verifying || loadingLink || !actionUrl}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-navy px-6 py-3.5 text-sm font-semibold text-brand-off-white shadow-md transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
           >
-            {checking ? (
+            {verifying || loadingLink ? (
               <>
                 <RefreshCw className="h-4 w-4 animate-spin" />
-                Checking…
+                {verifying ? 'Verifying…' : 'Preparing…'}
               </>
             ) : (
               <>
                 <CheckCircle className="h-4 w-4" />
-                I've verified — continue
+                Verify now
               </>
             )}
           </button>
@@ -145,7 +181,7 @@ export function VerifyEmailPage({ emailVerified, authChecked, isAuthenticated, o
             ) : (
               <>
                 <Mail className="h-4 w-4" />
-                Resend verification email
+                Email me a verification link
               </>
             )}
           </button>
@@ -165,14 +201,14 @@ export function VerifyEmailPage({ emailVerified, authChecked, isAuthenticated, o
 
         <div className="mt-6 border-t border-app-border pt-6">
           <p className="text-center text-sm text-app-text-muted">
-            Didn't receive the email? Check your spam folder or{' '}
+            Didn't receive an email? Outbound mail is only sent when Resend is configured. You can always{' '}
             <button
               type="button"
               className="font-medium text-brand-green hover:underline dark:text-brand-green-light"
-              onClick={handleResend}
-              disabled={resending || resendCooldown > 0}
+              onClick={handleVerifyNow}
+              disabled={verifying || loadingLink || !actionUrl}
             >
-              request a new one
+              verify now
             </button>
             .
           </p>
