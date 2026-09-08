@@ -5,6 +5,7 @@ import { sortScheduledExercises } from './exerciseService.js';
 import { parseDateParam, localTimeParts, userDayKey } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
 import { n, round } from '../utils/numbers.js';
+import { getRoutineForUser, resolveTemplateIdForDate } from './exerciseRoutineService.js';
 
 function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }) {
   return meal.items.length > 0 || n(meal.plannedCalories) > 0 || n(meal.actualCalories) > 0 || meal.status !== 'PLANNED';
@@ -49,13 +50,20 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
   }
 
   const dailyLog = await ensureDailyLog(userId, program, today);
-  const [meals, rawExercises, weightTrend] = await Promise.all([
+  const [meals, rawExercises, weightTrend, routine] = await Promise.all([
     prisma.meal.findMany({ where: { dailyLogId: dailyLog.id }, include: { items: true }, orderBy: { mealNumber: 'asc' } }),
     prisma.scheduledExercise.findMany({ where: { userId, scheduledDate: today }, include: { exercise: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
-    prisma.dailyLog.findMany({ where: { userId, weight: { not: null } }, orderBy: { date: 'asc' }, take: 30 })
+    prisma.dailyLog.findMany({ where: { userId, weight: { not: null } }, orderBy: { date: 'asc' }, take: 30 }),
+    getRoutineForUser(userId)
   ]);
   const nutritionMeals = mealsForNutritionDisplay(meals);
   const exercises = sortScheduledExercises(rawExercises);
+
+  const hasExerciseRoutine = Boolean(routine?.days?.length);
+  const todayTemplateId = hasExerciseRoutine
+    ? resolveTemplateIdForDate(routine!.days, today)
+    : undefined;
+  const isRestDay = hasExerciseRoutine && todayTemplateId === null;
 
   const weightMetric = program.metrics.find((metric) => metric.metricType === 'WEIGHT');
   const start = n(weightMetric?.startValue);
@@ -71,6 +79,10 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
     meals: nutritionMeals,
     allMeals: meals,
     exercises,
+    exerciseRoutineStatus: {
+      hasRoutine: hasExerciseRoutine,
+      isRestDay
+    },
     date: resolvedDateKey,
     nextMeal: nextMeal
       ? {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Camera, ChevronDown, Leaf, Pencil, Plus, X } from 'lucide-react';
+import { Camera, ChevronDown, Leaf, Pencil, Plus, Utensils, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
 import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
@@ -457,45 +457,62 @@ export function TodayNutrition({
           <Pencil size={16} />
         </Link>
       </div>
-      <div className="space-y-3">
-        {meals.map((meal) => {
-          const expanded = expandedMealId === meal.id;
-          const plannedCount = (meal.items ?? []).filter((item) => item.type === 'PLANNED').length;
-          const plannedTime = formatPlannedTime(meal.plannedTime);
+      {meals.length > 0 ? (
+        <div className="space-y-3">
+          {meals.map((meal) => {
+            const expanded = expandedMealId === meal.id;
+            const plannedCount = (meal.items ?? []).filter((item) => item.type === 'PLANNED').length;
+            const plannedTime = formatPlannedTime(meal.plannedTime);
 
-          return (
-            <div key={meal.id} className="rounded-2xl bg-app-muted">
-              <div className="flex items-center gap-2 p-3">
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => toggleMeal(meal.id)}
-                  aria-expanded={expanded}
-                >
-                  <p className="font-semibold text-app-text">
-                    {meal.mealNumber}. {plannedTime ? `${meal.name} - ${plannedTime}` : meal.name}
-                  </p>
-                  <p className="text-sm text-app-text-muted">
-                    {Math.round(Number(meal.actualCalories))} / {Math.round(Number(meal.plannedCalories))} kcal
-                    {plannedCount > 0 && ` · ${plannedCount} item${plannedCount === 1 ? '' : 's'}`}
-                  </p>
-                </button>
-                <MealStatusMenu meal={meal} onChange={onChange} />
-                <button
-                  type="button"
-                  className="grid h-8 w-8 shrink-0 place-items-center text-app-text-muted"
-                  onClick={() => toggleMeal(meal.id)}
-                  aria-expanded={expanded}
-                  aria-label={expanded ? `Collapse ${meal.name}` : `Expand ${meal.name}`}
-                >
-                  <ChevronDown size={18} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                </button>
+            return (
+              <div key={meal.id} className="rounded-2xl bg-app-muted">
+                <div className="flex items-center gap-2 p-3">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => toggleMeal(meal.id)}
+                    aria-expanded={expanded}
+                  >
+                    <p className="font-semibold text-app-text">
+                      {meal.mealNumber}. {plannedTime ? `${meal.name} - ${plannedTime}` : meal.name}
+                    </p>
+                    <p className="text-sm text-app-text-muted">
+                      {Math.round(Number(meal.actualCalories))} / {Math.round(Number(meal.plannedCalories))} kcal
+                      {plannedCount > 0 && ` · ${plannedCount} item${plannedCount === 1 ? '' : 's'}`}
+                    </p>
+                  </button>
+                  <MealStatusMenu meal={meal} onChange={onChange} />
+                  <button
+                    type="button"
+                    className="grid h-8 w-8 shrink-0 place-items-center text-app-text-muted"
+                    onClick={() => toggleMeal(meal.id)}
+                    aria-expanded={expanded}
+                    aria-label={expanded ? `Collapse ${meal.name}` : `Expand ${meal.name}`}
+                  >
+                    <ChevronDown size={18} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+                {expanded && <PlannedItemChecklist meal={meal} onChange={onChange} />}
               </div>
-              {expanded && <PlannedItemChecklist meal={meal} onChange={onChange} />}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center rounded-2xl border border-dashed border-app-border bg-app-muted/50 px-6 py-8 text-center">
+          <Utensils className="mb-3 h-10 w-10 text-app-text-muted/60" aria-hidden />
+          <p className="font-semibold text-app-text">No meals planned yet</p>
+          <p className="mt-1 max-w-xs text-sm text-app-text-muted">
+            Plan your meals ahead or log what you eat throughout the day.
+          </p>
+          <Link
+            to="/nutrition/plan"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+          >
+            <Utensils size={14} />
+            Plan meals
+          </Link>
+        </div>
+      )}
       <div className="mt-4 border-t border-app-border pt-4">
         <p className="mb-2 text-sm font-medium text-app-text">Add food directly or ask about restaurant choices</p>
         <div className="flex gap-2">

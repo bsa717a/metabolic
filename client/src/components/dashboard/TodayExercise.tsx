@@ -1,16 +1,65 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Pencil, Play } from 'lucide-react';
-import type { Exercise } from '../../types';
+import { Calendar, Dumbbell, Pencil, Play, Sofa } from 'lucide-react';
+import type { Exercise, ExerciseRoutineStatus } from '../../types';
 import { todayKey } from '../../services/api';
 import { primeAudio } from '../../utils/sessionCues';
 import { ExerciseCard } from '../exercise/ExerciseCard';
 import { Card } from '../ui/Card';
 
+function EmptyExerciseState({
+  routineStatus
+}: {
+  routineStatus?: ExerciseRoutineStatus;
+}) {
+  const hasRoutine = routineStatus?.hasRoutine ?? false;
+  const isRestDay = routineStatus?.isRestDay ?? false;
+
+  if (hasRoutine && isRestDay) {
+    return (
+      <div className="flex flex-col items-center rounded-2xl border border-dashed border-brand-green/30 bg-brand-green/5 px-6 py-8 text-center">
+        <Sofa className="mb-3 h-10 w-10 text-brand-green/60" aria-hidden />
+        <p className="font-semibold text-app-text">Rest day</p>
+        <p className="mt-1 text-sm text-app-text-muted">
+          Your routine has today scheduled for recovery.
+        </p>
+        <Link
+          to="/exercise/plan"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand-green transition hover:text-brand-green-light"
+        >
+          <Calendar size={14} />
+          View weekly plan
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-app-border bg-app-muted/50 px-6 py-8 text-center">
+      <Dumbbell className="mb-3 h-10 w-10 text-app-text-muted/60" aria-hidden />
+      <p className="font-semibold text-app-text">No workout scheduled</p>
+      <p className="mt-1 max-w-xs text-sm text-app-text-muted">
+        {hasRoutine
+          ? "Today doesn't have exercises assigned yet."
+          : 'Set up your weekly routine to auto-populate workouts.'}
+      </p>
+      <Link
+        to={hasRoutine ? '/exercise' : '/exercise/manage'}
+        className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+      >
+        <Dumbbell size={14} />
+        {hasRoutine ? 'Add exercises' : 'Set up routine'}
+      </Link>
+    </div>
+  );
+}
+
 export function TodayExercise({
   exercises,
+  routineStatus,
   onChange
 }: {
   exercises: Exercise[];
+  routineStatus?: ExerciseRoutineStatus;
   onChange: () => void | Promise<void>;
 }) {
   const navigate = useNavigate();
@@ -45,7 +94,7 @@ export function TodayExercise({
         </div>
       </div>
       {!exercises.length ? (
-        <p className="text-sm text-app-text-muted">No exercises planned today.</p>
+        <EmptyExerciseState routineStatus={routineStatus} />
       ) : (
         <div className="space-y-4">
           {todo.length > 0 && (

@@ -462,12 +462,17 @@ export type DashboardDailyLog = {
   exercisesCompleted: number;
   exercisesPlanned: number;
 };
+export type ExerciseRoutineStatus = {
+  hasRoutine: boolean;
+  isRestDay: boolean;
+};
 export type Dashboard = {
   program: Program | null;
   dailyLog: DashboardDailyLog | null;
   meals: Meal[];
   allMeals?: Meal[];
   exercises: Exercise[];
+  exerciseRoutineStatus?: ExerciseRoutineStatus;
   /** User's calendar day for this dashboard payload (YYYY-MM-DD). */
   date?: string;
   summary: {

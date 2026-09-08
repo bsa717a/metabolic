@@ -298,7 +298,11 @@ export function DashboardPage({
           />
         </div>
         <div data-tour="today-exercise">
-          <TodayExercise exercises={data.exercises} onChange={() => loadDashboard({ silent: true })} />
+          <TodayExercise
+            exercises={data.exercises}
+            routineStatus={data.exerciseRoutineStatus}
+            onChange={() => loadDashboard({ silent: true })}
+          />
         </div>
         <div data-tour="macro-progress">
           <MiniBlueprint program={data.program} />
