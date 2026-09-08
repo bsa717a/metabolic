@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { login, loginWithGoogle, resetPassword, signUp } from '../services/auth';
+import { login, loginWithApple, loginWithGoogle, resetPassword, signUp } from '../services/auth';
 import { isFirebaseConfigured } from '../services/firebase';
 import { BrandLogo } from '../components/brand/BrandLogo';
 import { getPendingCoachInvite, postLoginPath } from '../utils/pendingCoachInvite';
@@ -39,6 +39,18 @@ function GoogleIcon() {
       <path
         fill="#EA4335"
         d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+      />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M14.94 14.46c-.45 1.04-.98 1.99-1.59 2.86-.83 1.18-1.51 2-2.04 2.45-.81.75-1.68 1.14-2.6 1.16-.66 0-1.46-.19-2.39-.57-.93-.38-1.78-.57-2.56-.57-.83 0-1.72.19-2.67.57-.95.38-1.72.58-2.3.6-.89.04-1.78-.36-2.67-1.21-.57-.49-1.29-1.33-2.14-2.53-.91-1.28-1.66-2.76-2.25-4.45-.63-1.82-.94-3.59-.94-5.29 0-1.95.42-3.64 1.26-5.05.66-1.13 1.54-2.02 2.64-2.67 1.1-.65 2.29-.98 3.57-1 .7 0 1.62.22 2.76.65 1.13.43 1.86.65 2.18.65.24 0 1.05-.26 2.42-.77 1.3-.47 2.39-.67 3.28-.59 2.43.2 4.25 1.16 5.47 2.9-2.17 1.32-3.25 3.16-3.22 5.53.02 1.85.69 3.38 2 4.6.59.56 1.25 1 1.98 1.31-.16.46-.33.91-.52 1.33zm-5.07-18.07c0 1.45-.53 2.8-1.58 4.06-1.27 1.49-2.8 2.35-4.47 2.21-.02-.18-.03-.37-.03-.57 0-1.39.61-2.88 1.69-4.1.54-.62 1.23-1.13 2.06-1.54.83-.4 1.61-.62 2.35-.66.02.2.03.4.03.6z"
+        transform="scale(0.82) translate(1, 1)"
       />
     </svg>
   );
@@ -120,6 +132,16 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
     }
   }
 
+  async function appleLogin() {
+    setError('');
+    setSuccess('');
+    try {
+      await loginWithApple();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Apple sign-in failed');
+    }
+  }
+
   const heading =
     mode === 'signup'
       ? 'Create your account'
@@ -194,15 +216,26 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
           </form>
         ) : (
           <>
-            <button
-              type="button"
-              className="mb-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3.5 text-sm font-medium text-app-text shadow-sm transition hover:bg-app-muted disabled:opacity-50"
-              disabled={!isFirebaseConfigured}
-              onClick={googleLogin}
-            >
-              <GoogleIcon />
-              Continue with Google
-            </button>
+            <div className="mb-6 flex flex-col gap-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-black/90 disabled:opacity-50"
+                disabled={!isFirebaseConfigured}
+                onClick={appleLogin}
+              >
+                <AppleIcon />
+                Sign in with Apple
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3.5 text-sm font-medium text-app-text shadow-sm transition hover:bg-app-muted disabled:opacity-50"
+                disabled={!isFirebaseConfigured}
+                onClick={googleLogin}
+              >
+                <GoogleIcon />
+                Continue with Google
+              </button>
+            </div>
 
             <div className="mb-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-app-border" />
@@ -304,31 +337,23 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
 
               {error && <p className="text-sm text-red-500">{error}</p>}
 
-              <p className="text-center text-sm text-app-text-muted">
-                {mode === 'signup' ? (
-                  <>
-                    Already have an account?{' '}
-                    <button
-                      type="button"
-                      className="font-medium text-brand-green hover:underline dark:text-brand-green-light"
-                      onClick={() => switchMode('login')}
-                    >
-                      Sign in
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    New to MetabolicOS?{' '}
-                    <button
-                      type="button"
-                      className="font-medium text-brand-green hover:underline dark:text-brand-green-light"
-                      onClick={() => switchMode('signup')}
-                    >
-                      Create an account
-                    </button>
-                  </>
-                )}
-              </p>
+              {mode === 'signup' ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center rounded-full border-2 border-brand-green px-6 py-3.5 text-sm font-semibold text-brand-green transition hover:bg-brand-green/10 dark:border-brand-green-light dark:text-brand-green-light dark:hover:bg-brand-green-light/10"
+                  onClick={() => switchMode('login')}
+                >
+                  Sign in
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center rounded-full border-2 border-brand-green px-6 py-3.5 text-sm font-semibold text-brand-green transition hover:bg-brand-green/10 dark:border-brand-green-light dark:text-brand-green-light dark:hover:bg-brand-green-light/10"
+                  onClick={() => switchMode('signup')}
+                >
+                  Create an account
+                </button>
+              )}
             </form>
           </>
         )}

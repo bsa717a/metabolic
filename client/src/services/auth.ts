@@ -4,6 +4,7 @@ import {
   confirmPasswordReset,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  OAuthProvider,
   onAuthStateChanged,
   onIdTokenChanged,
   signInWithEmailAndPassword,
@@ -191,6 +192,14 @@ export function getCurrentUserEmail(): string | null {
 export function loginWithGoogle() {
   if (!auth) throw new Error('Firebase is not configured. Add VITE_FIREBASE_* values to client/.env.');
   return signInWithPopup(auth, new GoogleAuthProvider());
+}
+
+export function loginWithApple() {
+  if (!auth) throw new Error('Firebase is not configured. Add VITE_FIREBASE_* values to client/.env.');
+  const provider = new OAuthProvider('apple.com');
+  provider.addScope('email');
+  provider.addScope('name');
+  return signInWithPopup(auth, provider);
 }
 
 export async function resetPassword(email: string) {
