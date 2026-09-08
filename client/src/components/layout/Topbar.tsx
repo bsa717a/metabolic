@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, RotateCcw, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -7,6 +7,7 @@ import type { AppUser } from '../../types';
 import { useTheme } from '../../theme/ThemeContext';
 import { BrandLogo } from '../brand/BrandLogo';
 import { EditAccountDetailsDrawer } from '../user/EditAccountDetailsDrawer';
+import { RestartOnboardingConfirmModal } from '../onboarding/RestartOnboardingConfirmModal';
 import { TopbarGamification } from './TopbarGamification';
 import { ColorThemePicker } from './ColorThemePicker';
 import { ThemeToggle } from './ThemeToggle';
@@ -69,6 +70,7 @@ export function Topbar({
   const [dashboardLayout, setDashboardLayout] = useDashboardLayout();
   const isDashboard = location.pathname === '/';
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
+  const [restartOnboardingOpen, setRestartOnboardingOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -276,6 +278,14 @@ export function Topbar({
                     }}
                   />
                   <ProfileMenuItem
+                    label="Restart onboarding"
+                    icon={RotateCcw}
+                    onClick={() => {
+                      closeProfileMenu();
+                      setRestartOnboardingOpen(true);
+                    }}
+                  />
+                  <ProfileMenuItem
                     label="Virtual Coaches"
                     icon={Sparkles}
                     onClick={() => {
@@ -408,6 +418,15 @@ export function Topbar({
           onUserUpdated={onUserUpdated}
         />
       ) : null}
+
+      <RestartOnboardingConfirmModal
+        open={restartOnboardingOpen}
+        onClose={() => setRestartOnboardingOpen(false)}
+        onConfirm={() => {
+          setRestartOnboardingOpen(false);
+          navigate('/restart-onboarding');
+        }}
+      />
     </>
   );
 }
