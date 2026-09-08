@@ -283,6 +283,7 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
           onFormPatch={handleFormPatch}
           onSubmit={handleSubmit}
           submitting={submitting}
+          onDismiss={handleBack}
         />
       </div>
 

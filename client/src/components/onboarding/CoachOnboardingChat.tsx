@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SendHorizontal } from 'lucide-react';
+import { SendHorizontal, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { VirtualCoach } from '../../data/virtualCoaches';
 import type { SetupFormState } from '../../types/onboarding';
@@ -21,6 +21,7 @@ type CoachOnboardingChatProps = {
   onFormPatch: (patch: Partial<SetupFormState>) => void;
   onSubmit: () => Promise<void>;
   submitting?: boolean;
+  onDismiss?: () => void;
   className?: string;
 };
 
@@ -31,6 +32,7 @@ export function CoachOnboardingChat({
   onFormPatch,
   onSubmit,
   submitting = false,
+  onDismiss,
   className
 }: CoachOnboardingChatProps) {
   const intro = buildIntroTurn(coach, firstName);
@@ -141,10 +143,20 @@ export function CoachOnboardingChat({
             <p className="truncate text-sm font-semibold text-app-text">{coach.name}</p>
             <p className="truncate text-xs text-app-text-muted">Setting up your plan together</p>
           </div>
-          <div className="shrink-0 text-right">
+          <div className="flex shrink-0 items-center gap-1.5">
             <p className="text-xs font-medium text-app-text-muted">
               Step {progress.currentStep} of {progress.totalSteps}
             </p>
+            {onDismiss ? (
+              <button
+                type="button"
+                aria-label="Close onboarding"
+                onClick={onDismiss}
+                className="rounded-full p-1 text-app-text-muted transition hover:bg-app-muted hover:text-app-text"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="px-4 pb-3">
