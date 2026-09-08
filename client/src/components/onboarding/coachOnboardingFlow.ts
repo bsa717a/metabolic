@@ -405,6 +405,7 @@ function bodyFatVisualEstimateTurn(sex: 'male' | 'female'): CoachOnboardingTurn 
     assistantMessage: `Here are some reference body types for ${sex === 'male' ? 'men' : 'women'}. Tap the one that looks closest to you — I'll use that % as a starting point. You can adjust it afterward.\n\n[VISUAL_ESTIMATE_CARDS:${sex}]`,
     quickReplies: [
       { label: 'I have a number', mobileLabel: 'Number', value: 'have_number' },
+      { label: 'How do I measure it?', mobileLabel: 'Measure', value: 'how_to_measure' },
       { label: 'Skip for now', mobileLabel: 'Skip', value: 'skip' }
     ]
   };
@@ -766,8 +767,11 @@ export function advanceCoachOnboarding(
           next: genderTurn()
         };
       }
-      if (value === 'have_number' || value.includes('have a number') || value.includes('number')) {
+      if (value === 'have_number' || value.includes('have a number')) {
         return { next: bodyFatCurrentTurn() };
+      }
+      if (value === 'how_to_measure' || value.includes('measure') || value.includes('how do i')) {
+        return { next: bodyFatHowTurn() };
       }
       const visualBodyFat = parseBodyFat(input);
       if (visualBodyFat != null) {
