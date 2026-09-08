@@ -133,7 +133,15 @@ describe('getOnboardingProgress', () => {
   });
 
   it('groups all body fat stages into one main step', () => {
-    const bodyFatStages = ['bodyFatAsk', 'bodyFatKnowHow', 'bodyFatHow', 'bodyFatCurrent', 'bodyFatGoal'] as const;
+    const bodyFatStages = [
+      'bodyFatAsk',
+      'bodyFatKnowHow',
+      'bodyFatEstimateSex',
+      'bodyFatVisualEstimate',
+      'bodyFatHow',
+      'bodyFatCurrent',
+      'bodyFatGoal'
+    ] as const;
     const steps = bodyFatStages.map((stage) => getOnboardingProgress(stage, false).currentStep);
     const uniqueSteps = [...new Set(steps)];
     expect(uniqueSteps.length).toBe(1);
@@ -159,5 +167,38 @@ describe('getOnboardingProgress', () => {
     const progress = getOnboardingProgress('readyToSubmit', false);
     expect(progress.currentStep).toBe(progress.totalSteps);
     expect(progress.mainStepLabel).toBe('Confirm');
+  });
+});
+
+describe('body fat visual estimate', () => {
+  const withGender = { ...formWithVirtualCoach(), gender: 'm' };
+
+  it('asks gender before body composition', () => {
+    const height = advanceCoachOnboarding('height', `5'10`, formWithVirtualCoach(), coach);
+    expect(height.next.stage).toBe('gender');
+
+    const gender = advanceCoachOnboarding('gender', 'male', formWithVirtualCoach(), coach);
+    expect(gender.formPatch).toEqual({ gender: 'm' });
+    expect(gender.next.stage).toBe('activity');
+  });
+
+  it('opens visual estimate cards when the user does not know their number', () => {
+    const result = advanceCoachOnboarding('bodyFatKnowHow', 'no', withGender, coach);
+    expect(result.next.stage).toBe('bodyFatVisualEstimate');
+    expect(result.next.assistantMessage).toContain('[VISUAL_ESTIMATE_CARDS:male]');
+  });
+
+  it('stays on visual estimate after invalid chat input so cards can stay visible', () => {
+    const result = advanceCoachOnboarding('bodyFatVisualEstimate', 'idk', withGender, coach);
+    expect(result.error).toBe('Tap one of the body type images, or skip.');
+    expect(result.next.stage).toBe('bodyFatVisualEstimate');
+    expect(result.next.assistantMessage).toContain('[VISUAL_ESTIMATE_CARDS:male]');
+  });
+
+  it('accepts a tapped silhouette midpoint', () => {
+    const result = advanceCoachOnboarding('bodyFatVisualEstimate', '20', withGender, coach);
+    expect(result.formPatch).toEqual({ bodyFat: '20' });
+    expect(result.next.stage).toBe('bodyFatCurrent');
+    expect(result.next.assistantMessage).toContain('20%');
   });
 });

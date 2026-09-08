@@ -129,6 +129,20 @@ export function CoachOnboardingChat({
   const showQuickReplies =
     Boolean(quickReplies?.length) && !busy && !submitting && messages.at(-1)?.role === 'assistant';
 
+  const latestVisualEstimate = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      const markerMatch = message.content.match(VISUAL_ESTIMATE_MARKER_RE);
+      if (message.role === 'assistant' && markerMatch) {
+        return { sex: markerMatch[1] as BodyFatEstimateSex };
+      }
+    }
+    return null;
+  })();
+
+  const showVisualEstimateCards =
+    stage === 'bodyFatVisualEstimate' && latestVisualEstimate != null && !busy && !submitting;
+
   return (
     <div
       className={clsx(
@@ -166,12 +180,10 @@ export function CoachOnboardingChat({
 
       <div ref={threadRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-app-bg/40 px-4 py-4">
         {messages.map((message, index) => {
-          const isLastMessage = index === messages.length - 1;
           const markerMatch = message.content.match(VISUAL_ESTIMATE_MARKER_RE);
           const hasVisualEstimateCards = message.role === 'assistant' && markerMatch;
 
           if (hasVisualEstimateCards) {
-            const sex = markerMatch[1] as BodyFatEstimateSex;
             const textParts = message.content.split(VISUAL_ESTIMATE_MARKER_RE);
             const textBefore = textParts[0]?.trim();
 
@@ -184,22 +196,13 @@ export function CoachOnboardingChat({
                     </div>
                   </div>
                 ) : null}
-                {isLastMessage && !busy && !submitting ? (
-                  <BodyFatEstimateCards
-                    sex={sex}
-                    selectedMidpoint={selectedVisualEstimate}
-                    onSelect={(midpoint) => {
-                      setSelectedVisualEstimate(midpoint);
-                      void handleAdvance(String(midpoint), `I look closest to ${midpoint}%`);
-                    }}
-                  />
-                ) : (
+                {!showVisualEstimateCards ? (
                   <div className="flex justify-start">
                     <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-md bg-app-muted px-4 py-2.5 text-sm italic leading-relaxed text-app-text-muted">
-                      [Selected body type: {selectedVisualEstimate ?? 'none'}%]
+                      [Selected body type: {selectedVisualEstimate ?? (form.bodyFat || 'none')}%]
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             );
           }
@@ -218,6 +221,16 @@ export function CoachOnboardingChat({
             </div>
           );
         })}
+        {showVisualEstimateCards && latestVisualEstimate ? (
+          <BodyFatEstimateCards
+            sex={latestVisualEstimate.sex}
+            selectedMidpoint={selectedVisualEstimate}
+            onSelect={(midpoint) => {
+              setSelectedVisualEstimate(midpoint);
+              void handleAdvance(String(midpoint), `I look closest to ${midpoint}%`);
+            }}
+          />
+        ) : null}
         {busy || submitting ? (
           <div className="flex justify-start">
             <div className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-app-muted px-4 py-3">
