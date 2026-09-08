@@ -11,8 +11,11 @@ import {
   type CoachOnboardingStage,
   type CoachOnboardingTurn
 } from './coachOnboardingFlow';
+import { BodyFatEstimateCards, type BodyFatEstimateSex } from './BodyFatEstimateCards';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+const VISUAL_ESTIMATE_MARKER_RE = /\[VISUAL_ESTIMATE_CARDS:(male|female)\]/;
 
 type CoachOnboardingChatProps = {
   coach: VirtualCoach;
@@ -44,6 +47,7 @@ export function CoachOnboardingChat({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<CoachOnboardingStage>(intro.stage);
+  const [selectedVisualEstimate, setSelectedVisualEstimate] = useState<number | undefined>();
   const formRef = useRef(form);
   const stageRef = useRef<CoachOnboardingStage>(intro.stage);
   const busyRef = useRef(false);
@@ -73,6 +77,9 @@ export function CoachOnboardingChat({
     setStage(turn.stage);
     setQuickReplies(turn.quickReplies);
     setMessages((current) => [...current, { role: 'assistant', content: turn.assistantMessage }]);
+    if (turn.stage !== 'bodyFatVisualEstimate') {
+      setSelectedVisualEstimate(undefined);
+    }
   }
 
   async function handleAdvance(raw: string, displayLabel?: string) {
@@ -122,6 +129,20 @@ export function CoachOnboardingChat({
   const showQuickReplies =
     Boolean(quickReplies?.length) && !busy && !submitting && messages.at(-1)?.role === 'assistant';
 
+  const latestVisualEstimate = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      const markerMatch = message.content.match(VISUAL_ESTIMATE_MARKER_RE);
+      if (message.role === 'assistant' && markerMatch) {
+        return { sex: markerMatch[1] as BodyFatEstimateSex };
+      }
+    }
+    return null;
+  })();
+
+  const showVisualEstimateCards =
+    stage === 'bodyFatVisualEstimate' && latestVisualEstimate != null && !busy && !submitting;
+
   return (
     <div
       className={clsx(
@@ -158,19 +179,58 @@ export function CoachOnboardingChat({
       </div>
 
       <div ref={threadRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-app-bg/40 px-4 py-4">
-        {messages.map((message, index) => (
-          <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-            <div
-              className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                message.role === 'user'
-                  ? 'rounded-br-md bg-[#0b84fe] text-white'
-                  : 'rounded-bl-md bg-app-muted text-app-text'
-              }`}
-            >
-              {message.content}
+        {messages.map((message, index) => {
+          const markerMatch = message.content.match(VISUAL_ESTIMATE_MARKER_RE);
+          const hasVisualEstimateCards = message.role === 'assistant' && markerMatch;
+
+          if (hasVisualEstimateCards) {
+            const textParts = message.content.split(VISUAL_ESTIMATE_MARKER_RE);
+            const textBefore = textParts[0]?.trim();
+
+            return (
+              <div key={index} className="space-y-3">
+                {textBefore ? (
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-md bg-app-muted px-4 py-2.5 text-sm leading-relaxed text-app-text">
+                      {textBefore}
+                    </div>
+                  </div>
+                ) : null}
+                {!showVisualEstimateCards ? (
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-md bg-app-muted px-4 py-2.5 text-sm italic leading-relaxed text-app-text-muted">
+                      [Selected body type: {selectedVisualEstimate ?? (form.bodyFat || 'none')}%]
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          }
+
+          return (
+            <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+              <div
+                className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                  message.role === 'user'
+                    ? 'rounded-br-md bg-[#0b84fe] text-white'
+                    : 'rounded-bl-md bg-app-muted text-app-text'
+                }`}
+              >
+                {message.content}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
+        {showVisualEstimateCards && latestVisualEstimate ? (
+          <BodyFatEstimateCards
+            sex={latestVisualEstimate.sex}
+            selectedMidpoint={selectedVisualEstimate}
+            onSelect={(midpoint) => {
+              setSelectedVisualEstimate(midpoint);
+              void handleAdvance(String(midpoint), `I look closest to ${midpoint}%`);
+            }}
+          />
+        ) : null}
         {busy || submitting ? (
           <div className="flex justify-start">
             <div className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-app-muted px-4 py-3">
