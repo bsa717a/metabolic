@@ -98,7 +98,7 @@ export function MigrationConfirmationFlow({
         />
 
         <div className="space-y-5">
-          <OnboardingWeightFields form={form} onChange={onChange} />
+          <OnboardingWeightFields form={form} onChange={onChange} showHeight showGender />
           <OnboardingPersonalFields form={form} onChange={onChange} />
 
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
