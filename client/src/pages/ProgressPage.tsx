@@ -104,7 +104,7 @@ export function ProgressPage() {
               title="No weight data yet"
               description="Log your weight to see trends over time and track your progress."
               ctaLabel="Log weight"
-              ctaTo="/"
+              ctaTo="/program"
             />
           )}
         </Card>
@@ -164,7 +164,7 @@ export function ProgressPage() {
               See Metabolic Blueprint for compact rings, metric table, and detailed goal tracking.
             </p>
             <Link
-              to="/"
+              to="/program"
               className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
             >
               View blueprint
