@@ -171,7 +171,7 @@ describe('getOnboardingProgress', () => {
 });
 
 describe('body fat visual estimate', () => {
-  const withGender = { ...formWithVirtualCoach(), gender: 'm' };
+  const withGender = { ...formWithVirtualCoach(), gender: 'm' as const };
 
   it('asks gender before body composition', () => {
     const height = advanceCoachOnboarding('height', `5'10`, formWithVirtualCoach(), coach);
