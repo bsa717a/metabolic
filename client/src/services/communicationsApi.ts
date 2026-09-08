@@ -1,5 +1,5 @@
 import { api } from './api';
-import { getIdToken } from './auth';
+import { forceTokenRefresh, getIdToken } from './auth';
 import type { CommunicationUser, EligibilitySummary, RecipientInput } from '../lib/communications/types';
 
 /**
@@ -28,9 +28,8 @@ class CommunicationsApiError extends Error {
   }
 }
 
-async function postWithSummary<T>(path: string, body: unknown): Promise<T> {
-  const token = await getIdToken();
-  const response = await fetch(`${API_URL}${path}`, {
+async function executePostWithSummary(path: string, body: unknown, token: string | null): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -38,6 +37,19 @@ async function postWithSummary<T>(path: string, body: unknown): Promise<T> {
     },
     body: JSON.stringify(body)
   });
+}
+
+async function postWithSummary<T>(path: string, body: unknown): Promise<T> {
+  const token = await getIdToken();
+  let response = await executePostWithSummary(path, body, token);
+
+  if (response.status === 401 && token) {
+    const freshToken = await forceTokenRefresh();
+    if (freshToken && freshToken !== token) {
+      response = await executePostWithSummary(path, body, freshToken);
+    }
+  }
+
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new CommunicationsApiError(data?.error || 'Request failed', data?.summary);
@@ -223,18 +235,30 @@ export const generateCommunicationEmail = (input: AiEmailGenerateInput) =>
     body: JSON.stringify(input)
   });
 
-/** Upload an image for use in an email; returns a stable proxy URL. */
-export const uploadCommunicationAsset = async (file: File | Blob): Promise<string> => {
-  const token = await getIdToken();
+async function executeUploadAsset(file: File | Blob, token: string | null): Promise<Response> {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetch(`${API_URL}/api/admin/communications/assets`, {
+  return fetch(`${API_URL}/api/admin/communications/assets`, {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: formData
   });
+}
+
+/** Upload an image for use in an email; returns a stable proxy URL. */
+export const uploadCommunicationAsset = async (file: File | Blob): Promise<string> => {
+  const token = await getIdToken();
+  let response = await executeUploadAsset(file, token);
+
+  if (response.status === 401 && token) {
+    const freshToken = await forceTokenRefresh();
+    if (freshToken && freshToken !== token) {
+      response = await executeUploadAsset(file, freshToken);
+    }
+  }
+
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.url) {
     throw new Error(data.error || 'Failed to upload image');
