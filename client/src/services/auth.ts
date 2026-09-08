@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  onIdTokenChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -18,23 +19,87 @@ import { clearSignupDashboardFirstSession } from '../utils/signupDashboardExperi
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
+/**
+ * Token refresh system for long-running sessions.
+ *
+ * Firebase ID tokens expire after 1 hour. The SDK auto-refreshes ~5 minutes
+ * before expiry, but network issues or device sleep can cause stale tokens.
+ * This module:
+ * - Listens to onIdTokenChanged for proactive refresh
+ * - Caches the current token with expiry time
+ * - Forces refresh when token is expired or near expiry
+ * - Exposes forceTokenRefresh() for retry-after-401 scenarios
+ */
+let cachedToken: string | null = null;
+let tokenExpiryTime: number | null = null;
+let tokenRefreshPromise: Promise<string | null> | null = null;
+
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes before expiry
+
+function parseTokenExpiry(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function initTokenRefreshListener() {
+  if (!auth) return;
+
+  onIdTokenChanged(auth, async (user) => {
+    if (!user) {
+      cachedToken = null;
+      tokenExpiryTime = null;
+      return;
+    }
+
+    try {
+      const token = await user.getIdToken();
+      cachedToken = token;
+      tokenExpiryTime = parseTokenExpiry(token);
+    } catch {
+      cachedToken = null;
+      tokenExpiryTime = null;
+    }
+  });
+}
+
+initTokenRefreshListener();
+
 function requireAuth() {
   if (!auth) throw new Error('Firebase is not configured. Add VITE_FIREBASE_* values to client/.env.');
   return auth;
 }
 
+async function executePostAuthJson(path: string, body: unknown, token: string | null): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(body ?? {})
+  });
+}
+
 async function postAuthJson<T>(path: string, body?: unknown): Promise<T> {
-  const token = await getIdToken();
+  let token = await getIdToken();
   let response: Response;
+  let retried = false;
+
   try {
-    response = await fetch(`${API_URL}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify(body ?? {})
-    });
+    response = await executePostAuthJson(path, body, token);
+
+    if (response.status === 401 && token && !retried) {
+      retried = true;
+      const freshToken = await forceTokenRefresh();
+      if (freshToken && freshToken !== token) {
+        token = freshToken;
+        response = await executePostAuthJson(path, body, token);
+      }
+    }
   } catch {
     throw new Error('Could not reach the server. Make sure the API is running.');
   }
@@ -146,6 +211,47 @@ export function listenForAuth(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
 
-export async function getIdToken() {
-  return auth?.currentUser?.getIdToken();
+/**
+ * Force a fresh token from Firebase, bypassing the cache.
+ * Use after a 401 response to ensure the next request has a valid token.
+ */
+export async function forceTokenRefresh(): Promise<string | null> {
+  if (!auth?.currentUser) return null;
+
+  if (tokenRefreshPromise) {
+    return tokenRefreshPromise;
+  }
+
+  tokenRefreshPromise = (async () => {
+    try {
+      const token = await auth.currentUser!.getIdToken(true);
+      cachedToken = token;
+      tokenExpiryTime = parseTokenExpiry(token);
+      return token;
+    } catch {
+      cachedToken = null;
+      tokenExpiryTime = null;
+      return null;
+    } finally {
+      tokenRefreshPromise = null;
+    }
+  })();
+
+  return tokenRefreshPromise;
+}
+
+/**
+ * Get the current ID token, refreshing if expired or near expiry.
+ * Returns null if no user is signed in.
+ */
+export async function getIdToken(): Promise<string | null> {
+  if (!auth?.currentUser) return null;
+
+  const now = Date.now();
+
+  if (cachedToken && tokenExpiryTime && tokenExpiryTime - now > TOKEN_REFRESH_BUFFER_MS) {
+    return cachedToken;
+  }
+
+  return forceTokenRefresh();
 }
