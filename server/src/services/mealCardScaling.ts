@@ -46,6 +46,10 @@ export type ScaledFoodLine = {
   fat: number;
   free: boolean;
   rounded: boolean;
+  discrete?: boolean;
+  unitStep?: number;
+  minServings?: number | null;
+  maxServings?: number | null;
 };
 
 export function scaleFactor(targetCalories: unknown, referenceCalories: unknown): number {
@@ -95,8 +99,82 @@ export function scaleOptionFood(
     carbs: round(servings * n(food.carbs), 2),
     fat: round(servings * n(food.fat), 2),
     free: optionFood.isFree ?? !optionFood.scalable,
-    rounded
+    rounded,
+    discrete: optionFood.discrete,
+    unitStep: n(optionFood.unitStep) > 0 ? n(optionFood.unitStep) : 1,
+    minServings: optionFood.minServings == null ? null : n(optionFood.minServings),
+    maxServings: optionFood.maxServings == null ? null : n(optionFood.maxServings)
   };
+}
+
+function scaleExistingLine(line: ScaledFoodLine, factor: number): ScaledFoodLine {
+  if (line.free || line.servings <= 0 || line.quantity <= 0) return line;
+  const servingSize = line.quantity / line.servings;
+  const scaled = scaleOptionFood(
+    {
+      foodId: line.foodId,
+      baseServings: line.servings,
+      scalable: true,
+      discrete: Boolean(line.discrete),
+      unitStep: line.unitStep ?? 1,
+      minServings: line.minServings,
+      maxServings: line.maxServings,
+      food: {
+        name: line.name,
+        servingSize,
+        servingUnit: line.unit,
+        calories: line.calories / line.servings,
+        protein: line.protein / line.servings,
+        carbs: line.carbs / line.servings,
+        fat: line.fat / line.servings,
+        imageUrl: line.imageUrl
+      },
+      isFree: false
+    },
+    factor
+  );
+  return {
+    ...line,
+    ...scaled,
+    optionId: line.optionId,
+    discrete: line.discrete,
+    unitStep: line.unitStep,
+    minServings: line.minServings,
+    maxServings: line.maxServings
+  };
+}
+
+/**
+ * Second pass after reference scaling: shrink/grow the *picked* combo so it
+ * actually hits the meal calorie target. Discrete items (eggs, toast) snap
+ * to whole units; leftover calorie error is absorbed by continuous lines.
+ */
+export function rebalanceLinesToTarget(lines: ScaledFoodLine[], targetCalories: unknown): ScaledFoodLine[] {
+  const target = n(targetCalories);
+  if (target <= 0 || !lines.length) return lines;
+
+  const freeCalories = lines.filter((line) => line.free).reduce((sum, line) => sum + line.calories, 0);
+  const scalableCalories = lines
+    .filter((line) => !line.free && line.calories > 0)
+    .reduce((sum, line) => sum + line.calories, 0);
+  if (scalableCalories <= 0) return lines;
+
+  const remaining = target - freeCalories;
+  const factor = remaining > 0 ? remaining / scalableCalories : 0;
+  const first = lines.map((line) => scaleExistingLine(line, factor));
+
+  const actual = sumLines(first).calories;
+  const error = target - actual;
+  if (Math.abs(error) < 1) return first;
+
+  const continuousCalories = first
+    .filter((line) => !line.free && !line.discrete)
+    .reduce((sum, line) => sum + line.calories, 0);
+  if (continuousCalories <= 0) return first;
+
+  const adjust = (continuousCalories + error) / continuousCalories;
+  if (adjust <= 0) return first;
+  return first.map((line) => (line.free || line.discrete ? line : scaleExistingLine(line, adjust)));
 }
 
 export function sumLines(lines: ScaledFoodLine[]) {

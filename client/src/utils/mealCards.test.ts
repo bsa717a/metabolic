@@ -3,15 +3,19 @@ import {
   activeCards,
   defaultPicks,
   foodsLabel,
+  foodQuantity,
+  mealBuilderReviewSubtitle,
   missingCoverageRole,
   picksToSelections,
   pruneAndRefillPicks,
+  rebalanceSelectionToTarget,
   restorePicks,
   selectionTotals,
   togglePick,
   visibleOptions,
   type BuilderCard,
-  type CardOption
+  type CardOption,
+  type SelectedFoodLine
 } from './mealCards';
 
 function option(id: string, overrides: Partial<CardOption> = {}): CardOption {
@@ -254,6 +258,109 @@ describe('picksToSelections', () => {
       'salsa',
       'pico'
     ]);
+  });
+});
+
+describe('mealBuilderReviewSubtitle', () => {
+  it('does not claim the meal is scaled to target when it is outside the band', () => {
+    expect(mealBuilderReviewSubtitle(true, 20)).toBe('This meal fits your target');
+    expect(mealBuilderReviewSubtitle(false, 413)).toBe('This combo is over your target');
+    expect(mealBuilderReviewSubtitle(false, -80)).toBe('This combo is under your target');
+  });
+});
+
+describe('rebalanceSelectionToTarget', () => {
+  function line(overrides: Partial<SelectedFoodLine>): SelectedFoodLine {
+    return {
+      foodId: 'food',
+      optionId: 'opt',
+      cardName: 'card',
+      name: 'Food',
+      imageUrl: null,
+      servings: 1,
+      quantity: 1,
+      unit: 'cup',
+      calories: 100,
+      protein: 0,
+      carbs: 20,
+      fat: 0,
+      free: false,
+      rounded: false,
+      ...overrides
+    };
+  }
+
+  it('shrinks a stacked breakfast toward the calorie target and snaps eggs to 2', () => {
+    const eggs = line({
+      foodId: 'egg',
+      optionId: 'eggs',
+      name: 'Egg',
+      unit: 'egg',
+      servings: 4,
+      quantity: 4,
+      calories: 300,
+      protein: 24,
+      carbs: 0,
+      fat: 20,
+      discrete: true,
+      unitStep: 1
+    });
+    const potatoes = line({
+      foodId: 'potato',
+      optionId: 'carb',
+      name: 'Potato',
+      servings: 2,
+      quantity: 2,
+      calories: 400,
+      protein: 8,
+      carbs: 80
+    });
+    const spinach = line({
+      foodId: 'spinach',
+      optionId: 'veg',
+      name: 'Spinach',
+      servings: 2,
+      quantity: 2,
+      calories: 400,
+      protein: 8,
+      carbs: 40
+    });
+    const overrides = rebalanceSelectionToTarget([eggs, potatoes, spinach], 657);
+    expect(overrides['eggs:egg']).toBe(2);
+
+    const calories = [eggs, potatoes, spinach].reduce((sum, food) => {
+      const qty = foodQuantity(food, overrides);
+      return sum + food.calories * (qty / food.quantity);
+    }, 0);
+    expect(Math.abs(calories - 657)).toBeLessThanOrEqual(657 * 0.1);
+  });
+
+  it('keeps the egg cap when scaling a small plate up to a larger target', () => {
+    const eggs = line({
+      foodId: 'egg',
+      optionId: 'eggs',
+      name: 'Egg',
+      unit: 'egg',
+      servings: 1,
+      quantity: 1,
+      calories: 75,
+      protein: 6,
+      discrete: true,
+      unitStep: 1,
+      maxServings: 2
+    });
+    const potatoes = line({
+      foodId: 'potato',
+      optionId: 'carb',
+      name: 'Potato',
+      servings: 1,
+      quantity: 1,
+      calories: 100,
+      protein: 2,
+      carbs: 20
+    });
+    const overrides = rebalanceSelectionToTarget([eggs, potatoes], 657);
+    expect(overrides['eggs:egg']).toBe(2);
   });
 });
 

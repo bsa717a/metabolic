@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveServings, scaleFactor, scaleOptionFood, sumLines } from './mealCardScaling.js';
+import { resolveServings, scaleFactor, scaleOptionFood, sumLines, rebalanceLinesToTarget } from './mealCardScaling.js';
 
 describe('mealCardScaling', () => {
   // Worked example from docs/dinner-card-builder-plan.md:
@@ -113,5 +113,95 @@ describe('mealCardScaling', () => {
       scaleFactor(660, 660)
     );
     assert.equal(servings, 3);
+  });
+
+  it('clamps eggs to max servings so 2 × 1.37 stays 2, not 3 or 4', () => {
+    const { servings } = resolveServings(
+      { baseServings: 2, scalable: true, discrete: true, unitStep: 1, maxServings: 2 },
+      1.37
+    );
+    assert.equal(servings, 2);
+  });
+
+  it('rebalances a stacked plate to the calorie target and snaps eggs to whole units', () => {
+    const eggs = scaleOptionFood(
+      {
+        foodId: 'egg',
+        baseServings: 4,
+        scalable: true,
+        discrete: true,
+        unitStep: 1,
+        food: { name: 'Egg', servingSize: 1, servingUnit: 'egg', calories: 75, protein: 6, carbs: 0.6, fat: 5 }
+      },
+      1
+    );
+    const potatoes = scaleOptionFood(
+      {
+        foodId: 'potato',
+        baseServings: 2,
+        scalable: true,
+        discrete: false,
+        unitStep: 1,
+        food: { name: 'Potato', servingSize: 1, servingUnit: 'cup', calories: 200, protein: 4, carbs: 40, fat: 0 }
+      },
+      1
+    );
+    const spinach = scaleOptionFood(
+      {
+        foodId: 'spinach',
+        baseServings: 2,
+        scalable: true,
+        discrete: false,
+        unitStep: 1,
+        food: { name: 'Spinach', servingSize: 1, servingUnit: 'cup', calories: 200, protein: 4, carbs: 20, fat: 0 }
+      },
+      1
+    );
+    const salsa = scaleOptionFood(
+      {
+        foodId: 'salsa',
+        baseServings: 1,
+        scalable: false,
+        discrete: false,
+        unitStep: 1,
+        food: { name: 'Salsa', servingSize: 1, servingUnit: 'tbsp', calories: 10, protein: 0, carbs: 2, fat: 0 }
+      },
+      1
+    );
+    // 4×75 + 400 + 400 + 10 = 1110
+    const balanced = rebalanceLinesToTarget([eggs, potatoes, spinach, salsa], 657);
+    const eggLine = balanced.find((line) => line.foodId === 'egg')!;
+    assert.equal(eggLine.quantity, 2);
+    const totals = sumLines(balanced);
+    assert.ok(Math.abs(totals.calories - 657) <= 657 * 0.1);
+  });
+
+  it('keeps the egg cap when rebalancing a small plate up to a larger target', () => {
+    const eggs = scaleOptionFood(
+      {
+        foodId: 'egg',
+        baseServings: 1,
+        scalable: true,
+        discrete: true,
+        unitStep: 1,
+        maxServings: 2,
+        food: { name: 'Egg', servingSize: 1, servingUnit: 'egg', calories: 75, protein: 6, carbs: 0.6, fat: 5 }
+      },
+      1
+    );
+    const potatoes = scaleOptionFood(
+      {
+        foodId: 'potato',
+        baseServings: 1,
+        scalable: true,
+        discrete: false,
+        unitStep: 1,
+        food: { name: 'Potato', servingSize: 1, servingUnit: 'cup', calories: 100, protein: 2, carbs: 20, fat: 0 }
+      },
+      1
+    );
+    const balanced = rebalanceLinesToTarget([eggs, potatoes], 657);
+    const eggLine = balanced.find((line) => line.foodId === 'egg')!;
+    assert.equal(eggLine.quantity, 2);
   });
 });

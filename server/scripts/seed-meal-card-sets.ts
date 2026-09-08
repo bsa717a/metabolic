@@ -165,7 +165,13 @@ type OptionSeed = {
   description?: string;
   icon?: string;
   isDefault?: boolean;
-  foods: Array<{ food: string; baseServings: number; scalable?: boolean; discrete?: boolean }>;
+  foods: Array<{
+    food: string;
+    baseServings: number;
+    scalable?: boolean;
+    discrete?: boolean;
+    maxServings?: number;
+  }>;
 };
 
 type CardSeed = {
@@ -202,7 +208,7 @@ const SETS: SetSeed[] = [
             name: 'Eggs',
             icon: '🥚',
             isDefault: true,
-            foods: [{ food: 'Egg - Whole with Yoke Cooked', baseServings: 3, discrete: true }]
+            foods: [{ food: 'Egg - Whole with Yoke Cooked', baseServings: 2, discrete: true, maxServings: 2 }]
           },
           { name: 'Turkey sausage', icon: '🌭', foods: [{ food: 'Turkey sausage', baseServings: 2.3 }] },
           { name: 'Bacon', icon: '🥓', foods: [{ food: 'Bacon', baseServings: 4, discrete: true }] },
@@ -471,7 +477,8 @@ async function seedSet(set: SetSeed, foodIds: Map<string, string>, apply: boolea
                       foodId: foodIds.get(line.food)!,
                       baseServings: new Prisma.Decimal(line.baseServings),
                       scalable: line.scalable ?? true,
-                      discrete: line.discrete ?? false
+                      discrete: line.discrete ?? false,
+                      ...(line.maxServings != null ? { maxServings: new Prisma.Decimal(line.maxServings) } : {})
                     }))
                   }
                 }))

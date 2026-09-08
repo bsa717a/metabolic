@@ -42,14 +42,15 @@ async function main() {
     where: { id: OPTION_FOOD_ID },
     data: {
       foodId: singleEgg.id,
-      baseServings: new Prisma.Decimal(3),
+      baseServings: new Prisma.Decimal(2),
       scalable: true,
       discrete: true,
-      unitStep: new Prisma.Decimal(1)
+      unitStep: new Prisma.Decimal(1),
+      maxServings: new Prisma.Decimal(2)
     }
   });
 
-  // Recompute Breakfast Builder reference from default scalable picks (eggs now 3×75).
+  // Recompute Breakfast Builder reference from default scalable picks (eggs now 2×75).
   const set = optionFood.option.card.cardSet;
   const cards = await prisma.mealCard.findMany({
     where: { cardSetId: set.id },
