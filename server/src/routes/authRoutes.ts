@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { serializeAppUser } from '../services/userSerialization.js';
 import { getUserDemographics, getUserProfile, updateUserDemographics, updateUserProfile } from '../services/userProfileService.js';
+import { deleteUserAccount } from '../services/userDeletionService.js';
+import { UserDeletionError } from '../services/userDeletionPolicy.js';
 import { isEmailConfigured, sendEmailVerificationLink, sendPasswordResetLink } from '../services/emailService.js';
 import {
   clearVerificationActionUrl,
@@ -97,6 +99,19 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/api/me', { preHandler: requireAuth }, async (request) => ({
     user: await serializeAppUser(request.appUser!)
   }));
+
+  app.delete('/api/me', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      await deleteUserAccount(request.appUser!.id, request.appUser!);
+      return reply.code(204).send();
+    } catch (error) {
+      if (error instanceof UserDeletionError) {
+        return reply.code(error.statusCode).send({ error: error.message });
+      }
+      request.log.error({ err: error }, 'Failed to delete account');
+      return reply.code(500).send({ error: error instanceof Error ? error.message : 'Unable to delete account' });
+    }
+  });
 
   app.get('/api/users/:userId/demographics', { preHandler: requireAuth }, async (request, reply) => {
     const { userId } = request.params as { userId: string };

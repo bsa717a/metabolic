@@ -7,6 +7,7 @@ import { Drawer } from '../ui/Drawer';
 import { UserProfileFields } from './UserProfileFields';
 import { timezoneOptions } from '../../utils/timezoneOptions';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from './userProfileForm';
+import { logout } from '../../services/auth';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { PushNotificationsCard } from './PushNotificationsCard';
 
@@ -97,6 +98,7 @@ function EditAccountDetailsDrawerContent({
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [coachSaving, setCoachSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const [assignedCoach, setAssignedCoach] = useState(user?.assignedCoach ?? null);
   const [coachRequestedAt, setCoachRequestedAt] = useState(user?.coachRequestedAt ?? null);
@@ -215,7 +217,27 @@ function EditAccountDetailsDrawerContent({
     }
   }
 
+  async function deleteAccount() {
+    const typed = window.prompt(
+      'This permanently deletes your Metabolic account, logs, meals, and photos. Type DELETE to confirm.'
+    );
+    if (typed !== 'DELETE') return;
+
+    setDeleting(true);
+    setError('');
+    try {
+      await api('/api/me', { method: 'DELETE' });
+      onClose();
+      await logout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const readOnlyAccount = mode === 'coach';
+  const busy = saving || coachSaving || deleting;
 
   return (
     <Drawer
@@ -227,10 +249,10 @@ function EditAccountDetailsDrawerContent({
       headerActions={
         loaded ? (
           <>
-            <Button disabled={saving || coachSaving} onClick={save}>
+            <Button disabled={busy} onClick={save}>
               {saving ? 'Saving…' : 'Save account details'}
             </Button>
-            <Button variant="secondary" disabled={saving || coachSaving} onClick={onClose}>
+            <Button variant="secondary" disabled={busy} onClick={onClose}>
               Cancel
             </Button>
           </>
@@ -330,7 +352,7 @@ function EditAccountDetailsDrawerContent({
                   </span>
                   .
                 </p>
-                <Button variant="secondary" disabled={coachSaving || saving} onClick={() => void turnOffCoach()}>
+                <Button variant="secondary" disabled={busy} onClick={() => void turnOffCoach()}>
                   {coachSaving ? 'Turning off…' : 'Turn off coach'}
                 </Button>
               </>
@@ -349,7 +371,7 @@ function EditAccountDetailsDrawerContent({
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    disabled={coachSaving || saving || !coachCode.trim()}
+                    disabled={busy || !coachCode.trim()}
                     onClick={() => {
                       void (async () => {
                         setCoachSaving(true);
@@ -366,7 +388,7 @@ function EditAccountDetailsDrawerContent({
                   >
                     {coachSaving ? 'Saving…' : 'Save coach code'}
                   </Button>
-                  <Button variant="secondary" disabled={coachSaving || saving} onClick={() => void turnOffCoach()}>
+                  <Button variant="secondary" disabled={busy} onClick={() => void turnOffCoach()}>
                     {coachSaving ? 'Canceling…' : 'Cancel request'}
                   </Button>
                 </div>
@@ -452,6 +474,24 @@ function EditAccountDetailsDrawerContent({
           >
             Replay dashboard tour
           </button>
+        </div>
+      )}
+
+      {mode === 'self' && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/60 dark:bg-red-950/30">
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">Delete account</p>
+          <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+            Permanently removes your account, logs, meals, photos, and sign-in. This cannot be undone.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-3 border-red-300 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/60"
+            disabled={busy}
+            onClick={() => void deleteAccount()}
+          >
+            {deleting ? 'Deleting…' : 'Delete my account'}
+          </Button>
         </div>
       )}
 

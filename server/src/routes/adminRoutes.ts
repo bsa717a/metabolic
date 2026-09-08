@@ -24,6 +24,8 @@ import {
   updateAdminFood,
   updateAdminUser
 } from '../services/adminService.js';
+import { deleteUserAccount } from '../services/userDeletionService.js';
+import { UserDeletionError } from '../services/userDeletionPolicy.js';
 import { assignCoachLed, endCoachLed, finalizeCoachLedTransition } from '../services/coachLedService.js';
 import {
   nutritionTemplateCreateBody,
@@ -330,6 +332,20 @@ export async function adminRoutes(app: FastifyInstance) {
     } catch (error) {
       request.log.error({ err: error }, 'Failed to update user');
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update user' });
+    }
+  });
+
+  app.delete('/api/admin/users/:id', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await deleteUserAccount(id, request.appUser!);
+      return reply.code(204).send();
+    } catch (error) {
+      if (error instanceof UserDeletionError) {
+        return reply.code(error.statusCode).send({ error: error.message });
+      }
+      request.log.error({ err: error }, 'Failed to delete user');
+      return reply.code(500).send({ error: error instanceof Error ? error.message : 'Unable to delete user' });
     }
   });
 

@@ -8,6 +8,7 @@ import { UserProfileFields } from '../user/UserProfileFields';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from '../user/userProfileForm';
 import { timezoneOptions } from '../../utils/timezoneOptions';
 import { planLabel } from '../../utils/entitlements';
+import { logout } from '../../services/auth';
 
 const roles: Role[] = ['SUPER_ADMIN', 'ADMIN', 'COACH', 'USER', 'VIEWER'];
 const statuses: UserStatus[] = ['ACTIVE', 'INVITED', 'DISABLED'];
@@ -82,6 +83,7 @@ export function EditUserDrawer({
   user,
   onClose,
   onSaved,
+  onDeleted,
   coaches
 }: {
   open: boolean;
@@ -89,6 +91,7 @@ export function EditUserDrawer({
   coaches?: CoachSummary[];
   onClose: () => void;
   onSaved: (user: AdminUser) => void;
+  onDeleted?: (userId: string) => void;
 }) {
   if (!user) {
     return null;
@@ -102,6 +105,7 @@ export function EditUserDrawer({
       coaches={coaches ?? []}
       onClose={onClose}
       onSaved={onSaved}
+      onDeleted={onDeleted}
     />
   );
 }
@@ -111,13 +115,15 @@ function EditUserDrawerContent({
   user,
   coaches,
   onClose,
-  onSaved
+  onSaved,
+  onDeleted
 }: {
   open: boolean;
   user: AdminUser;
   coaches: CoachSummary[];
   onClose: () => void;
   onSaved: (user: AdminUser) => void;
+  onDeleted?: (userId: string) => void;
 }) {
   const [draft, setDraft] = useState(() => toDraft(user));
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
@@ -135,6 +141,7 @@ function EditUserDrawerContent({
   const [saving, setSaving] = useState(false);
   const [sendingWelcomeEmail, setSendingWelcomeEmail] = useState(false);
   const [welcomeEmailStatus, setWelcomeEmailStatus] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -262,6 +269,30 @@ function EditUserDrawerContent({
     }
   }
 
+  async function deleteUser() {
+    const typed = window.prompt(
+      `Permanently delete ${user.email} and all of their data, including their Firebase sign-in? Type DELETE to confirm.`
+    );
+    if (typed !== 'DELETE') return;
+
+    setDeleting(true);
+    setError('');
+    try {
+      const me = await api<{ user: { id: string } }>('/api/me');
+      const deletingSelf = me.user.id === user.id;
+      await api(`/api/admin/users/${user.id}`, { method: 'DELETE' });
+      onDeleted?.(user.id);
+      onClose();
+      if (deletingSelf) {
+        await logout();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete user');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <Drawer
       open={open}
@@ -271,10 +302,10 @@ function EditUserDrawerContent({
       panelClassName="max-w-md"
       headerActions={
         <>
-          <Button disabled={saving || loadingProfile} onClick={save}>
+          <Button disabled={saving || loadingProfile || deleting} onClick={save}>
             {saving ? 'Saving...' : 'Save changes'}
           </Button>
-          <Button variant="secondary" disabled={saving} onClick={onClose}>
+          <Button variant="secondary" disabled={saving || deleting} onClick={onClose}>
             Cancel
           </Button>
         </>
@@ -469,6 +500,22 @@ function EditUserDrawerContent({
           {sendingWelcomeEmail ? 'Sending…' : 'Send welcome email'}
         </Button>
         {welcomeEmailStatus ? <p className="text-sm text-emerald-700">{welcomeEmailStatus}</p> : null}
+      </div>
+
+      <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
+        <p className="text-sm font-semibold text-red-800 dark:text-red-200">Delete user</p>
+        <p className="text-sm text-red-700 dark:text-red-300">
+          Permanently removes this account, their data, and their Firebase sign-in. This cannot be undone.
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          className="border-red-300 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/60"
+          disabled={saving || deleting || coachActionLoading}
+          onClick={() => void deleteUser()}
+        >
+          {deleting ? 'Deleting…' : 'Delete user'}
+        </Button>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
