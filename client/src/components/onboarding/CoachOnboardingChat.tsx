@@ -6,6 +6,7 @@ import type { SetupFormState } from '../../types/onboarding';
 import {
   advanceCoachOnboarding,
   buildIntroTurn,
+  getOnboardingProgress,
   type CoachOnboardingQuickReply,
   type CoachOnboardingStage,
   type CoachOnboardingTurn
@@ -42,11 +43,15 @@ export function CoachOnboardingChat({
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<CoachOnboardingStage>(intro.stage);
   const formRef = useRef(form);
   const stageRef = useRef<CoachOnboardingStage>(intro.stage);
   const busyRef = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const hasInviteCode = Boolean(form.coachCode.trim());
+  const progress = getOnboardingProgress(stage, hasInviteCode);
 
   useEffect(() => {
     formRef.current = form;
@@ -65,6 +70,7 @@ export function CoachOnboardingChat({
 
   function applyTurn(turn: CoachOnboardingTurn) {
     stageRef.current = turn.stage;
+    setStage(turn.stage);
     setQuickReplies(turn.quickReplies);
     setMessages((current) => [...current, { role: 'assistant', content: turn.assistantMessage }]);
   }
@@ -123,16 +129,31 @@ export function CoachOnboardingChat({
         className ?? 'h-[min(48rem,calc(100vh-3.5rem))] sm:h-[min(56rem,calc(100vh-3.5rem))]'
       )}
     >
-      <div className="flex items-center gap-3 border-b border-app-border px-4 py-3">
-        <img
-          src={coach.image}
-          alt={coach.name}
-          className="h-9 w-9 rounded-full object-cover"
-          style={{ objectPosition: '50% 18%' }}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-app-text">{coach.name}</p>
-          <p className="truncate text-xs text-app-text-muted">Setting up your plan together</p>
+      <div className="border-b border-app-border">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <img
+            src={coach.image}
+            alt={coach.name}
+            className="h-9 w-9 rounded-full object-cover"
+            style={{ objectPosition: '50% 18%' }}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-app-text">{coach.name}</p>
+            <p className="truncate text-xs text-app-text-muted">Setting up your plan together</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-xs font-medium text-app-text-muted">
+              Step {progress.currentStep} of {progress.totalSteps}
+            </p>
+          </div>
+        </div>
+        <div className="px-4 pb-3">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-app-muted">
+            <div
+              className="h-full rounded-full bg-brand-green transition-all duration-300 ease-out"
+              style={{ width: `${(progress.currentStep / progress.totalSteps) * 100}%` }}
+            />
+          </div>
         </div>
       </div>
 

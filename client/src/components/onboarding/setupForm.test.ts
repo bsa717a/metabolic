@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getVirtualCoach } from '../../data/virtualCoaches';
-import { advanceCoachOnboarding } from './coachOnboardingFlow';
+import { advanceCoachOnboarding, getOnboardingProgress } from './coachOnboardingFlow';
 import { buildSetupPayload, createEmptySetupForm } from './setupForm';
 
 const coach = getVirtualCoach('kali')!;
@@ -106,5 +106,58 @@ describe('invite onboarding', () => {
     const result = advanceCoachOnboarding('intro', 'continue', formWithVirtualCoach(), coach);
     expect(result.next.stage).toBe('trackingMode');
     expect(result.next.quickReplies?.some((reply) => reply.value === 'track')).toBe(true);
+  });
+});
+
+describe('getOnboardingProgress', () => {
+  it('returns step 1 of 12 at intro without invite code', () => {
+    const progress = getOnboardingProgress('intro', false);
+    expect(progress.currentStep).toBe(1);
+    expect(progress.totalSteps).toBe(12);
+    expect(progress.mainStepLabel).toBe('Welcome');
+  });
+
+  it('returns step 1 of 10 at intro with invite code', () => {
+    const progress = getOnboardingProgress('intro', true);
+    expect(progress.currentStep).toBe(1);
+    expect(progress.totalSteps).toBe(10);
+    expect(progress.mainStepLabel).toBe('Welcome');
+  });
+
+  it('groups weight and goalWeight into the same main step', () => {
+    const weightProgress = getOnboardingProgress('weight', false);
+    const goalWeightProgress = getOnboardingProgress('goalWeight', false);
+    expect(weightProgress.currentStep).toBe(goalWeightProgress.currentStep);
+    expect(weightProgress.mainStepLabel).toBe('Weight');
+    expect(goalWeightProgress.mainStepLabel).toBe('Weight');
+  });
+
+  it('groups all body fat stages into one main step', () => {
+    const bodyFatStages = ['bodyFatAsk', 'bodyFatKnowHow', 'bodyFatHow', 'bodyFatCurrent', 'bodyFatGoal'] as const;
+    const steps = bodyFatStages.map((stage) => getOnboardingProgress(stage, false).currentStep);
+    const uniqueSteps = [...new Set(steps)];
+    expect(uniqueSteps.length).toBe(1);
+    expect(getOnboardingProgress('bodyFatAsk', false).mainStepLabel).toBe('Body Composition');
+  });
+
+  it('groups contact stages (smsAsk, timezone, phone) into one main step', () => {
+    const contactStages = ['smsAsk', 'timezone', 'phone'] as const;
+    const steps = contactStages.map((stage) => getOnboardingProgress(stage, false).currentStep);
+    const uniqueSteps = [...new Set(steps)];
+    expect(uniqueSteps.length).toBe(1);
+    expect(getOnboardingProgress('smsAsk', false).mainStepLabel).toBe('Contact');
+  });
+
+  it('skips trackingMode and coachConnection steps when invite code is present', () => {
+    const withInvite = getOnboardingProgress('readyToSubmit', true);
+    const withoutInvite = getOnboardingProgress('readyToSubmit', false);
+    expect(withInvite.totalSteps).toBe(10);
+    expect(withoutInvite.totalSteps).toBe(12);
+  });
+
+  it('reaches final step at readyToSubmit', () => {
+    const progress = getOnboardingProgress('readyToSubmit', false);
+    expect(progress.currentStep).toBe(progress.totalSteps);
+    expect(progress.mainStepLabel).toBe('Confirm');
   });
 });
