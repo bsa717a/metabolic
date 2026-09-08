@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.26.1](https://github.com/bsa717a/metabolic/compare/v0.26.0...v0.26.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **auth:** harden Firebase token refresh for long sessions ([ec001a8](https://github.com/bsa717a/metabolic/commit/ec001a87a75459749deba5b289a173776104cf11))
+* **auth:** harden Firebase token refresh for long sessions ([94aede2](https://github.com/bsa717a/metabolic/commit/94aede243dcad94f28cb3ab2b784cce313c637ad))
+
 ## [0.26.0](https://github.com/bsa717a/metabolic/compare/v0.25.0...v0.26.0) (2026-09-08)
 
 
