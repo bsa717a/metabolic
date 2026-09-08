@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Utensils } from 'lucide-react';
 import type { Meal } from '../../types';
 import { MealCard } from './MealCard';
 import { MealSuggestionsDrawer } from './MealSuggestionsDrawer';
@@ -213,36 +214,49 @@ export const MealPlanner = forwardRef<
         {saveAllError && (
           <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{saveAllError}</div>
         )}
-        {meals.map((meal) => {
-          const cardMeal = cardMeals.find((c) => c.mealNumber === meal.mealNumber);
-          const mealEditing = multiMealEdit ? editingAll : meal.id === editingMealId;
-          return (
-            <MealCard
-              key={meal.id}
-              ref={(handle) => setEditorRef(meal.id, handle)}
-              meal={meal}
-              selectedDate={selectedDate}
-              onChange={onChange}
-              isEditing={mealEditing}
-              onEnterEditMode={handleEnterEditMode}
-              onExitEditMode={handleExitEditMode}
-              onLogActual={onLogActual}
-              onAiSuggestions={setSuggestionsMeal}
-              onSwapMeal={setSwapMeal}
-              selected={meal.id === selectedMealId}
-              onSelect={onSelectMeal}
-              onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
-              macroTargets={cardMeal?.macroTargets}
-              dailyTargets={cardMeal?.dailyTargets}
-              onRequestSaveAll={multiMealEdit ? (opts) => void saveAll(opts) : undefined}
-              onRequestCancelAll={multiMealEdit ? () => void cancelAll() : undefined}
-              externalSaving={multiMealEdit ? savingAll : undefined}
-              onDraftTotalsChange={
-                mealEditing ? (totals) => handleDraftTotalsChange(meal.id, totals) : undefined
-              }
-            />
-          );
-        })}
+        {meals.length > 0 ? (
+          meals.map((meal) => {
+            const cardMeal = cardMeals.find((c) => c.mealNumber === meal.mealNumber);
+            const mealEditing = multiMealEdit ? editingAll : meal.id === editingMealId;
+            return (
+              <MealCard
+                key={meal.id}
+                ref={(handle) => setEditorRef(meal.id, handle)}
+                meal={meal}
+                selectedDate={selectedDate}
+                onChange={onChange}
+                isEditing={mealEditing}
+                onEnterEditMode={handleEnterEditMode}
+                onExitEditMode={handleExitEditMode}
+                onLogActual={onLogActual}
+                onAiSuggestions={setSuggestionsMeal}
+                onSwapMeal={setSwapMeal}
+                selected={meal.id === selectedMealId}
+                onSelect={onSelectMeal}
+                onBuildMeal={cardMeal && onBuildMeal ? () => onBuildMeal(cardMeal.mealNumber) : undefined}
+                macroTargets={cardMeal?.macroTargets}
+                dailyTargets={cardMeal?.dailyTargets}
+                onRequestSaveAll={multiMealEdit ? (opts) => void saveAll(opts) : undefined}
+                onRequestCancelAll={multiMealEdit ? () => void cancelAll() : undefined}
+                externalSaving={multiMealEdit ? savingAll : undefined}
+                onDraftTotalsChange={
+                  mealEditing ? (totals) => handleDraftTotalsChange(meal.id, totals) : undefined
+                }
+              />
+            );
+          })
+        ) : (
+          <div className="flex flex-col items-center rounded-2xl border border-dashed border-app-border bg-app-muted/50 px-6 py-12 text-center">
+            <Utensils className="mb-3 h-12 w-12 text-app-text-muted/50" aria-hidden />
+            <p className="text-lg font-semibold text-app-text">No meals for this day</p>
+            <p className="mt-1 max-w-sm text-sm text-app-text-muted">
+              Add a meal to start planning, or use the meal builder for quick setup.
+            </p>
+            <p className="mt-4 text-xs text-app-text-muted">
+              Tap &ldquo;Add meal&rdquo; above to create your first meal slot.
+            </p>
+          </div>
+        )}
       </div>
 
       <MealSwapDrawer
