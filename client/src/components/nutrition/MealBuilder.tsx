@@ -9,10 +9,13 @@ import {
   foodsLabel,
   foodQuantity,
   foodQuantityKey,
+  mealBuilderReviewSubtitle,
   missingCoverageRole,
   picksToSelections,
   pruneAndRefillPicks,
   pruneQuantityOverrides,
+  quantityInputStep,
+  rebalanceSelectionToTarget,
   restorePicks,
   selectedFoodLines,
   selectionTotals,
@@ -60,6 +63,7 @@ export function MealBuilder({
   const [recError, setRecError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<RecommendedMeal | null>(null);
   const recRequestId = useRef(0);
+  const [scaledPicksKey, setScaledPicksKey] = useState<string | null>(null);
 
   // Reset the wizard whenever it (re)opens — state adjustment during render, not an effect.
   const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
@@ -74,6 +78,7 @@ export function MealBuilder({
       setRecs(null);
       setRecError(null);
       setChosen(null);
+      setScaledPicksKey(null);
       const restoredPicks =
         payload.savedSelections?.setId === payload.setId
           ? restorePicks(cards, payload.savedSelections.picks)
@@ -120,6 +125,13 @@ export function MealBuilder({
   const missingRole = missingCoverageRole(cards, picks);
 
   const isReview = step >= wizardCards.length;
+  const picksScaleKey = wizardCards.map((card) => `${card.id}:${(picks[card.id] ?? []).join(',')}`).join('|');
+  if (mode === 'wizard' && isReview && foodLines.length && picksScaleKey !== scaledPicksKey) {
+    setScaledPicksKey(picksScaleKey);
+    if (target > 0) {
+      setQuantityOverrides(rebalanceSelectionToTarget(foodLines, target, quantityOverrides));
+    }
+  }
   const currentCard = isReview ? null : wizardCards[step];
   const currentVisibleOptions = currentCard ? visibleOptions(currentCard, picks) : [];
   const stepPicked = currentCard ? (picks[currentCard.id] ?? []).length > 0 : true;
@@ -141,6 +153,11 @@ export function MealBuilder({
   function updateFoodQuantity(key: string, quantity: number) {
     if (!Number.isFinite(quantity) || quantity <= 0) return;
     setQuantityOverrides((prev) => ({ ...prev, [key]: quantity }));
+  }
+
+  function scaleToTarget() {
+    if (target <= 0) return;
+    setQuantityOverrides(rebalanceSelectionToTarget(foodLines, target, quantityOverrides));
   }
 
   async function save() {
@@ -183,6 +200,8 @@ export function MealBuilder({
           className="w-16 rounded-lg border border-app-border bg-app-bg px-2 py-1 text-sm tabular-nums text-app-text"
           value={foodQuantity(line, quantityOverrides)}
           onChange={(quantity) => updateFoodQuantity(key, quantity)}
+          min={quantityInputStep(line)}
+          step={quantityInputStep(line)}
           aria-label={`Quantity for ${line.name}`}
         />
         <span className="w-12 shrink-0 text-xs font-semibold text-brand-green">{line.unit}</span>
@@ -295,12 +314,17 @@ export function MealBuilder({
               {mode === 'wizard' && (isReview ? 'Review your meal' : currentCard?.name)}
             </h2>
           </div>
-          <p className="mt-1 text-xs font-semibold text-brand-green-light">
+          <p
+            className={clsx(
+              'mt-1 text-xs font-semibold',
+              mode === 'wizard' && isReview && !inBand ? 'text-brand-gold' : 'text-brand-green-light'
+            )}
+          >
             {mode === 'choose' && `Target ${payload.targetCalories} kcal — pick your path`}
             {mode === 'recommend' && `Complete meals fit to your ${payload.targetCalories} kcal target`}
             {mode === 'wizard' &&
               (isReview
-                ? 'Everything is scaled to your target'
+                ? mealBuilderReviewSubtitle(inBand, overBy)
                 : currentCard?.pickRule ?? (currentCard?.maxSelect === 1 ? 'Pick 1' : 'Pick 1 or more'))}
           </p>
         </div>
@@ -524,15 +548,22 @@ export function MealBuilder({
                     </span>
                   ) : (
                     <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                      ~{Math.abs(Math.round(overBy))} kcal {overBy > 0 ? 'over' : 'under'} — that's okay, just a heads-up
+                      ~{Math.abs(Math.round(overBy))} kcal {overBy > 0 ? 'over' : 'under'}
                     </span>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={scaleToTarget}
+                  className="mt-3 w-full rounded-xl border-2 border-brand-green bg-brand-green/5 px-4 py-2.5 text-sm font-bold text-brand-deep transition hover:bg-brand-green/10"
+                >
+                  Scale to my {target} kcal target
+                </button>
               </div>
               <p className="text-center text-xs text-app-text-muted">
                 Saving makes this your {payload.setName.toLowerCase().replace(' builder', '')} for the rest of the
-                week — rebuild on any day to change it from there on. Go back to swap any card; portions rebalance
-                automatically.
+                week — rebuild on any day to change it from there on. Go back to swap any card, or scale portions
+                to your target above.
               </p>
               {saveError && (
                 <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</div>
