@@ -20,7 +20,11 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useDashboardLayout } from '../utils/dashboardLayoutPreference';
 import { CoachHomeDashboard } from '../components/dashboard/coachHome/CoachHomeDashboard';
 import { ClassicDashboardHint } from '../components/dashboard/ClassicDashboardHint';
-import { FirstDayChecklist } from '../components/dashboard/FirstDayChecklist';
+import {
+  FirstDayChecklist,
+  isFirstDayChecklistDismissedLocally,
+  persistFirstDayChecklistDismissedLocally
+} from '../components/dashboard/FirstDayChecklist';
 
 function MacroDonut({
   label,
@@ -104,7 +108,9 @@ export function DashboardPage({
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [checklistDismissed, setChecklistDismissed] = useState(false);
+  const [checklistDismissed, setChecklistDismissed] = useState(
+    () => Boolean(user?.firstDayChecklistDismissedAt) || isFirstDayChecklistDismissedLocally(user?.id)
+  );
 
   const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -228,11 +234,15 @@ export function DashboardPage({
   }
 
   const showChecklist =
-    !checklistDismissed && !user?.firstDayChecklistDismissedAt && data?.program;
+    !checklistDismissed &&
+    !user?.firstDayChecklistDismissedAt &&
+    !isFirstDayChecklistDismissedLocally(user?.id) &&
+    Boolean(data?.program);
 
-  function handleChecklistDismiss(updatedUser: AppUser) {
+  function handleChecklistDismiss(updatedUser?: AppUser) {
     setChecklistDismissed(true);
-    onUserUpdated?.(updatedUser);
+    persistFirstDayChecklistDismissedLocally(updatedUser?.id ?? user?.id);
+    if (updatedUser?.id) onUserUpdated?.(updatedUser);
   }
 
   if (dashboardLayout === 'coachHome') {

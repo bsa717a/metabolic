@@ -17,9 +17,10 @@ function deriveChecklistItems(data: Dashboard, user: AppUser | null | undefined)
     (meal) => meal.status === 'EATEN_AS_PLANNED' || meal.status === 'MODIFIED' || meal.status === 'UNPLANNED'
   );
 
-  const hasLoggedWeight = data.weightTrend && data.weightTrend.length > 0;
+  const hasLoggedWeight = Boolean(data.weightTrend && data.weightTrend.length > 0);
 
-  const hasViewedExercise = (data.exercises ?? []).length > 0;
+  const todayExercises = data.exercises ?? [];
+  const hasExercisePlanToday = todayExercises.length > 0;
 
   const hasVirtualCoach = Boolean(user?.selectedVirtualCoachId);
 
@@ -36,12 +37,16 @@ function deriveChecklistItems(data: Dashboard, user: AppUser | null | undefined)
       done: hasLoggedWeight,
       to: '/progress'
     },
-    {
-      key: 'exercise',
-      label: 'Check your exercise plan',
-      done: hasViewedExercise,
-      to: '/exercise'
-    },
+    ...(hasExercisePlanToday
+      ? [
+          {
+            key: 'exercise',
+            label: 'Check your exercise plan',
+            done: true,
+            to: '/exercise'
+          }
+        ]
+      : []),
     ...(hasVirtualCoach
       ? [
           {
@@ -55,6 +60,30 @@ function deriveChecklistItems(data: Dashboard, user: AppUser | null | undefined)
   ];
 }
 
+export const FIRST_DAY_CHECKLIST_DISMISSED_KEY_PREFIX = 'metabolic-first-day-checklist-dismissed:';
+
+export function firstDayChecklistDismissedStorageKey(userId: string) {
+  return `${FIRST_DAY_CHECKLIST_DISMISSED_KEY_PREFIX}${userId}`;
+}
+
+export function isFirstDayChecklistDismissedLocally(userId: string | undefined) {
+  if (!userId) return false;
+  try {
+    return localStorage.getItem(firstDayChecklistDismissedStorageKey(userId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function persistFirstDayChecklistDismissedLocally(userId: string | undefined) {
+  if (!userId) return;
+  try {
+    localStorage.setItem(firstDayChecklistDismissedStorageKey(userId), '1');
+  } catch {
+    // Ignore storage failures in private browsing or restricted contexts.
+  }
+}
+
 export function FirstDayChecklist({
   user,
   data,
@@ -62,7 +91,7 @@ export function FirstDayChecklist({
 }: {
   user: AppUser | null | undefined;
   data: Dashboard;
-  onDismiss: (updatedUser: AppUser) => void;
+  onDismiss: (updatedUser?: AppUser) => void;
 }) {
   const [dismissing, setDismissing] = useState(false);
 
@@ -73,13 +102,18 @@ export function FirstDayChecklist({
   async function handleDismiss() {
     if (dismissing) return;
     setDismissing(true);
+    persistFirstDayChecklistDismissedLocally(user?.id);
+    const optimisticUser = user
+      ? { ...user, firstDayChecklistDismissedAt: new Date().toISOString() }
+      : undefined;
+    onDismiss(optimisticUser);
     try {
       const response = await api<{ user: AppUser }>('/api/tutorial/first-day-checklist/dismiss', {
         method: 'POST'
       });
-      onDismiss(response.user);
+      if (response.user) onDismiss(response.user);
     } catch {
-      setDismissing(false);
+      // Card is already hidden locally even if the server request fails.
     }
   }
 
@@ -99,9 +133,13 @@ export function FirstDayChecklist({
         </div>
         <button
           type="button"
-          onClick={() => void handleDismiss()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void handleDismiss();
+          }}
           disabled={dismissing}
-          className="rounded-full p-1.5 text-app-text-muted transition hover:bg-app-muted hover:text-app-text disabled:opacity-50"
+          className="relative z-10 -m-1 rounded-full p-2.5 text-app-text-muted transition hover:bg-app-muted hover:text-app-text disabled:opacity-50"
           aria-label="Dismiss checklist"
         >
           <X size={18} aria-hidden />
@@ -146,7 +184,11 @@ export function FirstDayChecklist({
       {allDone && (
         <button
           type="button"
-          onClick={() => void handleDismiss()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void handleDismiss();
+          }}
           disabled={dismissing}
           className="mt-3 w-full rounded-full bg-brand-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-green-light disabled:opacity-50"
         >
