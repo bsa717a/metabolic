@@ -7,6 +7,21 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.27.0](https://github.com/bsa717a/metabolic/compare/v0.26.1...v0.27.0) (2026-09-08)
+
+
+### Features
+
+* **onboarding:** add body fat visual estimate aid ([f69c5d7](https://github.com/bsa717a/metabolic/commit/f69c5d7aff036f576707d1659160ac29a04b42df))
+
+
+### Bug Fixes
+
+* **nutrition:** rebalance meal-builder review to the calorie target ([dd9ed01](https://github.com/bsa717a/metabolic/commit/dd9ed012c5aa2af410e4ef855192f63c6b070e59))
+* **nutrition:** rebalance meal-builder review to the calorie target ([90a6f7d](https://github.com/bsa717a/metabolic/commit/90a6f7dadbf00359b21451ab6647b131587e8d05))
+* **onboarding:** keep body-fat estimate cards visible after a failed reply ([14d20c5](https://github.com/bsa717a/metabolic/commit/14d20c5c52f8b1a04baee23cb3a66c24e56cbe85))
+* **onboarding:** properly move gender before body composition in both paths ([ec03baf](https://github.com/bsa717a/metabolic/commit/ec03bafedc8000231ea75dcbfe070ace90a91268))
+
 ## [0.26.1](https://github.com/bsa717a/metabolic/compare/v0.26.0...v0.26.1) (2026-09-08)
 
 
