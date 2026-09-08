@@ -82,53 +82,6 @@ export async function sendWelcomeEmail(options: { to: string; firstName?: string
 
 export type { ResultsReadyLinks };
 
-export async function sendResultsReadyEmail(options: {
-  to: string;
-  clientFirstName: string;
-  coachName: string;
-  links: ResultsReadyLinks;
-}) {
-  if (!isEmailConfigured()) {
-    throw new Error('Email is not configured.');
-  }
-
-  const subject = 'Your results are ready';
-  const greeting = options.clientFirstName.trim() || 'there';
-  const coachLabel = options.coachName.trim() || 'Your coach';
-
-  const text = [
-    `Hi ${greeting},`,
-    '',
-    `${coachLabel} let you know your latest program results are ready to review.`,
-    '',
-    `Progress: ${options.links.progress}`,
-    `Nutrition: ${options.links.nutrition}`,
-    `Exercise: ${options.links.exercise}`,
-    '',
-    '— Master Metabolic'
-  ].join('\n');
-
-  const html = [
-    `<p>Hi ${escapeHtml(greeting)},</p>`,
-    `<p>${escapeHtml(coachLabel)} let you know your latest program results are ready to review.</p>`,
-    '<ul>',
-    `<li><a href="${escapeHtml(options.links.progress)}">View progress</a></li>`,
-    `<li><a href="${escapeHtml(options.links.nutrition)}">View nutrition</a></li>`,
-    `<li><a href="${escapeHtml(options.links.exercise)}">View exercise</a></li>`,
-    '</ul>',
-    '<p>— Master Metabolic</p>'
-  ].join('');
-
-  await sendOrThrow('Could not send email', () =>
-    sendEmail({
-      to: options.to,
-      subject,
-      text,
-      html
-    })
-  );
-}
-
 export async function sendSessionRecapEmail(options: { to: string } & SessionRecapEmail) {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured.');
