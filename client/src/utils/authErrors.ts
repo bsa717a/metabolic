@@ -80,6 +80,22 @@ const AUTH_USER_NOTICES: Record<string, AuthUserNotice> = {
   'Sign in failed. Try again.': {
     title: 'Sign-in failed',
     body: 'Something went wrong while signing you in. Try again.'
+  },
+  'Verification email sent! Check your inbox (and spam folder).': {
+    title: 'Verification email sent',
+    body: 'Check your inbox and spam folder for the verification link.'
+  },
+  'Email not verified yet. Check your inbox and click the verification link.': {
+    title: 'Email not verified',
+    body: 'Check your inbox for the verification email and click the link to verify.'
+  },
+  'Too many attempts. Please wait a few minutes before trying again.': {
+    title: 'Too many attempts',
+    body: 'Wait a few minutes before requesting another verification email.'
+  },
+  'Failed to send verification email.': {
+    title: 'Could not send email',
+    body: 'We could not send the verification email. Try again in a moment.'
   }
 };
 

@@ -1,7 +1,7 @@
 import type { VirtualCoach } from '../../data/virtualCoaches';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
 import { hasValidCurrentWeight } from '../../utils/onboardingWeight';
-import { detectedTimezone } from '../../utils/timezoneOptions';
+import { detectedTimezone, resolveTimezone } from '../../utils/timezoneOptions';
 import { displayToIso } from '../ui/BirthDateInput';
 import type { SetupFormState } from '../../types/onboarding';
 
@@ -386,10 +386,10 @@ function smsAskTurn(coach: VirtualCoach): CoachOnboardingTurn {
 }
 
 function timezoneTurn(currentTimezone: string): CoachOnboardingTurn {
-  const detected = currentTimezone.trim() || detectedTimezone() || 'America/Denver';
+  const detected = resolveTimezone(currentTimezone);
   return {
     stage: 'timezone',
-    assistantMessage: `Is your timezone ${detected}? If not, type the correct one (for example America/Denver).`,
+    assistantMessage: `I've got your timezone as ${detected} — this is used for meal reminders and scheduling. Is that right?`,
     quickReplies: [
       { label: `Yes — ${detected}`, mobileLabel: 'Yes', value: `yes:${detected}` },
       { label: "I'll type it", mobileLabel: 'Type', value: 'type' }
@@ -431,6 +431,24 @@ function parseCoachCode(text: string): string | null {
   return normalized;
 }
 
+function hasInviteCoachCode(form: SetupFormState) {
+  return Boolean(form.coachCode.trim());
+}
+
+function inviteCoachNote(form: SetupFormState): string | undefined {
+  if (!form.coachCode.trim()) return undefined;
+  return form.trackingOnly
+    ? `You're also connected to your real coach from the invite you used. Tracking just means I won't build a meal plan up front — they can still work with you.`
+    : `You're also connected to your real coach from the invite you used.`;
+}
+
+function nextAfterContact(form: SetupFormState): CoachOnboardingTurn {
+  if (hasInviteCoachCode(form)) {
+    return readyToSubmitTurn(form.trackingOnly, inviteCoachNote(form));
+  }
+  return realCoachAskTurn();
+}
+
 function readyToSubmitTurn(
   trackingOnly: boolean,
   realCoachNote?: string
@@ -461,9 +479,21 @@ export function advanceCoachOnboarding(
 
   switch (stage) {
     case 'intro':
+      if (hasInviteCoachCode(form)) {
+        return {
+          formPatch: { trackingOnly: false },
+          next: weightTurn()
+        };
+      }
       return { next: trackingModeTurn() };
 
     case 'trackingMode': {
+      if (hasInviteCoachCode(form)) {
+        return {
+          formPatch: { trackingOnly: false },
+          next: weightTurn()
+        };
+      }
       const value = normalizeChoice(input);
       const wantsTrack =
         value === 'track' ||
@@ -717,17 +747,18 @@ export function advanceCoachOnboarding(
 
     case 'smsAsk': {
       if (isYes(input)) {
-        const timezone = form.timezone.trim() || detectedTimezone();
+        const timezone = resolveTimezone(form.timezone);
         return {
           formPatch: { timezone },
           next: timezoneTurn(timezone)
         };
       }
       if (isNo(input)) {
-        const timezone = form.timezone.trim() || detectedTimezone();
+        const timezone = resolveTimezone(form.timezone);
+        const patched = { ...form, timezone, phone: '' };
         return {
           formPatch: { timezone, phone: '' },
-          next: realCoachAskTurn()
+          next: nextAfterContact(patched)
         };
       }
       return { error: 'Tap Yes or No.', next: smsAskTurn(coach) };
@@ -735,20 +766,21 @@ export function advanceCoachOnboarding(
 
     case 'timezone': {
       if (normalizeChoice(input) === 'type') {
+        const detected = detectedTimezone();
         return {
           next: {
             stage: 'timezone',
             assistantMessage: `Type your timezone (for example America/Chicago or America/Los_Angeles).`,
-            quickReplies: [{ label: `Use ${detectedTimezone() || 'detected'}`, mobileLabel: 'Detected', value: `yes:${detectedTimezone()}` }]
+            quickReplies: [{ label: `Use ${detected}`, mobileLabel: 'Detected', value: `yes:${detected}` }]
           }
         };
       }
       if (input.toLowerCase().startsWith('yes:')) {
-        const timezone = input.slice(4).trim() || detectedTimezone();
+        const timezone = resolveTimezone(input.slice(4));
         if (!isValidTimezone(timezone)) {
           return {
             error: 'That timezone looks invalid. Try America/Denver.',
-            next: timezoneTurn(form.timezone || detectedTimezone())
+            next: timezoneTurn(resolveTimezone(form.timezone))
           };
         }
         return {
@@ -764,15 +796,16 @@ export function advanceCoachOnboarding(
       }
       return {
         error: 'Confirm with the button or type a timezone like America/Denver.',
-        next: timezoneTurn(form.timezone || detectedTimezone())
+        next: timezoneTurn(resolveTimezone(form.timezone))
       };
     }
 
     case 'phone': {
       if (isSkip(input)) {
+        const patched = { ...form, phone: '' };
         return {
           formPatch: { phone: '' },
-          next: realCoachAskTurn()
+          next: nextAfterContact(patched)
         };
       }
       const digits = input.replace(/\D/g, '');
@@ -782,9 +815,10 @@ export function advanceCoachOnboarding(
           next: phoneTurn()
         };
       }
+      const patched = { ...form, phone: input.trim() };
       return {
         formPatch: { phone: input.trim() },
-        next: realCoachAskTurn()
+        next: nextAfterContact(patched)
       };
     }
 
@@ -801,7 +835,7 @@ export function advanceCoachOnboarding(
       }
       if (value === 'request' || value.includes('like a real') || value.includes('want a real')) {
         return {
-          formPatch: { wantsCoach: true, coachCode: '' },
+          formPatch: { wantsCoach: true },
           next: readyToSubmitTurn(
             form.trackingOnly,
             "I'll also put in a request for a real coach. You can keep chatting with me either way."
@@ -810,7 +844,7 @@ export function advanceCoachOnboarding(
       }
       if (isSkip(input) || isNo(input) || value.includes('no thanks')) {
         return {
-          formPatch: { wantsCoach: false, coachCode: '' },
+          formPatch: { wantsCoach: false },
           next: readyToSubmitTurn(form.trackingOnly)
         };
       }
@@ -833,7 +867,7 @@ export function advanceCoachOnboarding(
     case 'realCoachCode': {
       if (isSkip(input)) {
         return {
-          formPatch: { coachCode: '', wantsCoach: false },
+          formPatch: { wantsCoach: false },
           next: readyToSubmitTurn(form.trackingOnly)
         };
       }

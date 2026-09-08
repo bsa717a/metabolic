@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { login, loginWithGoogle, resetPassword, signUp } from '../services/auth';
 import { isFirebaseConfigured } from '../services/firebase';
 import { BrandLogo } from '../components/brand/BrandLogo';
+import { getPendingCoachInvite, postLoginPath } from '../utils/pendingCoachInvite';
 import type { AppUser } from '../types';
 
 const inputClass =
@@ -46,6 +47,7 @@ function GoogleIcon() {
 type AuthMode = 'login' | 'signup' | 'reset';
 
 export function LoginPage({ authenticated }: { authenticated: boolean; appUser?: AppUser | null }) {
+  const location = useLocation();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,7 +61,10 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
     () => LOGIN_WELCOMES[Math.floor(Math.random() * LOGIN_WELCOMES.length)]
   );
 
-  if (authenticated) return <Navigate to="/" replace />;
+  if (authenticated) {
+    const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+    return <Navigate to={postLoginPath({ pendingCoachCode: getPendingCoachInvite(), returnTo })} replace />;
+  }
 
   function switchMode(next: AuthMode) {
     setMode(next);

@@ -1,8 +1,9 @@
 import type { VirtualCoachId } from '../../data/virtualCoaches';
 import { api } from '../../services/api';
-import { detectedTimezone } from '../../utils/timezoneOptions';
+import { resolveTimezone } from '../../utils/timezoneOptions';
 import { hasValidCurrentWeight } from '../../utils/onboardingWeight';
 import { normalizeBirthDateKey, normalizeSetupGender } from '../../utils/setupDraft';
+import { getPendingCoachInvite, clearPendingCoachInvite } from '../../utils/pendingCoachInvite';
 import type { SetupFormState } from '../../types/onboarding';
 
 type SubmitOptions = {
@@ -37,8 +38,8 @@ export function validateSetupForm(form: SetupFormState, options: SubmitOptions =
   if (targetBodyFat !== undefined && Number.isNaN(targetBodyFat)) {
     return 'Enter a valid goal body fat percentage.';
   }
-  if (requireTimezone && !form.timezone.trim() && !detectedTimezone()) {
-    return 'Select your timezone.';
+  if (requireTimezone && !resolveTimezone(form.timezone)) {
+    return 'We need your timezone to schedule reminders at the right time. Please select one above.';
   }
 
   return null;
@@ -53,7 +54,7 @@ export function buildSetupPayload(form: SetupFormState) {
   const targetBodyFat = parseOptionalBodyFat(form.goalBodyFat);
   const heightFeet = form.heightFeet.trim() ? Number(form.heightFeet) : undefined;
   const heightInches = form.heightInches.trim() ? Number(form.heightInches) : undefined;
-  const timezone = form.timezone.trim() || detectedTimezone();
+  const timezone = resolveTimezone(form.timezone);
 
   return {
     weight: currentWeight,
@@ -69,7 +70,7 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(form.selectedVirtualCoachId
       ? { selectedVirtualCoachId: form.selectedVirtualCoachId as VirtualCoachId }
       : {}),
-    ...(form.trackingOnly ? { trackingOnly: true } : {}),
+    ...(form.trackingOnly && !form.coachCode.trim() ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
     ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
@@ -89,9 +90,12 @@ export async function submitSetupForm(form: SetupFormState, options: SubmitOptio
     method: 'POST',
     body: JSON.stringify(buildSetupPayload(form))
   });
+
+  clearPendingCoachInvite();
 }
 
 export function createEmptySetupForm(): SetupFormState {
+  const pendingInvite = getPendingCoachInvite();
   return {
     weight: '',
     goalWeight: '',
@@ -101,7 +105,7 @@ export function createEmptySetupForm(): SetupFormState {
     heightInches: '',
     occupation: '',
     activityLevel: '',
-    coachCode: '',
+    coachCode: pendingInvite || '',
     wantsCoach: false,
     selectedVirtualCoachId: '',
     trackingOnly: false,
@@ -140,7 +144,9 @@ export function applyDraftToForm(
 ): SetupFormState {
   const genderValue = normalizeSetupGender(draft.gender || profile?.gender || user?.gender);
   const birthDateValue = normalizeBirthDateKey(draft.birthDate || profile?.birthDate || user?.birthDate);
-  const timezoneValue = draft.timezone || profile?.timezone || user?.timezone || form.timezone;
+  const timezoneValue = resolveTimezone(
+    draft.timezone || profile?.timezone || user?.timezone || form.timezone
+  );
   const phoneValue = profile?.phone?.trim() || user?.phone?.trim() || form.phone;
 
   return {

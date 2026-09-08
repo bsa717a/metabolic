@@ -3,7 +3,7 @@ import { HelpCircle } from 'lucide-react';
 import { BirthDateInput } from '../ui/BirthDateInput';
 import { NumberInput } from '../ui/NumberInput';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
-import { detectedTimezone, timezoneOptions } from '../../utils/timezoneOptions';
+import { resolveTimezone, timezoneOptions } from '../../utils/timezoneOptions';
 import type { SetupFormState } from '../../types/onboarding';
 import { onboardingCardClass, onboardingFieldClass, onboardingInputClass } from './onboardingStyles';
 
@@ -181,21 +181,41 @@ export function OnboardingPersonalFields({
   showCoach?: boolean;
 }) {
   const [showActivityHelp, setShowActivityHelp] = useState(false);
+  const [showTimezoneHelp, setShowTimezoneHelp] = useState(false);
+
+  const effectiveTimezone = form.timezone || resolveTimezone();
+
   return (
     <div className="space-y-4">
       {showTimezone ? (
         <div>
-          <label htmlFor="timezone" className="mb-2 block text-sm font-medium text-app-text">
-            Timezone
-          </label>
+          <div className="mb-2 flex items-center gap-1.5">
+            <label htmlFor="timezone" className="block text-sm font-medium text-app-text">
+              Your timezone
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowTimezoneHelp((open) => !open)}
+              className="text-app-text-muted transition hover:text-app-text"
+              aria-label="Why we need your timezone"
+              aria-expanded={showTimezoneHelp}
+            >
+              <HelpCircle size={15} aria-hidden />
+            </button>
+          </div>
+          {showTimezoneHelp ? (
+            <p className="mb-2 text-xs leading-relaxed text-app-text-muted">
+              We use your timezone to schedule meal reminders and daily check-ins at the right time
+              for you.
+            </p>
+          ) : null}
           <select
             id="timezone"
             className={onboardingInputClass}
-            value={form.timezone}
+            value={effectiveTimezone}
             onChange={(e) => onChange('timezone', e.target.value)}
           >
-            <option value="">Select timezone</option>
-            {timezoneOptions(form.timezone || detectedTimezone()).map((zone) => (
+            {timezoneOptions(effectiveTimezone).map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
               </option>

@@ -84,6 +84,9 @@ echo "==> Ensure Cloud Scheduler job for proactive SMS reminders (best-effort)"
 # deploy when scheduler setup fails; run ./scripts/setup-sms-scheduler.sh once as admin.
 API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-sms-scheduler.sh" || true
 
+echo "==> Ensure Cloud Scheduler job for transactional email queue (best-effort)"
+API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-email-scheduler.sh" || true
+
 echo "==> Set API_PUBLIC_URL + Twilio webhook validation (stable Cloud Run URL)"
 gcloud run services update "$SERVICE_NAME" \
   --region "$REGION" \

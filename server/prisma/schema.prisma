@@ -227,6 +227,7 @@ model User {
   dashboardTutorialCompletedAt DateTime?
   smsRemindersIntroCompletedAt DateTime?
   coachWelcomeCompletedAt DateTime?
+  firstDayChecklistDismissedAt DateTime?
   selectedVirtualCoachId String?
   virtualCoachCheckInDay Int?
   plan PlanTier @default(STARTER)
@@ -1770,4 +1771,45 @@ model CommunicationUnsubscribe {
   @@index([phone])
   @@index([userId])
   @@index([email, phone, channel, category])
+}
+
+enum EmailQueueStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  DEAD
+}
+
+enum EmailType {
+  WELCOME
+  VERIFICATION
+  PASSWORD_RESET
+  RESULTS_READY
+  SESSION_RECAP
+  COACH_REQUEST
+  STORE_ORDER
+  FEEDBACK_ALERT
+  FEEDBACK_TESTER
+  FEEDBACK_DIGEST
+}
+
+/// Transactional email queue with retry support. Emails that fail to send are
+/// retried with exponential backoff. After max retries, they move to DEAD status.
+model EmailQueue {
+  id String @id @default(cuid())
+  emailType EmailType
+  status EmailQueueStatus @default(PENDING)
+  toAddress String
+  subject String
+  payload Json
+  attempts Int @default(0)
+  maxAttempts Int @default(5)
+  lastError String?
+  nextAttemptAt DateTime @default(now())
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, nextAttemptAt])
+  @@index([emailType, status])
 }

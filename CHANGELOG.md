@@ -7,6 +7,71 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.24.0](https://github.com/bsa717a/metabolic/compare/v0.23.0...v0.24.0) (2026-09-08)
+
+
+### Features
+
+* **auth:** let users and admins delete accounts including Firebase ([fbb1e52](https://github.com/bsa717a/metabolic/commit/fbb1e521611f9b0690a76d9f6305fd8d844fb170))
+* **auth:** let users and admins delete accounts including Firebase ([60e791f](https://github.com/bsa717a/metabolic/commit/60e791ff87bf2dfdefcb440fc76f59af16b0de64))
+* **dashboard:** add first-day checklist after onboarding ([69850a1](https://github.com/bsa717a/metabolic/commit/69850a1d1e41da21deb158b4ed0117331fd2b80f))
+
+
+### Bug Fixes
+
+* **dashboard:** dismiss first-day checklist without waiting on save ([7c6d015](https://github.com/bsa717a/metabolic/commit/7c6d0151083dc703e057f91c1ed7c20cffb68d85))
+
+## [0.23.0](https://github.com/bsa717a/metabolic/compare/v0.22.0...v0.23.0) (2026-09-07)
+
+
+### Features
+
+* **coach:** notify coach when client links via invite ([#257](https://github.com/bsa717a/metabolic/issues/257)) ([b3acce9](https://github.com/bsa717a/metabolic/commit/b3acce933d50cd5435bae468b035ef30a4a24b0e))
+
+
+### Bug Fixes
+
+* **exercise:** let coaches load global weekly routine days ([516e521](https://github.com/bsa717a/metabolic/commit/516e5210ca55c3d0655337a9ea112dd99b61d32e))
+* **exercise:** let coaches load global weekly routine days ([58d5f4f](https://github.com/bsa717a/metabolic/commit/58d5f4fe9925da1bfa09081996c8d921af9e356d))
+
+## [0.22.0](https://github.com/bsa717a/metabolic/compare/v0.21.0...v0.22.0) (2026-09-07)
+
+
+### Features
+
+* **coach:** invite links with join confirmation ([a881e11](https://github.com/bsa717a/metabolic/commit/a881e1190551e3b2d8cb539ed82dfc0067afce86))
+
+
+### Bug Fixes
+
+* **coach:** connect invite clients after login and onboarding ([9624f03](https://github.com/bsa717a/metabolic/commit/9624f034859bae7513a8b8e51b2d1dfff3e5b26c))
+* **onboarding:** auto-detect timezone with clear copy ([c53797c](https://github.com/bsa717a/metabolic/commit/c53797c089c45f5d9e1366e6fef7f6d8cc046f9b))
+
+## [0.21.0](https://github.com/bsa717a/metabolic/compare/v0.20.0...v0.21.0) (2026-09-07)
+
+
+### Features
+
+* **auth:** branded verification emails and in-app verify ([73cdc3e](https://github.com/bsa717a/metabolic/commit/73cdc3e80ccfecd8b0ea3ddb67201e98f4265d5d))
+* **auth:** send branded verification mail and verify in-app ([c124cc3](https://github.com/bsa717a/metabolic/commit/c124cc351318f72b34e85f673a90ac386c206a1b))
+
+
+### Bug Fixes
+
+* **auth:** require Firebase email verification before app access ([7fb53bf](https://github.com/bsa717a/metabolic/commit/7fb53bf15265e8b5f10248e16b7261e4cd16778e))
+* **nutrition:** include quantity 1 on printed meal plans ([1dc7922](https://github.com/bsa717a/metabolic/commit/1dc79225e30360dab3087a421742fd0f5b65c63f))
+* **nutrition:** include quantity 1 on printed meal plans ([089615a](https://github.com/bsa717a/metabolic/commit/089615ae21c86dd750ee0f968abe722f342838be))
+
+## [0.20.0](https://github.com/bsa717a/metabolic/compare/v0.19.0...v0.20.0) (2026-09-05)
+
+
+### Features
+
+* **coach:** email a fun session recap when the coach saves ([be140ca](https://github.com/bsa717a/metabolic/commit/be140ca59f75bf8c370d0214507b82f10b583673))
+* **coach:** email a fun session recap when the coach saves ([6b83b70](https://github.com/bsa717a/metabolic/commit/6b83b70cd802fcddb9fa732e53a70765dec6a20e))
+* **email:** send outbound mail through Resend ([6728172](https://github.com/bsa717a/metabolic/commit/67281726e0b8a49b57641c0c8ac8526d35ad09d8))
+* **email:** send outbound mail through Resend ([6741c48](https://github.com/bsa717a/metabolic/commit/6741c48e4ce75504eaa52914e1a7b65959a5a887))
+
 ## [0.19.0](https://github.com/bsa717a/metabolic/compare/v0.18.0...v0.19.0) (2026-09-03)
 
 

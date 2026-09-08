@@ -22,6 +22,7 @@ export type AppUser = {
   dashboardTutorialCompletedAt?: string | null;
   smsRemindersIntroCompletedAt?: string | null;
   coachWelcomeCompletedAt?: string | null;
+  firstDayChecklistDismissedAt?: string | null;
   selectedVirtualCoachId?: string | null;
   plan: PlanSlug;
   subscriptionStatus: SubscriptionStatusSlug;
@@ -29,6 +30,7 @@ export type AppUser = {
   subscriptionCurrentPeriodEnd?: string | null;
   gracePeriodEndsAt?: string | null;
   nextPlanAfterCoach?: PlanSlug | null;
+  coachCode?: string | null;
   assignedCoach?: UserSummary | null;
   coachRequestedAt?: string | null;
   coachRelationshipStatus?: CoachRelationshipStatusSlug | null;

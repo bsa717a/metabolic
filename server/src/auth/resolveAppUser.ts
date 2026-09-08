@@ -3,18 +3,18 @@ import type { User } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
-import { isEmailConfigured, sendWelcomeEmail } from "../services/emailService.js";
+import { isEmailConfigured, sendEmailVerificationLink } from "../services/emailService.js";
 import { slugToPlan } from "../services/entitlements.js";
 import { isTwilioConfigured, sendOutboundMessage } from "../services/twilioOutboundService.js";
 
 /** Best-effort alerts when a new account is created. Never throws — failed/unconfigured
- *  alerts must not break signup. */
-async function notifyNewSignup(user: User) {
-  if (isEmailConfigured()) {
+ *  alerts must not break signup. Welcome email is sent later when onboarding completes. */
+async function notifyNewSignup(user: User, emailVerified: boolean) {
+  if (isEmailConfigured() && !emailVerified) {
     try {
-      await sendWelcomeEmail({ to: user.email, firstName: user.firstName });
+      await sendEmailVerificationLink({ email: user.email, firstName: user.firstName });
     } catch (error) {
-      console.error("Failed to send welcome email", error);
+      console.error("Failed to send verification email", error);
     }
   }
 
@@ -118,7 +118,7 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
         ...(signupPlan ? { plan: signupPlan } : {})
       }
     });
-    void notifyNewSignup(createdUser);
+    void notifyNewSignup(createdUser, Boolean(firebaseUser.email_verified));
     return createdUser;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

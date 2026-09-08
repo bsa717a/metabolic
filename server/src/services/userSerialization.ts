@@ -45,6 +45,7 @@ export async function serializeAppUser(user: User) {
     dashboardTutorialCompletedAt: user.dashboardTutorialCompletedAt?.toISOString() ?? null,
     smsRemindersIntroCompletedAt: user.smsRemindersIntroCompletedAt?.toISOString() ?? null,
     coachWelcomeCompletedAt: user.coachWelcomeCompletedAt?.toISOString() ?? null,
+    firstDayChecklistDismissedAt: user.firstDayChecklistDismissedAt?.toISOString() ?? null,
     selectedVirtualCoachId: user.selectedVirtualCoachId,
     plan: planToSlug(user.plan),
     subscriptionStatus: user.subscriptionStatus.toLowerCase(),
@@ -52,6 +53,7 @@ export async function serializeAppUser(user: User) {
     subscriptionCurrentPeriodEnd: user.subscriptionCurrentPeriodEnd?.toISOString() ?? null,
     gracePeriodEndsAt: user.gracePeriodEndsAt?.toISOString() ?? null,
     nextPlanAfterCoach: user.nextPlanAfterCoach ? planToSlug(user.nextPlanAfterCoach) : null,
+    coachCode: user.coachCode,
     assignedCoach: assignment?.coach
       ? {
           id: assignment.coach.id,

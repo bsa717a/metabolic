@@ -8,8 +8,28 @@ const COMMON_TIMEZONES = [
   'Pacific/Honolulu'
 ];
 
-export function detectedTimezone() {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+const DEFAULT_TIMEZONE = 'America/New_York';
+
+/**
+ * Detect the browser's timezone using the Intl API.
+ * Returns a safe fallback if detection fails.
+ */
+export function detectedTimezone(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz?.trim() || DEFAULT_TIMEZONE;
+  } catch {
+    return DEFAULT_TIMEZONE;
+  }
+}
+
+/**
+ * Resolve timezone for form submission: prefer explicit value, then detect, then fallback.
+ */
+export function resolveTimezone(explicit?: string | null): string {
+  const trimmed = explicit?.trim();
+  if (trimmed) return trimmed;
+  return detectedTimezone();
 }
 
 export function timezoneOptions(current = '') {
