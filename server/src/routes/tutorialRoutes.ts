@@ -27,4 +27,12 @@ export async function tutorialRoutes(app: FastifyInstance) {
     });
     return { user: await serializeAppUser(user) };
   });
+
+  app.post('/api/tutorial/first-day-checklist/dismiss', { preHandler: requireAuth }, async (request) => {
+    const user = await prisma.user.update({
+      where: { id: request.appUser!.id },
+      data: { firstDayChecklistDismissedAt: new Date() }
+    });
+    return { user: await serializeAppUser(user) };
+  });
 }
