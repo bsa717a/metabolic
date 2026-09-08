@@ -331,7 +331,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   async function sendResultsEmail() {
     if (!selectedClient) return;
     const confirmed = window.confirm(
-      `Send a results-ready email to ${clientName(selectedClient)} at ${selectedClient.email}?`
+      `Send a session recap email to ${clientName(selectedClient)} at ${selectedClient.email}?`
     );
     if (!confirmed) return;
 
@@ -343,9 +343,9 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
         `/api/coach/users/${selectedClient.id}/send-results-email`,
         { method: 'POST' }
       );
-      setSuccessMessage(`Results email sent to ${result.to}.`);
+      setSuccessMessage(`Session recap sent to ${result.to}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to send results email');
+      setError(err instanceof Error ? err.message : 'Unable to send session recap email');
     } finally {
       setSendingEmail(false);
     }
@@ -546,7 +546,6 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 clientName={clientName(selectedClient)}
                 programId={dashboard?.program?.id ?? null}
                 onScheduleSession={() => setScheduleOpen(true)}
-                onSendResults={sendResultsEmail}
                 onSessionSaved={refreshClientData}
               />
             ) : (

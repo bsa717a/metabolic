@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Dumbbell, Send, UtensilsCrossed, CalendarPlus } from 'lucide-react';
+import { ChevronDown, Dumbbell, UtensilsCrossed, CalendarPlus } from 'lucide-react';
 import { api, toDateKey } from '../../services/api';
 import type { CoachSession } from '../../types';
 import { Button } from '../ui/Button';
@@ -43,14 +43,12 @@ export function SessionNotesPanel({
   clientName,
   programId,
   onScheduleSession,
-  onSendResults,
   onSessionSaved
 }: {
   clientId: string;
   clientName: string;
   programId: string | null;
   onScheduleSession: () => void;
-  onSendResults: () => void;
   onSessionSaved?: () => void | Promise<void>;
 }) {
   const [sessions, setSessions] = useState<CoachSession[]>([]);
@@ -156,7 +154,6 @@ export function SessionNotesPanel({
         <p className="mb-2 text-xs font-semibold uppercase text-app-text-muted">Quick actions</p>
         <div className="space-y-2">
           <QuickAction icon={<CalendarPlus className="h-4 w-4" />} label="Schedule next session" onClick={onScheduleSession} />
-          <QuickAction icon={<Send className="h-4 w-4" />} label="Send results" onClick={onSendResults} />
         </div>
         <p className="mt-2 text-xs text-app-text-muted">
           <span className="inline-flex items-center gap-1">

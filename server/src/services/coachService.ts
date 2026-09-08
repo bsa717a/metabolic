@@ -21,7 +21,6 @@ import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
 import { getUserNutritionTargets, setUserNutritionTargets } from './nutritionTargetService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { saveProgramMetricSnapshot } from './programService.js';
-import { sendResultsReadyEmail } from './emailService.js';
 import { sendCoachSessionRecapEmail } from './sessionRecapService.js';
 import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsReadyNotification.js';
 import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, resolveOutboundChannel } from './twilioOutboundService.js';
@@ -436,6 +435,16 @@ function utcStartOfToday() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
+function utcTodayRange() {
+  const today = utcStartOfToday();
+  return { today, todayEnd: addUtcDays(today, 1) };
+}
+
+function occurredTodayUtc(occurredAt: Date) {
+  const { today, todayEnd } = utcTodayRange();
+  return occurredAt >= today && occurredAt < todayEnd;
+}
+
 function buildSnapshotPayloadFromProgram(
   metrics: Array<{ metricType: string; currentValue: unknown; unit: string }>,
   existingSnapshot: { values: Array<{ metricType: string; currentValue: unknown; unit: string }> } | null
@@ -490,7 +499,7 @@ export async function saveCoachSessionComplete(
   });
   if (!program) throw new Error('No active program found for this client');
 
-  const today = utcStartOfToday();
+  const { today, todayEnd } = utcTodayRange();
   const existingSnapshot = await prisma.programMetricSnapshot.findUnique({
     where: { programId_date: { programId: program.id, date: today } },
     include: { values: true }
@@ -515,7 +524,6 @@ export async function saveCoachSessionComplete(
     return withSessionRecap(actor, data.userId, notes, session);
   }
 
-  const todayEnd = addUtcDays(today, 1);
   const todaySession = await prisma.coachSession.findFirst({
     where: {
       coachId: actor.id,
@@ -551,6 +559,15 @@ async function withSessionRecap(
   notes: string,
   session: Parameters<typeof serializeCoachSession>[0]
 ) {
+  if (!occurredTodayUtc(session.occurredAt)) {
+    return {
+      ...serializeCoachSession(session),
+      recapEmailSent: false,
+      recapEmailTo: null,
+      recapEmailError: null
+    };
+  }
+
   const recap = await sendCoachSessionRecapEmail(actor, userId, notes);
   return {
     ...serializeCoachSession(session),
@@ -652,16 +669,27 @@ export async function sendCoachResultsReadyEmail(
   actor: { id: string; role: Role; firstName: string; lastName: string },
   userId: string
 ) {
-  const { client, coachName, links } = await getCoachResultsNotificationContext(actor, userId);
+  await requireCoachClient(actor, userId);
 
-  await sendResultsReadyEmail({
-    to: client.email,
-    clientFirstName: client.firstName,
-    coachName,
-    links
+  const { today, todayEnd } = utcTodayRange();
+  const todaySession = await prisma.coachSession.findFirst({
+    where: {
+      coachId: actor.id,
+      userId,
+      occurredAt: { gte: today, lt: todayEnd }
+    },
+    select: { notes: true }
   });
+  if (!todaySession) {
+    throw new Error("Save today's session notes before sending a recap email.");
+  }
 
-  return { sent: true, to: client.email };
+  const recap = await sendCoachSessionRecapEmail(actor, userId, todaySession.notes);
+  if (!recap.sent || !recap.to) {
+    throw new Error(recap.error ?? 'Email is not configured.');
+  }
+
+  return { sent: true, to: recap.to };
 }
 
 export async function sendCoachResultsReadySms(
