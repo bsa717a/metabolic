@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.24.0](https://github.com/bsa717a/metabolic/compare/v0.23.0...v0.24.0) (2026-09-08)
+
+
+### Features
+
+* **auth:** let users and admins delete accounts including Firebase ([fbb1e52](https://github.com/bsa717a/metabolic/commit/fbb1e521611f9b0690a76d9f6305fd8d844fb170))
+* **auth:** let users and admins delete accounts including Firebase ([60e791f](https://github.com/bsa717a/metabolic/commit/60e791ff87bf2dfdefcb440fc76f59af16b0de64))
+* **dashboard:** add first-day checklist after onboarding ([69850a1](https://github.com/bsa717a/metabolic/commit/69850a1d1e41da21deb158b4ed0117331fd2b80f))
+
+
+### Bug Fixes
+
+* **dashboard:** dismiss first-day checklist without waiting on save ([7c6d015](https://github.com/bsa717a/metabolic/commit/7c6d0151083dc703e057f91c1ed7c20cffb68d85))
+
 ## [0.23.0](https://github.com/bsa717a/metabolic/compare/v0.22.0...v0.23.0) (2026-09-07)
 
 
