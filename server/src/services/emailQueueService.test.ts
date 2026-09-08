@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { EmailQueueStatus } from '@prisma/client';
+import { emailQueueReadyWhere, STALE_PROCESSING_MS } from './emailQueuePolicy.js';
 
 describe('emailQueueService backoff logic', () => {
   const BASE_DELAY_MS = 60_000;
@@ -28,5 +30,19 @@ describe('emailQueueService backoff logic', () => {
   it('caps at 1 hour max delay', () => {
     assert.equal(calculateExpectedDelay(10), MAX_DELAY_MS);
     assert.equal(calculateExpectedDelay(20), MAX_DELAY_MS);
+  });
+});
+
+describe('emailQueueReadyWhere', () => {
+  it('includes pending, failed, and stale processing rows', () => {
+    const now = new Date('2026-09-07T18:00:00.000Z');
+    const where = emailQueueReadyWhere(now);
+    const staleBefore = new Date(now.getTime() - STALE_PROCESSING_MS);
+
+    assert.deepEqual(where.nextAttemptAt, { lte: now });
+    assert.deepEqual(where.OR, [
+      { status: { in: [EmailQueueStatus.PENDING, EmailQueueStatus.FAILED] } },
+      { status: EmailQueueStatus.PROCESSING, updatedAt: { lte: staleBefore } }
+    ]);
   });
 });

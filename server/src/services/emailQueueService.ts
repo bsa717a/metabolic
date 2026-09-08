@@ -1,7 +1,10 @@
-import { EmailQueueStatus, EmailType, type Prisma } from '@prisma/client';
+import { EmailQueueStatus, EmailType } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { sendEmail, isEmailConfigured } from './emailTransport.js';
+import { isEmailConfigured } from './emailTransport.js';
 import { sendWelcomeEmail as sendWelcomeEmailDirect } from './emailService.js';
+import { emailQueueReadyWhere, STALE_PROCESSING_MS } from './emailQueuePolicy.js';
+
+export { emailQueueReadyWhere, STALE_PROCESSING_MS };
 
 const BASE_DELAY_MS = 60_000;
 const MAX_DELAY_MS = 3600_000;
@@ -34,7 +37,6 @@ export async function enqueueWelcomeEmail(options: {
     }
   });
 
-  console.log(`[EmailQueue] Enqueued WELCOME email for ${options.toAddress} (id: ${entry.id})`);
   return entry.id;
 }
 
@@ -62,29 +64,36 @@ export type ProcessEmailQueueResult = {
   errors: Array<{ id: string; error: string }>;
 };
 
+async function claimQueuedEmail(id: string, staleBefore: Date): Promise<boolean> {
+  const claimed = await prisma.emailQueue.updateMany({
+    where: {
+      id,
+      OR: [
+        { status: { in: [EmailQueueStatus.PENDING, EmailQueueStatus.FAILED] } },
+        { status: EmailQueueStatus.PROCESSING, updatedAt: { lte: staleBefore } }
+      ]
+    },
+    data: { status: EmailQueueStatus.PROCESSING }
+  });
+  return claimed.count === 1;
+}
+
 export async function processEmailQueue(): Promise<ProcessEmailQueueResult> {
   if (!isEmailConfigured()) {
-    console.warn('[EmailQueue] Email not configured, skipping queue processing');
     return { processed: 0, sent: 0, failed: 0, dead: 0, errors: [] };
   }
 
   const now = new Date();
+  const staleBefore = new Date(now.getTime() - STALE_PROCESSING_MS);
 
   const pendingEmails = await prisma.emailQueue.findMany({
-    where: {
-      status: { in: [EmailQueueStatus.PENDING, EmailQueueStatus.FAILED] },
-      nextAttemptAt: { lte: now }
-    },
+    where: emailQueueReadyWhere(now),
     orderBy: { nextAttemptAt: 'asc' },
     take: BATCH_SIZE
   });
 
-  if (pendingEmails.length === 0) {
-    return { processed: 0, sent: 0, failed: 0, dead: 0, errors: [] };
-  }
-
   const result: ProcessEmailQueueResult = {
-    processed: pendingEmails.length,
+    processed: 0,
     sent: 0,
     failed: 0,
     dead: 0,
@@ -92,19 +101,14 @@ export async function processEmailQueue(): Promise<ProcessEmailQueueResult> {
   };
 
   for (const email of pendingEmails) {
+    const claimed = await claimQueuedEmail(email.id, staleBefore);
+    if (!claimed) continue;
+
+    result.processed++;
     const attempts = email.attempts + 1;
 
     try {
-      await prisma.emailQueue.update({
-        where: { id: email.id },
-        data: { status: EmailQueueStatus.PROCESSING }
-      });
-
-      await sendEmailByType(
-        email.emailType,
-        email.toAddress,
-        email.payload as EmailPayload
-      );
+      await sendEmailByType(email.emailType, email.toAddress, email.payload as EmailPayload);
 
       await prisma.emailQueue.update({
         where: { id: email.id },
@@ -114,21 +118,10 @@ export async function processEmailQueue(): Promise<ProcessEmailQueueResult> {
           attempts
         }
       });
-
-      console.log(
-        `[EmailQueue] Sent ${email.emailType} email to ${email.toAddress} ` +
-        `(id: ${email.id}, attempt: ${attempts})`
-      );
       result.sent++;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const truncatedError = errorMessage.slice(0, 500);
-
-      console.error(
-        `[EmailQueue] Failed to send ${email.emailType} email to ${email.toAddress}: ` +
-        `${truncatedError} (id: ${email.id}, attempt: ${attempts}/${email.maxAttempts})`
-      );
-
       result.errors.push({ id: email.id, error: truncatedError });
 
       if (attempts >= email.maxAttempts) {
@@ -140,9 +133,6 @@ export async function processEmailQueue(): Promise<ProcessEmailQueueResult> {
             lastError: truncatedError
           }
         });
-        console.error(
-          `[EmailQueue] Email ${email.id} moved to DEAD after ${attempts} attempts`
-        );
         result.dead++;
       } else {
         const delayMs = calculateNextAttemptDelay(attempts);
@@ -157,10 +147,6 @@ export async function processEmailQueue(): Promise<ProcessEmailQueueResult> {
             nextAttemptAt
           }
         });
-        console.warn(
-          `[EmailQueue] Email ${email.id} will retry at ${nextAttemptAt.toISOString()} ` +
-          `(attempt ${attempts + 1}/${email.maxAttempts})`
-        );
         result.failed++;
       }
     }
@@ -189,7 +175,7 @@ export async function getQueueStats(): Promise<{
 
 export async function retryDeadEmail(emailId: string): Promise<boolean> {
   const email = await prisma.emailQueue.findUnique({ where: { id: emailId } });
-  
+
   if (!email || email.status !== EmailQueueStatus.DEAD) {
     return false;
   }
@@ -204,7 +190,6 @@ export async function retryDeadEmail(emailId: string): Promise<boolean> {
     }
   });
 
-  console.log(`[EmailQueue] Manually reset DEAD email ${emailId} to PENDING`);
   return true;
 }
 
@@ -218,10 +203,6 @@ export async function cleanupOldEmails(olderThanDays: number = 30): Promise<numb
       sentAt: { lt: cutoffDate }
     }
   });
-
-  if (result.count > 0) {
-    console.log(`[EmailQueue] Cleaned up ${result.count} old sent emails`);
-  }
 
   return result.count;
 }
