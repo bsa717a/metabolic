@@ -36,9 +36,18 @@ let tokenRefreshPromise: Promise<string | null> | null = null;
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes before expiry
 
+function base64UrlToBase64(base64url: string): string {
+  let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4;
+  if (pad) {
+    base64 += '='.repeat(4 - pad);
+  }
+  return base64;
+}
+
 function parseTokenExpiry(token: string): number | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(base64UrlToBase64(token.split('.')[1])));
     return payload.exp ? payload.exp * 1000 : null;
   } catch {
     return null;
@@ -222,6 +231,9 @@ export async function forceTokenRefresh(): Promise<string | null> {
     return tokenRefreshPromise;
   }
 
+  const previousToken = cachedToken;
+  const previousExpiry = tokenExpiryTime;
+
   tokenRefreshPromise = (async () => {
     try {
       const token = await auth.currentUser!.getIdToken(true);
@@ -229,6 +241,11 @@ export async function forceTokenRefresh(): Promise<string | null> {
       tokenExpiryTime = parseTokenExpiry(token);
       return token;
     } catch {
+      if (previousToken && previousExpiry && previousExpiry > Date.now()) {
+        cachedToken = previousToken;
+        tokenExpiryTime = previousExpiry;
+        return previousToken;
+      }
       cachedToken = null;
       tokenExpiryTime = null;
       return null;
