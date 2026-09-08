@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.25.0](https://github.com/bsa717a/metabolic/compare/v0.24.0...v0.25.0) (2026-09-08)
+
+
+### Features
+
+* **email:** send welcome email on onboarding complete with retry queue ([03c7756](https://github.com/bsa717a/metabolic/commit/03c775699e9a94ddd872ba89f824df69d51794db))
+
+
+### Bug Fixes
+
+* **coach:** skip session recap emails for past visits ([d5d6fa6](https://github.com/bsa717a/metabolic/commit/d5d6fa6a1e58123b35d2f325d2af4fcfd59561e7))
+* **coach:** skip session recap emails for past visits ([3701cee](https://github.com/bsa717a/metabolic/commit/3701ceefa22d5b789b82e1ba6a0e820b0343b50c))
+* **email:** tick welcome queue and reclaim stuck jobs ([3ef9bf2](https://github.com/bsa717a/metabolic/commit/3ef9bf21c23884cfc18afee839b3670ba9c0e46f))
+
 ## [0.24.0](https://github.com/bsa717a/metabolic/compare/v0.23.0...v0.24.0) (2026-09-08)
 
 
