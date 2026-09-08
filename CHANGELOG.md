@@ -7,6 +7,21 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.26.0](https://github.com/bsa717a/metabolic/compare/v0.25.0...v0.26.0) (2026-09-08)
+
+
+### Features
+
+* **onboarding:** add progress indicator to coach onboarding chat ([093b0ba](https://github.com/bsa717a/metabolic/commit/093b0ba44a0ba23295f11e3bc063f4e467763c7e))
+* **onboarding:** add progress indicator to coach onboarding chat ([fe92e1e](https://github.com/bsa717a/metabolic/commit/fe92e1eaae4c3d18eede8e55e6db6b6b116e5100))
+* **ui:** improve empty states with clear CTAs for meals, exercise, and weight ([c4163b2](https://github.com/bsa717a/metabolic/commit/c4163b285b7c71b985c57c2147f641b15cc11f4b))
+* **ui:** improve empty states with clear CTAs for meals, exercise, and weight ([18654c8](https://github.com/bsa717a/metabolic/commit/18654c878d099a83e768ac660b80aec2102061ff))
+
+
+### Bug Fixes
+
+* **ui:** send empty-state weight and blueprint CTAs to /program ([62e1ccc](https://github.com/bsa717a/metabolic/commit/62e1ccc49d1606d30c6c0328081df3d7146c156f))
+
 ## [0.25.0](https://github.com/bsa717a/metabolic/compare/v0.24.0...v0.25.0) (2026-09-08)
 
 
