@@ -5,6 +5,48 @@ import { detectedTimezone, resolveTimezone } from '../../utils/timezoneOptions';
 import { displayToIso } from '../ui/BirthDateInput';
 import type { SetupFormState } from '../../types/onboarding';
 
+export type OnboardingMainStep =
+  | 'welcome'
+  | 'trackingMode'
+  | 'weight'
+  | 'height'
+  | 'activity'
+  | 'bodyComposition'
+  | 'personalInfo'
+  | 'diet'
+  | 'planSummary'
+  | 'contact'
+  | 'coachConnection'
+  | 'confirm';
+
+const MAIN_STEPS_WITH_INVITE: OnboardingMainStep[] = [
+  'welcome',
+  'weight',
+  'height',
+  'activity',
+  'bodyComposition',
+  'personalInfo',
+  'diet',
+  'planSummary',
+  'contact',
+  'confirm'
+];
+
+const MAIN_STEPS_WITHOUT_INVITE: OnboardingMainStep[] = [
+  'welcome',
+  'trackingMode',
+  'weight',
+  'height',
+  'activity',
+  'bodyComposition',
+  'personalInfo',
+  'diet',
+  'planSummary',
+  'contact',
+  'coachConnection',
+  'confirm'
+];
+
 export type CoachOnboardingStage =
   | 'intro'
   | 'trackingMode'
@@ -48,6 +90,69 @@ export type CoachOnboardingAdvance = {
   /** When true, caller should submit setup with the patched form. */
   submit?: boolean;
 };
+
+const STAGE_TO_MAIN_STEP: Record<CoachOnboardingStage, OnboardingMainStep> = {
+  intro: 'welcome',
+  trackingMode: 'trackingMode',
+  weight: 'weight',
+  goalWeight: 'weight',
+  height: 'height',
+  activity: 'activity',
+  bodyFatAsk: 'bodyComposition',
+  bodyFatKnowHow: 'bodyComposition',
+  bodyFatHow: 'bodyComposition',
+  bodyFatCurrent: 'bodyComposition',
+  bodyFatGoal: 'bodyComposition',
+  gender: 'personalInfo',
+  birthDate: 'personalInfo',
+  allergiesAsk: 'diet',
+  allergiesDetail: 'diet',
+  planReveal: 'planSummary',
+  smsAsk: 'contact',
+  timezone: 'contact',
+  phone: 'contact',
+  realCoachAsk: 'coachConnection',
+  realCoachCode: 'coachConnection',
+  readyToSubmit: 'confirm'
+};
+
+export type OnboardingProgress = {
+  currentStep: number;
+  totalSteps: number;
+  mainStepLabel: string;
+};
+
+const MAIN_STEP_LABELS: Record<OnboardingMainStep, string> = {
+  welcome: 'Welcome',
+  trackingMode: 'Your Goals',
+  weight: 'Weight',
+  height: 'Height',
+  activity: 'Activity',
+  bodyComposition: 'Body Composition',
+  personalInfo: 'Personal Info',
+  diet: 'Diet',
+  planSummary: 'Your Plan',
+  contact: 'Contact',
+  coachConnection: 'Coach',
+  confirm: 'Confirm'
+};
+
+export function getOnboardingProgress(
+  stage: CoachOnboardingStage,
+  hasInviteCode: boolean
+): OnboardingProgress {
+  const mainSteps = hasInviteCode ? MAIN_STEPS_WITH_INVITE : MAIN_STEPS_WITHOUT_INVITE;
+  const currentMainStep = STAGE_TO_MAIN_STEP[stage];
+  const currentStepIndex = mainSteps.indexOf(currentMainStep);
+  const currentStep = currentStepIndex === -1 ? 1 : currentStepIndex + 1;
+  const totalSteps = mainSteps.length;
+
+  return {
+    currentStep,
+    totalSteps,
+    mainStepLabel: MAIN_STEP_LABELS[currentMainStep]
+  };
+}
 
 const BODY_FAT_HOW = [
   "Here's the easiest ways to get a number:",
