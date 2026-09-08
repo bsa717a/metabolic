@@ -99,6 +99,7 @@ const STAGE_TO_MAIN_STEP: Record<CoachOnboardingStage, OnboardingMainStep> = {
   weight: 'weight',
   goalWeight: 'weight',
   height: 'height',
+  gender: 'height',
   activity: 'activity',
   bodyFatAsk: 'bodyComposition',
   bodyFatKnowHow: 'bodyComposition',
@@ -107,7 +108,6 @@ const STAGE_TO_MAIN_STEP: Record<CoachOnboardingStage, OnboardingMainStep> = {
   bodyFatHow: 'bodyComposition',
   bodyFatCurrent: 'bodyComposition',
   bodyFatGoal: 'bodyComposition',
-  gender: 'personalInfo',
   birthDate: 'personalInfo',
   allergiesAsk: 'diet',
   allergiesDetail: 'diet',
@@ -701,7 +701,7 @@ export function advanceCoachOnboarding(
       }
       return {
         formPatch: { heightFeet: height.feet, heightInches: height.inches },
-        next: activityTurn()
+        next: genderTurn()
       };
     }
 
@@ -728,7 +728,7 @@ export function advanceCoachOnboarding(
       if (isNo(input)) {
         return {
           formPatch: { bodyFat: '', goalBodyFat: '' },
-          next: genderTurn()
+          next: birthDateTurn()
         };
       }
       return { error: 'Tap Yes or No.', next: bodyFatAskTurn() };
@@ -764,7 +764,7 @@ export function advanceCoachOnboarding(
       if (isSkip(value) || value === 'skip') {
         return {
           formPatch: { bodyFat: '', goalBodyFat: '' },
-          next: genderTurn()
+          next: birthDateTurn()
         };
       }
       if (value === 'have_number' || value.includes('have a number')) {
@@ -788,7 +788,7 @@ export function advanceCoachOnboarding(
       if (isSkip(input) || normalizeChoice(input) === 'skip') {
         return {
           formPatch: { bodyFat: '', goalBodyFat: '' },
-          next: genderTurn()
+          next: birthDateTurn()
         };
       }
       const howBodyFat = parseBodyFat(input);
@@ -812,7 +812,7 @@ export function advanceCoachOnboarding(
       if (isSkip(input)) {
         return {
           formPatch: { bodyFat: '', goalBodyFat: '' },
-          next: genderTurn()
+          next: birthDateTurn()
         };
       }
       const bodyFat = parseBodyFat(input);
@@ -832,7 +832,7 @@ export function advanceCoachOnboarding(
       if (isSkip(input)) {
         return {
           formPatch: { goalBodyFat: '' },
-          next: genderTurn('No problem — we can set a body fat goal later.')
+          next: birthDateTurn()
         };
       }
       const goalBodyFat = parseBodyFat(input);
@@ -845,20 +845,20 @@ export function advanceCoachOnboarding(
       }
       return {
         formPatch: { goalBodyFat: String(goalBodyFat) },
-        next: genderTurn(`Got it — goal body fat is ${goalBodyFat}%.`)
+        next: birthDateTurn()
       };
     }
 
     case 'gender': {
       const value = normalizeChoice(input);
       if (value === 'f' || value === 'female') {
-        return { formPatch: { gender: 'f' }, next: birthDateTurn() };
+        return { formPatch: { gender: 'f' }, next: activityTurn() };
       }
       if (value === 'm' || value === 'male') {
-        return { formPatch: { gender: 'm' }, next: birthDateTurn() };
+        return { formPatch: { gender: 'm' }, next: activityTurn() };
       }
       if (isSkip(input) || value.includes('prefer')) {
-        return { formPatch: { gender: '' }, next: birthDateTurn() };
+        return { formPatch: { gender: '' }, next: activityTurn() };
       }
       return { error: 'Pick one of the options.', next: genderTurn() };
     }
