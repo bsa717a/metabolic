@@ -56,6 +56,8 @@ export type CoachOnboardingStage =
   | 'activity'
   | 'bodyFatAsk'
   | 'bodyFatKnowHow'
+  | 'bodyFatEstimateSex'
+  | 'bodyFatVisualEstimate'
   | 'bodyFatHow'
   | 'bodyFatCurrent'
   | 'bodyFatGoal'
@@ -100,6 +102,8 @@ const STAGE_TO_MAIN_STEP: Record<CoachOnboardingStage, OnboardingMainStep> = {
   activity: 'activity',
   bodyFatAsk: 'bodyComposition',
   bodyFatKnowHow: 'bodyComposition',
+  bodyFatEstimateSex: 'bodyComposition',
+  bodyFatVisualEstimate: 'bodyComposition',
   bodyFatHow: 'bodyComposition',
   bodyFatCurrent: 'bodyComposition',
   bodyFatGoal: 'bodyComposition',
@@ -384,7 +388,39 @@ function bodyFatHowTurn(): CoachOnboardingTurn {
   };
 }
 
-function bodyFatCurrentTurn(): CoachOnboardingTurn {
+function bodyFatEstimateSexTurn(): CoachOnboardingTurn {
+  return {
+    stage: 'bodyFatEstimateSex',
+    assistantMessage: `I can show you some reference images to help estimate your body fat. Body fat percentages differ by sex — which set should I show?`,
+    quickReplies: [
+      { label: 'Men', value: 'male' },
+      { label: 'Women', value: 'female' }
+    ]
+  };
+}
+
+function bodyFatVisualEstimateTurn(sex: 'male' | 'female'): CoachOnboardingTurn {
+  return {
+    stage: 'bodyFatVisualEstimate',
+    assistantMessage: `Here are some reference body types for ${sex === 'male' ? 'men' : 'women'}. Tap the one that looks closest to you — I'll use that % as a starting point. You can adjust it afterward.\n\n[VISUAL_ESTIMATE_CARDS:${sex}]`,
+    quickReplies: [
+      { label: 'I have a number', mobileLabel: 'Number', value: 'have_number' },
+      { label: 'Skip for now', mobileLabel: 'Skip', value: 'skip' }
+    ]
+  };
+}
+
+function bodyFatCurrentTurn(prefilled?: number): CoachOnboardingTurn {
+  if (prefilled != null) {
+    return {
+      stage: 'bodyFatCurrent',
+      assistantMessage: `Based on the image you picked, I've set your estimate to ${prefilled}%. Does that look right? You can adjust it or just continue.`,
+      quickReplies: [
+        { label: `Use ${prefilled}%`, mobileLabel: `${prefilled}%`, value: String(prefilled) },
+        { label: 'Skip', value: 'skip' }
+      ]
+    };
+  }
   return {
     stage: 'bodyFatCurrent',
     assistantMessage: `What's your current body fat percentage? Just the number is fine — like 25 (no % needed).`,
@@ -702,9 +738,46 @@ export function advanceCoachOnboarding(
         return { next: bodyFatCurrentTurn() };
       }
       if (isNo(input)) {
-        return { next: bodyFatHowTurn() };
+        const sex = form.gender === 'm' ? 'male' : form.gender === 'f' ? 'female' : null;
+        if (sex) {
+          return { next: bodyFatVisualEstimateTurn(sex) };
+        }
+        return { next: bodyFatEstimateSexTurn() };
       }
       return { error: 'Tap Yes or No.', next: bodyFatKnowHowTurn() };
+    }
+
+    case 'bodyFatEstimateSex': {
+      const value = normalizeChoice(input);
+      if (value === 'male' || value === 'men' || value === 'm') {
+        return { next: bodyFatVisualEstimateTurn('male') };
+      }
+      if (value === 'female' || value === 'women' || value === 'f') {
+        return { next: bodyFatVisualEstimateTurn('female') };
+      }
+      return { error: 'Pick Men or Women.', next: bodyFatEstimateSexTurn() };
+    }
+
+    case 'bodyFatVisualEstimate': {
+      const value = normalizeChoice(input);
+      if (isSkip(value) || value === 'skip') {
+        return {
+          formPatch: { bodyFat: '', goalBodyFat: '' },
+          next: genderTurn()
+        };
+      }
+      if (value === 'have_number' || value.includes('have a number') || value.includes('number')) {
+        return { next: bodyFatCurrentTurn() };
+      }
+      const visualBodyFat = parseBodyFat(input);
+      if (visualBodyFat != null) {
+        return {
+          formPatch: { bodyFat: String(visualBodyFat) },
+          next: bodyFatCurrentTurn(visualBodyFat)
+        };
+      }
+      const currentSex = form.gender === 'm' ? 'male' : form.gender === 'f' ? 'female' : 'male';
+      return { error: 'Tap one of the body type images, or skip.', next: bodyFatVisualEstimateTurn(currentSex) };
     }
 
     case 'bodyFatHow': {
