@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { login, loginWithApple, loginWithGoogle, resetPassword, signUp, takeOAuthRedirectError } from '../services/auth';
 import { isFirebaseConfigured } from '../services/firebase';
 import { BrandLogo } from '../components/brand/BrandLogo';
@@ -366,6 +366,11 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
 
       <p className="mt-8 max-w-md text-center text-sm text-app-text-muted">
         Secure access to your personalized wellness dashboard
+      </p>
+      <p className="mt-3 text-center text-xs text-app-text-muted">
+        <Link to="/privacy" className="underline underline-offset-2 hover:text-app-text">
+          Privacy Policy
+        </Link>
       </p>
     </main>
   );
