@@ -7,6 +7,18 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.31.0](https://github.com/bsa717a/metabolic/compare/v0.30.0...v0.31.0) (2026-09-09)
+
+
+### Features
+
+* **ios:** add App Store native readiness for iOS ([#283](https://github.com/bsa717a/metabolic/issues/283)) ([3c165a4](https://github.com/bsa717a/metabolic/commit/3c165a4fcc049b9733b52017abab483a81159646))
+
+
+### Bug Fixes
+
+* sync package-lock for capacitor-firebase authentication ([#285](https://github.com/bsa717a/metabolic/issues/285)) ([b557847](https://github.com/bsa717a/metabolic/commit/b55784719e847337a00d50fd81ee88c6162409ae))
+
 ## [0.30.0](https://github.com/bsa717a/metabolic/compare/v0.29.0...v0.30.0) (2026-09-09)
 
 
