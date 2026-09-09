@@ -1,5 +1,6 @@
 import { forceTokenRefresh, getIdToken } from './auth';
 import { recordFailedRequest } from './diagnostics';
+import { nativeAwareFetch } from './nativeHttp';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -32,10 +33,11 @@ async function executeRequest(
   token: string | null,
   options: RequestInit
 ): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
+  return nativeAwareFetch(`${API_URL}${path}`, {
     ...options,
     method,
     body,
+    signal: options.signal ?? AbortSignal.timeout(15_000),
     headers: {
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -85,11 +87,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 }
 
 async function executeBlobRequest(path: string, token: string | null): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    }
-  });
+  return nativeAwareFetch(
+    `${API_URL}${path}`,
+    {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    },
+    { responseType: 'blob' }
+  );
 }
 
 /** Authenticated binary fetch (e.g. proxied progress photos for MediaPipe). */

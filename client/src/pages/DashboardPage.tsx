@@ -210,8 +210,9 @@ export function DashboardPage({
         <h1 className="text-xl font-bold">Dashboard could not load</h1>
         <p className="mt-2 text-sm">{error}</p>
         <p className="mt-4 text-sm text-red-700 dark:text-red-300">
-          Check that the backend is running and that Firebase Admin credentials are configured in{' '}
-          <code>server/.env</code>.
+          {error.includes('Could not reach the server')
+            ? 'Check your internet connection and try again. If this continues on the iPhone app, the API may not allow this app origin yet.'
+            : 'Check that the backend is running and that Firebase Admin credentials are configured in server/.env.'}
         </p>
       </div>
     );

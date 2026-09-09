@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import { env } from './config/env.js';
+import { corsAllowedOrigins } from './utils/corsOrigins.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { dashboardRoutes } from './routes/dashboardRoutes.js';
 import { programRoutes } from './routes/programRoutes.js';
@@ -48,7 +49,7 @@ async function main() {
   });
 
   await app.register(cors, {
-    origin: env.CLIENT_URL,
+    origin: corsAllowedOrigins(env.CLIENT_URL),
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });

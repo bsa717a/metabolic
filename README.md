@@ -157,4 +157,4 @@ npx cap open ios         # Opens Xcode
 2. **Distribute App → App Store Connect → Upload**
 3. In App Store Connect: add build to Internal Testing group
 
-The default configuration loads the production web app (`https://metabolic-v1.web.app`) in a WebView. To bundle assets for offline use, see the strategy notes in `client/IOS.md`.
+The iOS app bundles the web build and uses native Google and Sign in with Apple. See `client/IOS.md`.

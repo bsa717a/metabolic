@@ -130,20 +130,26 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
   async function googleLogin() {
     setError('');
     setSuccess('');
+    setSubmitting(true);
     try {
       await loginWithGoogle();
     } catch (err) {
-      setError(formatAuthError(err));
+      setError(formatAuthError(err, 'oauth'));
+    } finally {
+      setSubmitting(false);
     }
   }
 
   async function appleLogin() {
     setError('');
     setSuccess('');
+    setSubmitting(true);
     try {
       await loginWithApple();
     } catch (err) {
-      setError(formatAuthError(err));
+      setError(formatAuthError(err, 'oauth'));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -181,6 +187,11 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
             </p>
           </div>
         )}
+
+        {mode !== 'reset' && submitting && !error && (
+          <p className="mb-6 text-sm text-app-text-muted">Signing in…</p>
+        )}
+        {mode !== 'reset' && error && <p className="mb-6 text-sm text-red-500">{error}</p>}
 
         {mode === 'reset' ? (
           <form className="space-y-5" onSubmit={submitReset}>
@@ -225,7 +236,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
               <button
                 type="button"
                 className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-black/90 disabled:opacity-50"
-                disabled={!isFirebaseConfigured}
+                disabled={!isFirebaseConfigured || submitting}
                 onClick={appleLogin}
               >
                 <AppleIcon />
@@ -234,7 +245,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
               <button
                 type="button"
                 className="flex w-full items-center justify-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3.5 text-sm font-medium text-app-text shadow-sm transition hover:bg-app-muted disabled:opacity-50"
-                disabled={!isFirebaseConfigured}
+                disabled={!isFirebaseConfigured || submitting}
                 onClick={googleLogin}
               >
                 <GoogleIcon />
@@ -339,8 +350,6 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
                 {submitting ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
                 {!submitting && <ArrowRight size={16} aria-hidden />}
               </button>
-
-              {error && <p className="text-sm text-red-500">{error}</p>}
 
               {mode === 'signup' ? (
                 <button

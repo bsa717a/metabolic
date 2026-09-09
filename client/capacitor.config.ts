@@ -1,3 +1,4 @@
+/// <reference types="@capacitor-firebase/authentication" />
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
@@ -5,11 +6,15 @@ const config: CapacitorConfig = {
   appName: 'Master Metabolic',
   webDir: 'dist',
 
-  // For first TestFlight "hello world": load production web app in WebView.
-  // Comment out this server block to use the local bundled dist/ instead.
+  // Bundle dist/ so Google/Apple use native SDKs. A remote Hosting URL only
+  // works for social login after that same JS is deployed and this native shell
+  // includes the Capacitor Firebase Authentication plugin.
+  //
+  // Bundled dist/. WKWebView cannot use `https` as a custom scheme, so the
+  // real origin is capacitor://metaos.mastermetabolic.com. API calls use
+  // Capacitor native HTTP so they are not blocked by CORS.
   server: {
-    url: 'https://metabolic-v1.web.app',
-    cleartext: false, // HTTPS only
+    hostname: 'metaos.mastermetabolic.com',
   },
 
   ios: {
@@ -23,14 +28,13 @@ const config: CapacitorConfig = {
   },
 
   plugins: {
-    SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: true,
-      backgroundColor: '#0f172a',
-      showSpinner: false,
-      splashFullScreen: true,
-      splashImmersive: true,
+    CapacitorHttp: {
+      enabled: true
     },
+    FirebaseAuthentication: {
+      skipNativeAuth: true,
+      providers: ['apple.com', 'google.com']
+    }
   },
 };
 
