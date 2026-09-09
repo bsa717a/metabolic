@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.30.0](https://github.com/bsa717a/metabolic/compare/v0.29.0...v0.30.0) (2026-09-09)
+
+
+### Features
+
+* **ios:** native Google and Apple sign-in for Capacitor ([f0da3df](https://github.com/bsa717a/metabolic/commit/f0da3dffda9cbb448ff415f3e345665c52a658a4))
+* **ios:** native Google and Apple sign-in for Capacitor ([93b722b](https://github.com/bsa717a/metabolic/commit/93b722bbcb5ae9004641d14041abbbec6d66a4b7))
+
 ## [0.29.0](https://github.com/bsa717a/metabolic/compare/v0.28.0...v0.29.0) (2026-09-09)
 
 
