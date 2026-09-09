@@ -1,0 +1,30 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["8FG8V9P49A.com.mastermetabolic.app"],
+        "paths": ["/join", "/join?*"],
+        "components": [
+          {
+            "/": "/join",
+            "comment": "Coach invite deep link"
+          },
+          {
+            "/": "/join",
+            "?": { "coach": "*" },
+            "comment": "Coach invite with coach parameter"
+          },
+          {
+            "/": "/join",
+            "?": { "code": "*" },
+            "comment": "Coach invite with code parameter"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["8FG8V9P49A.com.mastermetabolic.app"]
+  }
+}
