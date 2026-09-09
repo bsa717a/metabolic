@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { login, loginWithApple, loginWithGoogle, resetPassword, signUp } from '../services/auth';
+import { login, loginWithApple, loginWithGoogle, resetPassword, signUp, takeOAuthRedirectError } from '../services/auth';
 import { isFirebaseConfigured } from '../services/firebase';
 import { BrandLogo } from '../components/brand/BrandLogo';
 import { getPendingCoachInvite, postLoginPath } from '../utils/pendingCoachInvite';
+import { formatAuthError } from '../utils/authErrors';
 import type { AppUser } from '../types';
 
 const inputClass =
@@ -46,11 +47,10 @@ function GoogleIcon() {
 
 function AppleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
       <path
         fill="currentColor"
-        d="M14.94 14.46c-.45 1.04-.98 1.99-1.59 2.86-.83 1.18-1.51 2-2.04 2.45-.81.75-1.68 1.14-2.6 1.16-.66 0-1.46-.19-2.39-.57-.93-.38-1.78-.57-2.56-.57-.83 0-1.72.19-2.67.57-.95.38-1.72.58-2.3.6-.89.04-1.78-.36-2.67-1.21-.57-.49-1.29-1.33-2.14-2.53-.91-1.28-1.66-2.76-2.25-4.45-.63-1.82-.94-3.59-.94-5.29 0-1.95.42-3.64 1.26-5.05.66-1.13 1.54-2.02 2.64-2.67 1.1-.65 2.29-.98 3.57-1 .7 0 1.62.22 2.76.65 1.13.43 1.86.65 2.18.65.24 0 1.05-.26 2.42-.77 1.3-.47 2.39-.67 3.28-.59 2.43.2 4.25 1.16 5.47 2.9-2.17 1.32-3.25 3.16-3.22 5.53.02 1.85.69 3.38 2 4.6.59.56 1.25 1 1.98 1.31-.16.46-.33.91-.52 1.33zm-5.07-18.07c0 1.45-.53 2.8-1.58 4.06-1.27 1.49-2.8 2.35-4.47 2.21-.02-.18-.03-.37-.03-.57 0-1.39.61-2.88 1.69-4.1.54-.62 1.23-1.13 2.06-1.54.83-.4 1.61-.62 2.35-.66.02.2.03.4.03.6z"
-        transform="scale(0.82) translate(1, 1)"
+        d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
       />
     </svg>
   );
@@ -72,6 +72,11 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
   const [loginWelcome] = useState(
     () => LOGIN_WELCOMES[Math.floor(Math.random() * LOGIN_WELCOMES.length)]
   );
+
+  useEffect(() => {
+    const redirectError = takeOAuthRedirectError();
+    if (redirectError) setError(redirectError);
+  }, []);
 
   if (authenticated) {
     const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
@@ -97,7 +102,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
         await login(email, password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : `${mode === 'signup' ? 'Sign up' : 'Login'} failed`);
+      setError(formatAuthError(err, mode === 'signup' ? 'signup' : 'login'));
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +121,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
       await resetPassword(email);
       setSuccess(`If an account exists for ${email.trim()}, a password reset link is on its way.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send reset email');
+      setError(formatAuthError(err, 'reset'));
     } finally {
       setSubmitting(false);
     }
@@ -128,7 +133,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
     try {
       await loginWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed');
+      setError(formatAuthError(err));
     }
   }
 
@@ -138,7 +143,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
     try {
       await loginWithApple();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Apple sign-in failed');
+      setError(formatAuthError(err));
     }
   }
 

@@ -96,7 +96,16 @@ gcloud projects add-iam-policy-binding metabolic-v1 \
   --role="roles/cloudsql.client"
 ```
 
-In Firebase Console: enable Email/Password (+ Google) auth; add `metabolic-v1.web.app` to Authorized domains.
+In Firebase Console: enable Email/Password, Google, and Apple auth; add `metabolic-v1.web.app` to Authorized domains.
+
+Sign in with Apple (web) also needs an Apple Developer setup, then those values in Firebase → Authentication → Sign-in method → Apple:
+
+1. In [Apple Developer](https://developer.apple.com/account) create an App ID with **Sign in with Apple**, then a Services ID (the OAuth client ID).
+2. On the Services ID, set the domain `metabolic-v1.firebaseapp.com` and return URL `https://metabolic-v1.firebaseapp.com/__/auth/handler`.
+3. Create a Sign in with Apple key (`.p8`). In Firebase, enable Apple and paste the Services ID, Team ID, Key ID, and private key.
+4. Keep `localhost` in Firebase authorized domains for local `npm run dev`.
+
+The login page uses a popup first and falls back to a full-page redirect if the browser blocks popups. Apple only sends the user's name on the first authorization; the app stores it on the Firebase profile and backfills `/api/me` if that request raced ahead.
 
 ### 2. Deploy app
 

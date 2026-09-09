@@ -28,11 +28,21 @@ async function notifyNewSignup(user: User, emailVerified: boolean) {
   }
 }
 
-function splitName(firebaseUser: DecodedIdToken) {
+export function splitName(firebaseUser: { name?: string; email?: string }) {
   const [firstName = "Metabolic", ...lastNameParts] = (firebaseUser.name || firebaseUser.email?.split("@")[0] || "User")
     .trim()
     .split(/\s+/);
   return { firstName, lastName: lastNameParts.join(" ") || "User" };
+}
+
+export function shouldBackfillName(
+  user: { firstName: string; lastName: string; email: string },
+  firebaseUser: { name?: string; email?: string }
+) {
+  if (!firebaseUser.name?.trim()) return false;
+  const localPart = user.email.split("@")[0] || "";
+  const placeholderFirst = user.firstName === "Metabolic" || user.firstName === localPart;
+  return placeholderFirst && user.lastName === "User";
 }
 
 /** Placeholder UIDs from seed data or legacy imports — replaced on first Firebase sign-in. */
@@ -87,7 +97,16 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
   }
 
   const byUid = await prisma.user.findUnique({ where: { firebaseUid: firebaseUser.uid } });
-  if (byUid) return byUid;
+  if (byUid) {
+    if (shouldBackfillName(byUid, firebaseUser)) {
+      const { firstName, lastName } = splitName(firebaseUser);
+      return prisma.user.update({
+        where: { id: byUid.id },
+        data: { firstName, lastName }
+      });
+    }
+    return byUid;
+  }
 
   if (firebaseUser.email) {
     const byEmail = await prisma.user.findFirst({

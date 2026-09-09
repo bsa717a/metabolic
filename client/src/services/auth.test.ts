@@ -9,11 +9,18 @@ vi.mock('firebase/auth', () => ({
   checkActionCode: vi.fn(),
   confirmPasswordReset: vi.fn(),
   createUserWithEmailAndPassword: vi.fn(),
+  getRedirectResult: vi.fn().mockResolvedValue(null),
+  getAdditionalUserInfo: vi.fn().mockReturnValue(null),
   GoogleAuthProvider: vi.fn(),
+  OAuthProvider: vi.fn().mockImplementation(() => ({
+    addScope: vi.fn(),
+    setCustomParameters: vi.fn()
+  })),
   onAuthStateChanged: (...args: unknown[]) => mockOnAuthStateChanged(...args),
   onIdTokenChanged: (...args: unknown[]) => mockOnIdTokenChanged(...args),
   signInWithEmailAndPassword: vi.fn(),
   signInWithPopup: vi.fn(),
+  signInWithRedirect: vi.fn(),
   signOut: vi.fn(),
   updateProfile: vi.fn(),
   verifyPasswordResetCode: vi.fn()
@@ -223,5 +230,72 @@ describe('parseTokenExpiry', () => {
 
     const token = await getIdToken();
     expect(token).toBeDefined();
+  });
+});
+
+const OAUTH_REDIRECT_ERROR_KEY = 'metabolic.oauthRedirectError';
+
+function installWebStorage() {
+  function createStorage() {
+    const store = new Map<string, string>();
+    return {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      }
+    };
+  }
+  vi.stubGlobal('sessionStorage', createStorage());
+  vi.stubGlobal('localStorage', createStorage());
+}
+
+describe('OAuth redirect error storage', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    installWebStorage();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('clears a stored redirect error after a successful email login', async () => {
+    const { signInWithEmailAndPassword } = await import('firebase/auth');
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user: { uid: 'u1' } } as never);
+    sessionStorage.setItem(OAUTH_REDIRECT_ERROR_KEY, 'Sign-in popup was blocked.');
+
+    const { login } = await import('./auth');
+    await login('pat@example.com', 'secret');
+
+    expect(sessionStorage.getItem(OAUTH_REDIRECT_ERROR_KEY)).toBeNull();
+  });
+
+  it('clears a stored redirect error on logout', async () => {
+    sessionStorage.setItem(OAUTH_REDIRECT_ERROR_KEY, 'Sign-in popup was blocked.');
+
+    const { logout } = await import('./auth');
+    await logout();
+
+    expect(sessionStorage.getItem(OAUTH_REDIRECT_ERROR_KEY)).toBeNull();
+  });
+
+  it('clears a stored redirect error after a successful OAuth popup', async () => {
+    const { signInWithPopup } = await import('firebase/auth');
+    vi.mocked(signInWithPopup).mockResolvedValue({
+      user: { uid: 'u1', displayName: null, providerData: [{ providerId: 'google.com' }] }
+    } as never);
+    sessionStorage.setItem(OAUTH_REDIRECT_ERROR_KEY, 'Sign-in popup was blocked.');
+
+    const { loginWithGoogle } = await import('./auth');
+    await loginWithGoogle();
+
+    expect(sessionStorage.getItem(OAUTH_REDIRECT_ERROR_KEY)).toBeNull();
   });
 });
