@@ -10,6 +10,13 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://metabolic-v1.web.app',
     cleartext: false, // HTTPS only
+    // Allow OAuth flows to stay inside the WebView instead of opening Safari
+    allowNavigation: [
+      'metabolic-v1.firebaseapp.com',
+      '*.firebaseapp.com',
+      'appleid.apple.com',
+      'accounts.google.com',
+    ],
   },
 
   ios: {
@@ -22,16 +29,7 @@ const config: CapacitorConfig = {
     scrollEnabled: true,
   },
 
-  plugins: {
-    SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: true,
-      backgroundColor: '#0f172a',
-      showSpinner: false,
-      splashFullScreen: true,
-      splashImmersive: true,
-    },
-  },
+  plugins: {},
 };
 
 export default config;
