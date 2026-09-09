@@ -143,6 +143,7 @@ function EditUserDrawerContent({
   const [welcomeEmailStatus, setWelcomeEmailStatus] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -273,10 +274,10 @@ function EditUserDrawerContent({
     const typed = window.prompt(
       `Permanently delete ${user.email} and all of their data, including their Firebase sign-in? Type DELETE to confirm.`
     );
-    if (typed !== 'DELETE') return;
+    if ((typed ?? '').trim().toUpperCase() !== 'DELETE') return;
 
     setDeleting(true);
-    setError('');
+    setDeleteError('');
     try {
       const me = await api<{ user: { id: string } }>('/api/me');
       const deletingSelf = me.user.id === user.id;
@@ -287,7 +288,7 @@ function EditUserDrawerContent({
         await logout();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to delete user');
+      setDeleteError(err instanceof Error && err.message ? err.message : 'Unable to delete user');
     } finally {
       setDeleting(false);
     }
@@ -313,6 +314,7 @@ function EditUserDrawerContent({
     >
     <div className="space-y-6">
       <p className="text-sm text-app-text-muted">Update account details for {user.email}.</p>
+      {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
 
       <div className="space-y-4">
         <label className="block">
@@ -507,6 +509,7 @@ function EditUserDrawerContent({
         <p className="text-sm text-red-700 dark:text-red-300">
           Permanently removes this account, their data, and their Firebase sign-in. This cannot be undone.
         </p>
+        {deleteError ? <p className="text-sm font-medium text-red-800 dark:text-red-200">{deleteError}</p> : null}
         <Button
           type="button"
           variant="secondary"
@@ -517,8 +520,6 @@ function EditUserDrawerContent({
           {deleting ? 'Deleting…' : 'Delete user'}
         </Button>
       </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
     </Drawer>
   );
