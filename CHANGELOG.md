@@ -7,6 +7,20 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.28.0](https://github.com/bsa717a/metabolic/compare/v0.27.0...v0.28.0) (2026-09-09)
+
+
+### Features
+
+* **auth:** add Sign in with Apple button and update auth landing UI ([1f91657](https://github.com/bsa717a/metabolic/commit/1f9165750411c658f35ec9e6a0b0063654aa2845))
+* **auth:** add Sign in with Apple button and update auth landing UI ([ce52ae5](https://github.com/bsa717a/metabolic/commit/ce52ae5f1d3bc69747c944d5c56bb26f40f6c4e2))
+* **auth:** wire Sign in with Apple through Firebase and backfill names ([7534f6d](https://github.com/bsa717a/metabolic/commit/7534f6ddead90840bf8a570dd7e41c71bfd8f8f8))
+
+
+### Bug Fixes
+
+* **onboarding:** preserve gender literal type in test fixture ([#272](https://github.com/bsa717a/metabolic/issues/272)) ([e24d827](https://github.com/bsa717a/metabolic/commit/e24d82705590972077bf549f98071178b985ba2c))
+
 ## [0.27.0](https://github.com/bsa717a/metabolic/compare/v0.26.1...v0.27.0) (2026-09-08)
 
 
