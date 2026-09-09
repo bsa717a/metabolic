@@ -3,18 +3,26 @@ import {
   checkActionCode,
   confirmPasswordReset,
   createUserWithEmailAndPassword,
+  getRedirectResult,
   GoogleAuthProvider,
+  OAuthProvider,
+  getAdditionalUserInfo,
   onAuthStateChanged,
   onIdTokenChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
   verifyPasswordResetCode,
   type ActionCodeInfo,
-  type User
+  type AuthProvider,
+  type User,
+  type UserCredential
 } from 'firebase/auth';
 import { auth } from './firebase';
+import { displayNameFromAppleResult, isAppleUserCredential } from '../utils/appleSignIn';
+import { formatAuthError, getAuthErrorCode } from '../utils/authErrors';
 import { clearSignupDashboardFirstSession } from '../utils/signupDashboardExperience';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -117,9 +125,11 @@ export type VerificationEmailResult = {
   actionUrl?: string;
 };
 
-export function login(email: string, password: string) {
+export async function login(email: string, password: string) {
   if (!auth) throw new Error('Firebase is not configured. Add VITE_FIREBASE_* values to client/.env.');
-  return signInWithEmailAndPassword(auth, email, password);
+  const credential = await signInWithEmailAndPassword(auth, email, password);
+  clearOAuthRedirectError();
+  return credential;
 }
 
 export async function signUp(email: string, password: string, displayName: string) {
@@ -128,6 +138,7 @@ export async function signUp(email: string, password: string, displayName: strin
   if (displayName.trim()) {
     await updateProfile(credential.user, { displayName: displayName.trim() });
   }
+  clearOAuthRedirectError();
   return credential;
 }
 
@@ -188,9 +199,96 @@ export function getCurrentUserEmail(): string | null {
   return auth?.currentUser?.email ?? null;
 }
 
+const OAUTH_REDIRECT_ERROR_KEY = 'metabolic.oauthRedirectError';
+
+function storeOAuthRedirectError(error: unknown) {
+  try {
+    sessionStorage.setItem(OAUTH_REDIRECT_ERROR_KEY, formatAuthError(error));
+  } catch {
+    // Ignore storage failures (private mode, tests without sessionStorage).
+  }
+}
+
+function clearOAuthRedirectError() {
+  try {
+    sessionStorage.removeItem(OAUTH_REDIRECT_ERROR_KEY);
+  } catch {
+    // Ignore storage failures (private mode, tests without sessionStorage).
+  }
+}
+
+export function takeOAuthRedirectError(): string | null {
+  try {
+    const message = sessionStorage.getItem(OAUTH_REDIRECT_ERROR_KEY);
+    if (message) sessionStorage.removeItem(OAUTH_REDIRECT_ERROR_KEY);
+    return message;
+  } catch {
+    return null;
+  }
+}
+
+async function persistAppleDisplayName(result: UserCredential) {
+  const additionalUserInfo = getAdditionalUserInfo(result);
+  const profile = additionalUserInfo?.profile as Record<string, unknown> | undefined;
+  const displayName = displayNameFromAppleResult({
+    user: result.user,
+    additionalUserInfo: { profile: profile ?? null }
+  });
+  if (!displayName || result.user.displayName === displayName) return;
+  await updateProfile(result.user, { displayName });
+  await result.user.getIdToken(true);
+}
+
+async function consumeOAuthRedirectResult() {
+  if (!auth) return;
+  try {
+    const result = await getRedirectResult(auth);
+    if (!result) return;
+    clearOAuthRedirectError();
+    if (isAppleUserCredential(result)) {
+      await persistAppleDisplayName(result);
+    }
+  } catch (error) {
+    storeOAuthRedirectError(error);
+  }
+}
+
+function initOAuthRedirectListener() {
+  void consumeOAuthRedirectResult();
+}
+
+initOAuthRedirectListener();
+
+function shouldFallbackToRedirect(error: unknown) {
+  const code = getAuthErrorCode(error);
+  return code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment';
+}
+
+async function signInWithOAuth(provider: AuthProvider) {
+  const firebaseAuth = requireAuth();
+  try {
+    const result = await signInWithPopup(firebaseAuth, provider);
+    clearOAuthRedirectError();
+    return result;
+  } catch (error) {
+    if (!shouldFallbackToRedirect(error)) throw error;
+    await signInWithRedirect(firebaseAuth, provider);
+    return null;
+  }
+}
+
 export function loginWithGoogle() {
-  if (!auth) throw new Error('Firebase is not configured. Add VITE_FIREBASE_* values to client/.env.');
-  return signInWithPopup(auth, new GoogleAuthProvider());
+  return signInWithOAuth(new GoogleAuthProvider());
+}
+
+export async function loginWithApple() {
+  const provider = new OAuthProvider('apple.com');
+  provider.addScope('email');
+  provider.addScope('name');
+  provider.setCustomParameters({ locale: 'en_US' });
+  const result = await signInWithOAuth(provider);
+  if (result) await persistAppleDisplayName(result);
+  return result;
 }
 
 export async function resetPassword(email: string) {
@@ -199,6 +297,7 @@ export async function resetPassword(email: string) {
 
 export function logout() {
   clearSignupDashboardFirstSession();
+  clearOAuthRedirectError();
   if (!auth) return Promise.resolve();
   return signOut(auth);
 }

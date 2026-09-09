@@ -24,6 +24,16 @@ describe('formatAuthError', () => {
     expect(formatAuthError({ code: 'auth/email-already-in-use' }, 'signup')).toBe(
       'An account with this email already exists. Sign in instead.'
     );
+    expect(formatAuthError({ code: 'auth/popup-closed-by-user' })).toBe('Sign-in was cancelled.');
+    expect(formatAuthError({ code: 'auth/popup-blocked' })).toBe(
+      'Sign-in popup was blocked. Allow popups for this site and try again.'
+    );
+    expect(formatAuthError({ code: 'auth/operation-not-allowed' })).toBe(
+      'This sign-in method is not enabled. Try email or Google instead.'
+    );
+    expect(formatAuthError({ code: 'auth/account-exists-with-different-credential' })).toBe(
+      'An account with this email already exists. Sign in with email or Google instead.'
+    );
   });
 
   it('does not surface raw Firebase error strings', () => {

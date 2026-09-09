@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { login, loginWithGoogle, resetPassword, signUp } from '../services/auth';
+import { login, loginWithApple, loginWithGoogle, resetPassword, signUp, takeOAuthRedirectError } from '../services/auth';
 import { isFirebaseConfigured } from '../services/firebase';
 import { BrandLogo } from '../components/brand/BrandLogo';
 import { getPendingCoachInvite, postLoginPath } from '../utils/pendingCoachInvite';
+import { formatAuthError } from '../utils/authErrors';
 import type { AppUser } from '../types';
 
 const inputClass =
@@ -44,6 +45,17 @@ function GoogleIcon() {
   );
 }
 
+function AppleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
+      />
+    </svg>
+  );
+}
+
 type AuthMode = 'login' | 'signup' | 'reset';
 
 export function LoginPage({ authenticated }: { authenticated: boolean; appUser?: AppUser | null }) {
@@ -60,6 +72,11 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
   const [loginWelcome] = useState(
     () => LOGIN_WELCOMES[Math.floor(Math.random() * LOGIN_WELCOMES.length)]
   );
+
+  useEffect(() => {
+    const redirectError = takeOAuthRedirectError();
+    if (redirectError) setError(redirectError);
+  }, []);
 
   if (authenticated) {
     const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
@@ -85,7 +102,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
         await login(email, password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : `${mode === 'signup' ? 'Sign up' : 'Login'} failed`);
+      setError(formatAuthError(err, mode === 'signup' ? 'signup' : 'login'));
     } finally {
       setSubmitting(false);
     }
@@ -104,7 +121,7 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
       await resetPassword(email);
       setSuccess(`If an account exists for ${email.trim()}, a password reset link is on its way.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send reset email');
+      setError(formatAuthError(err, 'reset'));
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +133,17 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
     try {
       await loginWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed');
+      setError(formatAuthError(err));
+    }
+  }
+
+  async function appleLogin() {
+    setError('');
+    setSuccess('');
+    try {
+      await loginWithApple();
+    } catch (err) {
+      setError(formatAuthError(err));
     }
   }
 
@@ -194,15 +221,26 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
           </form>
         ) : (
           <>
-            <button
-              type="button"
-              className="mb-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3.5 text-sm font-medium text-app-text shadow-sm transition hover:bg-app-muted disabled:opacity-50"
-              disabled={!isFirebaseConfigured}
-              onClick={googleLogin}
-            >
-              <GoogleIcon />
-              Continue with Google
-            </button>
+            <div className="mb-6 flex flex-col gap-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-black/90 disabled:opacity-50"
+                disabled={!isFirebaseConfigured}
+                onClick={appleLogin}
+              >
+                <AppleIcon />
+                Sign in with Apple
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3.5 text-sm font-medium text-app-text shadow-sm transition hover:bg-app-muted disabled:opacity-50"
+                disabled={!isFirebaseConfigured}
+                onClick={googleLogin}
+              >
+                <GoogleIcon />
+                Continue with Google
+              </button>
+            </div>
 
             <div className="mb-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-app-border" />
@@ -304,31 +342,23 @@ export function LoginPage({ authenticated }: { authenticated: boolean; appUser?:
 
               {error && <p className="text-sm text-red-500">{error}</p>}
 
-              <p className="text-center text-sm text-app-text-muted">
-                {mode === 'signup' ? (
-                  <>
-                    Already have an account?{' '}
-                    <button
-                      type="button"
-                      className="font-medium text-brand-green hover:underline dark:text-brand-green-light"
-                      onClick={() => switchMode('login')}
-                    >
-                      Sign in
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    New to MetabolicOS?{' '}
-                    <button
-                      type="button"
-                      className="font-medium text-brand-green hover:underline dark:text-brand-green-light"
-                      onClick={() => switchMode('signup')}
-                    >
-                      Create an account
-                    </button>
-                  </>
-                )}
-              </p>
+              {mode === 'signup' ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center rounded-full border-2 border-brand-green px-6 py-3.5 text-sm font-semibold text-brand-green transition hover:bg-brand-green/10 dark:border-brand-green-light dark:text-brand-green-light dark:hover:bg-brand-green-light/10"
+                  onClick={() => switchMode('login')}
+                >
+                  Sign in
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center rounded-full border-2 border-brand-green px-6 py-3.5 text-sm font-semibold text-brand-green transition hover:bg-brand-green/10 dark:border-brand-green-light dark:text-brand-green-light dark:hover:bg-brand-green-light/10"
+                  onClick={() => switchMode('signup')}
+                >
+                  Create an account
+                </button>
+              )}
             </form>
           </>
         )}

@@ -65,6 +65,26 @@ const AUTH_USER_NOTICES: Record<string, AuthUserNotice> = {
     title: 'Sign-in cancelled',
     body: 'Google sign-in was cancelled before it finished.'
   },
+  'Sign-in was cancelled.': {
+    title: 'Sign-in cancelled',
+    body: 'Sign-in was cancelled before it finished.'
+  },
+  'Sign-in popup was blocked. Allow popups for this site and try again.': {
+    title: 'Popup blocked',
+    body: 'Allow popups for this site and try Apple or Google sign-in again.'
+  },
+  'An account with this email already exists. Sign in with email or Google instead.': {
+    title: 'Account already exists',
+    body: 'An account with this email already exists. Sign in with email or Google instead.'
+  },
+  'This sign-in method is not enabled. Try email or Google instead.': {
+    title: 'Sign-in unavailable',
+    body: 'This sign-in method is not enabled yet. Try email or Google instead.'
+  },
+  'This site is not authorized for sign-in.': {
+    title: 'Sign-in unavailable',
+    body: 'This site is not authorized for sign-in.'
+  },
   'Network error. Check your connection and try again.': {
     title: 'Connection problem',
     body: 'Check your internet connection and try again.'
@@ -136,7 +156,16 @@ export function formatAuthError(error: unknown, mode: 'login' | 'signup' | 'rese
     case 'auth/weak-password':
       return 'Choose a stronger password (at least 6 characters).';
     case 'auth/popup-closed-by-user':
-      return 'Google sign-in was cancelled.';
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was cancelled.';
+    case 'auth/popup-blocked':
+      return 'Sign-in popup was blocked. Allow popups for this site and try again.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account with this email already exists. Sign in with email or Google instead.';
+    case 'auth/operation-not-allowed':
+      return 'This sign-in method is not enabled. Try email or Google instead.';
+    case 'auth/unauthorized-domain':
+      return 'This site is not authorized for sign-in.';
     case 'auth/network-request-failed':
       return 'Network error. Check your connection and try again.';
     default:
