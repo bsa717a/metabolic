@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.29.0](https://github.com/bsa717a/metabolic/compare/v0.28.0...v0.29.0) (2026-09-09)
+
+
+### Features
+
+* add public Privacy Policy page at /privacy ([#280](https://github.com/bsa717a/metabolic/issues/280)) ([86ee996](https://github.com/bsa717a/metabolic/commit/86ee996e1e8283839ed19446e4e70b33c92cfcc2))
+* **ios:** scaffold Capacitor for iOS TestFlight ([#278](https://github.com/bsa717a/metabolic/issues/278)) ([89f5f55](https://github.com/bsa717a/metabolic/commit/89f5f55b72b46bb00f5ab53f152695c68045341c))
+
 ## [0.28.0](https://github.com/bsa717a/metabolic/compare/v0.27.0...v0.28.0) (2026-09-09)
 
 
