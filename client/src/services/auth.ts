@@ -23,6 +23,8 @@ import {
 import { auth } from './firebase';
 import { displayNameFromAppleResult, isAppleUserCredential } from '../utils/appleSignIn';
 import { formatAuthError, getAuthErrorCode } from '../utils/authErrors';
+import { nativeAwareFetch } from './nativeHttp';
+import { isNativeAuthPlatform } from './nativeAuthPlatform';
 import { clearSignupDashboardFirstSession } from '../utils/signupDashboardExperience';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -82,7 +84,7 @@ function requireAuth() {
 }
 
 async function executePostAuthJson(path: string, body: unknown, token: string | null): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
+  return nativeAwareFetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -254,10 +256,31 @@ async function consumeOAuthRedirectResult() {
 }
 
 function initOAuthRedirectListener() {
+  // getRedirectResult never settles in the iOS WebView and blocks Firebase auth state.
+  if (isNativeAuthPlatform()) return;
   void consumeOAuthRedirectResult();
 }
 
+function initNativePendingGoogleAuth() {
+  if (!isNativeAuthPlatform() || !auth) return;
+  const firebaseAuth = auth;
+  const consume = () => {
+    void import('./nativeAuth').then(({ consumePendingNativeGoogleAuth }) =>
+      consumePendingNativeGoogleAuth(firebaseAuth)
+        .then((result) => {
+          if (result) clearOAuthRedirectError();
+        })
+        .catch((error) => {
+          storeOAuthRedirectError(error);
+        })
+    );
+  };
+  consume();
+  window.addEventListener('metabolic-pending-google-auth', consume);
+}
+
 initOAuthRedirectListener();
+initNativePendingGoogleAuth();
 
 function shouldFallbackToRedirect(error: unknown) {
   const code = getAuthErrorCode(error);
@@ -277,11 +300,24 @@ async function signInWithOAuth(provider: AuthProvider) {
   }
 }
 
-export function loginWithGoogle() {
+export async function loginWithGoogle() {
+  if (isNativeAuthPlatform()) {
+    const { nativeGoogleCredentialSignIn } = await import('./nativeAuth');
+    const result = await nativeGoogleCredentialSignIn(requireAuth());
+    clearOAuthRedirectError();
+    return result;
+  }
   return signInWithOAuth(new GoogleAuthProvider());
 }
 
 export async function loginWithApple() {
+  if (isNativeAuthPlatform()) {
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+    const result = await nativeAppleCredentialSignIn(requireAuth());
+    await persistAppleDisplayName(result);
+    clearOAuthRedirectError();
+    return result;
+  }
   const provider = new OAuthProvider('apple.com');
   provider.addScope('email');
   provider.addScope('name');
@@ -307,7 +343,22 @@ export function listenForAuth(callback: (user: User | null) => void) {
     callback(null);
     return () => undefined;
   }
-  return onAuthStateChanged(auth, callback);
+  const firebaseAuth = auth;
+  let settled = false;
+  const notify = (user: User | null) => {
+    if (settled) return;
+    settled = true;
+    callback(user);
+  };
+  const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+    settled = true;
+    callback(user);
+  });
+  const timeout = setTimeout(() => notify(firebaseAuth.currentUser), 2500);
+  return () => {
+    clearTimeout(timeout);
+    unsubscribe();
+  };
 }
 
 /**

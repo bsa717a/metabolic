@@ -16,41 +16,15 @@ This document covers building, signing, and distributing the iOS app via Capacit
 
 ---
 
-## Strategy: Remote URL vs Bundled Assets
+## Strategy: Bundled Assets
 
-The Capacitor config supports two modes:
+The iOS app bundles the Vite `dist/` build and signs in with **native** Google
+and Sign in with Apple. That avoids Firebase `signInWithRedirect` inside WKWebView,
+which fails with "missing initial state".
 
-### 1. Remote URL (default for first TestFlight)
+A remote `server.url` of `https://metabolic-v1.web.app` is only safe for social
+login after that Hosting deploy includes the Capacitor authentication calls.
 
-The iOS WebView loads `https://metabolic-v1.web.app` directly. This is ideal for:
-- Quick TestFlight "hello world" without building web assets into the binary
-- Always showing the latest deployed web app
-- Smaller app binary size
-
-**Current config in `capacitor.config.ts`:**
-```ts
-server: {
-  url: 'https://metabolic-v1.web.app',
-  cleartext: false,
-},
-```
-
-**Tradeoff:** Requires network connectivity; app is a thin shell.
-
-### 2. Bundled Assets (offline-capable)
-
-Comment out the `server` block in `capacitor.config.ts` to bundle the built
-`dist/` folder into the app. This allows offline usage and faster initial load.
-
-```ts
-// Comment out to use bundled dist/
-// server: {
-//   url: 'https://metabolic-v1.web.app',
-//   cleartext: false,
-// },
-```
-
-Then rebuild and sync:
 ```bash
 npm run cap:sync:ios
 ```
@@ -208,6 +182,41 @@ After installing from TestFlight:
 
 - The production URL uses HTTPS and should not trigger ATS
 - If testing with a local URL, configure ATS exceptions in `Info.plist`
+
+### Apple sign-in: AuthorizationError 1000
+
+Sign in with Apple often fails in the **Simulator** with
+`com.apple.AuthenticationServices.AuthorizationError error 1000`.
+
+- Use a **physical iPhone**, or
+- In the Simulator: **Settings → Sign in to your iPhone** with an Apple ID that
+  has two-factor authentication
+
+Also confirm Xcode **Signing & Capabilities** includes **Sign in with Apple**
+for the App target (`com.mastermetabolic.app`).
+
+### Google sign-in returns to the login screen
+
+The iOS Google ID token is often issued for the **iOS** OAuth client, while
+Firebase JS Auth expects the **web** client. Native sign-in also backgrounds
+the WebView, which can drop the JS promise.
+
+`SERVER_CLIENT_ID` in `native/GoogleService-Info.plist` must be the Firebase
+**web** OAuth client ID. Native Auth must use `initializeAuth` with
+`indexedDBLocalPersistence` — `getAuth()` can hang after Google returns.
+Pending tokens are stored and exchanged with an access-token fallback. The iOS
+WebView origin is `https://metaos.mastermetabolic.com` so it matches the
+production site. The API stays on Cloud Run (`VITE_API_URL`) and must allow
+that origin in CORS.
+
+After changing native auth files:
+
+```bash
+cd client
+npm run cap:sync:ios
+```
+
+Then **Product → Run** in Xcode (a sync alone does not relaunch the simulator app).
 
 ### CocoaPods errors
 

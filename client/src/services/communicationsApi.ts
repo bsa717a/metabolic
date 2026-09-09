@@ -1,5 +1,6 @@
 import { api } from './api';
 import { forceTokenRefresh, getIdToken } from './auth';
+import { nativeAwareFetch } from './nativeHttp';
 import type { CommunicationUser, EligibilitySummary, RecipientInput } from '../lib/communications/types';
 
 /**
@@ -29,7 +30,7 @@ class CommunicationsApiError extends Error {
 }
 
 async function executePostWithSummary(path: string, body: unknown, token: string | null): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
+  return nativeAwareFetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

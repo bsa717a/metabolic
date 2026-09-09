@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APPLE_SIGNIN_UNAVAILABLE_MESSAGE,
   formatAuthError,
   getAuthErrorCode,
   getAuthUserNotice,
@@ -21,6 +22,9 @@ describe('formatAuthError', () => {
     expect(formatAuthError({ code: 'auth/missing-password' })).toBe('Enter your password.');
     expect(formatAuthError({ code: 'auth/wrong-password' })).toBe(WRONG_CREDENTIALS_MESSAGE);
     expect(formatAuthError({ code: 'auth/invalid-credential' })).toBe(WRONG_CREDENTIALS_MESSAGE);
+    expect(formatAuthError({ code: 'auth/invalid-credential' }, 'oauth')).toBe(
+      'Google or Apple sign-in could not be completed. Try again.'
+    );
     expect(formatAuthError({ code: 'auth/email-already-in-use' }, 'signup')).toBe(
       'An account with this email already exists. Sign in instead.'
     );
@@ -38,6 +42,17 @@ describe('formatAuthError', () => {
 
   it('does not surface raw Firebase error strings', () => {
     expect(formatAuthError(new Error('Firebase: Error (auth/missing-password).'))).toBe('Sign in failed. Try again.');
+  });
+
+  it('maps native Apple AuthorizationError 1000 to a simulator-friendly message', () => {
+    expect(
+      formatAuthError(
+        new Error(
+          'The operation couldn’t be completed. (com.apple.AuthenticationServices.AuthorizationError error 1000.)'
+        ),
+        'oauth'
+      )
+    ).toBe(APPLE_SIGNIN_UNAVAILABLE_MESSAGE);
   });
 });
 

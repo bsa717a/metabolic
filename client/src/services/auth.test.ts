@@ -26,6 +26,17 @@ vi.mock('firebase/auth', () => ({
   verifyPasswordResetCode: vi.fn()
 }));
 
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { isNativePlatform: () => false }
+}));
+
+vi.mock('@capacitor-firebase/authentication', () => ({
+  FirebaseAuthentication: {
+    signInWithGoogle: vi.fn(),
+    signInWithApple: vi.fn()
+  }
+}));
+
 vi.mock('./firebase', () => ({
   auth: {
     currentUser: {

@@ -4,11 +4,24 @@ type AuthErrorLike = {
 };
 
 export const WRONG_CREDENTIALS_MESSAGE = 'Email or password is incorrect. Check both and try again.';
+export const APPLE_SIGNIN_UNAVAILABLE_MESSAGE =
+  'Sign in with Apple isn’t available in the Simulator unless it is signed into iCloud. Use a physical iPhone, or open Settings on the Simulator and sign in with your Apple ID.';
 
 export type AuthUserNotice = { title: string; body: string };
 
 export function getAuthErrorCode(error: unknown): string {
   return (error as AuthErrorLike)?.code ?? '';
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return (error as AuthErrorLike)?.message ?? '';
+}
+
+function formatAppleAuthorizationError(message: string): string | null {
+  if (!/AuthenticationServices\.AuthorizationError/i.test(message)) return null;
+  if (/error 1001/.test(message)) return 'Sign-in was cancelled.';
+  return APPLE_SIGNIN_UNAVAILABLE_MESSAGE;
 }
 
 export function isLoginCredentialFailure(code: string): boolean {
@@ -64,6 +77,22 @@ const AUTH_USER_NOTICES: Record<string, AuthUserNotice> = {
   'Google sign-in was cancelled.': {
     title: 'Sign-in cancelled',
     body: 'Google sign-in was cancelled before it finished.'
+  },
+  'Google or Apple sign-in could not be completed. Try again.': {
+    title: 'Sign-in failed',
+    body: 'Google or Apple sign-in could not be completed. Try again.'
+  },
+  [APPLE_SIGNIN_UNAVAILABLE_MESSAGE]: {
+    title: 'Apple sign-in unavailable',
+    body: APPLE_SIGNIN_UNAVAILABLE_MESSAGE
+  },
+  'Google sign-in timed out. Try again.': {
+    title: 'Sign-in timed out',
+    body: 'Google sign-in took too long. Try again.'
+  },
+  'Firebase did not accept the Google sign-in. Try again.': {
+    title: 'Sign-in failed',
+    body: 'Firebase did not accept the Google sign-in. Try again.'
   },
   'Sign-in was cancelled.': {
     title: 'Sign-in cancelled',
@@ -130,17 +159,26 @@ export function getAuthUserNotice(message: string): AuthUserNotice {
 }
 
 /** Maps Firebase Auth errors to plain-language messages for the login/signup UI. */
-export function formatAuthError(error: unknown, mode: 'login' | 'signup' | 'reset' = 'login'): string {
+export function formatAuthError(
+  error: unknown,
+  mode: 'login' | 'signup' | 'reset' | 'oauth' = 'login'
+): string {
   const code = getAuthErrorCode(error);
   const fallback =
-    mode === 'signup' ? 'Could not create your account. Try again.' : mode === 'reset' ? 'Could not send reset email.' : 'Sign in failed. Try again.';
+    mode === 'signup'
+      ? 'Could not create your account. Try again.'
+      : mode === 'reset'
+        ? 'Could not send reset email.'
+        : 'Sign in failed. Try again.';
 
   switch (code) {
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
     case 'auth/invalid-login-credentials':
-      return WRONG_CREDENTIALS_MESSAGE;
+      return mode === 'oauth'
+        ? 'Google or Apple sign-in could not be completed. Try again.'
+        : WRONG_CREDENTIALS_MESSAGE;
     case 'auth/invalid-email':
       return 'Enter a valid email address.';
     case 'auth/missing-email':
@@ -168,11 +206,13 @@ export function formatAuthError(error: unknown, mode: 'login' | 'signup' | 'rese
       return 'This site is not authorized for sign-in.';
     case 'auth/network-request-failed':
       return 'Network error. Check your connection and try again.';
-    default:
-      if (error instanceof Error && error.message && !error.message.startsWith('Firebase:')) {
-        return error.message;
-      }
+    default: {
+      const message = getErrorMessage(error);
+      const appleMessage = formatAppleAuthorizationError(message);
+      if (appleMessage) return appleMessage;
+      if (message && !message.startsWith('Firebase:')) return message;
       return fallback;
+    }
   }
 }
 

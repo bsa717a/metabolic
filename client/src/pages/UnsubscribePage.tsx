@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { nativeAwareFetch } from '../services/nativeHttp';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -29,7 +30,7 @@ export function UnsubscribePage() {
         return;
       }
       try {
-        const res = await fetch(`${API_URL}/api/unsubscribe?token=${encodeURIComponent(token)}`);
+        const res = await nativeAwareFetch(`${API_URL}/api/unsubscribe?token=${encodeURIComponent(token)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Invalid or expired unsubscribe link.');
         setVerified(data);
@@ -46,7 +47,7 @@ export function UnsubscribePage() {
     setConfirming(true);
     setError('');
     try {
-      const res = await fetch(`${API_URL}/api/unsubscribe/confirm`, {
+      const res = await nativeAwareFetch(`${API_URL}/api/unsubscribe/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token })
