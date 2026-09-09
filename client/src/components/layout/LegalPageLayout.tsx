@@ -27,6 +27,10 @@ export function LegalPageLayout({
         <div className="prose-legal mt-8 space-y-6 text-sm leading-7 text-app-text">{children}</div>
         <footer className="mt-12 border-t border-app-border pt-6 text-sm text-app-text-muted">
           <p>
+            <Link to="/privacy" className="font-medium text-app-text underline-offset-2 hover:underline">
+              Privacy Policy
+            </Link>
+            {' · '}
             <Link to="/sms-opt-in" className="font-medium text-app-text underline-offset-2 hover:underline">
               SMS Opt-In
             </Link>

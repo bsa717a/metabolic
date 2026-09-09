@@ -36,6 +36,7 @@ import { AuthActionPage } from './pages/AuthActionPage';
 import { FirstTimeSetupPage } from './pages/FirstTimeSetupPage';
 import { CampaignPolicyPage } from './pages/CampaignPolicyPage';
 import { CampaignTermsPage } from './pages/CampaignTermsPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { SupportPage } from './pages/SupportPage';
 import { SmsOptInPage } from './pages/SmsOptInPage';
 import { GamificationPage } from './pages/GamificationPage';
@@ -320,6 +321,7 @@ export default function App() {
         />
         <Route path="/pricing" element={<PricingPage authenticated={Boolean(firebaseUser)} />} />
         <Route path="/sms-opt-in" element={<SmsOptInPage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/campaign-policy" element={<CampaignPolicyPage />} />
         <Route path="/campaign-terms" element={<CampaignTermsPage />} />
         <Route path="/support" element={<SupportPage />} />
