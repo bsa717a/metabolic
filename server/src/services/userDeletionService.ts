@@ -1,44 +1,55 @@
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getFirebaseAdmin } from '../auth/firebaseAdmin.js';
-import { isPlaceholderFirebaseUid } from '../auth/resolveAppUser.js';
 import { env } from '../config/env.js';
 import { getFirebaseStorageBucket } from '../config/firebaseStorage.js';
+import { isSkippableFirebaseAuthError, shouldSkipFirebaseAuthUid } from './userDeletionFirebase.js';
 import { assertCanDeleteUser, UserDeletionError } from './userDeletionPolicy.js';
 
 export { assertCanDeleteUser, UserDeletionError };
 
 type Actor = { id: string; role: Role };
 
-function isFirebaseUserNotFound(error: unknown) {
-  if (!error || typeof error !== 'object') return false;
-  const code = 'code' in error ? String(error.code) : '';
-  const info =
-    'errorInfo' in error && error.errorInfo && typeof error.errorInfo === 'object' && 'code' in error.errorInfo
-      ? String(error.errorInfo.code)
-      : '';
-  return code === 'auth/user-not-found' || info === 'auth/user-not-found';
+const USER_DELETE_TRANSACTION = { maxWait: 10_000, timeout: 60_000 } as const;
+
+function humanizeUserDeleteDbError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2028') {
+      return 'Deleting this account timed out. Wait a moment and try again.';
+    }
+    if (error.code === 'P2003' || error.code === 'P2014') {
+      return 'This account is still linked to other records and could not be deleted.';
+    }
+  }
+  return error instanceof Error ? error.message : 'Unable to delete user';
 }
 
 async function deleteFirebaseAuthUser(firebaseUid: string) {
-  if (isPlaceholderFirebaseUid(firebaseUid)) return;
-
-  const auth = getFirebaseAdmin().auth();
-  try {
-    await auth.revokeRefreshTokens(firebaseUid);
-  } catch (error) {
-    if (!isFirebaseUserNotFound(error)) throw error;
-  }
+  if (shouldSkipFirebaseAuthUid(firebaseUid)) return;
 
   try {
-    await auth.deleteUser(firebaseUid);
+    const auth = getFirebaseAdmin().auth();
+    try {
+      await auth.revokeRefreshTokens(firebaseUid);
+    } catch (error) {
+      if (!isSkippableFirebaseAuthError(error)) throw error;
+    }
+    try {
+      await auth.deleteUser(firebaseUid);
+    } catch (error) {
+      if (!isSkippableFirebaseAuthError(error)) throw error;
+    }
   } catch (error) {
-    if (!isFirebaseUserNotFound(error)) throw error;
+    if (isSkippableFirebaseAuthError(error)) return;
+    throw new UserDeletionError(
+      error instanceof Error ? error.message : 'Unable to delete Firebase account',
+      502
+    );
   }
 }
 
 async function deleteFirebaseStorageForUser(firebaseUid: string) {
-  if (isPlaceholderFirebaseUid(firebaseUid)) return;
+  if (shouldSkipFirebaseAuthUid(firebaseUid)) return;
   if (!env.FIREBASE_CLIENT_EMAIL || !env.FIREBASE_PRIVATE_KEY) return;
 
   try {
@@ -127,18 +138,17 @@ export async function deleteUserAccount(targetId: string, actor: Actor) {
 
   const replacementUserId = await findCommunicationReplacement(target.id, actor.id);
 
-  try {
-    await deleteFirebaseAuthUser(target.firebaseUid);
-  } catch (error) {
-    throw new UserDeletionError(
-      error instanceof Error ? error.message : 'Unable to delete Firebase account',
-      502
-    );
-  }
-  await deleteFirebaseStorageForUser(target.firebaseUid);
+  await deleteFirebaseAuthUser(target.firebaseUid);
 
-  await prisma.$transaction(async (tx) => {
-    await detachNonCascadeReferences(tx, target.id, replacementUserId);
-    await tx.user.delete({ where: { id: target.id } });
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await detachNonCascadeReferences(tx, target.id, replacementUserId);
+      await tx.user.delete({ where: { id: target.id } });
+    }, USER_DELETE_TRANSACTION);
+  } catch (error) {
+    if (error instanceof UserDeletionError) throw error;
+    throw new UserDeletionError(humanizeUserDeleteDbError(error), 500);
+  }
+
+  await deleteFirebaseStorageForUser(target.firebaseUid);
 }

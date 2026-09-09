@@ -100,6 +100,7 @@ function EditAccountDetailsDrawerContent({
   const [coachSaving, setCoachSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [assignedCoach, setAssignedCoach] = useState(user?.assignedCoach ?? null);
   const [coachRequestedAt, setCoachRequestedAt] = useState(user?.coachRequestedAt ?? null);
   const [coachCode, setCoachCode] = useState('');
@@ -110,6 +111,7 @@ function EditAccountDetailsDrawerContent({
     setLoading(true);
     setLoaded(false);
     setError('');
+    setDeleteError('');
     setAssignedCoach(user?.assignedCoach ?? null);
     setCoachRequestedAt(user?.coachRequestedAt ?? null);
     setCoachCode('');
@@ -221,16 +223,16 @@ function EditAccountDetailsDrawerContent({
     const typed = window.prompt(
       'This permanently deletes your Metabolic account, logs, meals, and photos. Type DELETE to confirm.'
     );
-    if (typed !== 'DELETE') return;
+    if ((typed ?? '').trim().toUpperCase() !== 'DELETE') return;
 
     setDeleting(true);
-    setError('');
+    setDeleteError('');
     try {
       await api('/api/me', { method: 'DELETE' });
       onClose();
       await logout();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to delete account');
+      setDeleteError(err instanceof Error && err.message ? err.message : 'Unable to delete account');
     } finally {
       setDeleting(false);
     }
@@ -483,6 +485,7 @@ function EditAccountDetailsDrawerContent({
           <p className="mt-1 text-sm text-red-700 dark:text-red-300">
             Permanently removes your account, logs, meals, photos, and sign-in. This cannot be undone.
           </p>
+          {deleteError ? <p className="mt-2 text-sm font-medium text-red-800 dark:text-red-200">{deleteError}</p> : null}
           <Button
             type="button"
             variant="secondary"
