@@ -129,3 +129,32 @@ export METABOLIC_DB_PASSWORD='your-cloud-sql-password'
 This replaces production app data with your local database (users, foods, programs, meals, etc.) while keeping Prisma migrations intact.
 
 No deployment is performed automatically by CI. The server listens on `PORT` and includes a Dockerfile for Cloud Run.
+
+## iOS App (Capacitor)
+
+The web app can be wrapped as a native iOS app using [Capacitor](https://capacitorjs.com/). See [`client/IOS.md`](client/IOS.md) for full documentation.
+
+### Quick Start (Mac required)
+
+```bash
+cd client
+./scripts/ios-setup.sh   # Installs deps, builds, adds iOS platform
+npx cap open ios         # Opens Xcode
+```
+
+### App Store Details
+
+| Field      | Value                     |
+| ---------- | ------------------------- |
+| App Name   | Master Metabolic          |
+| Bundle ID  | `com.mastermetabolic.app` |
+| Apple ID   | `6810053439`              |
+| Team       | Cliffs Mama, LLC (`8FG8V9P49A`) |
+
+### TestFlight Upload
+
+1. In Xcode: **Product → Archive**
+2. **Distribute App → App Store Connect → Upload**
+3. In App Store Connect: add build to Internal Testing group
+
+The default configuration loads the production web app (`https://metabolic-v1.web.app`) in a WebView. To bundle assets for offline use, see the strategy notes in `client/IOS.md`.
