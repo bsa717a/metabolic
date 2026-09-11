@@ -63,7 +63,9 @@ Apple also provides a [validation tool](https://search.developer.apple.com/appse
 
 ### 3. Info.plist Privacy Descriptions
 
-Verify these keys exist in `ios/App/App/Info.plist`:
+Capacitor does **not** copy usage strings from `capacitor.config.ts`. `npm run native:patch` (part of `cap:sync:ios`) merges `client/native/ios-privacy-usage.json` into `ios/App/App/Info.plist`.
+
+Verify these keys exist in `ios/App/App/Info.plist` after sync:
 
 | Key                              | Purpose                                      |
 | -------------------------------- | -------------------------------------------- |
@@ -71,7 +73,7 @@ Verify these keys exist in `ios/App/App/Info.plist`:
 | `NSPhotoLibraryUsageDescription` | Photo library access for uploading images    |
 | `NSPhotoLibraryAddUsageDescription` | Saving photos to user's library           |
 
-The Capacitor config sets these during sync. If missing, add manually in Xcode under **Info** tab or edit `Info.plist` directly.
+If missing, re-run `npm run native:patch` from `client/`, or add them in Xcode under the **Info** tab. Without `NSCameraUsageDescription`, iOS terminates the app as soon as the camera opens.
 
 ---
 
@@ -135,6 +137,21 @@ npx cap sync ios
 ```
 
 Then wire up in the app. For now, the web app uses Firebase Cloud Messaging (FCM) for web push, which continues to work in the WebView.
+
+---
+
+## TestFlight – camera smoke test
+
+Meal and progress photos use `@capacitor/camera` inside the iOS shell (not the web `<input type="file">` / `getUserMedia` path). After uploading a build that includes this native plugin + Info.plist keys:
+
+1. Install the new TestFlight build (a JS-only Hosting deploy is not enough).
+2. Sign in and open **Today**.
+3. Tap the camera button on the meal logger.
+4. Confirm iOS shows the system camera/library prompt (or the in-plugin Take photo / Photo library sheet) and the app does **not** crash.
+5. Allow Camera. Take a meal photo. Confirm the preview appears and logging still works.
+6. Open a progress-photo upload (baseline / weekly check-in). Take a photo and pick one from the library. Confirm previews appear.
+7. Optional: Settings → Master Metabolic → disable Camera, then tap the camera button again. Expect a Settings guidance message, not a crash.
+8. Safari on the website should still use the file picker (unchanged).
 
 ---
 

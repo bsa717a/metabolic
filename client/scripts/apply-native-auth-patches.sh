@@ -32,3 +32,7 @@ if [[ -d ios/App/App ]]; then
   cp native/SceneDelegate.swift ios/App/App/SceneDelegate.swift
   echo "Copied GoogleService-Info.plist, App.entitlements, and SceneDelegate into ios/App/App"
 fi
+
+# Capacitor does not write ios.infoPlist from capacitor.config.ts. Merge the
+# camera / photo usage strings or iOS kills the app when the camera opens.
+node scripts/apply-ios-privacy-plist.mjs

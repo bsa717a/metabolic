@@ -162,6 +162,10 @@ After installing from TestFlight:
 | 4 | Navigation works                          | Tap around; pages load without errors    |
 | 5 | Network interruption (airplane mode)      | Graceful error (remote URL mode)         |
 | 6 | Status bar / safe area                    | Content respects notch/home indicator    |
+| 7 | Meal camera button                        | Permission prompt or camera; no crash    |
+| 8 | Progress photo take / library             | Preview appears; app stays running       |
+
+See `docs/app-store-ios.md` for the full camera TestFlight checklist.
 
 ---
 
@@ -217,6 +221,10 @@ npm run cap:sync:ios
 ```
 
 Then **Product → Run** in Xcode (a sync alone does not relaunch the simulator app).
+
+### Camera opens and the app immediately closes
+
+iOS kills the process if `NSCameraUsageDescription` is missing from `Info.plist`. Capacitor does not write that key from `capacitor.config.ts`. After `npm run cap:sync:ios`, confirm the three privacy keys in `ios/App/App/Info.plist` (merged from `native/ios-privacy-usage.json`). Meal and progress photos must go through `@capacitor/camera`, not a web file input.
 
 ### CocoaPods errors
 

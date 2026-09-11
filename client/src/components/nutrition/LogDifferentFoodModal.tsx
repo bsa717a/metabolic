@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Camera, X } from 'lucide-react';
+import { usePhotoPicker } from '../../hooks/usePhotoPicker';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -56,7 +57,11 @@ export function LogDifferentFoodModal({
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const { openPicker: openPhotoPicker, fileInput: photoFileInput } = usePhotoPicker({
+    disabled: loading,
+    onSelect: selectPhoto,
+    onError: setError
+  });
 
   function clearPhoto() {
     setPhoto((current) => {
@@ -239,23 +244,12 @@ export function LogDifferentFoodModal({
             title="Upload meal photo"
             aria-label="Upload meal photo"
             disabled={loading}
-            onClick={() => photoInputRef.current?.click()}
+            onClick={() => void openPhotoPicker()}
           >
             <Camera size={20} />
           </button>
         </div>
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          disabled={loading}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) selectPhoto(file);
-            event.target.value = '';
-          }}
-        />
+        {photoFileInput}
         {photo && (
           <div className="relative overflow-hidden rounded-xl border border-app-border">
             <img src={photo.previewUrl} alt="Meal preview" className="h-40 w-full object-cover" />
