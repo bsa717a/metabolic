@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.31.1](https://github.com/bsa717a/metabolic/compare/v0.31.0...v0.31.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **admin:** delete users when Firebase Auth is already gone ([#286](https://github.com/bsa717a/metabolic/issues/286)) ([b343814](https://github.com/bsa717a/metabolic/commit/b34381455b36022c813dee181ea4d70d18d7b285))
+* **ios:** stop Capacitor camera crash with native plugin ([#288](https://github.com/bsa717a/metabolic/issues/288)) ([8cc6d9f](https://github.com/bsa717a/metabolic/commit/8cc6d9fde0f25c3fdde39ea92d2c54d46a0a5f39))
+
 ## [0.31.0](https://github.com/bsa717a/metabolic/compare/v0.30.0...v0.31.0) (2026-09-09)
 
 
