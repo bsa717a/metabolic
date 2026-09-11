@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Camera, ChevronDown, Leaf, Pencil, Plus, Utensils, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
+import { usePhotoPicker } from '../../hooks/usePhotoPicker';
 import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
 import { parseFoodEntry } from '../../utils/foodEntryParse';
@@ -193,7 +194,11 @@ export function TodayNutrition({
     const { targetMeal, newMeal } = parseFoodEntry(meals, entry, expandedMealId, mealsForParse);
     return targetMeal?.name ?? (newMeal ? `${newMeal.name} (new)` : undefined);
   }, [entry, meals, mealsForParse, expandedMealId]);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const { openPicker: openPhotoPicker, fileInput: photoFileInput } = usePhotoPicker({
+    disabled: saving,
+    onSelect: selectPhoto,
+    onError: setError
+  });
 
   function toggleMeal(mealId: string) {
     setExpandedMealId((current) => (current === mealId ? null : mealId));
@@ -529,7 +534,7 @@ export function TodayNutrition({
               aria-label="Upload food photo"
               title="Upload food photo"
               disabled={saving}
-              onClick={() => photoInputRef.current?.click()}
+              onClick={() => void openPhotoPicker()}
             >
               <Camera size={20} />
             </button>
@@ -561,18 +566,7 @@ export function TodayNutrition({
             Logging to <span className="font-medium text-app-text">{detectedMealLabel}</span>
           </p>
         )}
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          disabled={saving}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) selectPhoto(file);
-            event.target.value = '';
-          }}
-        />
+        {photoFileInput}
         {photo && (
           <div className="relative mt-3 overflow-hidden rounded-xl border border-app-border">
             <img src={photo.previewUrl} alt="Food preview" className="h-36 w-full object-cover" />

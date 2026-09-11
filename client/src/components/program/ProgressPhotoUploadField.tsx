@@ -1,5 +1,6 @@
-import { useRef } from 'react';
+import { useState } from 'react';
 import { Upload } from 'lucide-react';
+import { usePhotoPicker } from '../../hooks/usePhotoPicker';
 
 export type PhotoDraft = {
   existingUrl: string | null;
@@ -24,7 +25,16 @@ export function ProgressPhotoUploadField({
   onSelect: (file: File) => void;
   previewClassName?: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const { openPicker, fileInput } = usePhotoPicker({
+    accept: 'image/*',
+    disabled,
+    onSelect: (file) => {
+      setPickerError(null);
+      onSelect(file);
+    },
+    onError: setPickerError
+  });
 
   return (
     <div className="rounded-2xl border border-app-border p-4">
@@ -37,25 +47,15 @@ export function ProgressPhotoUploadField({
           type="button"
           disabled={disabled}
           className="inline-flex items-center gap-1 rounded-full border border-app-border px-3 py-1.5 text-sm font-medium transition hover:bg-app-muted disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => void openPicker()}
         >
           <Upload size={14} />
           {draft.previewUrl ? 'Replace' : 'Upload'}
         </button>
       </div>
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        disabled={disabled}
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) onSelect(file);
-          event.target.value = '';
-        }}
-      />
+      {fileInput}
+      {pickerError ? <p className="mb-3 text-sm text-red-600">{pickerError}</p> : null}
 
       {draft.previewUrl ? (
         <img src={draft.previewUrl} alt={`${label} progress`} className={`${previewClassName} w-full rounded-xl object-cover`} />
@@ -64,7 +64,7 @@ export function ProgressPhotoUploadField({
           type="button"
           disabled={disabled}
           className={`flex ${previewClassName} w-full flex-col items-center justify-center rounded-xl border border-dashed border-app-border bg-app-muted/50 text-sm text-app-text-muted transition hover:border-brand-green/40 disabled:cursor-not-allowed disabled:opacity-50`}
-          onClick={() => inputRef.current?.click()}
+          onClick={() => void openPicker()}
         >
           <Upload size={20} className="mb-2" />
           Choose photo

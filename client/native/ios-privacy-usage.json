@@ -1,0 +1,5 @@
+{
+  "NSCameraUsageDescription": "Master Metabolic uses your camera to take progress photos and meal snapshots that help you track your wellness journey.",
+  "NSPhotoLibraryUsageDescription": "Master Metabolic accesses your photo library so you can upload progress photos and meal images to track your wellness journey.",
+  "NSPhotoLibraryAddUsageDescription": "Master Metabolic saves photos to your library so you can keep a copy of your progress and meal snapshots."
+}
