@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.31.2](https://github.com/bsa717a/metabolic/compare/v0.31.1...v0.31.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ios:** stop WKWebView rubber-band and honor safe areas ([#289](https://github.com/bsa717a/metabolic/issues/289)) ([68545a2](https://github.com/bsa717a/metabolic/commit/68545a2a1bbc76f050fae3408665c1d55896307f))
+
 ## [0.31.1](https://github.com/bsa717a/metabolic/compare/v0.31.0...v0.31.1) (2026-09-11)
 
 
