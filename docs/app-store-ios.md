@@ -155,6 +155,23 @@ Meal and progress photos use `@capacitor/camera` inside the iOS shell (not the w
 
 ---
 
+## TestFlight – iOS safe-area / over-scroll smoke test
+
+Use a **new TestFlight build** after `npm run cap:sync:ios` (a Hosting-only deploy does not update the native shell). Do **not** replace the App Review 1.0 (3) binary that is Waiting for Review.
+
+Install on a notched / Dynamic Island iPhone (or the matching simulator).
+
+1. **Top safe area.** Open Home. Confirm the app background fills under the status bar / Dynamic Island. There must be no black gutter. Header text and the logo sit below the inset.
+2. **Home indicator.** Confirm the five tab labels sit fully above the home indicator. The tab bar surface fills the bottom inset. Labels are not clipped or overlapped.
+3. **Over-scroll top.** On a long page (Nutrition or Progress), flick down from the top. The WKWebView must **not** rubber-band as a whole. The bottom nav stays pinned; no black strip appears under the tab bar.
+4. **Over-scroll bottom.** Flick up past the end of the same page. Same expectation: chrome stays put.
+5. **Mid-page scroll.** Normal scrolling in the middle of the page still works.
+6. **Safari / web.** The same routes in Safari should look unchanged (safe-area CSS is a no-op when insets are 0).
+
+Hold merge until Derek confirms this smoke on TestFlight.
+
+---
+
 ## TestFlight Upload
 
 ### 1. Sync Changes

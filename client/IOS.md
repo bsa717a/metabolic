@@ -161,7 +161,10 @@ After installing from TestFlight:
 | 3 | Firebase Auth – Sign In with Apple        | Auth flow completes, user logged in      |
 | 4 | Navigation works                          | Tap around; pages load without errors    |
 | 5 | Network interruption (airplane mode)      | Graceful error (remote URL mode)         |
-| 6 | Status bar / safe area                    | Content respects notch/home indicator    |
+| 6 | Status bar / Dynamic Island               | App background fills under the status bar; no black gutter. Header content sits below the inset. |
+| 6a | Home indicator vs bottom nav              | Tab labels sit above the home indicator; nav surface fills the inset. Labels are not clipped. |
+| 6b | Over-scroll at top of a long page         | Rubber-band does **not** lift the whole WKWebView. Bottom nav stays pinned to the bottom. |
+| 6c | Over-scroll at bottom of a long page      | Same: chrome stays put; no black strip under the tab bar. |
 | 7 | Meal camera button                        | Permission prompt or camera; no crash    |
 | 8 | Progress photo take / library             | Preview appears; app stays running       |
 

@@ -57,7 +57,7 @@ export function AppShell({
         />
         <main
           ref={mainRef}
-          className="mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto p-4 sm:overflow-visible sm:p-6 lg:p-8"
+          className="mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto overscroll-none p-4 sm:overflow-visible sm:p-6 lg:p-8"
         >
           <Outlet />
         </main>
