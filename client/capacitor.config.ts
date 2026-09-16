@@ -5,6 +5,9 @@ const config: CapacitorConfig = {
   appId: 'com.mastermetabolic.app',
   appName: 'Master Metabolic',
   webDir: 'dist',
+  // Matches --app-bg (classic). Avoids a black flash in the iOS safe-area gutters
+  // before CSS paints. Dark theme still paints over this from html/body.
+  backgroundColor: '#e9ecef',
 
   // Bundle dist/ so Google/Apple use native SDKs. A remote Hosting URL only
   // works for social login after that same JS is deployed and this native shell
@@ -21,7 +24,13 @@ const config: CapacitorConfig = {
     // Matches Apple Team ID in App Store Connect
     // Team: Cliffs Mama, LLC (8FG8V9P49A)
     // Signing configured in Xcode via Automatically manage signing
-    contentInset: 'automatic',
+    //
+    // `automatic` insets the WKWebView scroll view, which rubber-bands the
+    // entire shell (including the tab bar) and leaves a black gutter under
+    // the status bar. `never` + viewport-fit=cover + CSS env(safe-area-inset-*)
+    // draws edge-to-edge and lets the web chrome honor the insets.
+    contentInset: 'never',
+    backgroundColor: '#e9ecef',
     preferredContentMode: 'mobile',
     allowsLinkPreview: false,
     scrollEnabled: true,

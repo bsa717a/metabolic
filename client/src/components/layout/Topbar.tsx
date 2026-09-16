@@ -139,7 +139,7 @@ export function Topbar({
       <header
         ref={headerRef}
         className={clsx(
-          'sticky top-0 z-20 border-b py-2 backdrop-blur transition-colors duration-200 sm:py-3',
+          'sticky top-0 z-20 border-b pb-2 pt-[calc(0.5rem+var(--safe-area-top))] backdrop-blur transition-colors duration-200 sm:pb-3 sm:pt-[calc(0.75rem+var(--safe-area-top))]',
           isDashboard
             ? 'border-app-border bg-app-surface/90'
             : 'cursor-pointer border-brand-green/25 bg-app-muted/95 hover:bg-brand-green/10 dark:hover:bg-brand-green/15'

@@ -28,6 +28,10 @@
   --app-topbar-height: 4.5rem;
   --app-mobile-home-bar-height: 0px;
   --app-sticky-offset: calc(var(--app-topbar-height) + 0.75rem);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
 
   font-family: var(--font-sans);
   color: var(--app-text);
@@ -263,11 +267,22 @@
   --color-app-accent-light: var(--app-accent-light);
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+  min-height: 100dvh;
+  background: var(--app-bg);
+}
+
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
-  background: var(--app-bg);
   color: var(--app-text);
   transition: background-color 0.2s ease, color 0.2s ease;
 }
