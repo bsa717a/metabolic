@@ -176,6 +176,6 @@ describe('sessionCues', () => {
     const { countdownTick } = await import('./sessionCues');
     countdownTick(true);
     await vi.waitFor(() => expect(warn).toHaveBeenCalled());
-    expect(warn.mock.calls.some((call) => String(call[0]).includes('[sessionCues]'))).toBe(true);
+    expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('[sessionCues]'))).toBe(true);
   });
 });
