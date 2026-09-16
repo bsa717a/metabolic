@@ -1,0 +1,45 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+const CLIENT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
+
+function readClient(relPath: string) {
+  return readFileSync(join(CLIENT_ROOT, relPath), 'utf8');
+}
+
+describe('iOS Capacitor session audio + haptics wiring', () => {
+  it('configures AVAudioSession playback + mixWithOthers in the copied SceneDelegate', () => {
+    const scene = readClient('native/SceneDelegate.swift');
+    expect(scene).toContain('import AVFoundation');
+    expect(scene).toContain('func configurePlaybackAudioSession()');
+    expect(scene).toContain('setCategory(.playback, options: [.mixWithOthers])');
+    expect(scene).toContain('setActive(true)');
+    expect(scene).toMatch(/configurePlaybackAudioSession\(\)/);
+    expect(scene).toContain('func sceneDidBecomeActive');
+    const becomeActive = scene.slice(scene.indexOf('func sceneDidBecomeActive'));
+    expect(becomeActive).toContain('configurePlaybackAudioSession()');
+  });
+
+  it('copies SceneDelegate via native:patch so TestFlight shells pick up the session', () => {
+    const patch = readClient('scripts/apply-native-auth-patches.sh');
+    expect(patch).toContain('cp native/SceneDelegate.swift ios/App/App/SceneDelegate.swift');
+  });
+
+  it('depends on @capacitor/haptics for native tick/GO impacts', () => {
+    const pkg = JSON.parse(readClient('package.json')) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@capacitor/haptics']).toBeTruthy();
+
+    const cues = readClient('src/utils/sessionCues.ts');
+    expect(cues).toContain("from '@capacitor/haptics'");
+    expect(cues).toContain('ImpactStyle.Light');
+    expect(cues).toContain('ImpactStyle.Heavy');
+    expect(cues).toMatch(/gain:\s*0\.48/);
+    expect(cues).toMatch(/gain:\s*0\.68/);
+    expect(cues).toMatch(/HTML_VOLUME\s*=\s*0\.85/);
+    expect(cues).toContain("addEventListener('visibilitychange'");
+    expect(cues).toContain("addEventListener('pageshow'");
+    expect(cues).toContain("console.warn(`[sessionCues]");
+  });
+});
