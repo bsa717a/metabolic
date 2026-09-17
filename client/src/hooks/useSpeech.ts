@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VirtualCoachId } from '../data/virtualCoaches';
 import { api } from '../services/api';
+import { assertAiConsentForPath } from '../services/aiConsent';
 import { forceTokenRefresh, getIdToken } from '../services/auth';
 import { nativeAwareFetch } from '../services/nativeHttp';
 
@@ -239,6 +240,7 @@ export function useSpeech(coachId: VirtualCoachId) {
   const playNatural = useCallback(
     async (text: string): Promise<boolean> => {
       const executeVoiceRequest = async (token: string | null): Promise<Response> => {
+        assertAiConsentForPath('/api/ai/coach-voice');
         return nativeAwareFetch(
           `${API_URL}/api/ai/coach-voice`,
           {

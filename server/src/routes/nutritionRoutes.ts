@@ -368,7 +368,8 @@ export async function nutritionRoutes(app: FastifyInstance) {
         request.appUser!.id,
         query.data.startDate,
         query.data.endDate,
-        query.data.storeName ?? null
+        query.data.storeName ?? null,
+        { allowAi: request.appUser!.aiConsentAccepted }
       );
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to build shopping list' });
@@ -384,7 +385,9 @@ export async function nutritionRoutes(app: FastifyInstance) {
       .safeParse(request.query);
     if (!query.success) return reply.code(400).send({ error: 'startDate and endDate must be YYYY-MM-DD dates.' });
     try {
-      return await getMealPrepPlan(request.appUser!.id, query.data.startDate, query.data.endDate);
+      return await getMealPrepPlan(request.appUser!.id, query.data.startDate, query.data.endDate, {
+        allowAi: request.appUser!.aiConsentAccepted
+      });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to build meal prep plan' });
     }

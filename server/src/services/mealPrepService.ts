@@ -245,7 +245,12 @@ async function aggregatePrepBatches(userId: string, startDate: string, endDate: 
   };
 }
 
-export async function getMealPrepPlan(userId: string, startDate: string, endDate: string): Promise<MealPrepPlanResult> {
+export async function getMealPrepPlan(
+  userId: string,
+  startDate: string,
+  endDate: string,
+  options?: { allowAi?: boolean }
+): Promise<MealPrepPlanResult> {
   const { startDate: resolvedStart, endDate: resolvedEnd, plannedDayCount, batches } = await aggregatePrepBatches(
     userId,
     startDate,
@@ -277,6 +282,9 @@ export async function getMealPrepPlan(userId: string, startDate: string, endDate
   let enriched: EnrichedMealPrepResult;
   let enrichedFlag = true;
   try {
+    if (options?.allowAi === false) {
+      throw new Error('AI consent not granted');
+    }
     enriched = await getAiProvider().enrichMealPrep(enrichInput);
   } catch {
     enriched = await new MockAiProvider().enrichMealPrep(enrichInput);

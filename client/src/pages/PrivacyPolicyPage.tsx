@@ -1,7 +1,12 @@
 import { LegalPageLayout } from '../components/layout/LegalPageLayout';
+import {
+  AI_CONSENT_DATA_SENT,
+  AI_CONSENT_PURPOSE,
+  AI_CONSENT_RECIPIENT
+} from '../content/aiConsentCopy';
 
 const PRIVACY_EMAIL = 'derek@clifsmama.com';
-const EFFECTIVE_DATE = 'September 9, 2026';
+const EFFECTIVE_DATE = 'September 17, 2026';
 
 export function PrivacyPolicyPage() {
   return (
@@ -79,7 +84,10 @@ export function PrivacyPolicyPage() {
           <li>Deliver coach-guided nutrition and fitness recommendations</li>
           <li>Process your subscription and purchases</li>
           <li>Send transactional communications (account updates, reminders via SMS or email)</li>
-          <li>Power AI-driven features such as food/exercise lookups and virtual coach conversations</li>
+          <li>
+            Power AI-driven features such as food/exercise lookups and virtual coach conversations, using Google
+            Gemini after you accept in-app AI permission
+          </li>
           <li>Track your progress, streaks, and gamification achievements</li>
           <li>Respond to support requests and feedback</li>
           <li>Comply with legal obligations</li>
@@ -107,13 +115,34 @@ export function PrivacyPolicyPage() {
             <strong>SMS vendor (e.g., Twilio)</strong> — text message reminders and notifications
           </li>
           <li>
-            <strong>AI providers</strong> — food recognition, exercise lookups, and virtual coach
-            conversations
+            <strong>Google Gemini (third-party AI)</strong> — coaching replies and AI features (Nora / virtual
+            coach chat, food and exercise lookup, meal suggestions, progress-photo analysis, and coach voice)
+            after you accept in-app AI permission. A privacy policy alone is not enough; you must Accept in the
+            app before this data is sent.
           </li>
         </ul>
         <p className="mt-2 text-app-text-muted">
           These providers process data on our behalf under contracts that require them to protect your
           information. We may also share information when required by law or to protect rights and safety.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold">AI features and Google Gemini</h2>
+        <p className="mt-2 text-app-text-muted">
+          Master Metabolic uses {AI_CONSENT_RECIPIENT} to {AI_CONSENT_PURPOSE.charAt(0).toLowerCase()}
+          {AI_CONSENT_PURPOSE.slice(1)}.
+        </p>
+        <p className="mt-2 text-app-text-muted">What may be sent to Google Gemini:</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-app-text-muted">
+          {AI_CONSENT_DATA_SENT.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+        <p className="mt-2 text-app-text-muted">
+          We do not send this data to Gemini until you tap Accept in the in-app AI permission screen. If you
+          decline, AI features stay off and we do not transmit that data. You can revisit or change this anytime
+          in Account details.
         </p>
       </section>
 

@@ -235,6 +235,12 @@ export async function applyMemoryExtraction(
 ) {
   if (messages.length < 2) return;
 
+  const consent = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { aiConsentAccepted: true }
+  });
+  if (!consent?.aiConsentAccepted) return;
+
   const row = await ensureMemoryRow(userId);
   const existingFacts = parseFacts(row.facts);
   const existingSummaries = parseSummaries(row.sessionSummaries);

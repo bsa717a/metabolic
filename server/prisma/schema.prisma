@@ -228,6 +228,8 @@ model User {
   smsRemindersIntroCompletedAt DateTime?
   coachWelcomeCompletedAt DateTime?
   firstDayChecklistDismissedAt DateTime?
+  aiConsentAccepted Boolean @default(false)
+  aiConsentDecidedAt DateTime?
   selectedVirtualCoachId String?
   virtualCoachCheckInDay Int?
   plan PlanTier @default(STARTER)

@@ -127,6 +127,25 @@ describe('api', () => {
     expect(mockForceTokenRefresh).not.toHaveBeenCalled();
   });
 
+  it('blocks Gemini API calls until AI consent is accepted', async () => {
+    const { syncRuntimeAiConsent, AI_CONSENT_REQUIRED_MESSAGE } = await import('./aiConsent');
+    const { api } = await import('./api');
+
+    syncRuntimeAiConsent('u1', false);
+    await expect(api('/api/ai/chat', { method: 'POST' })).rejects.toThrow(AI_CONSENT_REQUIRED_MESSAGE);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    syncRuntimeAiConsent('u1', true);
+    mockGetIdToken.mockResolvedValue('token');
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('{"reply":"ok"}')
+    });
+    await expect(api('/api/ai/chat', { method: 'POST' })).resolves.toEqual({ reply: 'ok' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retry when no token is present', async () => {
     mockGetIdToken.mockResolvedValue(null);
 

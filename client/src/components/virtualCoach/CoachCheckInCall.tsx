@@ -3,7 +3,9 @@ import { BarChart3, Mic, MicOff, PhoneOff, Settings2, Volume2, VolumeX } from 'l
 import type { VirtualCoach } from '../../data/virtualCoaches';
 import type { PlanAdvance, VirtualCoachCheckInRecap, VirtualCoachCheckInSession } from '../../types';
 import { api } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
 import { useSpeech } from '../../hooks/useSpeech';
+import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 import { Button } from '../ui/Button';
 import { CheckInRecap } from './CheckInRecap';
 import { CoachWeekStatsModal } from './CoachWeekStats';
@@ -19,6 +21,7 @@ export function CoachCheckInCall({
   initialSession: VirtualCoachCheckInSession;
   onEnd: (recap: VirtualCoachCheckInRecap | null) => void;
 }) {
+  const { accepted, openReview } = useAiConsent();
   const [session, setSession] = useState(initialSession);
   const [chips, setChips] = useState(initialSession.chips ?? []);
   const [input, setInput] = useState('');
@@ -78,6 +81,11 @@ export function CoachCheckInCall({
   async function sendMessage(text: string) {
     const trimmed = text.trim();
     if (!trimmed || loading || endedRecap) return;
+    if (!accepted) {
+      openReview();
+      setError('AI features are off until you accept sharing data with Google Gemini.');
+      return;
+    }
 
     setLoading(true);
     setError(undefined);
@@ -202,6 +210,12 @@ export function CoachCheckInCall({
       )}
 
       {error && <p className="px-4 text-sm text-red-600">{error}</p>}
+
+      {!accepted ? (
+        <div className="px-4 pb-3">
+          <AiDisabledNotice onReview={openReview} />
+        </div>
+      ) : null}
 
       <div className="border-t border-app-border px-4 py-4">
         <form

@@ -147,7 +147,8 @@ export async function getGroceryShoppingList(
   userId: string,
   startDate: string,
   endDate: string,
-  storeName?: string | null
+  storeName?: string | null,
+  options?: { allowAi?: boolean }
 ): Promise<ShoppingListResult> {
   const trimmedStore = storeName?.trim() || null;
   const { startDate: resolvedStart, endDate: resolvedEnd, plannedDayCount, inputItems } = await aggregatePlannedItems(
@@ -173,6 +174,9 @@ export async function getGroceryShoppingList(
   let enriched;
   let enrichedFlag = true;
   try {
+    if (options?.allowAi === false) {
+      throw new Error('AI consent not granted');
+    }
     enriched = await getAiProvider().enrichShoppingList(inputItems, trimmedStore);
   } catch {
     enriched = await new MockAiProvider().enrichShoppingList(inputItems, trimmedStore);

@@ -10,6 +10,8 @@ import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDra
 import { logout } from '../../services/auth';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { PushNotificationsCard } from './PushNotificationsCard';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AI_CONSENT_RECIPIENT, AI_CONSENT_TITLE } from '../../content/aiConsentCopy';
 
 function labelClassName() {
   return 'mb-1 block text-sm font-medium text-slate-600 dark:text-app-text-muted';
@@ -83,6 +85,7 @@ function EditAccountDetailsDrawerContent({
 }) {
   const navigate = useNavigate();
   const { startTour } = useTutorial();
+  const { accepted: aiAccepted, openReview: openAiConsentReview, setAccepted: setAiAccepted } = useAiConsent();
   const [accountDraft, setAccountDraft] = useState<AccountDraft>({
     firstName: '',
     lastName: '',
@@ -451,6 +454,36 @@ function EditAccountDetailsDrawerContent({
         </div>
 
         {mode === 'self' && <PushNotificationsCard />}
+
+        {mode === 'self' ? (
+          <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
+            <p className="text-sm font-semibold text-app-text">{AI_CONSENT_TITLE}</p>
+            <p className="text-sm text-slate-600 dark:text-app-text-muted">
+              When on, chat messages and program / meal / exercise context may be sent to {AI_CONSENT_RECIPIENT} for
+              coaching replies and AI features. Turn off to keep AI disabled — we will not send that data.
+            </p>
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
+                checked={aiAccepted}
+                onChange={(event) => {
+                  void setAiAccepted(event.target.checked);
+                }}
+              />
+              <span className="text-sm text-slate-600 dark:text-app-text-muted">
+                Allow AI features and sharing with Google Gemini
+              </span>
+            </label>
+            <button
+              type="button"
+              className="text-sm font-semibold text-brand-green transition hover:text-brand-green-light"
+              onClick={openAiConsentReview}
+            >
+              Review AI permission details
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />

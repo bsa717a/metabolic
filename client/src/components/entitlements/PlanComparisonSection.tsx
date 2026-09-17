@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { PUBLIC_PLANS } from '../../data/plans';
+import { hidesDigitalPlanPurchase, IOS_PLAN_MANAGE_COPY } from '../../utils/nativePlatform';
 
 export function PlanComparisonSection({
   showActions = false,
@@ -10,6 +11,7 @@ export function PlanComparisonSection({
   showActions?: boolean;
   authenticated?: boolean;
 }) {
+  const hidePlanPurchase = hidesDigitalPlanPurchase();
   return (
     <>
       <div className="mb-10 text-center">
@@ -48,7 +50,9 @@ export function PlanComparisonSection({
             </ul>
             {showActions ? (
               <div className="mt-6">
-                {authenticated ? (
+                {hidePlanPurchase ? (
+                  <p className="text-center text-sm text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
+                ) : authenticated ? (
                   <Link to="/upgrade">
                     <Button className="w-full" variant={plan.recommended ? 'primary' : 'secondary'}>
                       {plan.id === 'starter' ? 'Current or downgrade' : 'Upgrade'}

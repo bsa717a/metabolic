@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import type { PlanSlug } from '../../types';
 import { getRequiredPlan, getUpgradePlan, planLabel, planPriceLabel, type FeatureKey } from '../../utils/entitlements';
+import { hidesDigitalPlanPurchase, IOS_PLAN_MANAGE_COPY } from '../../utils/nativePlatform';
 
 type UpgradePromptProps = {
   feature?: FeatureKey;
@@ -15,6 +16,7 @@ type UpgradePromptProps = {
 export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', className }: UpgradePromptProps) {
   const required = requiredPlan ?? (feature ? getRequiredPlan(feature) : 'self_guided');
   const upgrade = getUpgradePlan(currentPlan, required);
+  const hidePlanPurchase = hidesDigitalPlanPurchase();
 
   if (required === 'coach_led') {
     return (
@@ -39,14 +41,18 @@ export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', 
         {planPriceLabel(upgrade) ? `${planLabel(upgrade)} is ${planPriceLabel(upgrade)}.` : ''} Unlock this feature
         and more with a higher plan.
       </p>
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-        <Link to="/upgrade">
-          <Button>View plans</Button>
-        </Link>
-        <Link to="/pricing">
-          <Button variant="secondary">Compare plans</Button>
-        </Link>
-      </div>
+      {hidePlanPurchase ? (
+        <p className="mt-4 text-sm text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
+      ) : (
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <Link to="/upgrade">
+            <Button>View plans</Button>
+          </Link>
+          <Link to="/pricing">
+            <Button variant="secondary">Compare plans</Button>
+          </Link>
+        </div>
+      )}
     </Card>
   );
 }

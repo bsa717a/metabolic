@@ -4,6 +4,7 @@ import { Topbar } from './Topbar';
 import { MOBILE_BOTTOM_NAV_RESERVE, MobileBottomNav } from './MobileBottomNav';
 import type { AppUser } from '../../types';
 import { EntitlementsProvider } from '../../context/EntitlementsContext';
+import { AiConsentProvider } from '../../context/AiConsentContext';
 import { TutorialProvider } from '../tutorial/TutorialContext';
 import { DashboardTutorial } from '../tutorial/DashboardTutorial';
 import { SmsRemindersIntroModal } from '../sms/SmsRemindersIntroModal';
@@ -49,6 +50,7 @@ export function AppShell({
   return (
     <EntitlementsProvider user={user ?? null}>
     <TutorialProvider user={user} onComplete={onTutorialComplete}>
+    <AiConsentProvider user={user} onUserUpdated={onUserUpdated ?? onTutorialComplete}>
       <div className="flex min-h-dvh flex-col bg-app-bg transition-colors duration-200 max-sm:h-dvh max-sm:overflow-hidden">
         <Topbar
           user={user}
@@ -72,6 +74,7 @@ export function AppShell({
         <CoachChatFab user={user} />
         <FeedbackWidget />
       </div>
+    </AiConsentProvider>
     </TutorialProvider>
     </EntitlementsProvider>
   );

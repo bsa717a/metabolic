@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireAiConsent } from '../auth/requireAiConsent.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { prisma } from '../db/prisma.js';
 import { VIRTUAL_COACH_IDS } from '../data/virtualCoachPersonas.js';
@@ -72,7 +73,7 @@ export async function virtualCoachRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/virtual-coach/check-in/start', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach')] }, async (request, reply) => {
+  app.post('/api/virtual-coach/check-in/start', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach'), requireAiConsent] }, async (request, reply) => {
     try {
       return await startCheckIn(request.appUser!.id);
     } catch (error) {
@@ -80,7 +81,7 @@ export async function virtualCoachRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/virtual-coach/check-in/:id/message', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach')] }, async (request, reply) => {
+  app.post('/api/virtual-coach/check-in/:id/message', { preHandler: [requireAuth, requireFeature('weekly_virtual_coach'), requireAiConsent] }, async (request, reply) => {
     const parsed = messageBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Enter a message to continue.' });
