@@ -1,7 +1,7 @@
 import { clsx } from 'clsx';
 import { formatClock, timerCueKind } from './format';
 
-/** Large session clock that turns amber on 3-2-1 and reads GO / Time at zero. */
+/** Large session clock that turns amber from 5s and reads GO / Time at zero. */
 export function SessionTimerClock({
   remainingMs,
   paused = false,

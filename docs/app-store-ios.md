@@ -172,6 +172,23 @@ Hold merge until Derek confirms this smoke on TestFlight.
 
 ---
 
+## TestFlight – workout countdown audio / haptics smoke test
+
+Use a **new TestFlight build** after `npm run cap:sync:ios` (a Hosting-only deploy does not update `SceneDelegate` or `@capacitor/haptics`). Do **not** replace the App Review 1.0 (3) binary that is Waiting for Review.
+
+Need a day with a planned exercise that has rest between sets (or a timed duration) so the 5 → 3-2-1 + recorded Go path fires.
+
+1. **Silent switch ON, no other audio.** Start a workout. Confirm a beep at **5**, **no beep at 4**, then beeps at **3, 2, 1**. At zero, confirm the recorded **“Go!”** clip (natural voice file — not robot TTS). Cues should be near max volume, not harsh/clipped. Light haptic on each tick; stronger haptic on GO.
+2. **Silent switch OFF, no other audio.** Same: 5 → 3-2-1, recorded Go, loud but not harsh; same haptics.
+3. **Other audio playing.** Start Apple Music / Spotify / a podcast, then run the countdown. Beeps and recorded Go should mix (other audio must not pause). If cues are lost under loud music, note it — we can add `.duckOthers` in a follow-up.
+4. **In-app mute toggle.** Mute in the session header. Confirm beeps and recorded Go stop. Unmute and confirm they return. Haptics still fire while muted.
+5. **Background / resume.** Start a rest timer, background the app for a few seconds, then return before and after GO. After foregrounding, the next countdown must beep and the next Go clip must play (AudioContext / HTMLAudio re-prime). Missed ticks while backgrounded are skipped; GO should still fire when the timer elapses.
+6. **Safari / web.** Same session in Safari: louder beeps + recorded Go are OK; native haptics are a no-op (`navigator.vibrate` may pulse on Android/web).
+
+Hold merge until Derek confirms this smoke on TestFlight. Meta cuts a new TestFlight after merge + Derek yes. This branch does not archive or upload.
+
+---
+
 ## TestFlight Upload
 
 ### 1. Sync Changes

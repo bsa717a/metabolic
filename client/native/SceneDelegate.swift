@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import Capacitor
 import WebKit
@@ -18,11 +19,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
+        configurePlaybackAudioSession()
         disableWebViewOverscroll()
         injectPendingGoogleAuth()
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
+        configurePlaybackAudioSession()
         disableWebViewOverscroll()
         injectPendingGoogleAuth()
     }
@@ -33,6 +36,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         SceneDelegateProxy.shared.scene(scene, continue: userActivity)
+    }
+
+    /// Workout 5 / 3-2-1 beeps and the recorded "Go!" clip play inside WKWebView
+    /// (Web Audio + HTMLAudio). The default ambient session is muted by the Silent
+    /// switch. `.playback` + `.mixWithOthers` plays through Silent without
+    /// pausing Spotify / Apple Music.
+    /// Re-applied on become-active in case another app changed the session.
+    private func configurePlaybackAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, options: [.mixWithOthers])
+            try session.setActive(true)
+        } catch {
+            print("[sessionCues] AVAudioSession configure failed: \(error)")
+        }
     }
 
     /// Capacitor already sets `scrollView.bounces = false`, but iOS can still
