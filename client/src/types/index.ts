@@ -23,6 +23,8 @@ export type AppUser = {
   smsRemindersIntroCompletedAt?: string | null;
   coachWelcomeCompletedAt?: string | null;
   firstDayChecklistDismissedAt?: string | null;
+  aiConsentAccepted?: boolean;
+  aiConsentDecidedAt?: string | null;
   selectedVirtualCoachId?: string | null;
   plan: PlanSlug;
   subscriptionStatus: SubscriptionStatusSlug;

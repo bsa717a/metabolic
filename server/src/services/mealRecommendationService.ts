@@ -5,6 +5,7 @@ import { n, round } from '../utils/numbers.js';
 import { resolvePlanForDate } from './planResolution.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsService.js';
+import { AI_CONSENT_REQUIRED_MESSAGE, userHasGrantedAiConsent } from './aiConsent.js';
 import { MealCardError } from './mealCardService.js';
 import { cardMealTarget } from './mealCardMaterialize.js';
 import { getMealStructure, resolveTargets, slotTargets } from './targetService.js';
@@ -269,6 +270,9 @@ async function resolveSlot(userId: string, date: string, mealNumber: number) {
 /* ---------------- recommend ---------------- */
 
 export async function recommendMeals(userId: string, date: string, mealNumber: number, craving?: string) {
+  if (!(await userHasGrantedAiConsent(userId))) {
+    throw new MealCardError(AI_CONSENT_REQUIRED_MESSAGE, 403);
+  }
   const { templateMeal, targetCalories, proteinGoal } = await resolveSlot(userId, date, mealNumber);
 
   const user = await prisma.user.findUnique({

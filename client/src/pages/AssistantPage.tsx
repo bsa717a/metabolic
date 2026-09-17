@@ -4,6 +4,8 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 
 import { FeatureGate } from '../components/entitlements/FeatureGate';
+import { AiDisabledNotice } from '../components/privacy/AiDisabledNotice';
+import { useAiConsent } from '../context/AiConsentContext';
 import { EntitlementError } from '../services/api';
 
 const prompts = [
@@ -18,6 +20,7 @@ const prompts = [
 type Message = { role: 'user' | 'assistant'; content: string };
 
 export function AssistantPage() {
+  const { accepted, openReview } = useAiConsent();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,9 +61,13 @@ export function AssistantPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">AI Assistant</h1>
       <FeatureGate feature="extended_ai_coach">
+      {!accepted ? (
+        <AiDisabledNotice onReview={openReview} />
+      ) : (
       <Card className="flex min-h-[32rem] flex-col">
         <p className="text-slate-500">
-          Powered by Gemini on the backend. Your program, meals, and exercise data are included as context.
+          Powered by Google Gemini. Your chat messages plus program, meals, and exercise data are sent to Gemini
+          for coaching replies after you accept AI permission.
         </p>
 
         <div className="mt-5 flex-1 space-y-3 overflow-y-auto">
@@ -115,6 +122,7 @@ export function AssistantPage() {
           </Button>
         </form>
       </Card>
+      )}
       </FeatureGate>
     </div>
   );

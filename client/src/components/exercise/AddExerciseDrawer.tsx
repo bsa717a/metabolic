@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { ExerciseCatalogItem } from '../../types';
 import { EXERCISE_BODY_PARTS, EXERCISE_CATEGORIES } from '../../types';
 import { api } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '../../content/aiConsentCopy';
 import { coachDailyExercisesApi } from '../../utils/coachExerciseApi';
 import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { Button } from '../ui/Button';
@@ -102,6 +104,7 @@ function AddExerciseDrawerContent({
   const [catalogError, setCatalogError] = useState<string>();
   const [createError, setCreateError] = useState<string>();
   const [aiError, setAiError] = useState<string>();
+  const { accepted, openReview } = useAiConsent();
 
   useEffect(() => {
     api<ExerciseCatalogItem[]>('/api/exercises').then(setCatalog).catch(() => setCatalog([]));
@@ -129,6 +132,11 @@ function AddExerciseDrawerContent({
   async function lookupWithAi() {
     const input = aiQuery.trim();
     if (input.length < 2) return;
+    if (!accepted) {
+      openReview();
+      setAiError(AI_CONSENT_REQUIRED_MESSAGE);
+      return;
+    }
     setAiLoading(true);
     setAiError(undefined);
     try {

@@ -1,6 +1,7 @@
 import { forceTokenRefresh, getIdToken } from './auth';
 import { recordFailedRequest } from './diagnostics';
 import { nativeAwareFetch } from './nativeHttp';
+import { assertAiConsentForPath } from './aiConsent';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -47,6 +48,7 @@ async function executeRequest(
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  assertAiConsentForPath(path);
   const method = (options.method ?? 'GET').toUpperCase();
   const body = options.body ?? (['POST', 'PUT', 'PATCH'].includes(method) ? '{}' : undefined);
 

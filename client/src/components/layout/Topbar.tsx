@@ -12,6 +12,7 @@ import { ColorThemePicker } from './ColorThemePicker';
 import { ThemeToggle } from './ThemeToggle';
 import { isAdminRole, isCoachRole } from '../../utils/roles';
 import { planLabel } from '../../utils/entitlements';
+import { hidesDigitalPlanPurchase } from '../../utils/nativePlatform';
 import { useDashboardLayout } from '../../utils/dashboardLayoutPreference';
 
 const MOBILE_NAV_LINKS = [
@@ -242,7 +243,7 @@ export function Topbar({
                     </p>
                   </li>
                   <ProfileMenuItem
-                    label="Plan & upgrade"
+                    label={hidesDigitalPlanPurchase() ? 'Your plan' : 'Plan & upgrade'}
                     icon={CreditCard}
                     onClick={() => {
                       closeProfileMenu();

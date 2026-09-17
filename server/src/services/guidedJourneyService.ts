@@ -17,6 +17,7 @@ import {
 import { isReflectionUnlocked } from '../guidedJourney/unlockTiming.js';
 import { runProgressionEvaluation } from '../gamification/progressionEngine.js';
 import { getAiProvider } from './aiService.js';
+import { userHasGrantedAiConsent } from './aiConsent.js';
 
 async function recordEvent(
   userId: string,
@@ -59,7 +60,12 @@ async function assertEnrollmentMutable(userId: string) {
 async function getUserTimezone(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { timezone: true, guidedJourneyRemindersEnabled: true, selectedVirtualCoachId: true }
+    select: {
+      timezone: true,
+      guidedJourneyRemindersEnabled: true,
+      selectedVirtualCoachId: true,
+      aiConsentAccepted: true
+    }
   });
   return user;
 }
@@ -480,9 +486,16 @@ export async function getDiscoveryState(userId: string, discoveryId: string) {
   };
 }
 
-async function generateCoachResponse(_userId: string, discoveryId: string, reflectionText: string) {
+async function generateCoachResponse(
+  _userId: string,
+  discoveryId: string,
+  reflectionText: string,
+  allowAi = true
+) {
   const discovery = getDiscovery(discoveryId);
   const fallback = discovery?.staticCoachResponse ?? 'Thank you for reflecting. Awareness grows with practice.';
+
+  if (!allowAi || !(await userHasGrantedAiConsent(_userId))) return fallback;
 
   try {
     const provider = getAiProvider();
@@ -550,7 +563,12 @@ export async function submitReflection(userId: string, discoveryId: string, refl
     return getDiscoveryState(userId, discoveryId);
   }
 
-  const coachResponse = await generateCoachResponse(userId, discoveryId, trimmed);
+  const coachResponse = await generateCoachResponse(
+    userId,
+    discoveryId,
+    trimmed,
+    Boolean(user?.aiConsentAccepted)
+  );
   const now = new Date();
   const skill = getSkill(discovery.skillId);
   const chapterDiscoveries = getChapterDiscoveries(discovery.chapterId);

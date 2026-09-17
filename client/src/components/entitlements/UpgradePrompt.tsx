@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import type { PlanSlug } from '../../types';
 import { getRequiredPlan, getUpgradePlan, planLabel, planPriceLabel, type FeatureKey } from '../../utils/entitlements';
+import { hidesDigitalPlanPurchase, IOS_PLAN_MANAGE_COPY } from '../../utils/nativePlatform';
 
 type UpgradePromptProps = {
   feature?: FeatureKey;
@@ -15,6 +16,7 @@ type UpgradePromptProps = {
 export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', className }: UpgradePromptProps) {
   const required = requiredPlan ?? (feature ? getRequiredPlan(feature) : 'self_guided');
   const upgrade = getUpgradePlan(currentPlan, required);
+  const hidePlanPurchase = hidesDigitalPlanPurchase();
 
   if (required === 'coach_led') {
     return (
@@ -25,6 +27,16 @@ export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', 
           Coach-led programs are available through participating coaches — not as a public subscription. Ask your
           coach about joining their program.
         </p>
+      </Card>
+    );
+  }
+
+  if (hidePlanPurchase) {
+    return (
+      <Card className={className ?? 'border-brand-green/30 bg-brand-green/5 p-6 text-center'}>
+        <Sparkles className="mx-auto mb-3 text-brand-green" size={28} aria-hidden />
+        <h3 className="text-lg font-bold text-brand-navy dark:text-brand-off-white">Higher plan needed</h3>
+        <p className="mt-2 text-sm text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
       </Card>
     );
   }

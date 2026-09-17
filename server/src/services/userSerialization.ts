@@ -46,6 +46,8 @@ export async function serializeAppUser(user: User) {
     smsRemindersIntroCompletedAt: user.smsRemindersIntroCompletedAt?.toISOString() ?? null,
     coachWelcomeCompletedAt: user.coachWelcomeCompletedAt?.toISOString() ?? null,
     firstDayChecklistDismissedAt: user.firstDayChecklistDismissedAt?.toISOString() ?? null,
+    aiConsentAccepted: user.aiConsentAccepted,
+    aiConsentDecidedAt: user.aiConsentDecidedAt?.toISOString() ?? null,
     selectedVirtualCoachId: user.selectedVirtualCoachId,
     plan: planToSlug(user.plan),
     subscriptionStatus: user.subscriptionStatus.toLowerCase(),

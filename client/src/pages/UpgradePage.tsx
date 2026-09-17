@@ -7,12 +7,14 @@ import { Card } from '../components/ui/Card';
 import { PUBLIC_PLANS } from '../data/plans';
 import type { AppUser, PlanSlug } from '../types';
 import { planLabel } from '../utils/entitlements';
+import { hidesDigitalPlanPurchase, IOS_PLAN_MANAGE_COPY } from '../utils/nativePlatform';
 
 export function UpgradePage({ user }: { user: AppUser | null }) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState<PlanSlug | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
   const currentPlan = user?.plan ?? 'starter';
+  const hidePlanPurchase = hidesDigitalPlanPurchase();
 
   async function requestCheckout(plan: 'self_guided' | 'plus') {
     setLoading(plan);
@@ -44,11 +46,20 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
                 month: 'short',
                 day: 'numeric'
               })}
-              . Choose a plan to continue afterward.
+              .{' '}
+              {hidePlanPurchase
+                ? IOS_PLAN_MANAGE_COPY
+                : 'Choose a plan to continue afterward.'}
             </>
           ) : null}
         </p>
       </div>
+
+      {hidePlanPurchase ? (
+        <Card className="border-brand-gold/40 bg-brand-gold/10 p-4 text-sm text-app-text">
+          {IOS_PLAN_MANAGE_COPY} Digital subscriptions are not sold in the iOS app.
+        </Card>
+      ) : null}
 
       {user?.gracePeriodEndsAt && user.nextPlanAfterCoach ? (
         <Card className="border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
@@ -87,6 +98,8 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
                   </Button>
                 ) : plan.id === 'starter' ? (
                   <p className="text-center text-xs text-app-text-muted">Contact support to downgrade</p>
+                ) : hidePlanPurchase ? (
+                  <p className="text-center text-xs text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
                 ) : (
                   <Button
                     className="w-full"

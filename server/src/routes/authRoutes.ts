@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { prisma } from '../db/prisma.js';
 import { serializeAppUser } from '../services/userSerialization.js';
 import { getUserDemographics, getUserProfile, updateUserDemographics, updateUserProfile } from '../services/userProfileService.js';
 import { deleteUserAccount } from '../services/userDeletionService.js';
@@ -99,6 +100,21 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/api/me', { preHandler: requireAuth }, async (request) => ({
     user: await serializeAppUser(request.appUser!)
   }));
+
+  app.put('/api/me/ai-consent', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = z.object({ accepted: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'accepted must be true or false.' });
+    }
+    const user = await prisma.user.update({
+      where: { id: request.appUser!.id },
+      data: {
+        aiConsentAccepted: parsed.data.accepted,
+        aiConsentDecidedAt: new Date()
+      }
+    });
+    return { user: await serializeAppUser(user) };
+  });
 
   app.delete('/api/me', { preHandler: requireAuth }, async (request, reply) => {
     try {
