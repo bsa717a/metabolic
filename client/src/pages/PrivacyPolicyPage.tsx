@@ -116,9 +116,13 @@ export function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>Google Gemini (third-party AI)</strong> — coaching replies and AI features (Nora / virtual
-            coach chat and weekly check-in, food and exercise lookup, meal suggestions, progress-photo analysis,
-            and coach voice) after you accept in-app AI permission. A privacy policy alone is not enough; you
-            must Accept in the app before this data is sent.
+            coach chat and weekly check-in, food and exercise lookup, meal suggestions and recommendations,
+            shopping-list and meal-prep help, progress-photo analysis, and guided-journey reflections) after you
+            accept in-app AI permission. A privacy policy alone is not enough; you must Accept in the app before
+            this data is sent.
+          </li>
+          <li>
+            <strong>OpenAI</strong> — coach voice text-to-speech, only after you accept in-app AI permission
           </li>
         </ul>
         <p className="mt-2 text-app-text-muted">
@@ -128,7 +132,7 @@ export function PrivacyPolicyPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold">AI features and Google Gemini</h2>
+        <h2 className="text-lg font-semibold">AI features and third-party AI</h2>
         <p className="mt-2 text-app-text-muted">
           Master Metabolic uses {AI_CONSENT_RECIPIENT} to {AI_CONSENT_PURPOSE.charAt(0).toLowerCase()}
           {AI_CONSENT_PURPOSE.slice(1)}.

@@ -3,6 +3,8 @@ import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
 import { Check, ChevronLeft } from 'lucide-react';
 import { api } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 import {
   activeCards,
   defaultPicks,
@@ -47,6 +49,7 @@ export function MealBuilder({
   onClose: () => void;
   onSaved: (updated: MealCardsPayload) => void | Promise<void>;
 }) {
+  const { accepted, openReview } = useAiConsent();
   const cards = useMemo(
     () => (payload ? [...payload.cards].sort((a, b) => a.sortOrder - b.sortOrder) : []),
     [payload]
@@ -211,6 +214,11 @@ export function MealBuilder({
 
   async function loadRecommendations() {
     if (!payload) return;
+    if (!accepted) {
+      openReview();
+      setRecError('AI features are off until you accept sharing data with Google Gemini.');
+      return;
+    }
     const requestId = ++recRequestId.current;
     setMode('recommend');
     setChosen(null);
@@ -333,6 +341,7 @@ export function MealBuilder({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {mode === 'choose' && (
             <div className="space-y-3">
+              {!accepted ? <AiDisabledNotice onReview={openReview} /> : null}
               <button
                 type="button"
                 onClick={() => void loadRecommendations()}

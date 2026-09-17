@@ -17,6 +17,7 @@ import {
 import { isReflectionUnlocked } from '../guidedJourney/unlockTiming.js';
 import { runProgressionEvaluation } from '../gamification/progressionEngine.js';
 import { getAiProvider } from './aiService.js';
+import { userHasGrantedAiConsent } from './aiConsent.js';
 
 async function recordEvent(
   userId: string,
@@ -494,7 +495,7 @@ async function generateCoachResponse(
   const discovery = getDiscovery(discoveryId);
   const fallback = discovery?.staticCoachResponse ?? 'Thank you for reflecting. Awareness grows with practice.';
 
-  if (!allowAi) return fallback;
+  if (!allowAi || !(await userHasGrantedAiConsent(_userId))) return fallback;
 
   try {
     const provider = getAiProvider();

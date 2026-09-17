@@ -82,6 +82,7 @@ export function isAiTransmissionPath(path: string) {
   if (pathname === '/api/ai' || pathname.startsWith('/api/ai/')) return true;
   if (pathname === '/api/virtual-coach/check-in/start') return true;
   if (/^\/api\/virtual-coach\/check-in\/[^/]+\/message$/.test(pathname)) return true;
+  if (/^\/api\/daily-logs\/[^/]+\/meal-recommendations$/.test(pathname)) return true;
   return false;
 }
 

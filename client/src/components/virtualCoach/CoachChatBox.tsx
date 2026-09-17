@@ -444,12 +444,12 @@ export function CoachChatBox({
 
   useEffect(() => {
     const seed = seedUserMessage?.trim();
-    if (!seed || greetingLoading || seededRef.current) return;
+    if (!seed || greetingLoading || seededRef.current || !accepted) return;
     seededRef.current = true;
     void send(seed);
     // Seed once after the opening greeting is ready.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedUserMessage, greetingLoading]);
+  }, [accepted, seedUserMessage, greetingLoading]);
 
   async function handleQuickReply(reply: CoachChatQuickReply) {
     if (loading) return;

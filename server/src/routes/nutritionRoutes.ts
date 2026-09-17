@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireAiConsent } from '../auth/requireAiConsent.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { canAccessUser } from '../auth/requireRole.js';
 import { addBlankMeal, addMealItem, applyMealForward, clearMealPlannedFoods, copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, saveBuiltDayPlan, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
@@ -213,7 +214,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       throw error;
     }
   });
-  app.get('/api/daily-logs/:date/meal-recommendations', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
+  app.get('/api/daily-logs/:date/meal-recommendations', { preHandler: [requireAuth, requireFeature('meal_planning'), requireAiConsent] }, async (request, reply) => {
     const query = z
       .object({ mealNumber: z.coerce.number().int().min(1), craving: z.string().max(200).optional() })
       .parse(request.query);

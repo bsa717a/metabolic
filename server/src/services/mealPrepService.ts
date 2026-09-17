@@ -6,6 +6,7 @@ import {
   type EnrichedMealPrepResult,
   type MealPrepBatchInput
 } from './aiService.js';
+import { userHasGrantedAiConsent } from './aiConsent.js';
 import { parseValidatedDateRange, toDateKey } from '../utils/dates.js';
 import { n, round } from '../utils/numbers.js';
 
@@ -281,8 +282,9 @@ export async function getMealPrepPlan(
 
   let enriched: EnrichedMealPrepResult;
   let enrichedFlag = true;
+  const allowAi = options?.allowAi !== false && (await userHasGrantedAiConsent(userId));
   try {
-    if (options?.allowAi === false) {
+    if (!allowAi) {
       throw new Error('AI consent not granted');
     }
     enriched = await getAiProvider().enrichMealPrep(enrichInput);

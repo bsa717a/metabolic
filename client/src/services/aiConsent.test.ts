@@ -80,6 +80,7 @@ describe('aiConsent', () => {
     expect(isAiTransmissionPath('/api/ai/coach-voice/available')).toBe(false);
     expect(isAiTransmissionPath('/api/virtual-coach/check-in/start')).toBe(true);
     expect(isAiTransmissionPath('/api/virtual-coach/check-in/abc/message')).toBe(true);
+    expect(isAiTransmissionPath('/api/daily-logs/2026-09-17/meal-recommendations')).toBe(true);
     expect(isAiTransmissionPath('/api/virtual-coach/check-in/state')).toBe(false);
     expect(isAiTransmissionPath('/api/me')).toBe(false);
     expect(isAiTransmissionPath('/api/nutrition/shopping-list')).toBe(false);
