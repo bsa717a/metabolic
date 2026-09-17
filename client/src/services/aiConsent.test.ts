@@ -83,6 +83,7 @@ describe('aiConsent', () => {
     expect(isAiTransmissionPath('/api/virtual-coach/check-in/state')).toBe(false);
     expect(isAiTransmissionPath('/api/me')).toBe(false);
     expect(isAiTransmissionPath('/api/nutrition/shopping-list')).toBe(false);
+    expect(isAiTransmissionPath('/api/admin/communications/ai/generate')).toBe(false);
   });
 
   it('blocks AI API calls until runtime consent is accepted', () => {

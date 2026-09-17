@@ -116,9 +116,9 @@ export function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>Google Gemini (third-party AI)</strong> — coaching replies and AI features (Nora / virtual
-            coach chat, food and exercise lookup, meal suggestions, progress-photo analysis, and coach voice)
-            after you accept in-app AI permission. A privacy policy alone is not enough; you must Accept in the
-            app before this data is sent.
+            coach chat and weekly check-in, food and exercise lookup, meal suggestions, progress-photo analysis,
+            and coach voice) after you accept in-app AI permission. A privacy policy alone is not enough; you
+            must Accept in the app before this data is sent.
           </li>
         </ul>
         <p className="mt-2 text-app-text-muted">

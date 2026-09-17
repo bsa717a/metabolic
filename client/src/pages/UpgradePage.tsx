@@ -46,7 +46,10 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
                 month: 'short',
                 day: 'numeric'
               })}
-              . Choose a plan to continue afterward.
+              .{' '}
+              {hidePlanPurchase
+                ? IOS_PLAN_MANAGE_COPY
+                : 'Choose a plan to continue afterward.'}
             </>
           ) : null}
         </p>

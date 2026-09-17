@@ -74,8 +74,10 @@ export function hasRuntimeAiConsent() {
   return runtimeConsent.accepted;
 }
 
+/** Member-facing Gemini sends. Admin email studio (`/api/admin/communications/ai/*`) is out of scope. */
 export function isAiTransmissionPath(path: string) {
   const pathname = path.split('?')[0] ?? path;
+  if (pathname.startsWith('/api/admin/')) return false;
   if (pathname === '/api/ai/coach-voice/available') return false;
   if (pathname === '/api/ai' || pathname.startsWith('/api/ai/')) return true;
   if (pathname === '/api/virtual-coach/check-in/start') return true;

@@ -12,6 +12,9 @@ import {
   type CoachWelcomeGoals
 } from './coachWelcomeMessage';
 import { clearPendingCoachWelcome, readPendingCoachWelcome } from './coachWelcomePending';
+import { useAiConsent } from '../../context/AiConsentContext';
+
+/** Onboarding intro for Nora — not App Review AI consent (that is AiConsentModal). */
 
 type SetupNavigationState = {
   showCoachWelcome?: boolean;
@@ -61,6 +64,7 @@ export function CoachWelcomeGate({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { decided: aiConsentDecided } = useAiConsent();
   const [welcomeSession, setWelcomeSession] = useState<WelcomeSession | null>(null);
   const [sessionKey, setSessionKey] = useState(0);
   const launchedRef = useRef(false);
@@ -81,6 +85,7 @@ export function CoachWelcomeGate({
 
   useEffect(() => {
     if (launchedRef.current || launchInFlightRef.current || welcomeSession) return;
+    if (!aiConsentDecided) return;
     if (!user || user.coachWelcomeCompletedAt) return;
     if (location.pathname !== '/') return;
 
@@ -123,15 +128,16 @@ export function CoachWelcomeGate({
     user?.firstName,
     user?.id,
     user?.selectedVirtualCoachId,
-    welcomeSession
+    welcomeSession,
+    aiConsentDecided
   ]);
 
   useEffect(() => {
     if (!introRequest || introRequest === lastIntroRequestRef.current) return;
     lastIntroRequestRef.current = introRequest;
-    if (!user?.selectedVirtualCoachId) return;
+    if (!aiConsentDecided || !user?.selectedVirtualCoachId) return;
     void openWelcome(user.selectedVirtualCoachId);
-  }, [introRequest, openWelcome, user?.selectedVirtualCoachId]);
+  }, [aiConsentDecided, introRequest, openWelcome, user?.selectedVirtualCoachId]);
 
   const coach = welcomeSession ? getVirtualCoach(welcomeSession.coachId) : undefined;
 

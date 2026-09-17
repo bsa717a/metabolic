@@ -3,7 +3,7 @@ export const AI_CONSENT_TITLE = 'AI coaching and Google Gemini';
 export const AI_CONSENT_RECIPIENT = 'Google Gemini (third-party AI)';
 
 export const AI_CONSENT_PURPOSE =
-  'Generate coaching replies and power AI features such as Nora / virtual coach chat, food and exercise lookup, meal suggestions, progress-photo analysis, and coach voice.';
+  'Generate coaching replies and power AI features such as Nora / virtual coach chat and weekly check-in, food and exercise lookup, meal suggestions, progress-photo analysis, and coach voice.';
 
 export const AI_CONSENT_DATA_SENT = [
   'Chat messages you send to the assistant or Nora / virtual coach',

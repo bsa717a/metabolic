@@ -31,6 +31,16 @@ export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', 
     );
   }
 
+  if (hidePlanPurchase) {
+    return (
+      <Card className={className ?? 'border-brand-green/30 bg-brand-green/5 p-6 text-center'}>
+        <Sparkles className="mx-auto mb-3 text-brand-green" size={28} aria-hidden />
+        <h3 className="text-lg font-bold text-brand-navy dark:text-brand-off-white">Higher plan needed</h3>
+        <p className="mt-2 text-sm text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
+      </Card>
+    );
+  }
+
   return (
     <Card className={className ?? 'border-brand-green/30 bg-brand-green/5 p-6 text-center'}>
       <Sparkles className="mx-auto mb-3 text-brand-green" size={28} aria-hidden />
@@ -41,18 +51,14 @@ export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', 
         {planPriceLabel(upgrade) ? `${planLabel(upgrade)} is ${planPriceLabel(upgrade)}.` : ''} Unlock this feature
         and more with a higher plan.
       </p>
-      {hidePlanPurchase ? (
-        <p className="mt-4 text-sm text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
-      ) : (
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Link to="/upgrade">
-            <Button>View plans</Button>
-          </Link>
-          <Link to="/pricing">
-            <Button variant="secondary">Compare plans</Button>
-          </Link>
-        </div>
-      )}
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+        <Link to="/upgrade">
+          <Button>View plans</Button>
+        </Link>
+        <Link to="/pricing">
+          <Button variant="secondary">Compare plans</Button>
+        </Link>
+      </div>
     </Card>
   );
 }

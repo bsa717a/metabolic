@@ -351,6 +351,7 @@ export const communicationAdminRoutes: FastifyPluginAsync = async (app) => {
     return { communication };
   });
 
+  // Admin email studio is out of App Review member-facing Gemini consent.
   app.post('/api/admin/communications/ai/generate', { preHandler: adminOnly }, async (request, reply) => {
     const body = request.body as {
       prompt?: string;
