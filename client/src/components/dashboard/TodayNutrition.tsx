@@ -10,6 +10,8 @@ import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
 import { MealStatusMenu } from '../nutrition/MealStatusMenu';
 import { Card } from '../ui/Card';
 import { Drawer } from '../ui/Drawer';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '../../content/aiConsentCopy';
 
 type LookupResult = {
   items: Array<{
@@ -159,6 +161,7 @@ export function TodayNutrition({
   onChange: () => void | Promise<void>;
 }) {
   const mealsForParse = allMeals ?? meals;
+  const { accepted, openReview } = useAiConsent();
   const [searchParams] = useSearchParams();
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
   const openedFromQuery = useRef(false);
@@ -266,7 +269,15 @@ export function TodayNutrition({
     }
   }
 
+  function ensureAiConsent(setMessage: (message: string) => void) {
+    if (accepted) return true;
+    openReview();
+    setMessage(AI_CONSENT_REQUIRED_MESSAGE);
+    return false;
+  }
+
   async function loadMealSuggestions(inputText: string) {
+    if (!ensureAiConsent(setSuggestionError)) return;
     setSuggestionPrompt(inputText);
     setSelectedSuggestionMealId(expandedMealId);
     setSuggestionError(null);
@@ -371,6 +382,8 @@ export function TodayNutrition({
       setError('Add the food on the line after the meal name.');
       return;
     }
+
+    if (!ensureAiConsent(setError)) return;
 
     setSaving(true);
     setError(null);

@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { Camera, X } from 'lucide-react';
 import { usePhotoPicker } from '../../hooks/usePhotoPicker';
 import { api } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '../../content/aiConsentCopy';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 import type { Food } from '../../types';
 import type { GamificationCelebration } from '../../types/gamification';
 
@@ -53,6 +56,7 @@ export function LogDifferentFoodModal({
   /** When set, accepts lookups as foods without attaching to a meal (e.g. admin meal builder). */
   onFoodAccepted?: (foods: Food[]) => void | Promise<void>;
 }) {
+  const { accepted, openReview } = useAiConsent();
   const [description, setDescription] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -112,6 +116,11 @@ export function LogDifferentFoodModal({
   async function logDifferentFood() {
     const input = description.trim();
     if (!input && !photo) return;
+    if (!accepted) {
+      openReview();
+      setError(AI_CONSENT_REQUIRED_MESSAGE);
+      return;
+    }
     if (!mealId && !onFoodAccepted) {
       setError('Select a meal first.');
       return;
@@ -264,8 +273,9 @@ export function LogDifferentFoodModal({
             </button>
           </div>
         )}
+        {!accepted ? <AiDisabledNotice onReview={openReview} /> : null}
         <p className="text-xs text-app-text-muted">
-          {onFoodAccepted
+          {onFoodAccepted}
             ? 'AI will estimate the nutrition from your text or photo so you can add it to this meal step.'
             : itemType === 'ACTUAL'
               ? 'AI will estimate the nutrition from your text or photo and add it as actual food for this meal.'

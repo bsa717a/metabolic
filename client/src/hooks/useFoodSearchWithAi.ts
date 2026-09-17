@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
+import { useAiConsent } from '../context/AiConsentContext';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '../content/aiConsentCopy';
 import type { Food } from '../types';
 
 export type PendingFoodLookup = {
@@ -47,6 +49,7 @@ export function pendingToFood(pending: PendingFoodLookup): Food {
 }
 
 export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch?: boolean }) {
+  const { accepted, openReview } = useAiConsent();
   const [local, setLocal] = useState<Food[]>([]);
   const [queue, setQueue] = useState<Food[]>([]);
   const [pending, setPending] = useState<PendingFoodLookup[]>([]);
@@ -110,6 +113,11 @@ export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch
   const runAiSearch = useCallback(async () => {
     const q = query.trim();
     if (q.length < 2) return;
+    if (!accepted) {
+      openReview();
+      setAiError(AI_CONSENT_REQUIRED_MESSAGE);
+      return;
+    }
     const requestId = ++aiRequestId.current;
     setAiLoading(true);
     setAiError(null);
@@ -127,7 +135,7 @@ export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch
     } finally {
       if (requestId === aiRequestId.current) setAiLoading(false);
     }
-  }, [query]);
+  }, [accepted, openReview, query]);
 
   const acceptLookup = useCallback(async (lookupId: string) => {
     return api<Food>(`/api/ai/food-lookup/${lookupId}/accept`, {
