@@ -7,6 +7,18 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.32.0](https://github.com/bsa717a/metabolic/compare/v0.31.2...v0.32.0) (2026-09-17)
+
+
+### Features
+
+* **ios:** App Store Review path A — AI consent and hide iOS plan purchase ([#293](https://github.com/bsa717a/metabolic/issues/293)) ([37d8aaa](https://github.com/bsa717a/metabolic/commit/37d8aaaf187dd4008b12f9053f45dc79a80a7e03))
+
+
+### Bug Fixes
+
+* **ios:** audible workout countdown cues and haptics ([#291](https://github.com/bsa717a/metabolic/issues/291)) ([8f740fb](https://github.com/bsa717a/metabolic/commit/8f740fb9a3db4c7d8f9d3dd9f3c0a033c5900f14))
+
 ## [0.31.2](https://github.com/bsa717a/metabolic/compare/v0.31.1...v0.31.2) (2026-09-16)
 
 
