@@ -275,7 +275,7 @@ export function LogDifferentFoodModal({
         )}
         {!accepted ? <AiDisabledNotice onReview={openReview} /> : null}
         <p className="text-xs text-app-text-muted">
-          {onFoodAccepted}
+          {onFoodAccepted
             ? 'AI will estimate the nutrition from your text or photo so you can add it to this meal step.'
             : itemType === 'ACTUAL'
               ? 'AI will estimate the nutrition from your text or photo and add it as actual food for this meal.'
