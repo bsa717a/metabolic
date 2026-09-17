@@ -40,6 +40,9 @@ describe('iOS Capacitor session audio + haptics wiring', () => {
     expect(cues).toMatch(/WAV_PEAK\s*=\s*32767/);
     expect(cues).toContain('COUNTDOWN_TICK_MARKS_MS = [5000, 3000, 2000, 1000]');
     expect(cues).toContain("GO_CLIP_URL = '/audio/go.wav'");
+    expect(cues).toContain('function preloadGoClip');
+    expect(cues).toContain('primeSilentHtmlAudio');
+    expect(cues).not.toContain('function primeGoClip');
     expect(cues).not.toContain('speechSynthesis');
     expect(cues).not.toContain('SpeechSynthesisUtterance');
     expect(cues).toContain("addEventListener('visibilitychange'");

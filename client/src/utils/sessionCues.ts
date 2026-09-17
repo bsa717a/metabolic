@@ -166,9 +166,13 @@ function configureHtmlAudio(el: HTMLAudioElement): void {
   el.setAttribute('playsinline', 'true');
 }
 
+function isGoClipSrc(src: string): boolean {
+  return src.includes('go.wav');
+}
+
 function getHtmlAudio(): HTMLAudioElement {
   if (!htmlAudio) {
-    htmlAudio = new Audio(pingWavDataUri(GO));
+    htmlAudio = new Audio();
     configureHtmlAudio(htmlAudio);
   }
   return htmlAudio;
@@ -182,29 +186,41 @@ function getGoClip(): HTMLAudioElement {
   return goClip;
 }
 
-/** Warm the recorded Go clip from a user gesture so the first play is not silent in WKWebView. */
-function primeGoClip(): void {
+/** Unlock HTMLAudio from a user gesture with silence — never the recorded Go clip. */
+function primeSilentHtmlAudio(): void {
   try {
-    const el = getGoClip();
-    el.src = GO_CLIP_URL;
-    configureHtmlAudio(el);
-    el.load();
-    const prevMuted = el.muted;
+    const el = getHtmlAudio();
+    el.src = pingWavDataUri({ freq: 1, dur: 0.02, gain: 0 });
     el.muted = true;
+    el.volume = 0;
     void el
       .play()
       .then(() => {
         el.pause();
         el.currentTime = 0;
-        el.muted = prevMuted;
+        el.muted = false;
         el.volume = HTML_VOLUME;
       })
       .catch((error) => {
-        el.muted = prevMuted;
-        logCueFailure('prime Go clip failed', error);
+        el.muted = false;
+        el.volume = HTML_VOLUME;
+        logCueFailure('prime silent HTMLAudio failed', error);
       });
   } catch (error) {
-    logCueFailure('prime Go clip failed', error);
+    logCueFailure('prime silent HTMLAudio failed', error);
+  }
+}
+
+/** Cache go.wav without playing it. Play is reserved for restEndCue / session-start. */
+function preloadGoClip(): void {
+  try {
+    const el = getGoClip();
+    if (!el.src || !isGoClipSrc(el.src)) el.src = GO_CLIP_URL;
+    el.preload = 'auto';
+    el.setAttribute('playsinline', 'true');
+    el.load();
+  } catch (error) {
+    logCueFailure('preload Go clip failed', error);
   }
 }
 
@@ -233,11 +249,12 @@ async function unlockAudio(): Promise<void> {
   }
 }
 
-/** Call from a user gesture (Start workout / Complete set / Skip rest). */
+/** Call from a user gesture (Start workout / Complete set / Skip rest). Never plays go.wav. */
 export function primeAudio(): void {
   installForegroundResume();
   setCueAudioSession();
-  primeGoClip();
+  primeSilentHtmlAudio();
+  preloadGoClip();
   const ctx = getAudioContext();
   if (ctx?.state === 'suspended') {
     void ctx.resume().catch((error) => {
@@ -326,7 +343,7 @@ async function playGoClip(): Promise<boolean> {
   setCueAudioSession();
   try {
     const el = getGoClip();
-    if (!el.src || !el.src.includes('go.wav')) el.src = GO_CLIP_URL;
+    if (!el.src || !isGoClipSrc(el.src)) el.src = GO_CLIP_URL;
     el.currentTime = 0;
     configureHtmlAudio(el);
     await el.play();

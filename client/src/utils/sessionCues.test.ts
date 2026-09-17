@@ -79,7 +79,12 @@ describe('sessionCues', () => {
   let warn: ReturnType<typeof vi.spyOn>;
   const vibrate = vi.fn();
   const audioInstances: FakeAudio[] = [];
+  const playSrcs: string[] = [];
   const play = vi.fn().mockResolvedValue(undefined);
+
+  function playedGoClip(): boolean {
+    return playSrcs.some((src) => src.includes('go.wav'));
+  }
 
   function fireDocument(type: string) {
     for (const listener of documentListeners[type] ?? []) listener();
@@ -91,6 +96,7 @@ describe('sessionCues', () => {
     native = false;
     ctx = new FakeAudioContext();
     audioInstances.length = 0;
+    playSrcs.length = 0;
     play.mockResolvedValue(undefined);
     for (const key of Object.keys(windowListeners)) delete windowListeners[key];
     for (const key of Object.keys(documentListeners)) delete documentListeners[key];
@@ -126,7 +132,10 @@ describe('sessionCues', () => {
         muted = false;
         currentTime = 0;
         playsInline = false;
-        play = play;
+        play = vi.fn(() => {
+          playSrcs.push(this.src);
+          return play();
+        });
         load = vi.fn();
         pause = vi.fn();
         setAttribute = vi.fn();
@@ -151,11 +160,17 @@ describe('sessionCues', () => {
     expect(ctx.createBufferSource).toHaveBeenCalled();
   });
 
-  it('primes the recorded Go clip from a user gesture', async () => {
+  it('does not play go.wav when priming or unlocking audio', async () => {
     const { primeAudio, GO_CLIP_URL } = await import('./sessionCues');
     primeAudio();
+    await vi.waitFor(() => expect(ctx.resume).toHaveBeenCalled());
     await vi.waitFor(() => expect(play).toHaveBeenCalled());
-    expect(audioInstances.some((el) => el.src.includes(GO_CLIP_URL) || el.src.includes('go.wav'))).toBe(true);
+    expect(playedGoClip()).toBe(false);
+    expect(playSrcs.every((src) => !src.includes(GO_CLIP_URL) && !src.includes('go.wav'))).toBe(true);
+    expect(ctx.createBufferSource).toHaveBeenCalled();
+    const goEl = audioInstances.find((el) => el.src.includes(GO_CLIP_URL) || el.src.includes('go.wav'));
+    expect(goEl?.load).toHaveBeenCalled();
+    expect(goEl?.play).not.toHaveBeenCalled();
   });
 
   it('resumes an existing AudioContext when the page becomes visible', async () => {
@@ -194,8 +209,21 @@ describe('sessionCues', () => {
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'HEAVY' });
     expect(vibrate).not.toHaveBeenCalled();
     expect(ctx.createOscillator).not.toHaveBeenCalled();
+    expect(playedGoClip()).toBe(true);
     expect(audioInstances.some((el) => el.src.includes(GO_CLIP_URL) || el.src.includes('go.wav'))).toBe(true);
     expect(audioInstances.every((el) => el.volume === 1)).toBe(true);
+  });
+
+  it('plays go.wav only on the zero/start cue path, not on ticks', async () => {
+    ctx.state = 'running';
+    const { countdownTick, restEndCue } = await import('./sessionCues');
+    countdownTick(true);
+    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    expect(playedGoClip()).toBe(false);
+
+    restEndCue(true);
+    await vi.waitFor(() => expect(playedGoClip()).toBe(true));
+    expect(playSrcs.filter((src) => src.includes('go.wav'))).toHaveLength(1);
   });
 
   it('does not play Go when session sound is muted', async () => {
