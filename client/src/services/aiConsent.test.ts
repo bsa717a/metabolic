@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   AI_CONSENT_REQUIRED_MESSAGE,
   assertAiConsentForPath,
@@ -10,7 +10,35 @@ import {
   writeLocalAiConsent
 } from './aiConsent';
 
+function makeStorage(): Storage {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => void map.set(k, String(v)),
+    clear: () => void map.clear(),
+    removeItem: (k: string) => void map.delete(k),
+    get length() {
+      return map.size;
+    },
+    key: (i: number) => [...map.keys()][i] ?? null
+  };
+}
+
 describe('aiConsent', () => {
+  beforeAll(() => {
+    const local = makeStorage();
+    Object.defineProperty(globalThis, 'localStorage', { value: local, configurable: true });
+    Object.defineProperty(globalThis, 'window', {
+      value: { localStorage: local },
+      configurable: true
+    });
+  });
+
+  afterAll(() => {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+    Reflect.deleteProperty(globalThis, 'window');
+  });
+
   afterEach(() => {
     window.localStorage.clear();
     syncRuntimeAiConsent('', false);
