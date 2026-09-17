@@ -6,7 +6,7 @@
  *
  * Capacitor iOS: native AVAudioSession is `.playback` + `.mixWithOthers`
  * (SceneDelegate, copied by `native:patch`). That plays through the Silent
- * switch without interrupting other audio — including SpeechSynthesis "Go!".
+ * switch without interrupting other audio — including the recorded "Go!" clip.
  * On native, set `navigator.audioSession` to `playback` — `transient` can
  * leave WKWebView ambient, which the Silent switch mutes.
  */
@@ -25,14 +25,23 @@ type Tone = { freq: number; dur: number; gain: number };
 /** Beep at 5, then 3, 2, 1 — skip 4. Used by the workout session tick schedule. */
 export const COUNTDOWN_TICK_MARKS_MS = [5000, 3000, 2000, 1000] as const;
 
-const TICK: Tone = { freq: 740, dur: 0.11, gain: 0.8 };
-const GO: Tone = { freq: 988, dur: 0.18, gain: 0.94 };
+/** Pre-recorded natural "Go!" — played through HTMLAudio + the same AVAudioSession as beeps. */
+export const GO_CLIP_URL = '/audio/go.wav';
+
+/** Near-max sine family (fundamental + harmonics). Not a square — avoids harsh clipping. */
+const TICK: Tone = { freq: 880, dur: 0.15, gain: 1 };
+const GO: Tone = { freq: 1175, dur: 0.22, gain: 1 };
 const HTML_VOLUME = 1;
-const GO_SPEECH_TEXT = 'Go!';
-const WAV_PEAK = 30500;
+const WAV_PEAK = 32767;
+const PARTIALS = [
+  { ratio: 1, mix: 0.7 },
+  { ratio: 2, mix: 0.22 },
+  { ratio: 3, mix: 0.08 }
+] as const;
 
 let audioCtx: AudioContext | null = null;
 let htmlAudio: HTMLAudioElement | null = null;
+let goClip: HTMLAudioElement | null = null;
 let unlockPromise: Promise<void> | null = null;
 let foregroundResumeInstalled = false;
 
@@ -103,17 +112,24 @@ function installForegroundResume(): void {
 
 installForegroundResume();
 
-/** Short sine ping WAV (GO motif) for the HTMLAudio fallback. */
+function toneSample(tone: Tone, t: number): number {
+  let wave = 0;
+  for (const partial of PARTIALS) {
+    wave += Math.sin(2 * Math.PI * tone.freq * partial.ratio * t) * partial.mix;
+  }
+  return wave;
+}
+
+/** Short notification WAV (GO motif) for the HTMLAudio fallback. */
 function pingWavDataUri(tone: Tone): string {
   const sampleRate = 22050;
   const numSamples = Math.floor(sampleRate * tone.dur);
   const samples = new Int16Array(numSamples);
-  const peak = Math.min(1, tone.gain / GO.gain);
+  const peak = Math.min(1, tone.gain);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    const env = Math.min(1, t * 50) * Math.min(1, (tone.dur - t) * 25);
-    const wave = Math.sin(2 * Math.PI * tone.freq * t);
-    samples[i] = Math.max(-32767, Math.min(32767, Math.round(wave * env * WAV_PEAK * peak)));
+    const env = Math.min(1, t * 80) * Math.min(1, (tone.dur - t) * 20);
+    samples[i] = Math.max(-32767, Math.min(32767, Math.round(toneSample(tone, t) * env * WAV_PEAK * peak)));
   }
 
   const dataSize = samples.length * 2;
@@ -143,13 +159,53 @@ function pingWavDataUri(tone: Tone): string {
   return `data:audio/wav;base64,${btoa(binary)}`;
 }
 
+function configureHtmlAudio(el: HTMLAudioElement): void {
+  el.preload = 'auto';
+  el.volume = HTML_VOLUME;
+  el.muted = false;
+  el.setAttribute('playsinline', 'true');
+}
+
 function getHtmlAudio(): HTMLAudioElement {
   if (!htmlAudio) {
     htmlAudio = new Audio(pingWavDataUri(GO));
-    htmlAudio.preload = 'auto';
-    htmlAudio.volume = HTML_VOLUME;
+    configureHtmlAudio(htmlAudio);
   }
   return htmlAudio;
+}
+
+function getGoClip(): HTMLAudioElement {
+  if (!goClip) {
+    goClip = new Audio(GO_CLIP_URL);
+    configureHtmlAudio(goClip);
+  }
+  return goClip;
+}
+
+/** Warm the recorded Go clip from a user gesture so the first play is not silent in WKWebView. */
+function primeGoClip(): void {
+  try {
+    const el = getGoClip();
+    el.src = GO_CLIP_URL;
+    configureHtmlAudio(el);
+    el.load();
+    const prevMuted = el.muted;
+    el.muted = true;
+    void el
+      .play()
+      .then(() => {
+        el.pause();
+        el.currentTime = 0;
+        el.muted = prevMuted;
+        el.volume = HTML_VOLUME;
+      })
+      .catch((error) => {
+        el.muted = prevMuted;
+        logCueFailure('prime Go clip failed', error);
+      });
+  } catch (error) {
+    logCueFailure('prime Go clip failed', error);
+  }
 }
 
 async function unlockAudio(): Promise<void> {
@@ -177,94 +233,11 @@ async function unlockAudio(): Promise<void> {
   }
 }
 
-function getSpeechSynthesis(): SpeechSynthesis | null {
-  try {
-    if (typeof window === 'undefined') return null;
-    return window.speechSynthesis ?? null;
-  } catch (error) {
-    logCueFailure('speechSynthesis access failed', error);
-    return null;
-  }
-}
-
-function pickCueVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
-  const voices = synth.getVoices();
-  if (!voices.length) return null;
-  const english = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en'));
-  const pool = english.length ? english : voices;
-  const preferred = ['samantha', 'nicky', 'aaron', 'siri', 'google us english'];
-  for (const name of preferred) {
-    const match = pool.find((voice) => voice.name.toLowerCase().includes(name));
-    if (match) return match;
-  }
-  return pool.find((voice) => voice.localService) ?? pool[0] ?? null;
-}
-
-/** Warm SpeechSynthesis from a user gesture so the first "Go!" is not silent in WKWebView. */
-function primeSpeech(): void {
-  const synth = getSpeechSynthesis();
-  if (!synth) return;
-  try {
-    synth.getVoices();
-    const warm = new SpeechSynthesisUtterance(' ');
-    warm.volume = 0;
-    warm.rate = 2;
-    warm.lang = 'en-US';
-    synth.speak(warm);
-    synth.cancel();
-  } catch (error) {
-    logCueFailure('prime speechSynthesis failed', error);
-  }
-}
-
-function speakGo(): void {
-  setCueAudioSession();
-  const synth = getSpeechSynthesis();
-  if (!synth) {
-    logCueFailure('speechSynthesis unavailable', null);
-    return;
-  }
-  try {
-    if (synth.paused) synth.resume();
-    // Cancel only when something is already speaking. Immediate cancel+speak
-    // can drop the next utterance in iOS WKWebView.
-    if (synth.speaking) synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(GO_SPEECH_TEXT);
-    utterance.volume = 1;
-    utterance.rate = 1.05;
-    utterance.pitch = 1.08;
-    utterance.lang = 'en-US';
-    const voice = pickCueVoice(synth);
-    if (voice) {
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
-    }
-    utterance.onerror = (event) => {
-      logCueFailure('speechSynthesis Go failed', event.error);
-    };
-    const speak = () => {
-      try {
-        synth.speak(utterance);
-        if (synth.paused) synth.resume();
-      } catch (error) {
-        logCueFailure('speechSynthesis.speak failed', error);
-      }
-    };
-    if (synth.speaking) {
-      window.setTimeout(speak, 40);
-    } else {
-      speak();
-    }
-  } catch (error) {
-    logCueFailure('speakGo failed', error);
-  }
-}
-
 /** Call from a user gesture (Start workout / Complete set / Skip rest). */
 export function primeAudio(): void {
   installForegroundResume();
   setCueAudioSession();
-  primeSpeech();
+  primeGoClip();
   const ctx = getAudioContext();
   if (ctx?.state === 'suspended') {
     void ctx.resume().catch((error) => {
@@ -299,19 +272,27 @@ async function playViaWebAudio(tone: Tone): Promise<boolean> {
   }
 
   try {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = tone.freq;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+    const env = ctx.createGain();
+    env.connect(ctx.destination);
     const start = ctx.currentTime;
     const end = start + tone.dur;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(tone.gain, start + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    osc.start(start);
-    osc.stop(end + 0.02);
+    const holdEnd = Math.max(start + 0.02, end - 0.03);
+    env.gain.setValueAtTime(0.0001, start);
+    env.gain.exponentialRampToValueAtTime(tone.gain, start + 0.008);
+    env.gain.setValueAtTime(tone.gain, holdEnd);
+    env.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    for (const partial of PARTIALS) {
+      const osc = ctx.createOscillator();
+      const mix = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = tone.freq * partial.ratio;
+      mix.gain.value = partial.mix;
+      osc.connect(mix);
+      mix.connect(env);
+      osc.start(start);
+      osc.stop(end + 0.02);
+    }
     return true;
   } catch (error) {
     logCueFailure('Web Audio play failed', error);
@@ -325,7 +306,7 @@ async function playViaHtmlAudio(tone: Tone): Promise<boolean> {
     const el = getHtmlAudio();
     el.src = pingWavDataUri(tone);
     el.currentTime = 0;
-    el.volume = HTML_VOLUME;
+    configureHtmlAudio(el);
     await el.play();
     return true;
   } catch (error) {
@@ -339,6 +320,27 @@ async function playTone(tone: Tone): Promise<void> {
   if (webOk) return;
   const htmlOk = await playViaHtmlAudio(tone);
   if (!htmlOk) logCueFailure('all audio backends failed', tone);
+}
+
+async function playGoClip(): Promise<boolean> {
+  setCueAudioSession();
+  try {
+    const el = getGoClip();
+    if (!el.src || !el.src.includes('go.wav')) el.src = GO_CLIP_URL;
+    el.currentTime = 0;
+    configureHtmlAudio(el);
+    await el.play();
+    return true;
+  } catch (error) {
+    logCueFailure('Go clip play failed', error);
+    return false;
+  }
+}
+
+async function playGoSound(): Promise<void> {
+  const clipOk = await playGoClip();
+  if (clipOk) return;
+  await playTone(GO);
 }
 
 async function playNativeHaptic(style: ImpactStyle): Promise<void> {
@@ -356,12 +358,9 @@ export function countdownTick(sound: boolean): void {
   void playNativeHaptic(ImpactStyle.Light);
 }
 
-/** Fire when a rest (or duration) timer elapses. Beep + spoken "Go!". */
+/** Fire when a rest (or duration) timer elapses. Recorded "Go!" clip (sine fallback). */
 export function restEndCue(sound: boolean): void {
-  if (sound) {
-    void playTone(GO);
-    speakGo();
-  }
+  if (sound) void playGoSound();
   void playNativeHaptic(ImpactStyle.Heavy);
   if (isNativePlatform()) return;
   try {

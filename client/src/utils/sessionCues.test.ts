@@ -36,6 +36,7 @@ function makeGain() {
   return {
     connect: vi.fn(),
     gain: {
+      value: 0,
       setValueAtTime: vi.fn(),
       exponentialRampToValueAtTime: vi.fn()
     }
@@ -59,18 +60,26 @@ class FakeAudioContext {
   }));
 }
 
+type FakeAudio = {
+  src: string;
+  preload: string;
+  volume: number;
+  muted: boolean;
+  currentTime: number;
+  playsInline: boolean;
+  play: ReturnType<typeof vi.fn>;
+  load: ReturnType<typeof vi.fn>;
+  pause: ReturnType<typeof vi.fn>;
+};
+
 describe('sessionCues', () => {
   const windowListeners: Record<string, Listener[]> = {};
   const documentListeners: Record<string, Listener[]> = {};
   let ctx: FakeAudioContext;
   let warn: ReturnType<typeof vi.spyOn>;
   const vibrate = vi.fn();
+  const audioInstances: FakeAudio[] = [];
   const play = vi.fn().mockResolvedValue(undefined);
-  const speechSpeak = vi.fn();
-  const speechCancel = vi.fn();
-  const speechResume = vi.fn();
-  const speechGetVoices = vi.fn(() => [] as SpeechSynthesisVoice[]);
-  const speechState = { paused: false, speaking: false };
 
   function fireDocument(type: string) {
     for (const listener of documentListeners[type] ?? []) listener();
@@ -81,26 +90,11 @@ describe('sessionCues', () => {
     vi.clearAllMocks();
     native = false;
     ctx = new FakeAudioContext();
+    audioInstances.length = 0;
+    play.mockResolvedValue(undefined);
     for (const key of Object.keys(windowListeners)) delete windowListeners[key];
     for (const key of Object.keys(documentListeners)) delete documentListeners[key];
 
-    speechState.paused = false;
-    speechState.speaking = false;
-    vi.stubGlobal(
-      'SpeechSynthesisUtterance',
-      class {
-        text = '';
-        volume = 1;
-        rate = 1;
-        pitch = 1;
-        lang = '';
-        voice: SpeechSynthesisVoice | null = null;
-        onerror: ((event: { error: string }) => void) | null = null;
-        constructor(text: string) {
-          this.text = text;
-        }
-      }
-    );
     vi.stubGlobal(
       'window',
       {
@@ -113,18 +107,6 @@ describe('sessionCues', () => {
         setTimeout: (fn: () => void, _ms?: number) => {
           fn();
           return 0;
-        },
-        speechSynthesis: {
-          get paused() {
-            return speechState.paused;
-          },
-          get speaking() {
-            return speechState.speaking;
-          },
-          getVoices: speechGetVoices,
-          speak: speechSpeak,
-          cancel: speechCancel,
-          resume: speechResume
         }
       }
     );
@@ -141,8 +123,17 @@ describe('sessionCues', () => {
         src = '';
         preload = '';
         volume = 1;
+        muted = false;
         currentTime = 0;
+        playsInline = false;
         play = play;
+        load = vi.fn();
+        pause = vi.fn();
+        setAttribute = vi.fn();
+        constructor(src?: string) {
+          if (src) this.src = src;
+          audioInstances.push(this as unknown as FakeAudio);
+        }
       }
     );
     warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -158,6 +149,13 @@ describe('sessionCues', () => {
     primeAudio();
     await vi.waitFor(() => expect(ctx.resume).toHaveBeenCalled());
     expect(ctx.createBufferSource).toHaveBeenCalled();
+  });
+
+  it('primes the recorded Go clip from a user gesture', async () => {
+    const { primeAudio, GO_CLIP_URL } = await import('./sessionCues');
+    primeAudio();
+    await vi.waitFor(() => expect(play).toHaveBeenCalled());
+    expect(audioInstances.some((el) => el.src.includes(GO_CLIP_URL) || el.src.includes('go.wav'))).toBe(true);
   });
 
   it('resumes an existing AudioContext when the page becomes visible', async () => {
@@ -187,26 +185,37 @@ describe('sessionCues', () => {
     expect(vibrate).not.toHaveBeenCalled();
   });
 
-  it('plays a stronger native haptic on GO, speaks Go, and skips web vibrate', async () => {
+  it('plays the recorded Go clip and a stronger native haptic, skipping web vibrate', async () => {
     native = true;
     ctx.state = 'running';
-    const { restEndCue } = await import('./sessionCues');
+    const { restEndCue, GO_CLIP_URL } = await import('./sessionCues');
     restEndCue(true);
-    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    await vi.waitFor(() => expect(play).toHaveBeenCalled());
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'HEAVY' });
     expect(vibrate).not.toHaveBeenCalled();
-    expect(speechSpeak).toHaveBeenCalled();
-    const uttered = speechSpeak.mock.calls[0]?.[0] as { text?: string };
-    expect(uttered?.text).toBe('Go!');
+    expect(ctx.createOscillator).not.toHaveBeenCalled();
+    expect(audioInstances.some((el) => el.src.includes(GO_CLIP_URL) || el.src.includes('go.wav'))).toBe(true);
+    expect(audioInstances.every((el) => el.volume === 1)).toBe(true);
   });
 
-  it('does not speak Go when session sound is muted', async () => {
+  it('does not play Go when session sound is muted', async () => {
     native = true;
     ctx.state = 'running';
     const { restEndCue } = await import('./sessionCues');
     restEndCue(false);
-    expect(speechSpeak).not.toHaveBeenCalled();
+    expect(play).not.toHaveBeenCalled();
+    expect(ctx.createOscillator).not.toHaveBeenCalled();
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'HEAVY' });
+  });
+
+  it('falls back to the GO sine if the recorded clip cannot play', async () => {
+    native = true;
+    ctx.state = 'running';
+    play.mockRejectedValueOnce(new Error('clip blocked'));
+    const { restEndCue } = await import('./sessionCues');
+    restEndCue(true);
+    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('Go clip play failed'))).toBe(true);
   });
 
   it('skips the 4-count in the exported tick schedule', async () => {
@@ -232,5 +241,15 @@ describe('sessionCues', () => {
     countdownTick(true);
     await vi.waitFor(() => expect(warn).toHaveBeenCalled());
     expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('[sessionCues]'))).toBe(true);
+  });
+
+  it('falls back to HTMLAudio at max volume when Web Audio is unavailable', async () => {
+    ctx.resume.mockRejectedValue(new Error('blocked'));
+    const { countdownTick } = await import('./sessionCues');
+    countdownTick(true);
+    await vi.waitFor(() => expect(play).toHaveBeenCalled());
+    const beep = audioInstances.find((el) => el.src.startsWith('data:audio/wav'));
+    expect(beep).toBeTruthy();
+    expect(beep?.volume).toBe(1);
   });
 });

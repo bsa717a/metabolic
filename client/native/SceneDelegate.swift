@@ -38,10 +38,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         SceneDelegateProxy.shared.scene(scene, continue: userActivity)
     }
 
-    /// Workout 3-2-1 / GO cues use Web Audio inside WKWebView. The default
-    /// ambient session is muted by the Silent switch, which is why TestFlight
-    /// showed a visual countdown with no beeps. `.playback` + `.mixWithOthers`
-    /// plays through Silent without pausing Spotify / Apple Music.
+    /// Workout 5 / 3-2-1 beeps and the recorded "Go!" clip play inside WKWebView
+    /// (Web Audio + HTMLAudio). The default ambient session is muted by the Silent
+    /// switch. `.playback` + `.mixWithOthers` plays through Silent without
+    /// pausing Spotify / Apple Music.
     /// Re-applied on become-active in case another app changed the session.
     private func configurePlaybackAudioSession() {
         let session = AVAudioSession.sharedInstance()

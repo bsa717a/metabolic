@@ -199,7 +199,7 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     };
   }, [state?.phaseStartedAtMs]);
 
-  // 5 → 3-2-1 ticks (skip 4) + spoken GO. Prefer precise setTimeouts; also
+  // 5 → 3-2-1 ticks (skip 4) + recorded GO clip. Prefer precise setTimeouts; also
   // re-check from absolute remaining via `now` so a backgrounded tab still
   // fires GO. Missed ticks are skipped (no catch-up beeps). Between-set
   // auto-start waits a short GO beat so the flash is visible.
