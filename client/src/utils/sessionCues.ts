@@ -6,9 +6,9 @@
  *
  * Capacitor iOS: native AVAudioSession is `.playback` + `.mixWithOthers`
  * (SceneDelegate, copied by `native:patch`). That plays through the Silent
- * switch without interrupting other audio. On native, set
- * `navigator.audioSession` to `playback` — `transient` can leave WKWebView
- * ambient, which the Silent switch mutes.
+ * switch without interrupting other audio — including SpeechSynthesis "Go!".
+ * On native, set `navigator.audioSession` to `playback` — `transient` can
+ * leave WKWebView ambient, which the Silent switch mutes.
  */
 
 import { Capacitor } from '@capacitor/core';
@@ -22,9 +22,14 @@ type AudioSessionNavigator = Navigator & {
 
 type Tone = { freq: number; dur: number; gain: number };
 
-const TICK: Tone = { freq: 740, dur: 0.09, gain: 0.48 };
-const GO: Tone = { freq: 988, dur: 0.2, gain: 0.68 };
-const HTML_VOLUME = 0.85;
+/** Beep at 5, then 3, 2, 1 — skip 4. Used by the workout session tick schedule. */
+export const COUNTDOWN_TICK_MARKS_MS = [5000, 3000, 2000, 1000] as const;
+
+const TICK: Tone = { freq: 740, dur: 0.11, gain: 0.8 };
+const GO: Tone = { freq: 988, dur: 0.18, gain: 0.94 };
+const HTML_VOLUME = 1;
+const GO_SPEECH_TEXT = 'Go!';
+const WAV_PEAK = 30500;
 
 let audioCtx: AudioContext | null = null;
 let htmlAudio: HTMLAudioElement | null = null;
@@ -108,7 +113,7 @@ function pingWavDataUri(tone: Tone): string {
     const t = i / sampleRate;
     const env = Math.min(1, t * 50) * Math.min(1, (tone.dur - t) * 25);
     const wave = Math.sin(2 * Math.PI * tone.freq * t);
-    samples[i] = Math.max(-32767, Math.min(32767, Math.round(wave * env * 26000 * peak)));
+    samples[i] = Math.max(-32767, Math.min(32767, Math.round(wave * env * WAV_PEAK * peak)));
   }
 
   const dataSize = samples.length * 2;
@@ -172,10 +177,94 @@ async function unlockAudio(): Promise<void> {
   }
 }
 
+function getSpeechSynthesis(): SpeechSynthesis | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    return window.speechSynthesis ?? null;
+  } catch (error) {
+    logCueFailure('speechSynthesis access failed', error);
+    return null;
+  }
+}
+
+function pickCueVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
+  const voices = synth.getVoices();
+  if (!voices.length) return null;
+  const english = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en'));
+  const pool = english.length ? english : voices;
+  const preferred = ['samantha', 'nicky', 'aaron', 'siri', 'google us english'];
+  for (const name of preferred) {
+    const match = pool.find((voice) => voice.name.toLowerCase().includes(name));
+    if (match) return match;
+  }
+  return pool.find((voice) => voice.localService) ?? pool[0] ?? null;
+}
+
+/** Warm SpeechSynthesis from a user gesture so the first "Go!" is not silent in WKWebView. */
+function primeSpeech(): void {
+  const synth = getSpeechSynthesis();
+  if (!synth) return;
+  try {
+    synth.getVoices();
+    const warm = new SpeechSynthesisUtterance(' ');
+    warm.volume = 0;
+    warm.rate = 2;
+    warm.lang = 'en-US';
+    synth.speak(warm);
+    synth.cancel();
+  } catch (error) {
+    logCueFailure('prime speechSynthesis failed', error);
+  }
+}
+
+function speakGo(): void {
+  setCueAudioSession();
+  const synth = getSpeechSynthesis();
+  if (!synth) {
+    logCueFailure('speechSynthesis unavailable', null);
+    return;
+  }
+  try {
+    if (synth.paused) synth.resume();
+    // Cancel only when something is already speaking. Immediate cancel+speak
+    // can drop the next utterance in iOS WKWebView.
+    if (synth.speaking) synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(GO_SPEECH_TEXT);
+    utterance.volume = 1;
+    utterance.rate = 1.05;
+    utterance.pitch = 1.08;
+    utterance.lang = 'en-US';
+    const voice = pickCueVoice(synth);
+    if (voice) {
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+    }
+    utterance.onerror = (event) => {
+      logCueFailure('speechSynthesis Go failed', event.error);
+    };
+    const speak = () => {
+      try {
+        synth.speak(utterance);
+        if (synth.paused) synth.resume();
+      } catch (error) {
+        logCueFailure('speechSynthesis.speak failed', error);
+      }
+    };
+    if (synth.speaking) {
+      window.setTimeout(speak, 40);
+    } else {
+      speak();
+    }
+  } catch (error) {
+    logCueFailure('speakGo failed', error);
+  }
+}
+
 /** Call from a user gesture (Start workout / Complete set / Skip rest). */
 export function primeAudio(): void {
   installForegroundResume();
   setCueAudioSession();
+  primeSpeech();
   const ctx = getAudioContext();
   if (ctx?.state === 'suspended') {
     void ctx.resume().catch((error) => {
@@ -261,15 +350,18 @@ async function playNativeHaptic(style: ImpactStyle): Promise<void> {
   }
 }
 
-/** Soft 3-2-1 tick. Light haptic on native; web has no tick vibrate. */
+/** Soft 5 / 3-2-1 tick (no beep at 4). Light haptic on native; web has no tick vibrate. */
 export function countdownTick(sound: boolean): void {
   if (sound) void playTone(TICK);
   void playNativeHaptic(ImpactStyle.Light);
 }
 
-/** Fire when a rest (or duration) timer elapses. */
+/** Fire when a rest (or duration) timer elapses. Beep + spoken "Go!". */
 export function restEndCue(sound: boolean): void {
-  if (sound) void playTone(GO);
+  if (sound) {
+    void playTone(GO);
+    speakGo();
+  }
   void playNativeHaptic(ImpactStyle.Heavy);
   if (isNativePlatform()) return;
   try {

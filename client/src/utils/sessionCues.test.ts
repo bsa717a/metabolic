@@ -66,6 +66,11 @@ describe('sessionCues', () => {
   let warn: ReturnType<typeof vi.spyOn>;
   const vibrate = vi.fn();
   const play = vi.fn().mockResolvedValue(undefined);
+  const speechSpeak = vi.fn();
+  const speechCancel = vi.fn();
+  const speechResume = vi.fn();
+  const speechGetVoices = vi.fn(() => [] as SpeechSynthesisVoice[]);
+  const speechState = { paused: false, speaking: false };
 
   function fireDocument(type: string) {
     for (const listener of documentListeners[type] ?? []) listener();
@@ -79,6 +84,23 @@ describe('sessionCues', () => {
     for (const key of Object.keys(windowListeners)) delete windowListeners[key];
     for (const key of Object.keys(documentListeners)) delete documentListeners[key];
 
+    speechState.paused = false;
+    speechState.speaking = false;
+    vi.stubGlobal(
+      'SpeechSynthesisUtterance',
+      class {
+        text = '';
+        volume = 1;
+        rate = 1;
+        pitch = 1;
+        lang = '';
+        voice: SpeechSynthesisVoice | null = null;
+        onerror: ((event: { error: string }) => void) | null = null;
+        constructor(text: string) {
+          this.text = text;
+        }
+      }
+    );
     vi.stubGlobal(
       'window',
       {
@@ -87,6 +109,22 @@ describe('sessionCues', () => {
         },
         addEventListener: (type: string, listener: Listener) => {
           (windowListeners[type] ??= []).push(listener);
+        },
+        setTimeout: (fn: () => void, _ms?: number) => {
+          fn();
+          return 0;
+        },
+        speechSynthesis: {
+          get paused() {
+            return speechState.paused;
+          },
+          get speaking() {
+            return speechState.speaking;
+          },
+          getVoices: speechGetVoices,
+          speak: speechSpeak,
+          cancel: speechCancel,
+          resume: speechResume
         }
       }
     );
@@ -149,7 +187,7 @@ describe('sessionCues', () => {
     expect(vibrate).not.toHaveBeenCalled();
   });
 
-  it('plays a stronger native haptic on GO and skips web vibrate', async () => {
+  it('plays a stronger native haptic on GO, speaks Go, and skips web vibrate', async () => {
     native = true;
     ctx.state = 'running';
     const { restEndCue } = await import('./sessionCues');
@@ -157,6 +195,23 @@ describe('sessionCues', () => {
     await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'HEAVY' });
     expect(vibrate).not.toHaveBeenCalled();
+    expect(speechSpeak).toHaveBeenCalled();
+    const uttered = speechSpeak.mock.calls[0]?.[0] as { text?: string };
+    expect(uttered?.text).toBe('Go!');
+  });
+
+  it('does not speak Go when session sound is muted', async () => {
+    native = true;
+    ctx.state = 'running';
+    const { restEndCue } = await import('./sessionCues');
+    restEndCue(false);
+    expect(speechSpeak).not.toHaveBeenCalled();
+    expect(hapticImpact).toHaveBeenCalledWith({ style: 'HEAVY' });
+  });
+
+  it('skips the 4-count in the exported tick schedule', async () => {
+    const { COUNTDOWN_TICK_MARKS_MS } = await import('./sessionCues');
+    expect([...COUNTDOWN_TICK_MARKS_MS]).toEqual([5000, 3000, 2000, 1000]);
   });
 
   it('uses navigator.vibrate on web GO and does not call native haptics', async () => {

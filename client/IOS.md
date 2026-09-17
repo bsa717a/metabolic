@@ -167,10 +167,10 @@ After installing from TestFlight:
 | 6c | Over-scroll at bottom of a long page      | Same: chrome stays put; no black strip under the tab bar. |
 | 7 | Meal camera button                        | Permission prompt or camera; no crash    |
 | 8 | Progress photo take / library             | Preview appears; app stays running       |
-| 9 | Workout 3-2-1 / GO, Silent switch ON     | Beeps audible; light haptic on tick, stronger on GO |
-| 9a | Workout cues with other audio            | Beeps mix; Spotify / Apple Music do not pause |
-| 9b | In-app mute, then unmute                 | Beeps stop then return; haptics still fire when muted |
-| 9c | Background mid-rest, then return         | Next cues beep after foreground (no silent fail) |
+| 9 | Workout 5 → 3-2-1 / spoken Go, Silent ON | Beep at 5, skip 4, beep 3-2-1; spoken “Go!” (+ short beep); louder; light haptic on tick, stronger on GO |
+| 9a | Workout cues with other audio            | Beeps + spoken Go mix; Spotify / Apple Music do not pause |
+| 9b | In-app mute, then unmute                 | Beeps and spoken Go stop then return; haptics still fire when muted |
+| 9c | Background mid-rest, then return         | Next cues beep / speak after foreground (no silent fail) |
 
 See `docs/app-store-ios.md` for the full camera, safe-area, and countdown-audio TestFlight checklists.
 

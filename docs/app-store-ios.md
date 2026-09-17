@@ -176,14 +176,14 @@ Hold merge until Derek confirms this smoke on TestFlight.
 
 Use a **new TestFlight build** after `npm run cap:sync:ios` (a Hosting-only deploy does not update `SceneDelegate` or `@capacitor/haptics`). Do **not** replace the App Review 1.0 (3) binary that is Waiting for Review.
 
-Need a day with a planned exercise that has rest between sets (or a timed duration) so the 3-2-1 + GO path fires.
+Need a day with a planned exercise that has rest between sets (or a timed duration) so the 5 → 3-2-1 + spoken Go path fires.
 
-1. **Silent switch ON, no other audio.** Start a workout. Confirm 3-2-1 ticks and the GO beep are clearly audible. Confirm a light haptic on each tick and a stronger haptic on GO.
-2. **Silent switch OFF, no other audio.** Same: beeps clearly audible, not harsh; same haptics.
-3. **Other audio playing.** Start Apple Music / Spotify / a podcast, then run the countdown. Beeps should mix (other audio must not pause). If beeps are lost under loud music, note it — we can add `.duckOthers` in a follow-up.
-4. **In-app mute toggle.** Mute in the session header. Confirm beeps stop. Unmute and confirm they return. Haptics still fire while muted.
-5. **Background / resume.** Start a rest timer, background the app for a few seconds, then return before and after GO. After foregrounding, the next countdown must beep (AudioContext re-resumes). Missed ticks while backgrounded are skipped; GO should still fire when the timer elapses.
-6. **Safari / web.** Same session in Safari: louder beeps are OK; native haptics are a no-op (`navigator.vibrate` may pulse on Android/web).
+1. **Silent switch ON, no other audio.** Start a workout. Confirm a beep at **5**, **no beep at 4**, then beeps at **3, 2, 1**. At zero, confirm a spoken **“Go!”** (optional short beep with it). Cues should be clearly louder than the prior revision, not harsh/clipped. Light haptic on each tick; stronger haptic on GO.
+2. **Silent switch OFF, no other audio.** Same: 5 → 3-2-1, spoken Go, louder but not harsh; same haptics.
+3. **Other audio playing.** Start Apple Music / Spotify / a podcast, then run the countdown. Beeps and spoken Go should mix (other audio must not pause). If cues are lost under loud music, note it — we can add `.duckOthers` in a follow-up.
+4. **In-app mute toggle.** Mute in the session header. Confirm beeps and spoken Go stop. Unmute and confirm they return. Haptics still fire while muted.
+5. **Background / resume.** Start a rest timer, background the app for a few seconds, then return before and after GO. After foregrounding, the next countdown must beep and the next Go must speak (AudioContext / TTS re-prime). Missed ticks while backgrounded are skipped; GO should still fire when the timer elapses.
+6. **Safari / web.** Same session in Safari: louder beeps + spoken Go are OK; native haptics are a no-op (`navigator.vibrate` may pulse on Android/web).
 
 Hold merge until Derek confirms this smoke on TestFlight. Meta cuts a new TestFlight after merge + Derek yes. This branch does not archive or upload.
 

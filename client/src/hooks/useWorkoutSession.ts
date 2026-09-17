@@ -12,10 +12,10 @@ import {
   startSession,
   type WorkoutSessionState
 } from '../utils/workoutSession';
-import { countdownTick, restEndCue } from '../utils/sessionCues';
+import { COUNTDOWN_TICK_MARKS_MS, countdownTick, restEndCue } from '../utils/sessionCues';
 import { useNow } from './useNow';
 
-const COUNTDOWN_MARKS_MS = [3000, 2000, 1000] as const;
+type CountdownTickSec = 5 | 3 | 2 | 1;
 const AUTO_START_AFTER_GO_MS = 800;
 
 export type SessionEvent =
@@ -199,10 +199,10 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     };
   }, [state?.phaseStartedAtMs]);
 
-  // 3-2-1 ticks + GO cue. Prefer precise setTimeouts; also re-check from
-  // absolute remaining via `now` so a backgrounded tab still fires GO.
-  // Missed ticks are skipped (no catch-up beeps). Between-set auto-start
-  // waits a short GO beat so the flash is visible.
+  // 5 → 3-2-1 ticks (skip 4) + spoken GO. Prefer precise setTimeouts; also
+  // re-check from absolute remaining via `now` so a backgrounded tab still
+  // fires GO. Missed ticks are skipped (no catch-up beeps). Between-set
+  // auto-start waits a short GO beat so the flash is visible.
   useEffect(() => {
     if (!state || state.phase === 'summary') return;
     if (state.pausedRemainingMs != null) return;
@@ -215,7 +215,7 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     const autoStartNextSet = state.phase === 'rest' && state.currentSet > 1;
     const timeouts: number[] = [];
 
-    const fireTick = (sec: 1 | 2 | 3) => {
+    const fireTick = (sec: CountdownTickSec) => {
       const key = `${phaseKey}:t${sec}`;
       if (cueFiredRef.current.has(key)) return;
       cueFiredRef.current.add(key);
@@ -254,10 +254,10 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     }
 
     const scheduledAt = Date.now();
-    for (const markMs of COUNTDOWN_MARKS_MS) {
+    for (const markMs of COUNTDOWN_TICK_MARKS_MS) {
       const delay = endsAtMs - markMs - scheduledAt;
       if (delay > 0) {
-        const sec = (markMs / 1000) as 1 | 2 | 3;
+        const sec = (markMs / 1000) as CountdownTickSec;
         timeouts.push(window.setTimeout(() => fireTick(sec), delay));
       }
     }

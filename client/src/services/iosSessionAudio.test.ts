@@ -35,11 +35,18 @@ describe('iOS Capacitor session audio + haptics wiring', () => {
     expect(cues).toContain("from '@capacitor/haptics'");
     expect(cues).toContain('ImpactStyle.Light');
     expect(cues).toContain('ImpactStyle.Heavy');
-    expect(cues).toMatch(/gain:\s*0\.48/);
-    expect(cues).toMatch(/gain:\s*0\.68/);
-    expect(cues).toMatch(/HTML_VOLUME\s*=\s*0\.85/);
+    expect(cues).toMatch(/gain:\s*0\.8/);
+    expect(cues).toMatch(/gain:\s*0\.94/);
+    expect(cues).toMatch(/HTML_VOLUME\s*=\s*1/);
+    expect(cues).toContain('COUNTDOWN_TICK_MARKS_MS = [5000, 3000, 2000, 1000]');
+    expect(cues).toContain("speechSynthesis");
+    expect(cues).toContain("'Go!'");
     expect(cues).toContain("addEventListener('visibilitychange'");
     expect(cues).toContain("addEventListener('pageshow'");
     expect(cues).toContain("console.warn(`[sessionCues]");
+
+    const session = readClient('src/hooks/useWorkoutSession.ts');
+    expect(session).toContain('COUNTDOWN_TICK_MARKS_MS');
+    expect(session).not.toMatch(/COUNTDOWN_MARKS_MS = \[3000, 2000, 1000\]/);
   });
 });
