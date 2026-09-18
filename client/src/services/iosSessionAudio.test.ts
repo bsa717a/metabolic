@@ -14,9 +14,13 @@ describe('iOS Capacitor session audio + haptics wiring', () => {
     const scene = readClient('native/SceneDelegate.swift');
     expect(scene).toContain('import AVFoundation');
     expect(scene).toContain('func configurePlaybackAudioSession()');
-    expect(scene).toContain('setCategory(.playback, options: [.mixWithOthers])');
+    expect(scene).toContain('setCategory(.playback, mode: .default, options: [.mixWithOthers])');
+    expect(scene).not.toContain('duckOthers');
     expect(scene).toContain('setActive(true)');
     expect(scene).toMatch(/configurePlaybackAudioSession\(\)/);
+    expect(scene).toContain('func observeAudioSession()');
+    expect(scene).toContain('AVAudioSession.interruptionNotification');
+    expect(scene).toContain('AVAudioSession.mediaServicesWereResetNotification');
     expect(scene).toContain('func sceneDidBecomeActive');
     const becomeActive = scene.slice(scene.indexOf('func sceneDidBecomeActive'));
     expect(becomeActive).toContain('configurePlaybackAudioSession()');
@@ -42,6 +46,9 @@ describe('iOS Capacitor session audio + haptics wiring', () => {
     expect(cues).toContain("GO_CLIP_URL = '/audio/go.wav'");
     expect(cues).toContain('function preloadGoClip');
     expect(cues).toContain('primeSilentHtmlAudio');
+    expect(cues).toContain('if (isNativePlatform()) return');
+    expect(cues).toContain('HTMLAudio first');
+    expect(cues).not.toContain("nav.audioSession.type = isNativePlatform() ? 'playback'");
     expect(cues).not.toContain('function primeGoClip');
     expect(cues).not.toContain('speechSynthesis');
     expect(cues).not.toContain('SpeechSynthesisUtterance');

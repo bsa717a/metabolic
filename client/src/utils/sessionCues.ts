@@ -7,8 +7,12 @@
  * Capacitor iOS: native AVAudioSession is `.playback` + `.mixWithOthers`
  * (SceneDelegate, copied by `native:patch`). That plays through the Silent
  * switch without interrupting other audio — including the recorded "Go!" clip.
- * On native, set `navigator.audioSession` to `playback` — `transient` can
- * leave WKWebView ambient, which the Silent switch mutes.
+ *
+ * Do **not** set `navigator.audioSession` to `playback` on native. WebKit's
+ * JS session type drops `.mixWithOthers`, so Apple Music / Spotify stop when
+ * the first tick fires. SceneDelegate owns the native session; ticks use
+ * HTMLAudio (same path as Go) because Web Audio oscillators can "succeed"
+ * with no audible output while other audio is playing.
  */
 
 import { Capacitor } from '@capacitor/core';
@@ -83,7 +87,10 @@ function setCueAudioSession(): void {
   try {
     const nav = navigator as AudioSessionNavigator;
     if (!nav.audioSession) return;
-    nav.audioSession.type = isNativePlatform() ? 'playback' : 'transient';
+    // Native mixWithOthers lives on AVAudioSession. Setting `playback` here
+    // overwrites that and pauses background Music.
+    if (isNativePlatform()) return;
+    nav.audioSession.type = 'transient';
   } catch (error) {
     logCueFailure('audioSession type failed', error);
   }
@@ -333,6 +340,15 @@ async function playViaHtmlAudio(tone: Tone): Promise<boolean> {
 }
 
 async function playTone(tone: Tone): Promise<void> {
+  // Native: HTMLAudio first — same session as the recorded Go clip. Web Audio
+  // ticks can interrupt Music and then produce silence.
+  if (isNativePlatform()) {
+    const htmlOk = await playViaHtmlAudio(tone);
+    if (htmlOk) return;
+    const webOk = await playViaWebAudio(tone);
+    if (!webOk) logCueFailure('all audio backends failed', tone);
+    return;
+  }
   const webOk = await playViaWebAudio(tone);
   if (webOk) return;
   const htmlOk = await playViaHtmlAudio(tone);

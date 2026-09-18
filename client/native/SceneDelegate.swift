@@ -19,6 +19,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
+        observeAudioSession()
         configurePlaybackAudioSession()
         disableWebViewOverscroll()
         injectPendingGoogleAuth()
@@ -39,18 +40,49 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     /// Workout 5 / 3-2-1 beeps and the recorded "Go!" clip play inside WKWebView
-    /// (Web Audio + HTMLAudio). The default ambient session is muted by the Silent
-    /// switch. `.playback` + `.mixWithOthers` plays through Silent without
-    /// pausing Spotify / Apple Music.
-    /// Re-applied on become-active in case another app changed the session.
+    /// (HTMLAudio ticks + recorded Go). The default ambient session is muted by
+    /// the Silent switch. `.playback` + `.mixWithOthers` plays through Silent
+    /// without pausing Spotify / Apple Music. Prefer mix over duck so Music
+    /// keeps going; duck only if a later TestFlight pass finds cues inaudible.
+    /// Re-applied on become-active and after interruptions in case WKWebView
+    /// or another app changed the session.
     private func configurePlaybackAudioSession() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, options: [.mixWithOthers])
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
         } catch {
             print("[sessionCues] AVAudioSession configure failed: \(error)")
         }
+    }
+
+    private func observeAudioSession() {
+        let center = NotificationCenter.default
+        center.addObserver(
+            self,
+            selector: #selector(handleAudioInterruption(_:)),
+            name: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleMediaServicesReset),
+            name: AVAudioSession.mediaServicesWereResetNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+    }
+
+    @objc private func handleAudioInterruption(_ notification: Notification) {
+        guard
+            let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: typeValue),
+            type == .ended
+        else { return }
+        configurePlaybackAudioSession()
+    }
+
+    @objc private func handleMediaServicesReset() {
+        configurePlaybackAudioSession()
     }
 
     /// Capacitor already sets `scrollView.bounces = false`, but iOS can still
