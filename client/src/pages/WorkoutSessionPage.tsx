@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { todayKey } from '../services/api';
 import { useWorkoutSession } from '../hooks/useWorkoutSession';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useSessionOrientationLock } from '../hooks/useSessionOrientationLock';
 import { primeAudio } from '../utils/sessionCues';
 import { clearSession, currentMeta, sessionSummary } from '../utils/workoutSession';
 import { SessionProgressBar } from '../components/exercise/session/SessionProgressBar';
@@ -25,6 +26,7 @@ export function WorkoutSessionPage() {
 
   const active = Boolean(state) && state?.phase !== 'summary';
   useWakeLock(active);
+  useSessionOrientationLock(active);
 
   const timerRemaining = remaining ?? 0;
   const timerPaused = state?.pausedRemainingMs != null;

@@ -78,6 +78,7 @@ describe('sessionCues', () => {
   let ctx: FakeAudioContext;
   let warn: ReturnType<typeof vi.spyOn>;
   const vibrate = vi.fn();
+  const audioSession = { type: 'auto' };
   const audioInstances: FakeAudio[] = [];
   const playSrcs: string[] = [];
   const play = vi.fn().mockResolvedValue(undefined);
@@ -95,6 +96,7 @@ describe('sessionCues', () => {
     vi.clearAllMocks();
     native = false;
     ctx = new FakeAudioContext();
+    audioSession.type = 'auto';
     audioInstances.length = 0;
     playSrcs.length = 0;
     play.mockResolvedValue(undefined);
@@ -122,7 +124,7 @@ describe('sessionCues', () => {
         (documentListeners[type] ??= []).push(listener);
       }
     });
-    vi.stubGlobal('navigator', { vibrate });
+    vi.stubGlobal('navigator', { vibrate, audioSession });
     vi.stubGlobal(
       'Audio',
       class {
@@ -190,14 +192,29 @@ describe('sessionCues', () => {
     await vi.waitFor(() => expect(ctx.resume).toHaveBeenCalled());
   });
 
-  it('plays a Web Audio tick and a light native haptic', async () => {
+  it('plays an HTMLAudio tick and a light native haptic without touching audioSession', async () => {
     native = true;
     ctx.state = 'running';
     const { countdownTick } = await import('./sessionCues');
     countdownTick(true);
-    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    await vi.waitFor(() => expect(play).toHaveBeenCalled());
+    const beep = audioInstances.find((el) => el.src.startsWith('data:audio/wav'));
+    expect(beep).toBeTruthy();
+    expect(beep?.volume).toBe(1);
+    expect(ctx.createOscillator).not.toHaveBeenCalled();
+    expect(audioSession.type).toBe('auto');
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'LIGHT' });
     expect(vibrate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to Web Audio on native if HTMLAudio cannot play the tick', async () => {
+    native = true;
+    ctx.state = 'running';
+    play.mockRejectedValueOnce(new Error('html blocked'));
+    const { countdownTick } = await import('./sessionCues');
+    countdownTick(true);
+    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('HTMLAudio play failed'))).toBe(true);
   });
 
   it('plays the recorded Go clip and a stronger native haptic, skipping web vibrate', async () => {
@@ -242,8 +259,10 @@ describe('sessionCues', () => {
     play.mockRejectedValueOnce(new Error('clip blocked'));
     const { restEndCue } = await import('./sessionCues');
     restEndCue(true);
-    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(2));
     expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('Go clip play failed'))).toBe(true);
+    expect(audioInstances.some((el) => el.src.startsWith('data:audio/wav'))).toBe(true);
+    expect(ctx.createOscillator).not.toHaveBeenCalled();
   });
 
   it('skips the 4-count in the exported tick schedule', async () => {
@@ -269,6 +288,14 @@ describe('sessionCues', () => {
     countdownTick(true);
     await vi.waitFor(() => expect(warn).toHaveBeenCalled());
     expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('[sessionCues]'))).toBe(true);
+  });
+
+  it('uses a transient web audioSession so Safari ducks instead of pausing Music', async () => {
+    ctx.state = 'running';
+    const { countdownTick } = await import('./sessionCues');
+    countdownTick(true);
+    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    expect(audioSession.type).toBe('transient');
   });
 
   it('falls back to HTMLAudio at max volume when Web Audio is unavailable', async () => {

@@ -189,6 +189,21 @@ Hold merge until Derek confirms this smoke on TestFlight. Meta cuts a new TestFl
 
 ---
 
+## TestFlight – Music mix, keep-awake, orientation smoke test
+
+Use a **new TestFlight build** after `npm run cap:sync:ios` (Hosting-only does not update `SceneDelegate`, `@capacitor-community/keep-awake`, or `@capacitor/screen-orientation`). Do **not** replace the App Review 1.0 (5) binary.
+
+Need a day with rest between sets (or a timed duration) so the 5 → 3-2-1 + recorded Go path fires.
+
+1. **Apple Music + cues.** Start Music, then start a workout. Music must **keep playing**. Hear beeps at **5**, then **3, 2, 1** (no beep at 4), then the recorded **“Go!”** clip. Cues mix with Music; Music must not pause or stop.
+2. **Silent switch ON.** Same countdown with the Silent switch on and no other audio. Beeps + Go still play (prior #291 path). Light haptic on ticks; stronger haptic on Go.
+3. **Keep-awake.** On Nutrition, leave the phone idle — the screen must stay on. During an **active** workout, same. Leave Nutrition / end the workout (summary or back to Today) — the phone may dim/sleep again.
+4. **Orientation.** In an active workout, rotate the device — UI stays **portrait** and controls stay visible. Leave the session / end workout — rotation unlocks.
+
+Hold merge until Derek confirms this smoke on TestFlight. This branch does not archive, upload, or replace the App Review binary.
+
+---
+
 ## TestFlight Upload
 
 ### 1. Sync Changes
