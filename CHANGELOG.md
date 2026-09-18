@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.32.1](https://github.com/bsa717a/metabolic/compare/v0.32.0...v0.32.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **ios:** mix workout cues with Music, keep-awake, lock orientation ([#294](https://github.com/bsa717a/metabolic/issues/294)) ([b578f24](https://github.com/bsa717a/metabolic/commit/b578f249ca8529e2c49d331c2825dadea263ec2c))
+
 ## [0.32.0](https://github.com/bsa717a/metabolic/compare/v0.31.2...v0.32.0) (2026-09-17)
 
 
