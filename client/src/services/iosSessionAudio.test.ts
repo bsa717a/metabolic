@@ -13,17 +13,41 @@ describe('iOS Capacitor session audio + haptics wiring', () => {
   it('configures AVAudioSession playback + mixWithOthers in the copied SceneDelegate', () => {
     const scene = readClient('native/SceneDelegate.swift');
     expect(scene).toContain('import AVFoundation');
-    expect(scene).toContain('func configurePlaybackAudioSession()');
-    expect(scene).toContain('setCategory(.playback, mode: .default, options: [.mixWithOthers])');
-    expect(scene).not.toContain('duckOthers');
+    expect(scene).toContain('enum MixableAudioSession');
+    expect(scene).toContain('func configure()');
+    expect(scene).toContain('setCategory(.playback, mode: .default, options: mix)');
+    expect(scene).toContain('.mixWithOthers');
+    expect(scene).not.toMatch(/setActive\(\s*false\s*\)/);
+    expect(scene).toContain('opts.remove(.duckOthers)');
     expect(scene).toContain('setActive(true)');
-    expect(scene).toMatch(/configurePlaybackAudioSession\(\)/);
+    expect(scene).toContain('MixableAudioSession.install()');
+    expect(scene).toContain('MixableAudioSession.configure()');
     expect(scene).toContain('func observeAudioSession()');
     expect(scene).toContain('AVAudioSession.interruptionNotification');
     expect(scene).toContain('AVAudioSession.mediaServicesWereResetNotification');
     expect(scene).toContain('func sceneDidBecomeActive');
+    const connect = scene.slice(scene.indexOf('func scene('), scene.indexOf('func sceneDidBecomeActive'));
+    expect(connect.indexOf('MixableAudioSession.install()')).toBeLessThan(
+      connect.indexOf('MetabolicBridgeViewController()')
+    );
     const becomeActive = scene.slice(scene.indexOf('func sceneDidBecomeActive'));
-    expect(becomeActive).toContain('configurePlaybackAudioSession()');
+    expect(becomeActive).toContain('MixableAudioSession.configure()');
+  });
+
+  it('plays workout cues via in-process AVAudioPlayer, not WKWebView media', () => {
+    const scene = readClient('native/SceneDelegate.swift');
+    expect(scene).toContain('class SessionCuesPlugin');
+    expect(scene).toContain('CAPBridgedPlugin');
+    expect(scene).toContain('jsName = "SessionCues"');
+    expect(scene).toContain('func playTick');
+    expect(scene).toContain('func playGo');
+    expect(scene).toContain('class CueAudioPlayer');
+    expect(scene).toContain('AVAudioPlayer');
+    expect(scene).toContain('public/audio/go.wav');
+    expect(scene).toContain('class MetabolicBridgeViewController');
+    expect(scene).toContain('func capacitorDidLoad');
+    expect(scene).toContain('registerPluginInstance(SessionCuesPlugin())');
+    expect(scene).not.toContain('MPNowPlayingInfoCenter');
   });
 
   it('copies SceneDelegate via native:patch so TestFlight shells pick up the session', () => {
@@ -37,6 +61,7 @@ describe('iOS Capacitor session audio + haptics wiring', () => {
 
     const cues = readClient('src/utils/sessionCues.ts');
     expect(cues).toContain("from '@capacitor/haptics'");
+    expect(cues).toContain("registerPlugin<SessionCuesNativePlugin>('SessionCues')");
     expect(cues).toContain('ImpactStyle.Light');
     expect(cues).toContain('ImpactStyle.Heavy');
     expect(cues).toMatch(/gain:\s*1/);
@@ -47,11 +72,13 @@ describe('iOS Capacitor session audio + haptics wiring', () => {
     expect(cues).toContain('function preloadGoClip');
     expect(cues).toContain('primeSilentHtmlAudio');
     expect(cues).toContain('if (isNativePlatform()) return');
-    expect(cues).toContain('HTMLAudio first');
+    expect(cues).toContain('playNativeCue');
+    expect(cues).toContain('SessionCuesNative.prime()');
     expect(cues).not.toContain("nav.audioSession.type = isNativePlatform() ? 'playback'");
     expect(cues).not.toContain('function primeGoClip');
     expect(cues).not.toContain('speechSynthesis');
     expect(cues).not.toContain('SpeechSynthesisUtterance');
+    expect(cues).not.toContain('HTMLAudio first');
     expect(cues).toContain("addEventListener('visibilitychange'");
     expect(cues).toContain("addEventListener('pageshow'");
     expect(cues).toContain("console.warn(`[sessionCues]");

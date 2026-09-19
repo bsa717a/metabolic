@@ -168,7 +168,7 @@ After installing from TestFlight:
 | 7 | Meal camera button                        | Permission prompt or camera; no crash    |
 | 8 | Progress photo take / library             | Preview appears; app stays running       |
 | 9 | Workout 5 → 3-2-1 / recorded Go, Silent ON | Beep at 5, skip 4, beep 3-2-1; recorded “Go!” clip (not TTS); near-max volume, not harsh; light haptic on tick, stronger on GO |
-| 9a | Workout cues with other audio            | Beeps + recorded Go mix; Spotify / Apple Music do not pause |
+| 9a | Workout cues with other audio            | Beeps + recorded Go mix via native AVAudioPlayer; Spotify / Apple Music do not pause |
 | 9b | In-app mute, then unmute                 | Beeps and recorded Go stop then return; haptics still fire when muted |
 | 9c | Background mid-rest, then return         | Next cues beep / play Go after foreground (no silent fail) |
 
