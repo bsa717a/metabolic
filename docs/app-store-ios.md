@@ -204,6 +204,21 @@ Hold merge until Derek confirms this smoke on TestFlight. This branch does not a
 
 ---
 
+## Local smoke – Apple Music uninterrupted by workout cues
+
+Post-#294 on TF 1.0 (6): countdown beeps, recorded Go, and orientation lock work, but **Apple Music still stops / pauses** when ticks + Go fire. WKWebView HTMLAudio / Web Audio run in a separate process and take exclusive playback, so SceneDelegate `.mixWithOthers` never applied to those cues.
+
+This branch plays ticks + Go with **in-process `AVAudioPlayer`** (`.playback` + `.mixWithOthers`, never deactivate). Derek smokes **locally** after `npm run cap:sync:ios` on a Mac. **Local smoke only** — do **not** archive or upload a TestFlight for this follow-up. Do **not** merge until Derek yes. App Review / ASC binary **1.0 (5)** is untouched.
+
+Need a day with rest between sets (or a timed duration) so the 5 → 3-2-1 + recorded Go path fires.
+
+1. Start **Apple Music**, then start a workout countdown. Music **keeps playing** through 5, 3, 2, 1 + Go (must not pause or stop).
+2. Beeps + recorded Go are still **audible** over Music.
+3. Silent switch **ON** still plays cues (prior #291 / #294 fix).
+4. Orientation lock during the session still works (prior #294). Keep-awake was not changed.
+
+---
+
 ## TestFlight Upload
 
 ### 1. Sync Changes

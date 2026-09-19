@@ -1,12 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hapticImpact = vi.fn();
+const nativePrime = vi.fn().mockResolvedValue(undefined);
+const nativePlayTick = vi.fn().mockResolvedValue(undefined);
+const nativePlayGo = vi.fn().mockResolvedValue(undefined);
 let native = false;
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
     isNativePlatform: () => native
-  }
+  },
+  registerPlugin: () => ({
+    prime: (...args: unknown[]) => nativePrime(...args),
+    playTick: (...args: unknown[]) => nativePlayTick(...args),
+    playGo: (...args: unknown[]) => nativePlayGo(...args)
+  })
 }));
 
 vi.mock('@capacitor/haptics', () => ({
@@ -95,6 +103,9 @@ describe('sessionCues', () => {
     vi.resetModules();
     vi.clearAllMocks();
     native = false;
+    nativePrime.mockReset().mockResolvedValue(undefined);
+    nativePlayTick.mockReset().mockResolvedValue(undefined);
+    nativePlayGo.mockReset().mockResolvedValue(undefined);
     ctx = new FakeAudioContext();
     audioSession.type = 'auto';
     audioInstances.length = 0;
@@ -192,43 +203,55 @@ describe('sessionCues', () => {
     await vi.waitFor(() => expect(ctx.resume).toHaveBeenCalled());
   });
 
-  it('plays an HTMLAudio tick and a light native haptic without touching audioSession', async () => {
+  it('plays a native AVAudioPlayer tick without touching audioSession or WKWebView audio', async () => {
     native = true;
     ctx.state = 'running';
     const { countdownTick } = await import('./sessionCues');
     countdownTick(true);
-    await vi.waitFor(() => expect(play).toHaveBeenCalled());
-    const beep = audioInstances.find((el) => el.src.startsWith('data:audio/wav'));
-    expect(beep).toBeTruthy();
-    expect(beep?.volume).toBe(1);
+    await vi.waitFor(() => expect(nativePlayTick).toHaveBeenCalled());
+    expect(play).not.toHaveBeenCalled();
     expect(ctx.createOscillator).not.toHaveBeenCalled();
+    expect(ctx.resume).not.toHaveBeenCalled();
     expect(audioSession.type).toBe('auto');
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'LIGHT' });
     expect(vibrate).not.toHaveBeenCalled();
   });
 
-  it('falls back to Web Audio on native if HTMLAudio cannot play the tick', async () => {
+  it('primes native cues without creating Web Audio or HTMLAudio', async () => {
+    native = true;
+    const { primeAudio } = await import('./sessionCues');
+    primeAudio();
+    await vi.waitFor(() => expect(nativePrime).toHaveBeenCalled());
+    expect(play).not.toHaveBeenCalled();
+    expect(ctx.resume).not.toHaveBeenCalled();
+    expect(ctx.createBufferSource).not.toHaveBeenCalled();
+    expect(audioSession.type).toBe('auto');
+  });
+
+  it('falls back to Web Audio on native if the plugin and HTMLAudio cannot play the tick', async () => {
     native = true;
     ctx.state = 'running';
+    nativePlayTick.mockRejectedValueOnce(new Error('plugin missing'));
     play.mockRejectedValueOnce(new Error('html blocked'));
     const { countdownTick } = await import('./sessionCues');
     countdownTick(true);
     await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('native tick failed'))).toBe(true);
     expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('HTMLAudio play failed'))).toBe(true);
   });
 
-  it('plays the recorded Go clip and a stronger native haptic, skipping web vibrate', async () => {
+  it('plays the recorded Go clip through the native plugin and a stronger haptic', async () => {
     native = true;
     ctx.state = 'running';
-    const { restEndCue, GO_CLIP_URL } = await import('./sessionCues');
+    const { restEndCue } = await import('./sessionCues');
     restEndCue(true);
-    await vi.waitFor(() => expect(play).toHaveBeenCalled());
+    await vi.waitFor(() => expect(nativePlayGo).toHaveBeenCalled());
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'HEAVY' });
     expect(vibrate).not.toHaveBeenCalled();
+    expect(play).not.toHaveBeenCalled();
     expect(ctx.createOscillator).not.toHaveBeenCalled();
-    expect(playedGoClip()).toBe(true);
-    expect(audioInstances.some((el) => el.src.includes(GO_CLIP_URL) || el.src.includes('go.wav'))).toBe(true);
-    expect(audioInstances.every((el) => el.volume === 1)).toBe(true);
+    expect(playedGoClip()).toBe(false);
+    expect(audioSession.type).toBe('auto');
   });
 
   it('plays go.wav only on the zero/start cue path, not on ticks', async () => {
@@ -249,17 +272,20 @@ describe('sessionCues', () => {
     const { restEndCue } = await import('./sessionCues');
     restEndCue(false);
     expect(play).not.toHaveBeenCalled();
+    expect(nativePlayGo).not.toHaveBeenCalled();
     expect(ctx.createOscillator).not.toHaveBeenCalled();
     expect(hapticImpact).toHaveBeenCalledWith({ style: 'HEAVY' });
   });
 
-  it('falls back to the GO sine if the recorded clip cannot play', async () => {
+  it('falls back to the GO sine if the native plugin and recorded clip cannot play', async () => {
     native = true;
     ctx.state = 'running';
+    nativePlayGo.mockRejectedValueOnce(new Error('plugin missing'));
     play.mockRejectedValueOnce(new Error('clip blocked'));
     const { restEndCue } = await import('./sessionCues');
     restEndCue(true);
     await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(2));
+    expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('native go failed'))).toBe(true);
     expect(warn.mock.calls.some((call: unknown[]) => String(call[0]).includes('Go clip play failed'))).toBe(true);
     expect(audioInstances.some((el) => el.src.startsWith('data:audio/wav'))).toBe(true);
     expect(ctx.createOscillator).not.toHaveBeenCalled();

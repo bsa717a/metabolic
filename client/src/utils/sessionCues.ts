@@ -4,19 +4,27 @@
  * Web/Safari: declare a `transient` audio session (Safari 16.4+) and unlock
  * only via Web Audio so cues duck/mix instead of pausing Spotify / Apple Music.
  *
- * Capacitor iOS: native AVAudioSession is `.playback` + `.mixWithOthers`
- * (SceneDelegate, copied by `native:patch`). That plays through the Silent
- * switch without interrupting other audio — including the recorded "Go!" clip.
+ * Capacitor iOS: play ticks + Go through the `SessionCues` native plugin
+ * (`AVAudioPlayer` in the app process, `.playback` + `.mixWithOthers`).
+ * WKWebView HTMLAudio / Web Audio run in another process and take exclusive
+ * playback — that is why mixWithOthers in SceneDelegate still paused Music
+ * when cues fired from the web view. Do not create an AudioContext or play
+ * HTMLAudio on native unless the plugin is missing (old shell fallback).
  *
  * Do **not** set `navigator.audioSession` to `playback` on native. WebKit's
- * JS session type drops `.mixWithOthers`, so Apple Music / Spotify stop when
- * the first tick fires. SceneDelegate owns the native session; ticks use
- * HTMLAudio (same path as Go) because Web Audio oscillators can "succeed"
- * with no audible output while other audio is playing.
+ * JS session type drops `.mixWithOthers`.
  */
 
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
+
+type SessionCuesNativePlugin = {
+  prime(): Promise<void>;
+  playTick(): Promise<void>;
+  playGo(): Promise<void>;
+};
+
+const SessionCuesNative = registerPlugin<SessionCuesNativePlugin>('SessionCues');
 
 type AudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
@@ -29,7 +37,7 @@ type Tone = { freq: number; dur: number; gain: number };
 /** Beep at 5, then 3, 2, 1 — skip 4. Used by the workout session tick schedule. */
 export const COUNTDOWN_TICK_MARKS_MS = [5000, 3000, 2000, 1000] as const;
 
-/** Pre-recorded natural "Go!" — played through HTMLAudio + the same AVAudioSession as beeps. */
+/** Pre-recorded natural "Go!" — native AVAudioPlayer on iOS; HTMLAudio on web. */
 export const GO_CLIP_URL = '/audio/go.wav';
 
 /** Near-max sine family (fundamental + harmonics). Not a square — avoids harsh clipping. */
@@ -256,9 +264,27 @@ async function unlockAudio(): Promise<void> {
   }
 }
 
+async function playNativeCue(kind: 'tick' | 'go'): Promise<boolean> {
+  if (!isNativePlatform()) return false;
+  try {
+    if (kind === 'tick') await SessionCuesNative.playTick();
+    else await SessionCuesNative.playGo();
+    return true;
+  } catch (error) {
+    logCueFailure(`native ${kind} failed`, error);
+    return false;
+  }
+}
+
 /** Call from a user gesture (Start workout / Complete set / Skip rest). Never plays go.wav. */
 export function primeAudio(): void {
   installForegroundResume();
+  if (isNativePlatform()) {
+    void SessionCuesNative.prime().catch((error) => {
+      logCueFailure('native prime failed', error);
+    });
+    return;
+  }
   setCueAudioSession();
   primeSilentHtmlAudio();
   preloadGoClip();
@@ -340,8 +366,8 @@ async function playViaHtmlAudio(tone: Tone): Promise<boolean> {
 }
 
 async function playTone(tone: Tone): Promise<void> {
-  // Native: HTMLAudio first — same session as the recorded Go clip. Web Audio
-  // ticks can interrupt Music and then produce silence.
+  // Native first-line path is playNativeCue (app-process AVAudioPlayer).
+  // These web backends are Safari plus a last-resort old-shell fallback.
   if (isNativePlatform()) {
     const htmlOk = await playViaHtmlAudio(tone);
     if (htmlOk) return;
@@ -353,6 +379,11 @@ async function playTone(tone: Tone): Promise<void> {
   if (webOk) return;
   const htmlOk = await playViaHtmlAudio(tone);
   if (!htmlOk) logCueFailure('all audio backends failed', tone);
+}
+
+async function playTickSound(): Promise<void> {
+  if (await playNativeCue('tick')) return;
+  await playTone(TICK);
 }
 
 async function playGoClip(): Promise<boolean> {
@@ -371,6 +402,10 @@ async function playGoClip(): Promise<boolean> {
 }
 
 async function playGoSound(): Promise<void> {
+  if (isNativePlatform()) {
+    const nativeOk = await playNativeCue('go');
+    if (nativeOk) return;
+  }
   const clipOk = await playGoClip();
   if (clipOk) return;
   await playTone(GO);
@@ -387,7 +422,7 @@ async function playNativeHaptic(style: ImpactStyle): Promise<void> {
 
 /** Soft 5 / 3-2-1 tick (no beep at 4). Light haptic on native; web has no tick vibrate. */
 export function countdownTick(sound: boolean): void {
-  if (sound) void playTone(TICK);
+  if (sound) void playTickSound();
   void playNativeHaptic(ImpactStyle.Light);
 }
 
