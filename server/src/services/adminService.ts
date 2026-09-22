@@ -1,4 +1,4 @@
-import { FoodSource, PlanTier, Role, SubscriptionStatus, UserStatus, Visibility, CoachRelationshipStatus } from '@prisma/client';
+import { FoodSource, PlanTier, Role, SubscriptionSource, SubscriptionStatus, UserStatus, Visibility, CoachRelationshipStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { normalizePhone } from '../utils/phone.js';
 import { deleteExerciseHowToVideos } from './exerciseVideoStorageService.js';
@@ -191,7 +191,13 @@ export async function updateAdminUser(id: string, data: AdminUserUpdate) {
   }
 
   return prisma.$transaction(async (tx) => {
-    const user = await tx.user.update({ where: { id }, data: updateData });
+    const user = await tx.user.update({
+      where: { id },
+      data: {
+        ...updateData,
+        ...(data.plan !== undefined ? { subscriptionSource: SubscriptionSource.MANUAL } : {})
+      }
+    });
 
     if (data.role) {
       await tx.userOrganization.updateMany({

@@ -27,6 +27,8 @@ import { tutorialRoutes } from './routes/tutorialRoutes.js';
 import { virtualCoachRoutes } from './routes/virtualCoachRoutes.js';
 import { coachSupportRoutes } from './routes/coachSupportRoutes.js';
 import { billingRoutes } from './routes/billingRoutes.js';
+import { appleIapRoutes } from './routes/appleIapRoutes.js';
+import { appleIapWebhookRoutes } from './routes/appleIapWebhookRoutes.js';
 import { storeRoutes } from './routes/storeRoutes.js';
 import { storeAdminRoutes } from './routes/storeAdminRoutes.js';
 import { storeWebhookRoutes } from './routes/storeWebhookRoutes.js';
@@ -86,6 +88,8 @@ async function main() {
   await app.register(virtualCoachRoutes);
   await app.register(coachSupportRoutes);
   await app.register(billingRoutes);
+  await app.register(appleIapRoutes);
+  await app.register(appleIapWebhookRoutes);
   await app.register(storeRoutes);
   await app.register(storeAdminRoutes);
   await app.register(storeWebhookRoutes);

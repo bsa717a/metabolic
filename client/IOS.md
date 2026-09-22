@@ -12,7 +12,9 @@ This document covers building, signing, and distributing the iOS app via Capacit
 | SKU            | `metabolicos`                          |
 | Team           | Cliffs Mama, LLC                       |
 | Team ID        | `8FG8V9P49A`                           |
-| Capabilities   | Sign In with Apple, Push Notifications |
+| Capabilities   | Sign In with Apple, Push Notifications, In-App Purchase |
+
+Digital Self-Guided and Plus subscriptions are sold in iOS with StoreKit 2 (`AppleIap` plugin in `native/SceneDelegate.swift`). See [`docs/apple-iap.md`](../docs/apple-iap.md) for product IDs, server verification, and App Store Server Notifications. A JS-only Hosting deploy is not enough — run `npm run cap:sync:ios` so the native plugin is in the TestFlight shell. Physical `/store` remains Stripe.
 
 ---
 

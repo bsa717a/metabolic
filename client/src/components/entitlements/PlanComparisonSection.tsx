@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { appleFallbackPrice } from '../../data/appleIap';
 import { PUBLIC_PLANS } from '../../data/plans';
-import { hidesDigitalPlanPurchase, IOS_PLAN_MANAGE_COPY } from '../../utils/nativePlatform';
+import { usesAppleIapCheckout } from '../../utils/nativePlatform';
 
 export function PlanComparisonSection({
   showActions = false,
@@ -11,7 +12,7 @@ export function PlanComparisonSection({
   showActions?: boolean;
   authenticated?: boolean;
 }) {
-  const hidePlanPurchase = hidesDigitalPlanPurchase();
+  const appleCheckout = usesAppleIapCheckout();
   return (
     <>
       <div className="mb-10 text-center">
@@ -38,7 +39,9 @@ export function PlanComparisonSection({
               </span>
             ) : null}
             <h3 className="text-xl font-bold text-brand-navy dark:text-brand-off-white">{plan.name}</h3>
-            <p className="mt-1 text-3xl font-bold text-brand-green">{plan.price}</p>
+            <p className="mt-1 text-3xl font-bold text-brand-green">
+              {appleCheckout ? appleFallbackPrice(plan.id) ?? plan.price : plan.price}
+            </p>
             <p className="mt-2 text-sm text-app-text-muted">{plan.description}</p>
             <ul className="mt-6 flex-1 space-y-3">
               {plan.bullets.map((bullet) => (
@@ -50,9 +53,7 @@ export function PlanComparisonSection({
             </ul>
             {showActions ? (
               <div className="mt-6">
-                {hidePlanPurchase ? (
-                  <p className="text-center text-sm text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
-                ) : authenticated ? (
+                {authenticated ? (
                   <Link to="/upgrade">
                     <Button className="w-full" variant={plan.recommended ? 'primary' : 'secondary'}>
                       {plan.id === 'starter' ? 'Current or downgrade' : 'Upgrade'}

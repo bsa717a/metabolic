@@ -45,6 +45,19 @@ const envSchema = z.object({
   CLIENT_URL: z.string().url().default("http://localhost:5173"),
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
+  APPLE_BUNDLE_ID: z.string().optional().default("com.mastermetabolic.app"),
+  APPLE_APP_APPLE_ID: z.preprocess(
+    (value) => (value === "" || value == null ? 6810053439 : value),
+    z.coerce.number().int().positive()
+  ),
+  APPLE_IAP_ENVIRONMENT: z.enum(["Sandbox", "Production", "auto"]).default("auto"),
+  APPLE_IAP_ENABLE_ONLINE_CHECKS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  APPLE_IAP_ISSUER_ID: z.string().optional().default(""),
+  APPLE_IAP_KEY_ID: z.string().optional().default(""),
+  APPLE_IAP_PRIVATE_KEY: z.string().optional().default(""),
   STORE_NOTIFY_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   GIT_SHA: z.string().optional().default("dev"),
   CRON_SECRET: z.string().optional().default(""),

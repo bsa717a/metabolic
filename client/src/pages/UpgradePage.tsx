@@ -1,22 +1,57 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { api } from '../services/api';
+import { loadAppleIapProducts, purchaseApplePlan, restoreApplePurchases, type AppleIapProduct } from '../services/appleIap';
 import { PlanComparisonModal } from '../components/entitlements/PlanComparisonModal';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { appleFallbackPrice, appleProductIdForPlan } from '../data/appleIap';
 import { PUBLIC_PLANS } from '../data/plans';
 import type { AppUser, PlanSlug } from '../types';
 import { planLabel } from '../utils/entitlements';
-import { hidesDigitalPlanPurchase, IOS_PLAN_MANAGE_COPY } from '../utils/nativePlatform';
+import { usesAppleIapCheckout } from '../utils/nativePlatform';
 
-export function UpgradePage({ user }: { user: AppUser | null }) {
+export function UpgradePage({
+  user,
+  onUserUpdated
+}: {
+  user: AppUser | null;
+  onUserUpdated?: (user: AppUser) => void;
+}) {
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState<PlanSlug | null>(null);
+  const [loading, setLoading] = useState<PlanSlug | 'restore' | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
+  const [appleProducts, setAppleProducts] = useState<AppleIapProduct[]>([]);
   const currentPlan = user?.plan ?? 'starter';
-  const hidePlanPurchase = hidesDigitalPlanPurchase();
+  const useAppleCheckout = usesAppleIapCheckout();
 
-  async function requestCheckout(plan: 'self_guided' | 'plus') {
+  useEffect(() => {
+    if (!useAppleCheckout) return;
+    void loadAppleIapProducts()
+      .then(setAppleProducts)
+      .catch(() => setAppleProducts([]));
+  }, [useAppleCheckout]);
+
+  const productsByPlan = useMemo(() => {
+    const map = new Map<string, AppleIapProduct>();
+    for (const product of appleProducts) {
+      const plan = PUBLIC_PLANS.find((item) => appleProductIdForPlan(item.id) === product.id);
+      if (plan) map.set(plan.id, product);
+    }
+    return map;
+  }, [appleProducts]);
+
+  function priceFor(planId: string) {
+    const storeKit = productsByPlan.get(planId);
+    if (storeKit?.displayPrice) {
+      return storeKit.subscriptionPeriodUnit === 'month' ? `${storeKit.displayPrice}/month` : storeKit.displayPrice;
+    }
+    if (useAppleCheckout) return appleFallbackPrice(planId) ?? PUBLIC_PLANS.find((plan) => plan.id === planId)?.price;
+    return PUBLIC_PLANS.find((plan) => plan.id === planId)?.price;
+  }
+
+  async function requestWebCheckout(plan: 'self_guided' | 'plus') {
     setLoading(plan);
     setMessage('');
     try {
@@ -27,6 +62,38 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
       setMessage(result.message);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to start checkout');
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function requestAppleCheckout(plan: 'self_guided' | 'plus') {
+    setLoading(plan);
+    setMessage('');
+    try {
+      const nextUser = await purchaseApplePlan(plan);
+      if (!nextUser) {
+        setMessage('Purchase canceled.');
+        return;
+      }
+      onUserUpdated?.(nextUser);
+      setMessage(`You're now on ${planLabel(nextUser.plan)}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to complete the Apple purchase');
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function restorePurchases() {
+    setLoading('restore');
+    setMessage('');
+    try {
+      const nextUser = await restoreApplePurchases();
+      if (nextUser) onUserUpdated?.(nextUser);
+      setMessage(nextUser ? `Restored ${planLabel(nextUser.plan)}.` : 'No Apple subscriptions to restore.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to restore purchases');
     } finally {
       setLoading(null);
     }
@@ -46,20 +113,11 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
                 month: 'short',
                 day: 'numeric'
               })}
-              .{' '}
-              {hidePlanPurchase
-                ? IOS_PLAN_MANAGE_COPY
-                : 'Choose a plan to continue afterward.'}
+              . Choose a plan to continue afterward.
             </>
           ) : null}
         </p>
       </div>
-
-      {hidePlanPurchase ? (
-        <Card className="border-brand-gold/40 bg-brand-gold/10 p-4 text-sm text-app-text">
-          {IOS_PLAN_MANAGE_COPY} Digital subscriptions are not sold in the iOS app.
-        </Card>
-      ) : null}
 
       {user?.gracePeriodEndsAt && user.nextPlanAfterCoach ? (
         <Card className="border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
@@ -82,7 +140,7 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
                 </span>
               ) : null}
               <h2 className="text-lg font-bold">{plan.name}</h2>
-              <p className="text-2xl font-bold text-brand-green">{plan.price}</p>
+              <p className="text-2xl font-bold text-brand-green">{priceFor(plan.id)}</p>
               <ul className="mt-4 flex-1 space-y-2">
                 {plan.bullets.slice(0, 5).map((bullet) => (
                   <li key={bullet} className="flex gap-2 text-sm text-app-text-muted">
@@ -98,15 +156,17 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
                   </Button>
                 ) : plan.id === 'starter' ? (
                   <p className="text-center text-xs text-app-text-muted">Contact support to downgrade</p>
-                ) : hidePlanPurchase ? (
-                  <p className="text-center text-xs text-app-text-muted">{IOS_PLAN_MANAGE_COPY}</p>
                 ) : (
                   <Button
                     className="w-full"
                     disabled={loading !== null}
-                    onClick={() => void requestCheckout(plan.id as 'self_guided' | 'plus')}
+                    onClick={() =>
+                      void (useAppleCheckout
+                        ? requestAppleCheckout(plan.id as 'self_guided' | 'plus')
+                        : requestWebCheckout(plan.id as 'self_guided' | 'plus'))
+                    }
                   >
-                    {loading === plan.id ? 'Loading…' : 'Choose plan'}
+                    {loading === plan.id ? 'Loading…' : useAppleCheckout ? 'Subscribe' : 'Choose plan'}
                   </Button>
                 )}
               </div>
@@ -114,6 +174,31 @@ export function UpgradePage({ user }: { user: AppUser | null }) {
           );
         })}
       </div>
+
+      {useAppleCheckout ? (
+        <div className="space-y-3">
+          <Button variant="secondary" disabled={loading !== null} onClick={() => void restorePurchases()}>
+            {loading === 'restore' ? 'Restoring…' : 'Restore purchases'}
+          </Button>
+          <p className="text-xs text-app-text-muted">
+            Payment is charged to your Apple ID. Subscriptions renew monthly unless you cancel at least 24 hours
+            before the period ends. Manage or cancel in Settings → Apple ID → Subscriptions.{' '}
+            <Link className="underline" to="/privacy">
+              Privacy Policy
+            </Link>
+            {' · '}
+            <a
+              className="underline"
+              href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+              rel="noreferrer"
+              target="_blank"
+            >
+              Terms of Use (EULA)
+            </a>
+            .
+          </p>
+        </div>
+      ) : null}
 
       {message ? <p className="text-sm text-app-text-muted">{message}</p> : null}
 

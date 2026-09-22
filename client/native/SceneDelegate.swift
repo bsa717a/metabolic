@@ -1,6 +1,7 @@
 import AVFoundation
 import UIKit
 import Capacitor
+import StoreKit
 import WebKit
 import ObjectiveC
 
@@ -132,6 +133,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 class MetabolicBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(SessionCuesPlugin())
+        if #available(iOS 15.0, *) {
+            bridge?.registerPluginInstance(AppleIapPlugin())
+        }
     }
 }
 
@@ -420,5 +424,194 @@ public class SessionCuesPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject(error.localizedDescription)
             }
         }
+    }
+}
+
+/// StoreKit 2 bridge. JS never finishes or trusts a transaction until the API
+/// verifies the JWS. Keep this class in SceneDelegate.swift so `cap sync`
+/// copies it with the rest of the App target (ios/ is generated).
+@available(iOS 15.0, *)
+public class AppleIapPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "AppleIapPlugin"
+    public let jsName = "AppleIap"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "getProducts", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "purchase", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "currentEntitlements", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "restore", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "finishTransaction", returnType: CAPPluginReturnPromise)
+    ]
+
+    private var pendingFinish: [String: Transaction] = [:]
+
+    @objc func getProducts(_ call: CAPPluginCall) {
+        let ids = call.getArray("productIds", String.self) ?? []
+        Task {
+            do {
+                let products = try await Product.products(for: Set(ids))
+                call.resolve(["products": products.map { self.serializeProduct($0) }])
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc func purchase(_ call: CAPPluginCall) {
+        guard let productId = call.getString("productId"), !productId.isEmpty else {
+            call.reject("productId is required")
+            return
+        }
+        let token = call.getString("appAccountToken")
+        Task {
+            do {
+                let products = try await Product.products(for: [productId])
+                guard let product = products.first else {
+                    call.reject("Apple product was not found")
+                    return
+                }
+                var options = Set<Product.PurchaseOption>()
+                if let token, let uuid = UUID(uuidString: token) {
+                    options.insert(.appAccountToken(uuid))
+                }
+                let result = try await product.purchase(options: options)
+                switch result {
+                case .success(let verification):
+                    self.remember(verification)
+                    call.resolve(self.serializeVerification(verification, extras: ["canceled": false, "pending": false]))
+                case .userCancelled:
+                    call.resolve(["canceled": true, "pending": false])
+                case .pending:
+                    call.resolve(["canceled": false, "pending": true])
+                @unknown default:
+                    call.reject("Unsupported purchase result")
+                }
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc func currentEntitlements(_ call: CAPPluginCall) {
+        Task {
+            let transactions = await self.collectEntitlements(syncWithAppStore: false)
+            call.resolve(["transactions": transactions])
+        }
+    }
+
+    @objc func restore(_ call: CAPPluginCall) {
+        Task {
+            do {
+                try await AppStore.sync()
+                let transactions = await self.collectEntitlements(syncWithAppStore: false)
+                call.resolve(["transactions": transactions])
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc func finishTransaction(_ call: CAPPluginCall) {
+        guard let transactionId = call.getString("transactionId"), !transactionId.isEmpty else {
+            call.reject("transactionId is required")
+            return
+        }
+        Task {
+            if let pending = self.pendingFinish.removeValue(forKey: transactionId) {
+                await pending.finish()
+                call.resolve(["finished": true])
+                return
+            }
+            for await result in Transaction.unfinished {
+                if let transaction = self.verifiedTransaction(result), String(transaction.id) == transactionId {
+                    await transaction.finish()
+                    call.resolve(["finished": true])
+                    return
+                }
+            }
+            call.resolve(["finished": false])
+        }
+    }
+
+    private func collectEntitlements(syncWithAppStore _: Bool) async -> [[String: Any]] {
+        var items: [[String: Any]] = []
+        var seen = Set<String>()
+        for await result in Transaction.currentEntitlements {
+            let payload = serializeVerification(result)
+            if let id = payload["transactionId"] as? String, seen.insert(id).inserted {
+                remember(result)
+                items.append(payload)
+            }
+        }
+        for await result in Transaction.unfinished {
+            let payload = serializeVerification(result)
+            if let id = payload["transactionId"] as? String, seen.insert(id).inserted {
+                remember(result)
+                items.append(payload)
+            }
+        }
+        return items
+    }
+
+    private func remember(_ result: VerificationResult<Transaction>) {
+        if let transaction = verifiedTransaction(result) {
+            pendingFinish[String(transaction.id)] = transaction
+        }
+    }
+
+    private func verifiedTransaction(_ result: VerificationResult<Transaction>) -> Transaction? {
+        switch result {
+        case .verified(let transaction):
+            return transaction
+        case .unverified(let transaction, _):
+            return transaction
+        }
+    }
+
+    private func serializeVerification(
+        _ result: VerificationResult<Transaction>,
+        extras: [String: Any] = [:]
+    ) -> [String: Any] {
+        var payload: [String: Any] = [
+            "jwsRepresentation": result.jwsRepresentation
+        ]
+        if let transaction = verifiedTransaction(result) {
+            payload["transactionId"] = String(transaction.id)
+            payload["originalTransactionId"] = String(transaction.originalID)
+            payload["productId"] = transaction.productID
+        }
+        extras.forEach { payload[$0.key] = $0.value }
+        return payload
+    }
+
+    private func currencyCode(for product: Product) -> String {
+        if #available(iOS 16.0, *) {
+            return product.priceFormatStyle.currencyCode ?? ""
+        }
+        return ""
+    }
+
+    private func serializeProduct(_ product: Product) -> [String: Any] {
+        var periodUnit = ""
+        var periodValue = 1
+        if let subscription = product.subscription {
+            periodValue = subscription.subscriptionPeriod.value
+            switch subscription.subscriptionPeriod.unit {
+            case .day: periodUnit = "day"
+            case .week: periodUnit = "week"
+            case .month: periodUnit = "month"
+            case .year: periodUnit = "year"
+            @unknown default: periodUnit = "month"
+            }
+        }
+        return [
+            "id": product.id,
+            "displayName": product.displayName,
+            "description": product.description,
+            "displayPrice": product.displayPrice,
+            "price": NSDecimalNumber(decimal: product.price).doubleValue,
+            "currencyCode": self.currencyCode(for: product),
+            "subscriptionPeriodUnit": periodUnit,
+            "subscriptionPeriodValue": periodValue
+        ]
     }
 }
