@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import type { User } from 'firebase/auth';
 import { listenForAuth, reloadCurrentUser } from './services/auth';
 import { api } from './services/api';
 import { syncAppleEntitlements } from './services/appleIap';
+import { applyForegroundProfileSync } from './services/foregroundProfileSync';
 import { listenForForegroundPush, syncPushTokenIfGranted } from './services/pushNotifications';
 import type { AppUser } from './types';
 import { AppShell } from './components/layout/AppShell';
@@ -210,6 +211,7 @@ export default function App() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const foregroundSyncGen = useRef(0);
 
   const refreshOnboardingStatus = useCallback(async () => {
     try {
@@ -273,13 +275,23 @@ export default function App() {
   useEffect(() => {
     if (!firebaseUser) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshAppUser();
-        void syncAppleEntitlements().then((user) => {
-          if (user) setAppUser(user);
-        });
-        void refreshEmailVerification();
-      }
+      if (document.visibilityState !== 'visible') return;
+      const generation = ++foregroundSyncGen.current;
+      void applyForegroundProfileSync({
+        generation,
+        isCurrent: (value) => value === foregroundSyncGen.current,
+        loadMe: async () => {
+          try {
+            const me = await api<{ user: AppUser }>('/api/me');
+            return me.user;
+          } catch {
+            return null;
+          }
+        },
+        syncApple: syncAppleEntitlements,
+        apply: setAppUser
+      });
+      void refreshEmailVerification();
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
@@ -287,7 +299,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, [firebaseUser, refreshAppUser, refreshEmailVerification]);
+  }, [firebaseUser, refreshEmailVerification]);
 
   useEffect(() => {
     if (!appUser) return;
