@@ -7,6 +7,18 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.33.0](https://github.com/bsa717a/metabolic/compare/v0.32.1...v0.33.0) (2026-09-22)
+
+
+### Features
+
+* **ios:** Apple IAP for Self-Guided + Plus ([#304](https://github.com/bsa717a/metabolic/issues/304)) ([2e3469a](https://github.com/bsa717a/metabolic/commit/2e3469afbaab1b49da2fb41703001645c38ee147))
+
+
+### Bug Fixes
+
+* **ios:** keep Apple Music playing through workout cues ([#298](https://github.com/bsa717a/metabolic/issues/298)) ([bbbb918](https://github.com/bsa717a/metabolic/commit/bbbb9180fd3822d2787c767d8b45be5f6503e9b6))
+
 ## [0.32.1](https://github.com/bsa717a/metabolic/compare/v0.32.0...v0.32.1) (2026-09-18)
 
 
