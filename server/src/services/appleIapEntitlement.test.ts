@@ -48,11 +48,11 @@ describe('deriveSubscriptionState', () => {
     assert.equal(state.status, SubscriptionStatus.ACTIVE);
   });
 
-  it('marks expiration, refund, and upgrades as expired', () => {
+  it('marks expiration and refund as expired, and upgrades as superseded', () => {
     const now = new Date('2026-09-15T00:00:00.000Z');
     assert.equal(deriveSubscriptionState(tx({ expiresDate: new Date('2026-09-01T00:00:00.000Z') }), now).kind, 'expired');
     assert.equal(deriveSubscriptionState(tx(), now, 'REFUND').kind, 'expired');
-    assert.equal(deriveSubscriptionState(tx({ isUpgraded: true }), now).kind, 'expired');
+    assert.equal(deriveSubscriptionState(tx({ isUpgraded: true }), now).kind, 'superseded');
     assert.equal(deriveSubscriptionState(tx(), now, 'DID_FAIL_TO_RENEW').kind, 'past_due');
     assert.equal(deriveSubscriptionState(tx(), now, 'DID_FAIL_TO_RENEW').status, SubscriptionStatus.PAST_DUE);
   });
@@ -110,6 +110,30 @@ describe('pickHighestState and decideEntitlementUpdate', () => {
     );
     assert.equal(decideEntitlementUpdate(user({ subscriptionSource: SubscriptionSource.APPLE }), null).action, 'expire');
     assert.equal(decideEntitlementUpdate(user({ subscriptionSource: SubscriptionSource.MANUAL }), null).action, 'noop');
+  });
+
+  it('does not expire the user from a leftover upgraded transaction', () => {
+    const superseded = deriveSubscriptionState(tx({ isUpgraded: true }), now);
+    assert.equal(superseded.kind, 'superseded');
+    assert.equal(
+      decideEntitlementUpdate(user({ plan: PlanTier.PLUS, subscriptionSource: SubscriptionSource.APPLE }), superseded)
+        .action,
+      'noop'
+    );
+  });
+
+  it('does not downgrade a higher admin or beta plan when Apple only sold a lower tier', () => {
+    const selfGuided = deriveSubscriptionState(tx(), now);
+    assert.equal(
+      decideEntitlementUpdate(user({ plan: PlanTier.PLUS, subscriptionSource: SubscriptionSource.MANUAL }), selfGuided)
+        .action,
+      'noop'
+    );
+    assert.equal(
+      decideEntitlementUpdate(user({ plan: PlanTier.PLUS, subscriptionSource: SubscriptionSource.APPLE }), selfGuided)
+        .action,
+      'apply'
+    );
   });
 
   it('does not expire an Apple user from a different original transaction', () => {

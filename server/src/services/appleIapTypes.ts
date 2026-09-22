@@ -38,7 +38,7 @@ export interface AppleSignedDataVerifier {
   verifyNotification(signedPayload: string): Promise<VerifiedAppleNotification>;
 }
 
-export type AppleSubscriptionStateKind = 'active' | 'past_due' | 'expired';
+export type AppleSubscriptionStateKind = 'active' | 'past_due' | 'expired' | 'superseded';
 
 export type AppleSubscriptionState = {
   kind: AppleSubscriptionStateKind;

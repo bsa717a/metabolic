@@ -186,6 +186,15 @@ export function UpgradePage({
             <Link className="underline" to="/privacy">
               Privacy Policy
             </Link>
+            {' · '}
+            <a
+              className="underline"
+              href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+              rel="noreferrer"
+              target="_blank"
+            >
+              Terms of Use (EULA)
+            </a>
             .
           </p>
         </div>

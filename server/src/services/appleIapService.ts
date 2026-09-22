@@ -199,7 +199,9 @@ export async function processSignedTransactions(options: {
   const states = verified.map((transaction) => deriveSubscriptionState(transaction));
   const chosen = pickHighestState(states);
   const chosenTx =
-    (chosen && verified.find((transaction) => transaction.transactionId === chosen.transactionId)) ?? verified[0];
+    (chosen && verified.find((transaction) => transaction.transactionId === chosen.transactionId)) ??
+    verified.find((transaction, index) => states[index]?.kind !== 'superseded') ??
+    verified[0];
 
   const owner = await resolveUserForTransaction(options.userId, chosenTx);
   const already = await prisma.appleProcessedTransaction.findUnique({

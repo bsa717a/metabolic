@@ -1,5 +1,5 @@
 import { PlanTier, SubscriptionSource, SubscriptionStatus, type User } from '@prisma/client';
-import { mapProductIdToPlan } from './appleIapCatalog.js';
+import { mapProductIdToPlan, rankPlan } from './appleIapCatalog.js';
 import {
   AppleIapError,
   type AppleSubscriptionState,
@@ -40,8 +40,11 @@ export function deriveSubscriptionState(
   let kind: AppleSubscriptionState['kind'] = 'active';
   let status: SubscriptionStatus = SubscriptionStatus.ACTIVE;
 
-  if (revoked || expiredByDate || EXPIRE_NOTIFICATIONS.has(notify) || transaction.isUpgraded) {
+  if (revoked || expiredByDate || EXPIRE_NOTIFICATIONS.has(notify)) {
     kind = 'expired';
+    status = SubscriptionStatus.CANCELED;
+  } else if (transaction.isUpgraded) {
+    kind = 'superseded';
     status = SubscriptionStatus.CANCELED;
   } else if (PAST_DUE_NOTIFICATIONS.has(notify)) {
     kind = 'past_due';
@@ -63,7 +66,7 @@ export function deriveSubscriptionState(
 }
 
 export function pickHighestState(states: AppleSubscriptionState[]): AppleSubscriptionState | null {
-  const usable = states.filter((state) => state.kind !== 'expired');
+  const usable = states.filter((state) => state.kind !== 'expired' && state.kind !== 'superseded');
   if (usable.length === 0) return null;
   return usable.reduce((best, current) => {
     const rank = { [PlanTier.STARTER]: 0, [PlanTier.SELF_GUIDED]: 1, [PlanTier.PLUS]: 2, [PlanTier.COACH_LED]: 3 };
@@ -85,6 +88,10 @@ export function decideEntitlementUpdate(
     return { action: 'expire' };
   }
 
+  if (state.kind === 'superseded') {
+    return { action: 'noop' };
+  }
+
   if (state.kind === 'expired') {
     if (user.plan === PlanTier.COACH_LED) return { action: 'noop' };
     if (user.subscriptionSource !== SubscriptionSource.APPLE) return { action: 'noop' };
@@ -99,6 +106,13 @@ export function decideEntitlementUpdate(
 
   if (user.plan === PlanTier.COACH_LED) {
     return { action: 'bind_only', nextPlanAfterCoach: state.plan };
+  }
+
+  if (
+    rankPlan(user.plan) > rankPlan(state.plan) &&
+    user.subscriptionSource !== SubscriptionSource.APPLE
+  ) {
+    return { action: 'noop' };
   }
 
   return {
