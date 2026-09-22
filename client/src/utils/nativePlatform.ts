@@ -5,9 +5,17 @@ export function isNativeIos() {
   return Capacitor.getPlatform() === 'ios';
 }
 
-/** Guideline 3.1.1 path A: no in-app digital plan purchase on iOS. */
+/**
+ * Path A used to hide digital checkout on iOS. Apple IAP now sells
+ * Self-Guided and Plus in-app, so this is always false.
+ */
 export function hidesDigitalPlanPurchase() {
+  return false;
+}
+
+/** iOS uses StoreKit for digital plans; web keeps the billing/admin seam. */
+export function usesAppleIapCheckout() {
   return isNativeIos();
 }
 
-export const IOS_PLAN_MANAGE_COPY = 'Manage your plan on the web or contact your coach/support.';
+export const IOS_PLAN_MANAGE_COPY = 'Manage or cancel this subscription in Settings → Apple ID → Subscriptions.';

@@ -33,6 +33,11 @@ enum SubscriptionStatus {
   CANCELED
   COACH_MANAGED
 }
+enum SubscriptionSource {
+  MANUAL
+  APPLE
+  STRIPE
+}
 enum CoachRelationshipStatus {
   ACTIVE
   COMPLETED
@@ -234,10 +239,14 @@ model User {
   virtualCoachCheckInDay Int?
   plan PlanTier @default(STARTER)
   subscriptionStatus SubscriptionStatus @default(FREE)
+  subscriptionSource SubscriptionSource @default(MANUAL)
   subscriptionStartedAt DateTime?
   subscriptionCurrentPeriodEnd DateTime?
   stripeCustomerId String? @unique
   stripeSubscriptionId String? @unique
+  appleOriginalTransactionId String? @unique
+  appleAppAccountToken String? @unique
+  appleProductId String?
   gracePeriodEndsAt DateTime?
   nextPlanAfterCoach PlanTier?
   createdAt DateTime @default(now())
@@ -306,6 +315,24 @@ model User {
   guidedWisdomStones GuidedWisdomStone[]
   guidedJourneyEvents GuidedJourneyEvent[]
   pushDevices PushDevice[]
+  appleTransactions AppleProcessedTransaction[]
+}
+
+model AppleProcessedTransaction {
+  id String @id @default(cuid())
+  transactionId String @unique
+  originalTransactionId String
+  userId String
+  productId String
+  environment String
+  notificationType String?
+  expiresDate DateTime?
+  revocationDate DateTime?
+  processedAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([originalTransactionId])
+  @@index([userId])
 }
 
 model ClientProfile {

@@ -1,4 +1,4 @@
-import { PlanTier, SubscriptionStatus } from '@prisma/client';
+import { PlanTier, SubscriptionSource, SubscriptionStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { planToSlug, slugToPlan } from './entitlements.js';
 
@@ -53,6 +53,7 @@ export async function setUserPlanManual(
     data: {
       plan,
       subscriptionStatus: status,
+      subscriptionSource: SubscriptionSource.MANUAL,
       subscriptionStartedAt: plan === PlanTier.STARTER ? null : new Date(),
       gracePeriodEndsAt: null,
       nextPlanAfterCoach: null

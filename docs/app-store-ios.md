@@ -13,6 +13,8 @@ This document covers remaining steps for App Store submission, TestFlight distri
 | Team           | Cliffs Mama, LLC               |
 | Team ID        | `8FG8V9P49A`                   |
 
+Digital plan IAP (Self-Guided + Plus) is documented in [`apple-iap.md`](apple-iap.md).
+
 ---
 
 ## iOS Setup Checklist

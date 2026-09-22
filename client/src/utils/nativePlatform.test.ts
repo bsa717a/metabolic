@@ -11,17 +11,20 @@ describe('nativePlatform', () => {
     getPlatform.mockReturnValue('web');
   });
 
-  it('hides digital plan purchase only on native iOS', async () => {
-    const { hidesDigitalPlanPurchase, isNativeIos } = await import('./nativePlatform');
+  it('no longer hides digital plan purchase on iOS; IAP is the iOS checkout', async () => {
+    const { hidesDigitalPlanPurchase, isNativeIos, usesAppleIapCheckout } = await import('./nativePlatform');
     expect(isNativeIos()).toBe(false);
     expect(hidesDigitalPlanPurchase()).toBe(false);
+    expect(usesAppleIapCheckout()).toBe(false);
 
     getPlatform.mockReturnValue('ios');
     expect(isNativeIos()).toBe(true);
-    expect(hidesDigitalPlanPurchase()).toBe(true);
+    expect(hidesDigitalPlanPurchase()).toBe(false);
+    expect(usesAppleIapCheckout()).toBe(true);
 
     getPlatform.mockReturnValue('android');
     expect(isNativeIos()).toBe(false);
     expect(hidesDigitalPlanPurchase()).toBe(false);
+    expect(usesAppleIapCheckout()).toBe(false);
   });
 });
