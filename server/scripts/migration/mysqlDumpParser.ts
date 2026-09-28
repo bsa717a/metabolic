@@ -58,12 +58,10 @@ function unescapeString(raw: string): string {
 }
 
 /**
- * Parse one VALUES tuple region starting at `start` (the index of the first
- * "(" of the first tuple). Returns the parsed tuples and the index just past
- * the terminating ";".
+ * Visit each VALUES tuple starting at `start` (the index of the first "(").
+ * Returns the index just past the terminating ";".
  */
-function parseTuples(sql: string, start: number): { tuples: (string | null)[][]; end: number } {
-  const tuples: (string | null)[][] = [];
+function visitTuples(sql: string, start: number, visit: (values: (string | null)[]) => void): number {
   let i = start;
   const len = sql.length;
 
@@ -155,10 +153,10 @@ function parseTuples(sql: string, start: number): { tuples: (string | null)[][];
       i += 1;
     }
 
-    tuples.push(values);
+    visit(values);
   }
 
-  return { tuples, end: i };
+  return i;
 }
 
 function extractColumns(headerSegment: string): string[] {
@@ -170,9 +168,10 @@ function extractColumns(headerSegment: string): string[] {
 }
 
 /**
- * Parse all rows for a given table out of the dump.
+ * Parse rows for a given table out of the dump.
+ * `keep` drops a row immediately so a large table does not have to stay in memory.
  */
-export function parseTable(dumpPath: string, table: string): LegacyRow[] {
+export function parseTable(dumpPath: string, table: string, keep?: (row: LegacyRow) => boolean): LegacyRow[] {
   const sql = loadSql(dumpPath);
   const rows: LegacyRow[] = [];
   const insertMarker = new RegExp(`INSERT INTO \`${table}\`\\s*\\(`, 'g');
@@ -189,15 +188,15 @@ export function parseTable(dumpPath: string, table: string): LegacyRow[] {
     const tupleStart = sql.indexOf('(', valuesIdx);
     if (tupleStart === -1) continue;
 
-    const { tuples, end } = parseTuples(sql, tupleStart);
-    for (const tuple of tuples) {
-      if (tuple.length === 0) continue;
+    const end = visitTuples(sql, tupleStart, (tuple) => {
+      if (tuple.length === 0) return;
       const row: LegacyRow = {};
       columns.forEach((col, idx) => {
         row[col] = idx < tuple.length ? tuple[idx] : null;
       });
+      if (keep && !keep(row)) return;
       rows.push(row);
-    }
+    });
     insertMarker.lastIndex = end;
   }
 

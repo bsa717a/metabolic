@@ -1,16 +1,25 @@
 /**
- * Import one legacy astermet user (profile, metrics history, weekly meal/exercise
- * history, and current plan) into the local Metabolic database.
+ * Import one or more legacy astermet users (profile, metrics history, weekly
+ * meal/exercise history, and current plan) into the Metabolic database.
+ *
+ * Weekly nutrition and exercise rows stay linked the way the old app stored
+ * them: `owner_id` is the training session id. Rows are not dropped because
+ * the date or session number looks stale. An email that already exists is
+ * refreshed in place.
  *
  * Dry-run by default:
  *   cd server && npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
  *     --email grobrien@gmail.com
  *
+ *   npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
+ *     --email iammorgancrawford@gmail.com --email joebieker@gmail.com
+ *
  *   LEGACY_DUMP_PATH=/Users/derekfowler/Downloads/astermet_app.sql \
  *   npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
  *     --email grobrien@gmail.com --apply
  *
- * Auth only (creates the Firebase email/password from the legacy bcrypt hash):
+ * Auth only (creates the Firebase email/password from the legacy bcrypt hash
+ * when that email does not already exist):
  *   npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
  *     --email grobrien@gmail.com --apply --auth-only
  */
@@ -32,7 +41,6 @@ import { DUMP_PATH, SKIP_FIREBASE, legacyUid } from './config.js';
 import { loadIdMap, saveIdMap, type IdMap } from './idmap.js';
 import {
   cleanText,
-  isValidEmail,
   num,
   numPositive,
   parseHeightInches,
@@ -55,6 +63,14 @@ import {
   toNumber,
   type LegacyCircuitItem
 } from './legacyPlanParse.js';
+import {
+  accountAction,
+  currentPlanTitle,
+  displayNameFromLegacy,
+  foreignSessionPrograms,
+  parseImportArgs,
+  type ImportArgs
+} from './legacyUserImport.js';
 
 const prisma = new PrismaClient();
 const LEGACY_DAY_NOTE = 'legacy:daily-plan';
@@ -64,29 +80,45 @@ const CURRENT_EXERCISE_TAG_PREFIX = 'mmv1:exerciseProgram:';
 
 const BCRYPT_RE = /^\$2[aby]\$\d{2}\$.{53}$/;
 
-interface Args {
-  apply: boolean;
-  force: boolean;
-  authOnly: boolean;
-  email: string;
+function safeError(error: unknown): string {
+  if (!(error instanceof Error)) return 'database unreachable';
+  const cleaned = error.message.replace(/postgres(?:ql)?:\/\/\S+/gi, 'postgresql://***');
+  const lines = cleaned.split('\n').map((part) => part.trim()).filter(Boolean);
+  const useful = lines.find((line) => /DATABASE_URL|Environment variable|Can't reach|ECONNREFUSED|connect/i.test(line));
+  return (useful || lines.at(-1) || 'database unreachable').slice(0, 240);
 }
 
-function parseArgs(argv: string[]): Args {
-  let email = '';
-  let apply = false;
-  let force = false;
-  let authOnly = false;
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg === '--apply') apply = true;
-    else if (arg === '--force') force = true;
-    else if (arg === '--auth-only') authOnly = true;
-    else if (arg === '--email') email = (argv[++i] ?? '').trim().toLowerCase();
+async function describeAccountAction(email: string): Promise<string> {
+  if (!process.env.DATABASE_URL) {
+    return 'Action: lookup-skipped (DATABASE_URL is not set). Apply refreshes an existing email in place and creates a user only when that email is absent.';
   }
-  if (!email || !isValidEmail(email)) {
-    throw new Error('Pass --email user@example.com');
+  const failed = (detail: string) =>
+    `Action: lookup-failed (${detail}). Apply refreshes an existing email in place and creates a user only when that email is absent.`;
+  const lookup = prisma.user
+    .findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true }
+    })
+    .then((existing) => {
+      const action = accountAction(Boolean(existing));
+      return action === 'refresh'
+        ? `Action: refresh (existing user ${existing?.id}; no second account)`
+        : 'Action: create';
+    })
+    .catch((error: unknown) => failed(safeError(error)));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve(failed('timed out')), 8000);
+  });
+  try {
+    return await Promise.race([lookup, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return { apply, force, authOnly, email };
+}
+
+function dateLabel(row: LegacyRow): string {
+  return parseLegacyDate(row.date)?.toISOString().slice(0, 10) ?? (row.date ?? '').trim();
 }
 
 function legacyPasswordHash(row: LegacyRow): string | null {
@@ -109,7 +141,7 @@ async function importFirebaseLogin(row: LegacyRow, apply: boolean): Promise<stri
     return null;
   }
   if (!apply) {
-    console.log(`Firebase: would import ${email} as ${uid} with the legacy password hash`);
+    console.log(`Firebase: would import ${email} as ${uid} with the legacy bcrypt hash when that email does not already exist`);
     return uid;
   }
 
@@ -346,22 +378,24 @@ async function upsertPerson(row: LegacyRow, role: Role, apply: boolean) {
   if (existing && role !== Role.USER) {
     return existing;
   }
-  return prisma.user.upsert({
-    where: { email },
-    create: data,
-    update: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      phone: data.phone,
-      gender: data.gender,
-      role: data.role,
-      status: data.status,
-      timezone: data.timezone,
-      ...(role === Role.USER
-        ? { plan: PlanTier.COACH_LED, subscriptionStatus: SubscriptionStatus.COACH_MANAGED }
-        : {})
-    }
-  });
+  const profileUpdate = {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    phone: data.phone,
+    gender: data.gender,
+    role: data.role,
+    status: data.status,
+    timezone: data.timezone,
+    ...(role === Role.USER
+      ? { plan: PlanTier.COACH_LED, subscriptionStatus: SubscriptionStatus.COACH_MANAGED }
+      : {})
+  };
+  if (existing) {
+    console.log(`Account: refresh ${email} (${existing.id})`);
+    return prisma.user.update({ where: { id: existing.id }, data: profileUpdate });
+  }
+  console.log(`Account: create ${email}`);
+  return prisma.user.create({ data });
 }
 
 async function upsertCoachAssignment(coachId: string, userId: string): Promise<void> {
@@ -381,7 +415,8 @@ async function upsertCoachAssignment(coachId: string, userId: string): Promise<v
 async function importCurrentNutritionTemplate(
   latest: LegacyRow,
   createdById: string,
-  apply: boolean
+  apply: boolean,
+  displayName: string
 ) {
   const meals = parseMeals(latest.meals);
   const payloads = meals
@@ -445,7 +480,7 @@ async function importCurrentNutritionTemplate(
 
   const created = await prisma.nutritionPlanTemplate.create({
     data: {
-      name: `Gary current meals (${parseLegacyDate(latest.date)?.toISOString().slice(0, 10) ?? latest.date})`,
+      name: currentPlanTitle(displayName, 'meals', dateLabel(latest)),
       description: tag,
       visibility: Visibility.USER,
       createdById,
@@ -471,7 +506,8 @@ async function importCurrentExercisePlan(
   latest: LegacyRow,
   createdById: string,
   idMap: IdMap,
-  apply: boolean
+  apply: boolean,
+  displayName: string
 ) {
   const circuits = parseCircuits(latest.circuits).filter((circuit) => circuitItems(circuit).length > 0);
   const tag = `${CURRENT_EXERCISE_TAG_PREFIX}${latest.id}`;
@@ -489,14 +525,14 @@ async function importCurrentExercisePlan(
     ? await prisma.exercisePlan.update({
         where: { id: existing.id },
         data: {
-          name: `Gary current workouts (${parseLegacyDate(latest.date)?.toISOString().slice(0, 10) ?? latest.date})`,
+          name: currentPlanTitle(displayName, 'workouts', dateLabel(latest)),
           visibility: Visibility.USER,
           createdById
         }
       })
     : await prisma.exercisePlan.create({
         data: {
-          name: `Gary current workouts (${parseLegacyDate(latest.date)?.toISOString().slice(0, 10) ?? latest.date})`,
+          name: currentPlanTitle(displayName, 'workouts', dateLabel(latest)),
           description: tag,
           visibility: Visibility.USER,
           createdById
@@ -532,45 +568,166 @@ async function importCurrentExercisePlan(
   return { planId: plan.id, dayTemplateIds, dayCount: circuits.length, tag };
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  const idMap = loadIdMap();
-  console.log(`${args.apply ? 'APPLY' : 'DRY RUN'} import for ${args.email}`);
-  console.log(`Dump: ${DUMP_PATH}`);
+interface LegacyBundle {
+  usersByEmail: Map<string, LegacyRow>;
+  usersById: Map<string, LegacyRow>;
+  sessionsByUserId: Map<string, LegacyRow[]>;
+  sessionOwnerById: Map<string, string>;
+  nutritionBySessionId: Map<string, LegacyRow[]>;
+  exerciseBySessionId: Map<string, LegacyRow[]>;
+}
 
-  const users = parseTable(DUMP_PATH, 'users');
-  const legacyUser = users.find((row) => (row.email ?? '').trim().toLowerCase() === args.email);
-  if (!legacyUser) throw new Error(`No legacy user found for ${args.email}`);
+function pushGrouped(map: Map<string, LegacyRow[]>, key: string, row: LegacyRow) {
+  const list = map.get(key);
+  if (list) list.push(row);
+  else map.set(key, [row]);
+}
 
+function loadLegacyBundle(emails: string[]): LegacyBundle {
+  console.log('Reading legacy dump tables...');
+  const usersByEmail = new Map<string, LegacyRow>();
+  const usersById = new Map<string, LegacyRow>();
+  for (const row of parseTable(DUMP_PATH, 'users')) {
+    const email = (row.email ?? '').trim().toLowerCase();
+    if (email && !usersByEmail.has(email)) usersByEmail.set(email, row);
+    if (row.id != null) usersById.set(String(row.id), row);
+  }
+  const targetUserIds = new Set<string>();
+  for (const email of emails) {
+    const user = usersByEmail.get(email);
+    if (user?.id != null) targetUserIds.add(String(user.id));
+  }
+  const sessionsByUserId = new Map<string, LegacyRow[]>();
+  const sessionOwnerById = new Map<string, string>();
+  const targetSessionIds = new Set<string>();
+  for (const row of parseTable(DUMP_PATH, 'training_sessions', (session) => {
+    const owner = String(session.owner_id ?? '');
+    const id = session.id != null ? String(session.id) : '';
+    if (id) sessionOwnerById.set(id, owner);
+    return targetUserIds.has(owner);
+  })) {
+    const owner = String(row.owner_id ?? '');
+    const id = row.id != null ? String(row.id) : '';
+    pushGrouped(sessionsByUserId, owner, row);
+    if (id) targetSessionIds.add(id);
+  }
+  const keepProgram = (row: LegacyRow) => {
+    const owner = String(row.owner_id ?? '');
+    return targetSessionIds.has(owner) || targetUserIds.has(owner);
+  };
+  const nutritionBySessionId = new Map<string, LegacyRow[]>();
+  for (const row of parseTable(DUMP_PATH, 'nutritionPrograms', keepProgram)) {
+    pushGrouped(nutritionBySessionId, String(row.owner_id ?? ''), row);
+  }
+  const exerciseBySessionId = new Map<string, LegacyRow[]>();
+  for (const row of parseTable(DUMP_PATH, 'exercisePrograms', keepProgram)) {
+    pushGrouped(exerciseBySessionId, String(row.owner_id ?? ''), row);
+  }
+  return { usersByEmail, usersById, sessionsByUserId, sessionOwnerById, nutritionBySessionId, exerciseBySessionId };
+}
+
+function rowsForSessions(index: Map<string, LegacyRow[]>, sessionIds: Iterable<string>): LegacyRow[] {
+  const rows: LegacyRow[] = [];
+  for (const id of sessionIds) {
+    const linked = index.get(id);
+    if (linked) rows.push(...linked);
+  }
+  return rows;
+}
+
+function latestProgram(rows: LegacyRow[], sessionById: Map<string, SessionMetrics>): LegacyRow | undefined {
+  return [...rows]
+    .sort((a, b) => {
+      const sessionA = sessionById.get(String(a.owner_id));
+      const sessionB = sessionById.get(String(b.owner_id));
+      return (sessionA?.sessionNumber ?? 0) - (sessionB?.sessionNumber ?? 0);
+    })
+    .at(-1);
+}
+
+function programHasMeals(row: LegacyRow): boolean {
+  return parseMeals(row.meals).some((meal) => mealItems(meal).length > 0);
+}
+
+function programHasExercises(row: LegacyRow): boolean {
+  return parseCircuits(row.circuits).some((circuit) => circuitItems(circuit).length > 0);
+}
+
+function describePrograms(rows: LegacyRow[], sessionById: Map<string, SessionMetrics>): string[] {
+  return [...rows]
+    .sort((a, b) => {
+      const sessionA = sessionById.get(String(a.owner_id));
+      const sessionB = sessionById.get(String(b.owner_id));
+      return (sessionA?.date.getTime() ?? 0) - (sessionB?.date.getTime() ?? 0);
+    })
+    .map((row) => {
+      const session = sessionById.get(String(row.owner_id));
+      const number = session ? ` #${session.sessionNumber}` : '';
+      return `  #${row.id} ${dateLabel(row)} session ${row.owner_id}${number}`;
+    });
+}
+
+async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, idMap: IdMap): Promise<void> {
+  const legacyUser = bundle.usersByEmail.get(email);
+  if (!legacyUser) throw new Error(`No legacy user found for ${email}`);
+
+  const userId = String(legacyUser.id);
+  const displayName = displayNameFromLegacy(legacyUser.name, email);
   const coachIdLegacy = legacyUser.owner_id && legacyUser.owner_id !== '0' ? String(legacyUser.owner_id) : null;
-  const legacyCoach = coachIdLegacy ? users.find((row) => String(row.id) === coachIdLegacy) : null;
+  const legacyCoach = coachIdLegacy ? bundle.usersById.get(coachIdLegacy) ?? null : null;
 
-  const rawSessions = parseTable(DUMP_PATH, 'training_sessions')
-    .filter((row) => String(row.owner_id) === String(legacyUser.id))
-    .map(toMetrics)
-    .filter((row): row is SessionMetrics => Boolean(row));
+  const rawSessionRows = bundle.sessionsByUserId.get(userId) ?? [];
+  const rawSessionIds = new Set(rawSessionRows.map((row) => String(row.id)));
+  const rawSessions = rawSessionRows.map(toMetrics).filter((row): row is SessionMetrics => Boolean(row));
   const sessions = dedupeByDay(rawSessions);
+  const droppedSameDay = rawSessions.length - sessions.length;
   const sessionById = new Map(sessions.map((session) => [session.legacySessionId, session]));
 
-  const nutritionRows = parseTable(DUMP_PATH, 'nutritionPrograms').filter((row) => sessionById.has(String(row.owner_id)));
-  const exerciseRows = parseTable(DUMP_PATH, 'exercisePrograms').filter((row) => sessionById.has(String(row.owner_id)));
-  const latestNutrition = [...nutritionRows].sort((a, b) => {
-    const sessionA = sessionById.get(String(a.owner_id))!;
-    const sessionB = sessionById.get(String(b.owner_id))!;
-    return sessionA.sessionNumber - sessionB.sessionNumber;
-  }).at(-1);
-  const latestExercise = [...exerciseRows].sort((a, b) => {
-    const sessionA = sessionById.get(String(a.owner_id))!;
-    const sessionB = sessionById.get(String(b.owner_id))!;
-    return sessionA.sessionNumber - sessionB.sessionNumber;
-  }).at(-1);
+  const nutritionRows = rowsForSessions(bundle.nutritionBySessionId, sessionById.keys());
+  const exerciseRows = rowsForSessions(bundle.exerciseBySessionId, sessionById.keys());
+  const latestNutrition = latestProgram(nutritionRows, sessionById);
+  const latestExercise = latestProgram(exerciseRows, sessionById);
+  const mealTitle = latestNutrition ? currentPlanTitle(displayName, 'meals', dateLabel(latestNutrition)) : null;
+  const workoutTitle = latestExercise ? currentPlanTitle(displayName, 'workouts', dateLabel(latestExercise)) : null;
 
-  const first = sessions[0];
-  const last = sessions.at(-1);
-  console.log(`Legacy user #${legacyUser.id} ${legacyUser.name} (${legacyUser.email})`);
-  console.log(`Coach: ${legacyCoach ? `${legacyCoach.name} <${legacyCoach.email}>` : 'none'}`);
-  console.log(`Sessions: ${sessions.length}  first=${first ? `${dateKey(first.date)} ${first.weight}lb ${first.bodyFat}%` : 'n/a'}  last=${last ? `${dateKey(last.date)} ${last.weight}lb ${last.bodyFat}%` : 'n/a'}`);
-  console.log(`Nutrition weeks: ${nutritionRows.length}  Exercise weeks: ${exerciseRows.length}`);
+  const foreign = foreignSessionPrograms({
+    userId,
+    ownSessionIds: rawSessionIds,
+    candidates: [
+      ...(bundle.nutritionBySessionId.get(userId) ?? []).map((row) => ({
+        kind: 'nutrition' as const,
+        id: String(row.id),
+        date: row.date ?? '',
+        ownerId: String(row.owner_id ?? '')
+      })),
+      ...(bundle.exerciseBySessionId.get(userId) ?? []).map((row) => ({
+        kind: 'exercise' as const,
+        id: String(row.id),
+        date: row.date ?? '',
+        ownerId: String(row.owner_id ?? '')
+      }))
+    ],
+    sessionOwnerById: bundle.sessionOwnerById
+  });
+
+  console.log(`\n== ${email} ==`);
+  console.log(`Legacy user #${userId} ${displayName} (${legacyUser.email})`);
+  console.log(`Coach: ${legacyCoach ? `${legacyCoach.name} <${legacyCoach.email}> (legacy owner_id ${coachIdLegacy})` : 'none'}`);
+  console.log(`Sessions: ${sessions.length} kept, ${droppedSameDay} same-day duplicates removed`);
+  for (const session of sessions) {
+    console.log(`  #${session.sessionNumber} ${dateKey(session.date)}`);
+  }
+  console.log(`Nutrition programs: ${nutritionRows.length} session-linked kept (${nutritionRows.filter(programHasMeals).length} with meals)`);
+  for (const line of describePrograms(nutritionRows, sessionById)) console.log(line);
+  console.log(`Exercise programs: ${exerciseRows.length} session-linked kept (${exerciseRows.filter(programHasExercises).length} with exercises)`);
+  for (const line of describePrograms(exerciseRows, sessionById)) console.log(line);
+  console.log(`Current meal plan title: ${mealTitle ?? 'none'}`);
+  console.log(`Current workout plan title: ${workoutTitle ?? 'none'}`);
+  for (const note of foreign) {
+    const owner = bundle.usersById.get(note.sessionOwnerUserId);
+    const who = owner ? `${note.sessionOwnerUserId} ${owner.name} <${owner.email}>` : note.sessionOwnerUserId;
+    console.log(`Stored as-is: ${note.kind} #${note.id} (${note.date}) stays on training session ${note.ownerId} for legacy user ${who}. Not copied onto this account.`);
+  }
   if (latestNutrition) {
     const meals = parseMeals(latestNutrition.meals);
     console.log(`Latest meals ${latestNutrition.date}: ${meals.map((meal) => meal.name).join(', ')}`);
@@ -580,21 +737,25 @@ async function main(): Promise<void> {
     console.log(`Latest workouts ${latestExercise.date}: ${circuits.map((circuit) => circuit.name || 'Untitled').join(', ')}`);
   }
 
+  if (!args.apply) {
+    console.log(await describeAccountAction(email));
+  }
+
   const firebaseUid = await importFirebaseLogin(legacyUser, args.apply);
 
   if (!args.apply) {
-    console.log('\nNo changes written (dry-run). Re-run with --apply to import.');
+    console.log('No changes written (dry-run).');
     return;
   }
 
   if (args.authOnly) {
     const existing = await prisma.user.findFirst({
-      where: { email: { equals: args.email, mode: 'insensitive' } }
+      where: { email: { equals: email, mode: 'insensitive' } }
     });
-    if (!existing) throw new Error(`No local user found for ${args.email}. Run a full --apply first.`);
+    if (!existing) throw new Error(`No local user found for ${email}. Run a full --apply first.`);
     if (firebaseUid && existing.firebaseUid !== firebaseUid) {
       await prisma.user.update({ where: { id: existing.id }, data: { firebaseUid } });
-      console.log(`Linked ${args.email} to Firebase UID ${firebaseUid}`);
+      console.log(`Linked ${email} to Firebase UID ${firebaseUid}`);
     }
     return;
   }
@@ -634,6 +795,8 @@ async function main(): Promise<void> {
   });
   if (coach) await upsertCoachAssignment(coach.id, user.id);
 
+  const first = sessions[0];
+  const last = sessions.at(-1);
   const startDate = first?.date ?? new Date();
   const existingProgram = await prisma.program.findFirst({ where: { userId: user.id, name: 'Legacy Program' } });
   const program = existingProgram
@@ -866,10 +1029,10 @@ async function main(): Promise<void> {
   }
 
   const nutritionTemplate = latestNutrition
-    ? await importCurrentNutritionTemplate(latestNutrition, coach?.id ?? user.id, true)
+    ? await importCurrentNutritionTemplate(latestNutrition, coach?.id ?? user.id, true, displayName)
     : null;
   const exercisePlan = latestExercise
-    ? await importCurrentExercisePlan(latestExercise, coach?.id ?? user.id, idMap, true)
+    ? await importCurrentExercisePlan(latestExercise, coach?.id ?? user.id, idMap, true, displayName)
     : null;
 
   if (nutritionTemplate?.waterTargetOz) {
@@ -971,7 +1134,23 @@ async function main(): Promise<void> {
   console.log(`  Metric snapshots: ${snapshots}  progress snapshots: ${progressSnapshots}`);
   console.log(`  Historical daily logs: ${dailyLogs}  meals: ${mealsCreated}  scheduled exercises: ${exercisesCreated}`);
   console.log(`  Current nutrition template: ${nutritionTemplate?.id ?? 'none'} (${nutritionTemplate?.mealCount ?? 0} meals, ${Math.round(nutritionTemplate?.totals.calories ?? 0)} kcal)`);
+  console.log(`  Current meal plan title: ${mealTitle ?? 'none'}`);
   console.log(`  Current exercise plan: ${exercisePlan?.planId ?? 'none'} (${exercisePlan?.dayCount ?? 0} days)`);
+  console.log(`  Current workout plan title: ${workoutTitle ?? 'none'}`);
+}
+
+async function main(): Promise<void> {
+  const args = parseImportArgs(process.argv.slice(2));
+  const idMap = loadIdMap();
+  console.log(`${args.apply ? 'APPLY' : 'DRY RUN'} import for ${args.emails.length} user(s): ${args.emails.join(', ')}`);
+  console.log(`Dump: ${DUMP_PATH}`);
+  const bundle = loadLegacyBundle(args.emails);
+  for (const email of args.emails) {
+    await importOne(email, args, bundle, idMap);
+  }
+  if (!args.apply) {
+    console.log('\nNo changes written (dry-run). Re-run with --apply to import.');
+  }
 }
 
 main()

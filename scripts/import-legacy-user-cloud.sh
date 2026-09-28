@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Import one legacy astermet user into Cloud SQL (production).
-# Dry-run by default; pass --apply to write. Extra flags are forwarded
-# (e.g. --email grobrien@gmail.com --force --auth-only).
+# Import one or more legacy astermet users into Cloud SQL (production).
+# Dry-run by default; pass --apply to write. Repeat --email for each person.
+# Extra flags are forwarded (e.g. --force --auth-only).
+#
+#   scripts/import-legacy-user-cloud.sh \
+#     --email iammorgancrawford@gmail.com \
+#     --email joebieker@gmail.com \
+#     --apply
 set -euo pipefail
 
 APPLY=false
@@ -14,7 +19,7 @@ for arg in "$@"; do
 done
 
 if [[ ${#FORWARD_ARGS[@]} -eq 0 ]]; then
-  echo "Usage: scripts/import-legacy-user-cloud.sh --email user@example.com [--apply]"
+  echo "Usage: scripts/import-legacy-user-cloud.sh --email user@example.com [--email another@example.com ...] [--apply]"
   exit 1
 fi
 
@@ -37,9 +42,9 @@ fail_with_proxy_logs() {
 }
 
 if [[ "$APPLY" == "true" ]]; then
-  echo "==> Import legacy user to production (--apply)"
+  echo "==> Import legacy user(s) to production (--apply)"
 else
-  echo "==> Import legacy user to production (dry-run)"
+  echo "==> Import legacy user(s) to production (dry-run)"
 fi
 
 if command -v cloud-sql-proxy >/dev/null 2>&1; then
