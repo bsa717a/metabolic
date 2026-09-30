@@ -59,7 +59,7 @@ describe('startSession', () => {
     const s = startSession('2026-07-20', [ex('c', 'PLANNED', { durationSeconds: 120 })], 1000);
     expect(s.durationEndsAtMs).toBe(1000 + 120 * 1000);
     expect(remainingMs(s, 1000)).toBe(120_000);
-    expect(shouldAutoCompleteTimedSet(s)).toBe(false);
+    expect(shouldAutoCompleteTimedSet(s)).toBe(true);
   });
 
   it('arms a per-set countdown when sets and duration are both set', () => {

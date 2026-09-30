@@ -52,6 +52,13 @@ describe('SessionExerciseCard prescriptions', () => {
     expect(html).not.toContain('aria-label="Decrease Reps"');
   });
 
+  it('reads STOP at the end of a work countdown', () => {
+    const html = render({ name: 'Plank', sets: 3, durationSeconds: 30 }, 0);
+    expect(html).toContain('STOP');
+    expect(html).not.toContain('>GO<');
+    expect(html).not.toContain('>Time<');
+  });
+
   it('times each set without a rep stepper when only duration is set', () => {
     const html = render({ name: 'Plank', sets: 3, durationSeconds: 30 }, 30_000);
     expect(html).toContain('Set 1 of 3');
