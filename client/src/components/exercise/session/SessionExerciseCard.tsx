@@ -9,7 +9,6 @@ import { SessionRepScheme } from './SessionRepScheme';
 import type { PerExerciseState, SessionExerciseMeta } from '../../../utils/workoutSession';
 import { hasSets, hasWorkDuration, isDurationBased, totalSets } from '../../../utils/workoutSession';
 import { DurationField } from '../DurationField';
-import { timerCueKind } from './format';
 import { SessionTimerClock } from './SessionTimerCue';
 
 function Stepper({
@@ -116,9 +115,6 @@ export function SessionExerciseCard({
         ? 'Complete exercise'
         : 'Complete set'
       : 'Mark complete';
-  const durationCue = workTimed
-    ? timerCueKind(durationRemainingMs ?? durationTotalMs, paused)
-    : 'idle';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
@@ -164,7 +160,7 @@ export function SessionExerciseCard({
           <SessionTimerClock
             remainingMs={durationRemainingMs ?? durationTotalMs}
             paused={paused}
-            goLabel={setBased ? 'GO' : 'Time'}
+            goLabel="STOP"
             size={showSteppers ? 'work' : 'duration'}
           />
           <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -227,9 +223,7 @@ export function SessionExerciseCard({
         className={clsx(
           'relative z-40 flex w-full flex-1 items-center justify-center rounded-3xl px-4 py-8 text-3xl font-bold shadow-lg sm:min-h-[16rem] sm:text-4xl',
           showSteppers && workTimed ? 'min-h-[7rem]' : 'min-h-[12rem]',
-          durationCue === 'go'
-            ? 'bg-slate-950 text-white active:bg-slate-900'
-            : 'bg-emerald-500 text-white active:bg-emerald-600'
+          'bg-emerald-500 text-white active:bg-emerald-600'
         )}
         onClick={onCompleteSet}
       >

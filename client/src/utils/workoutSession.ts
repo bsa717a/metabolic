@@ -514,13 +514,13 @@ export function currentMeta(state: WorkoutSessionState): SessionExerciseMeta | n
 }
 
 /**
- * Sets that also have a duration finish themselves when the work countdown hits zero,
- * then rest. A no-set duration block stays on screen until Done.
+ * A work countdown finishes itself at zero (timed sets and a single duration block),
+ * then rest. Rep-only sets stay until Complete set.
  */
 export function shouldAutoCompleteTimedSet(state: WorkoutSessionState): boolean {
   if (state.phase !== 'exercise' || state.durationEndsAtMs == null) return false;
   const meta = currentMeta(state);
-  return Boolean(meta && hasSets(meta) && hasWorkDuration(meta));
+  return Boolean(meta && hasWorkDuration(meta));
 }
 
 export function upNextMeta(state: WorkoutSessionState): SessionExerciseMeta | null {
