@@ -278,6 +278,23 @@ describe('actualsForExercise', () => {
     });
   });
 
+  it('keeps reps entered on an earlier set when later sets are not adjusted', () => {
+    let s = startSession(
+      'd',
+      [ex('a', 'PLANNED', { sets: 2, reps: '10', durationSeconds: 30 })],
+      1000
+    );
+    s = sessionReducer(s, { type: 'ADJUST_ACTUALS', patch: { reps: 11 }, nowMs: 1500 });
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 1000 + 5_000 });
+    expect(s.perExercise.a.actualReps).toBeUndefined();
+    expect(s.perExercise.a.enteredReps).toBe(11);
+    s = sessionReducer(s, { type: 'SKIP_REST', nowMs: 20_000 });
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 20_000 + 30_000 });
+    expect(actualsForExercise(s, 'a').actualReps).toBe(11);
+    expect(actualsForExercise(s, 'a').actualSets).toBe(2);
+    expect(actualsForExercise(s, 'a').actualDurationSeconds).toBe(35);
+  });
+
   it('pauses and resumes a timed-set countdown without counting paused time', () => {
     const s0 = startSession('d', [ex('a', 'PLANNED', { sets: 2, durationSeconds: 30 })], 1000);
     const paused = sessionReducer(s0, { type: 'PAUSE', nowMs: 11_000 });

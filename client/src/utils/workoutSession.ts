@@ -46,6 +46,8 @@ export type SessionExerciseMeta = {
 export type PerExerciseState = {
   setsDone: number;
   actualReps?: number | null;
+  /** Last reps the stepper was set to. Survives the per-set reset so the log keeps what they entered. */
+  enteredReps?: number | null;
   actualWeight?: number | null;
   actualDurationSeconds?: number | null;
   actualDistance?: number | null;
@@ -301,7 +303,9 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
           ...state.perExercise,
           [currentId]: {
             ...per,
-            ...(action.patch.reps !== undefined ? { actualReps: action.patch.reps } : {}),
+            ...(action.patch.reps !== undefined
+              ? { actualReps: action.patch.reps, enteredReps: action.patch.reps }
+              : {}),
             ...(action.patch.weight !== undefined ? { actualWeight: action.patch.weight } : {}),
             ...(action.patch.durationSeconds !== undefined
               ? { actualDurationSeconds: action.patch.durationSeconds }
@@ -568,7 +572,7 @@ export function actualsForExercise(state: WorkoutSessionState, id: string) {
     };
   }
   return {
-    actualReps: per.actualReps ?? undefined,
+    actualReps: per.actualReps ?? per.enteredReps ?? undefined,
     actualWeight: per.actualWeight ?? undefined,
     actualDurationSeconds: per.actualDurationSeconds ?? undefined,
     actualSets: per.setsDone || undefined
