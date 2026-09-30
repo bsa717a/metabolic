@@ -54,9 +54,14 @@ describe('formatPlan', () => {
     expect(formatPlan({ sets: 4, reps: null })).toBe('4 sets × — reps');
   });
 
-  it('prefers sets over duration/distance/weight', () => {
+  it('shows duration with sets, and reps inside the time cap', () => {
+    expect(formatPlan({ sets: 3, durationSeconds: 30 })).toBe('3 sets × 30s');
+    expect(formatPlan({ sets: 3, reps: '10', durationSeconds: 30 })).toBe('3 sets × 10 reps in 30s');
+    expect(formatPlan({ sets: 3, reps: '15/12/10', durationSeconds: 30, weight: 25 })).toBe(
+      '3 sets × 15/12/10 reps in 30s @ 25 lbs'
+    );
     expect(formatPlan({ sets: 2, reps: '8', durationSeconds: 1800, distance: 3, weight: 10 })).toBe(
-      '2 sets × 8 reps @ 10 lbs'
+      '2 sets × 8 reps in 30 min @ 10 lbs'
     );
   });
 
@@ -81,6 +86,12 @@ describe('formatPlan', () => {
 describe('formatPlanShort', () => {
   it('uses compact set notation', () => {
     expect(formatPlanShort({ sets: 3, reps: '10', weight: 25 })).toBe('3×10 @ 25 lbs');
+  });
+
+  it('keeps duration in the compact label', () => {
+    expect(formatPlanShort({ sets: 3, durationSeconds: 30 })).toBe('3×30s');
+    expect(formatPlanShort({ sets: 3, reps: '10', durationSeconds: 30 })).toBe('3×10 in 30s');
+    expect(formatPlanShort({ sets: 3, reps: '15/12/10', durationSeconds: 30 })).toBe('3×15/12/10 in 30s');
   });
 
   it('falls back to em dash', () => {
