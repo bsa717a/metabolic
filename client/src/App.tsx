@@ -58,6 +58,7 @@ import { PricingPage } from './pages/PricingPage';
 import { UpgradePage } from './pages/UpgradePage';
 import { StorePage } from './pages/StorePage';
 import { JoinCoachPage } from './pages/JoinCoachPage';
+import { RestartOnboardingPage } from './pages/RestartOnboardingPage';
 import { isAdminRole, isCoachRole } from './utils/roles';
 import { AUTH_ACTION_PATH } from './utils/authAction';
 import { isEmailVerificationRequired } from './utils/emailVerification';
@@ -372,6 +373,25 @@ export default function App() {
                 void handleSetupComplete();
               }}
             />
+          }
+        />
+        <Route
+          path="/restart-onboarding"
+          element={
+            authChecked && firebaseUser && emailVerified ? (
+              <RestartOnboardingPage
+                user={appUser}
+                onComplete={() => {
+                  void refreshAppUser();
+                }}
+              />
+            ) : authChecked && !firebaseUser ? (
+              <Navigate to="/login" replace />
+            ) : authChecked && !emailVerified ? (
+              <Navigate to="/verify-email" replace />
+            ) : (
+              <LoadingScreen />
+            )
           }
         />
         <Route
