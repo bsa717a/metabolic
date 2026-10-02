@@ -150,15 +150,15 @@ export type PlanPeriodInfo = {
   /** Raw frozen period targets (no template fallback) — null when the period was never frozen. */
   frozenCalorieTarget: number | null;
   frozenProteinTarget: number | null;
-  /** Template description plus period notes, for the printable plan sheet. */
+  /** Nutrition template description, for the printable plan sheet. Period notes are internal provenance and are not included. */
   reminders: string | null;
   /** Snapshot date the period was sourced from, otherwise the period start. */
   sourcePlanDate: string | null;
 };
 
-function reminderText(description?: string | null, notes?: string | null) {
-  const parts = [description, notes].map((part) => part?.trim()).filter((part): part is string => Boolean(part));
-  return parts.length ? parts.join('\n\n') : null;
+function reminderText(description?: string | null) {
+  const text = description?.trim();
+  return text ? text : null;
 }
 
 /**
@@ -181,7 +181,6 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
         effectiveDate: true,
         calorieTarget: true,
         proteinTarget: true,
-        notes: true,
         sourceSnapshot: { select: { date: true } }
       }
     }),
@@ -242,7 +241,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     proteinTarget,
     frozenCalorieTarget: frozenCalories,
     frozenProteinTarget: frozenProtein,
-    reminders: reminderText(template?.description, active.notes),
+    reminders: reminderText(template?.description),
     sourcePlanDate
   };
 }
