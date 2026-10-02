@@ -239,6 +239,79 @@ describe('meal note API', () => {
     }
   });
 
+  it('returns a note on an inactive meal once another meal has activity', async (t) => {
+    if (!dbReady) return t.skip('postgres is not reachable');
+    const fixture = await createFixture();
+    const app = await appFor(fixture.client);
+    try {
+      const dinner = await prisma.meal.create({
+        data: {
+          dailyLogId: fixture.log.id,
+          userId: fixture.client.id,
+          mealNumber: 4,
+          name: 'Dinner',
+          status: 'PLANNED',
+          plannedCalories: 0
+        }
+      });
+      const untouched = await prisma.meal.create({
+        data: {
+          dailyLogId: fixture.log.id,
+          userId: fixture.client.id,
+          mealNumber: 5,
+          name: 'Evening',
+          status: 'PLANNED',
+          plannedCalories: 0
+        }
+      });
+      const saved = await app.inject({
+        method: 'PUT',
+        url: `/api/meals/${dinner.id}/note`,
+        payload: { note: 'Still need a plan' }
+      });
+      assert.equal(saved.statusCode, 200);
+
+      const meals = await getMealsForDate(fixture.client.id, '2026-10-02');
+      assert.equal(meals.find((meal) => meal.mealNumber === 4)?.clientNote, 'Still need a plan');
+      assert.equal(meals.some((meal) => meal.id === untouched.id), false);
+    } finally {
+      await app.close();
+      await fixture.cleanup();
+    }
+  });
+
+  it('keeps empty slots visible when a note is the only day activity', async (t) => {
+    if (!dbReady) return t.skip('postgres is not reachable');
+    const fixture = await createFixture();
+    const app = await appFor(fixture.client);
+    try {
+      await prisma.meal.update({
+        where: { id: fixture.breakfast.id },
+        data: { plannedCalories: 0, actualCalories: 0, status: 'PLANNED' }
+      });
+      await prisma.meal.update({
+        where: { id: fixture.snack.id },
+        data: { plannedCalories: 0, actualCalories: 0, status: 'PLANNED' }
+      });
+      const saved = await app.inject({
+        method: 'PUT',
+        url: `/api/meals/${fixture.breakfast.id}/note`,
+        payload: { note: 'Prep oats tonight' }
+      });
+      assert.equal(saved.statusCode, 200);
+
+      const meals = await getMealsForDate(fixture.client.id, '2026-10-02');
+      assert.deepEqual(
+        meals.map((meal) => meal.mealNumber),
+        [1, 2]
+      );
+      assert.equal(meals.find((meal) => meal.mealNumber === 1)?.clientNote, 'Prep oats tonight');
+    } finally {
+      await app.close();
+      await fixture.cleanup();
+    }
+  });
+
   it('keeps the note when the meal row is replaced', async (t) => {
     if (!dbReady) return t.skip('postgres is not reachable');
     const fixture = await createFixture();

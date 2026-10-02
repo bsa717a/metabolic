@@ -12,11 +12,17 @@ function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; 
   return meal.items.length > 0 || n(meal.plannedCalories) > 0 || n(meal.actualCalories) > 0 || meal.status !== MealStatus.PLANNED;
 }
 
-function mealsForNutritionDisplay<T extends { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }>(
+function hasClientNote(meal: { clientNote?: string | null }) {
+  return Boolean(meal.clientNote?.trim());
+}
+
+/** A note keeps an otherwise empty slot once the day has nutrition activity. It does not by itself hide the other empty slots. */
+function mealsForNutritionDisplay<T extends { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[]; clientNote?: string | null }>(
   meals: T[]
 ) {
   const activeMeals = meals.filter(hasNutritionActivity);
-  return activeMeals.length ? activeMeals : meals;
+  if (!activeMeals.length) return meals;
+  return meals.filter((meal) => hasNutritionActivity(meal) || hasClientNote(meal));
 }
 
 function matchesPlannedActual(
@@ -41,7 +47,7 @@ export async function getMealsForDate(userId: string, date: string) {
     include: { items: true },
     orderBy: { mealNumber: 'asc' }
   });
-  return withClientNotes(userId, day, mealsForNutritionDisplay(dedupeMealsByNumber(meals)));
+  return mealsForNutritionDisplay(await withClientNotes(userId, day, dedupeMealsByNumber(meals)));
 }
 
 async function resolvePlannedTime(mealNumber: number, plannedTime?: string | null) {
@@ -62,8 +68,9 @@ export async function addBlankMeal(userId: string, date: string, name = 'New mea
     orderBy: { mealNumber: 'asc' }
   });
 
-  const activeMeals = meals.filter(hasNutritionActivity);
-  const hiddenEmpty = meals.filter((meal) => !hasNutritionActivity(meal));
+  const annotated = await withClientNotes(userId, log.date, meals);
+  const activeMeals = annotated.filter(hasNutritionActivity);
+  const hiddenEmpty = annotated.filter((meal) => !hasNutritionActivity(meal) && !hasClientNote(meal));
 
   if (activeMeals.length > 0 && hiddenEmpty.length > 0) {
     const meal = hiddenEmpty[0];
