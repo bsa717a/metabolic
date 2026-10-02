@@ -150,7 +150,16 @@ export type PlanPeriodInfo = {
   /** Raw frozen period targets (no template fallback) — null when the period was never frozen. */
   frozenCalorieTarget: number | null;
   frozenProteinTarget: number | null;
+  /** Template description plus period notes, for the printable plan sheet. */
+  reminders: string | null;
+  /** Snapshot date the period was sourced from, otherwise the period start. */
+  sourcePlanDate: string | null;
 };
+
+function reminderText(description?: string | null, notes?: string | null) {
+  const parts = [description, notes].map((part) => part?.trim()).filter((part): part is string => Boolean(part));
+  return parts.length ? parts.join('\n\n') : null;
+}
 
 /**
  * Workstream E: describe the plan week a date falls in. Week number is DERIVED —
@@ -167,7 +176,14 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     prisma.planPeriod.findMany({
       where: { programId: program.id },
       orderBy: { effectiveDate: 'asc' },
-      select: { id: true, effectiveDate: true, calorieTarget: true, proteinTarget: true }
+      select: {
+        id: true,
+        effectiveDate: true,
+        calorieTarget: true,
+        proteinTarget: true,
+        notes: true,
+        sourceSnapshot: { select: { date: true } }
+      }
     }),
     resolvePlanForDate(program, day),
     resolveTargets(userId)
@@ -176,7 +192,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
   const template = plan.nutritionTemplateId
     ? await prisma.nutritionPlanTemplate.findUnique({
         where: { id: plan.nutritionTemplateId },
-        select: { name: true, calorieTarget: true, proteinTarget: true }
+        select: { name: true, calorieTarget: true, proteinTarget: true, description: true }
       })
     : null;
 
@@ -206,19 +222,27 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
       calorieTarget,
       proteinTarget,
       frozenCalorieTarget: frozenCalories,
-      frozenProteinTarget: frozenProtein
+      frozenProteinTarget: frozenProtein,
+      reminders: reminderText(template?.description),
+      sourcePlanDate: null
     };
   }
 
+  const active = periods[activeIndex];
   const next = periods[activeIndex + 1];
+  const sourcePlanDate = active.sourceSnapshot?.date
+    ? toDateKey(active.sourceSnapshot.date)
+    : toDateKey(active.effectiveDate);
   return {
     weekNumber: activeIndex + 1,
-    effectiveDate: toDateKey(periods[activeIndex].effectiveDate),
+    effectiveDate: toDateKey(active.effectiveDate),
     endDate: next ? toDateKey(new Date(next.effectiveDate.getTime() - DAY_MS)) : null,
     templateName: template?.name ?? null,
     calorieTarget,
     proteinTarget,
     frozenCalorieTarget: frozenCalories,
-    frozenProteinTarget: frozenProtein
+    frozenProteinTarget: frozenProtein,
+    reminders: reminderText(template?.description, active.notes),
+    sourcePlanDate
   };
 }

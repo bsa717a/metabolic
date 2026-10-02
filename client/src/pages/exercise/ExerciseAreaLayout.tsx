@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { api, getWeekDates, startOfWeek, todayKey } from '../../services/api';
+import { PlanPrintButton } from '../../components/export/PlanPrintButton';
+import type { PlanPrintOrientation } from '../../utils/planPrintOrientation';
+import { printExercisePlan, printExerciseWeekPlan } from '../../utils/printExercisePlan';
 import type { ExerciseRoutine } from '../../types';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
-import { type DayExercises, fetchExercisesForDates } from '../../utils/planExportData';
+import { type DayExercises, fetchExercisesForDates, formatWeekExportLabel, weekHasExercises } from '../../utils/planExportData';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../../components/exercise/ExercisePlanUndoToast';
 import type { ExerciseAreaContext } from './exerciseAreaContext';
@@ -27,6 +30,7 @@ export function ExerciseAreaLayout() {
   const [routine, setRoutine] = useState<ExerciseRoutine | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   const weekStart = startOfWeek(selectedDate);
@@ -131,12 +135,36 @@ export function ExerciseAreaLayout() {
 
   const currentSearch = searchParams.toString();
 
+  function handlePrint(orientation: PlanPrintOrientation) {
+    setPrintError(null);
+    try {
+      if (orientation === 'vertical') {
+        if (!exercisesForSelectedDate.length) {
+          setPrintError('No exercises planned for this day.');
+          return;
+        }
+        printExercisePlan(exercisesForSelectedDate, selectedDate);
+        return;
+      }
+      if (!weekHasExercises(weekDays)) {
+        setPrintError('No exercises planned for this week.');
+        return;
+      }
+      printExerciseWeekPlan(weekDays, formatWeekExportLabel(weekStart));
+    } catch (error) {
+      setPrintError(error instanceof Error ? error.message : 'Could not open print view.');
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
-          <h1 className="text-3xl font-bold text-app-text">Exercise</h1>
-          <p className="text-app-text-muted sm:pt-1">Start today&apos;s workout, plan your week, manage routines.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
+            <h1 className="text-3xl font-bold text-app-text">Exercise</h1>
+            <p className="text-app-text-muted sm:pt-1">Start today&apos;s workout, plan your week, manage routines.</p>
+          </div>
+          <PlanPrintButton onPrint={handlePrint} />
         </div>
         <nav
           aria-label="Exercise sections"
@@ -164,6 +192,9 @@ export function ExerciseAreaLayout() {
 
       {loadError && (
         <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>
+      )}
+      {printError && (
+        <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{printError}</div>
       )}
 
       <Outlet context={context} />
