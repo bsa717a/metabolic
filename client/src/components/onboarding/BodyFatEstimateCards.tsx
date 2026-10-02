@@ -28,10 +28,22 @@ const FEMALE_BANDS: BodyFatBand[] = [
 ];
 
 function SilhouetteIcon({ symbolId, className }: { symbolId: string; className?: string }) {
+  const src = `/body-fat-estimate/${symbolId}.webp`;
   return (
-    <svg className={className} aria-hidden="true">
-      <use href={`/body-fat-estimate/silhouettes.svg#${symbolId}`} />
-    </svg>
+    <span
+      aria-hidden="true"
+      className={clsx('inline-block shrink-0 bg-current', className)}
+      style={{
+        maskImage: `url("${src}")`,
+        WebkitMaskImage: `url("${src}")`,
+        maskRepeat: 'no-repeat',
+        WebkitMaskRepeat: 'no-repeat',
+        maskPosition: 'center',
+        WebkitMaskPosition: 'center',
+        maskSize: 'contain',
+        WebkitMaskSize: 'contain'
+      }}
+    />
   );
 }
 
