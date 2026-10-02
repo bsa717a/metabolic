@@ -14,7 +14,7 @@ import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { MealPrepDrawer } from '../components/nutrition/MealPrepDrawer';
 import { NutritionTargetsDrawer } from '../components/nutrition/NutritionTargetsDrawer';
 import { PlanActionsMenu } from '../components/nutrition/PlanActionsMenu';
-import { PlanPrintButton } from '../components/export/PlanPrintButton';
+import { NutritionPrintButton, type NutritionPrintChoice } from '../components/export/PlanPrintButton';
 import { DailyMealBuilderModal } from '../components/nutrition/DailyMealBuilderModal';
 import { PlanPeriodBanner } from '../components/nutrition/PlanPeriodBanner';
 import {
@@ -27,7 +27,6 @@ import {
 import { useEntitlements } from '../context/EntitlementsContext';
 import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
 import { printNutritionHorizontalWeek, printNutritionPlan, printNutritionWeekPlan } from '../utils/printNutritionPlan';
-import type { PlanPrintOrientation } from '../utils/planPrintOrientation';
 import type { HydrationSummary } from '../types/hydration';
 import { shareNutritionDayPlan } from '../utils/nutritionPlanShare';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -180,8 +179,12 @@ export function NutritionPage() {
     return `${label}: ${Math.round(calories)} kcal · ${Math.round(protein)}g protein · ${Math.round(carbs)}g carbs · ${Math.round(fat)}g fat`;
   }
 
-  async function handleOrientedPrint(orientation: PlanPrintOrientation) {
-    if (orientation === 'vertical') {
+  async function handleNutritionPrint(choice: NutritionPrintChoice) {
+    if (choice.orientation === 'vertical') {
+      if (choice.range === 'weekly') {
+        await handlePrintWeek();
+        return;
+      }
       handlePrintDay();
       return;
     }
@@ -301,7 +304,7 @@ export function NutritionPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">Nutrition</h1>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <PlanPrintButton busy={printing !== null || sharingDay} onPrint={(orientation) => void handleOrientedPrint(orientation)} />
+          <NutritionPrintButton busy={printing !== null || sharingDay} onPrint={(choice) => void handleNutritionPrint(choice)} />
           <PlanActionsMenu
             onCopyDay={() => void handleCopyDay()}
             copyDayDisabled={false}
