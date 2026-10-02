@@ -14,6 +14,7 @@ import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { MealPrepDrawer } from '../components/nutrition/MealPrepDrawer';
 import { NutritionTargetsDrawer } from '../components/nutrition/NutritionTargetsDrawer';
 import { PlanActionsMenu } from '../components/nutrition/PlanActionsMenu';
+import { NutritionPrintButton, type NutritionPrintChoice } from '../components/export/PlanPrintButton';
 import { DailyMealBuilderModal } from '../components/nutrition/DailyMealBuilderModal';
 import { PlanPeriodBanner } from '../components/nutrition/PlanPeriodBanner';
 import {
@@ -25,7 +26,8 @@ import {
 } from '../utils/planExportData';
 import { useEntitlements } from '../context/EntitlementsContext';
 import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
-import { printNutritionPlan, printNutritionWeekPlan } from '../utils/printNutritionPlan';
+import { printNutritionHorizontalWeek, printNutritionPlan, printNutritionWeekPlan } from '../utils/printNutritionPlan';
+import type { HydrationSummary } from '../types/hydration';
 import { shareNutritionDayPlan } from '../utils/nutritionPlanShare';
 import { useWakeLock } from '../hooks/useWakeLock';
 
@@ -177,6 +179,46 @@ export function NutritionPage() {
     return `${label}: ${Math.round(calories)} kcal · ${Math.round(protein)}g protein · ${Math.round(carbs)}g carbs · ${Math.round(fat)}g fat`;
   }
 
+  async function handleNutritionPrint(choice: NutritionPrintChoice) {
+    if (choice.orientation === 'vertical') {
+      if (choice.range === 'weekly') {
+        await handlePrintWeek();
+        return;
+      }
+      handlePrintDay();
+      return;
+    }
+
+    setPrintError(null);
+    setPrinting('week');
+    try {
+      const week = getWeekRange(selectedDate);
+      const days = await fetchMealsForDates(week.dates);
+      if (!weekHasMeals(days)) {
+        setPrintError('No meals planned for this week.');
+        return;
+      }
+      const [profile, hydration] = await Promise.all([
+        api<{ user: { firstName?: string | null } }>('/api/me').catch(() => null),
+        api<HydrationSummary>(`/api/hydration?date=${encodeURIComponent(selectedDate)}`).catch(() => null)
+      ]);
+      printNutritionHorizontalWeek({
+        days,
+        weekStart: week.startDate,
+        selectedDate,
+        clientName: profile?.user.firstName ?? null,
+        weekNumber: planPeriod?.weekNumber ?? null,
+        waterGoalOz: hydration?.goalOz ?? hydration?.targetOz ?? null,
+        reminders: planPeriod?.reminders ?? null,
+        sourcePlanDate: planPeriod?.sourcePlanDate ?? planPeriod?.effectiveDate ?? null
+      });
+    } catch (error) {
+      setPrintError(error instanceof Error ? error.message : 'Could not open print view.');
+    } finally {
+      setPrinting(null);
+    }
+  }
+
   function handlePrintDay() {
     setPrintError(null);
     if (!currentDayMeals.length) {
@@ -259,30 +301,33 @@ export function NutritionPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">Nutrition</h1>
-        <PlanActionsMenu
-          onCopyDay={() => void handleCopyDay()}
-          copyDayDisabled={false}
-          copyingDay={copyingDay}
-          onGroceryList={() =>
-            canAccess('meal_planning') ? setShoppingListOpen(true) : setUpgradePrompt('meal_planning')
-          }
-          onMealPrep={() =>
-            canAccess('meal_planning') ? setMealPrepOpen(true) : setUpgradePrompt('meal_planning')
-          }
-          onAdjustTargets={() =>
-            canAccess('personalized_targets') ? setTargetsOpen(true) : setUpgradePrompt('personalized_targets')
-          }
-          onMealBuilder={() =>
-            canAccess('meal_planning') ? setMealBuilderOpen(true) : setUpgradePrompt('meal_planning')
-          }
-          printing={printing}
-          sharingDay={sharingDay}
-          onShareDay={handleShareDay}
-          onPrintDay={handlePrintDay}
-          onPrintWeek={handlePrintWeek}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <NutritionPrintButton busy={printing !== null || sharingDay} onPrint={(choice) => void handleNutritionPrint(choice)} />
+          <PlanActionsMenu
+            onCopyDay={() => void handleCopyDay()}
+            copyDayDisabled={false}
+            copyingDay={copyingDay}
+            onGroceryList={() =>
+              canAccess('meal_planning') ? setShoppingListOpen(true) : setUpgradePrompt('meal_planning')
+            }
+            onMealPrep={() =>
+              canAccess('meal_planning') ? setMealPrepOpen(true) : setUpgradePrompt('meal_planning')
+            }
+            onAdjustTargets={() =>
+              canAccess('personalized_targets') ? setTargetsOpen(true) : setUpgradePrompt('personalized_targets')
+            }
+            onMealBuilder={() =>
+              canAccess('meal_planning') ? setMealBuilderOpen(true) : setUpgradePrompt('meal_planning')
+            }
+            printing={printing}
+            sharingDay={sharingDay}
+            onShareDay={handleShareDay}
+            onPrintDay={handlePrintDay}
+            onPrintWeek={handlePrintWeek}
+          />
+        </div>
       </div>
 
       {(planPeriod?.weekNumber != null || planPeriod?.calorieTarget != null) && (
