@@ -112,6 +112,28 @@ enum ExerciseStatus {
   SKIPPED
   MISSED
 }
+
+enum ExercisePageMode {
+  MANUAL
+  AUTOMATIC
+}
+
+enum ExerciseAutoLocation {
+  HOME
+  GYM
+}
+
+enum ExerciseAutoLevel {
+  BEGINNER
+  INTERMEDIATE
+  HARD
+}
+
+enum ExerciseAutoCheckIn {
+  NONE
+  BLOCK_COMPLETE
+  MISSED_WEEK
+}
 enum Difficulty {
   EASY
   NORMAL
@@ -317,6 +339,8 @@ model User {
   guidedJourneyEvents GuidedJourneyEvent[]
   pushDevices PushDevice[]
   appleTransactions AppleProcessedTransaction[]
+  exerciseAutoSetting UserExerciseAutoSetting?
+  exerciseAutoProgress UserExerciseAutoProgress[]
 }
 
 model AppleProcessedTransaction {
@@ -977,6 +1001,54 @@ model ExercisePlan {
   createdBy User? @relation("ExercisePlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
   days ExerciseTemplate[]
   routines ExerciseRoutine[]
+  autoTrackBlocks ExerciseAutoTrackBlock[]
+}
+
+/// Per-user Exercise page mode. Missing row means Manual (today's page).
+model UserExerciseAutoSetting {
+  userId String @id
+  mode ExercisePageMode @default(MANUAL)
+  location ExerciseAutoLocation @default(GYM)
+  level ExerciseAutoLevel @default(BEGINNER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Automatic-mode place in a track. One row per location × level so switching radios keeps progress.
+model UserExerciseAutoProgress {
+  id String @id @default(cuid())
+  userId String
+  location ExerciseAutoLocation
+  level ExerciseAutoLevel
+  blockIndex Int @default(0)
+  weekIndex Int @default(0)
+  dayIndex Int @default(0)
+  weekStartedOn DateTime? @db.Date
+  dayCompletedOn DateTime? @db.Date
+  pendingCheckIn ExerciseAutoCheckIn @default(NONE)
+  appliedOn DateTime? @db.Date
+  appliedTemplateId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, location, level])
+}
+
+/// Tags an existing exercise plan into an automatic track. Does not copy exercises.
+model ExerciseAutoTrackBlock {
+  id String @id @default(cuid())
+  location ExerciseAutoLocation
+  level ExerciseAutoLevel
+  blockIndex Int
+  planId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  plan ExercisePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([location, level, blockIndex])
+  @@index([planId])
 }
 
 model ExerciseTemplate {

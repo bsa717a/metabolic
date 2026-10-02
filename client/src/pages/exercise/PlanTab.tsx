@@ -11,10 +11,24 @@ import {
 } from '../../utils/planExportData';
 import { printExercisePlan, printExerciseWeekPlan } from '../../utils/printExercisePlan';
 import { routineRestDatesForWeek } from '../../utils/exerciseRoutineDisplay';
+import { AutomaticExercise } from '../../components/exercise/automatic/AutomaticExercise';
 import { useExerciseArea } from './exerciseAreaContext';
 
 export function PlanTab() {
-  const { selectedDate, weekDates, weekDays, routine } = useExerciseArea();
+  const {
+    selectedDate,
+    weekDates,
+    weekDays,
+    routine,
+    exerciseMode,
+    exerciseAuto,
+    exerciseAutoSaving,
+    exerciseAutoError,
+    setExerciseAutoLocation,
+    setExerciseAutoLevel,
+    answerExerciseCheckIn,
+    startAutomaticWorkout
+  } = useExerciseArea();
   const navigate = useNavigate();
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
@@ -58,6 +72,23 @@ export function PlanTab() {
     } finally {
       setPrinting(null);
     }
+  }
+
+  if (exerciseMode === 'AUTOMATIC') {
+    return (
+      <AutomaticExercise
+        location={exerciseAuto?.location ?? 'GYM'}
+        level={exerciseAuto?.level ?? 'BEGINNER'}
+        track={exerciseAuto?.track ?? null}
+        showToday={false}
+        busy={exerciseAutoSaving}
+        error={exerciseAutoError}
+        onLocation={setExerciseAutoLocation}
+        onLevel={setExerciseAutoLevel}
+        onCheckIn={answerExerciseCheckIn}
+        onStart={startAutomaticWorkout}
+      />
+    );
   }
 
   return (

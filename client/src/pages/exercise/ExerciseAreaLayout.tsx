@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { api, getWeekDates, startOfWeek, todayKey } from '../../services/api';
+import { api, getWeekDates, startOfWeek, todayDateParam, todayKey } from '../../services/api';
 import type { ExerciseRoutine } from '../../types';
+import type {
+  ExerciseAutoChoice,
+  ExerciseAutoLevel,
+  ExerciseAutoLocation,
+  ExerciseAutoMode,
+  ExerciseAutoState
+} from '../../types/exerciseAuto';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
 import { type DayExercises, fetchExercisesForDates } from '../../utils/planExportData';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../../components/exercise/ExercisePlanUndoToast';
+import { ExerciseModeSwitch } from '../../components/exercise/automatic/AutomaticExercise';
 import type { ExerciseAreaContext } from './exerciseAreaContext';
 
 function dateFromParams(params: URLSearchParams) {
@@ -22,7 +30,12 @@ const TABS = [
 
 export function ExerciseAreaLayout() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
+  const [exerciseAuto, setExerciseAuto] = useState<ExerciseAutoState | null>(null);
+  const [exerciseAutoSaving, setExerciseAutoSaving] = useState(false);
+  const [exerciseAutoError, setExerciseAutoError] = useState<string | null>(null);
   const [weekDays, setWeekDays] = useState<DayExercises[]>([]);
   const [routine, setRoutine] = useState<ExerciseRoutine | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -112,6 +125,103 @@ export function ExerciseAreaLayout() {
     [reloadWeek, registerUndo]
   );
 
+  const exerciseMode: ExerciseAutoMode = exerciseAuto?.mode ?? 'MANUAL';
+
+  const loadExerciseAuto = useCallback(async () => {
+    try {
+      const next = await api<ExerciseAutoState>(`/api/exercise-auto?${todayDateParam()}`);
+      setExerciseAuto(next);
+      setExerciseAutoError(null);
+    } catch (error) {
+      setExerciseAutoError(error instanceof Error ? error.message : 'Could not load exercise mode.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadExerciseAuto();
+  }, [loadExerciseAuto]);
+
+  const saveExerciseAuto = useCallback(async (patch: Partial<Pick<ExerciseAutoState, 'mode' | 'location' | 'level'>>) => {
+    setExerciseAutoSaving(true);
+    setExerciseAutoError(null);
+    try {
+      const next = await api<ExerciseAutoState>(`/api/exercise-auto?${todayDateParam()}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch)
+      });
+      setExerciseAuto(next);
+    } catch (error) {
+      setExerciseAutoError(error instanceof Error ? error.message : 'Could not save exercise mode.');
+      await loadExerciseAuto();
+    } finally {
+      setExerciseAutoSaving(false);
+    }
+  }, [loadExerciseAuto]);
+
+  const setExerciseMode = useCallback(
+    (mode: ExerciseAutoMode) => {
+      void saveExerciseAuto({ mode });
+    },
+    [saveExerciseAuto]
+  );
+
+  const setExerciseAutoLocation = useCallback(
+    (locationChoice: ExerciseAutoLocation) => {
+      void saveExerciseAuto({ location: locationChoice });
+    },
+    [saveExerciseAuto]
+  );
+
+  const setExerciseAutoLevel = useCallback(
+    (level: ExerciseAutoLevel) => {
+      void saveExerciseAuto({ level });
+    },
+    [saveExerciseAuto]
+  );
+
+  const answerExerciseCheckIn = useCallback(
+    (choice: ExerciseAutoChoice) => {
+      void (async () => {
+        setExerciseAutoSaving(true);
+        setExerciseAutoError(null);
+        try {
+          const next = await api<ExerciseAutoState>(`/api/exercise-auto/check-in?${todayDateParam()}`, {
+            method: 'POST',
+            body: JSON.stringify({ choice })
+          });
+          setExerciseAuto(next);
+        } catch (error) {
+          setExerciseAutoError(error instanceof Error ? error.message : 'Could not save that choice.');
+        } finally {
+          setExerciseAutoSaving(false);
+        }
+      })();
+    },
+    []
+  );
+
+  const startAutomaticWorkout = useCallback(() => {
+    void (async () => {
+      setExerciseAutoSaving(true);
+      setExerciseAutoError(null);
+      try {
+        const result = await api<{ date: string }>(`/api/exercise-auto/start?${todayDateParam()}`, {
+          method: 'POST'
+        });
+        navigate(`/exercise/session?date=${result.date}`);
+      } catch (error) {
+        setExerciseAutoError(error instanceof Error ? error.message : 'Could not start the workout.');
+        setExerciseAutoSaving(false);
+      }
+    })();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (exerciseMode === 'AUTOMATIC' && location.pathname.startsWith('/exercise/manage')) {
+      navigate({ pathname: '/exercise', search: searchParams.toString() }, { replace: true });
+    }
+  }, [exerciseMode, location.pathname, navigate, searchParams]);
+
   const context: ExerciseAreaContext = {
     selectedDate,
     selectDate,
@@ -126,23 +236,38 @@ export function ExerciseAreaLayout() {
     registerUndo,
     loadError,
     actionError,
-    setActionError
+    setActionError,
+    exerciseMode,
+    exerciseAuto,
+    exerciseAutoSaving,
+    exerciseAutoError,
+    setExerciseMode,
+    setExerciseAutoLocation,
+    setExerciseAutoLevel,
+    answerExerciseCheckIn,
+    startAutomaticWorkout
   };
 
   const currentSearch = searchParams.toString();
+  const visibleTabs = exerciseMode === 'AUTOMATIC' ? TABS.filter((tab) => tab.label !== 'Manage') : TABS;
+  const subtitle =
+    exerciseMode === 'AUTOMATIC'
+      ? "We'll build your weeks. You just show up."
+      : "Start today's workout, plan your week, manage routines.";
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
           <h1 className="text-3xl font-bold text-app-text">Exercise</h1>
-          <p className="text-app-text-muted sm:pt-1">Start today&apos;s workout, plan your week, manage routines.</p>
+          <p className="text-app-text-muted sm:pt-1">{subtitle}</p>
         </div>
+        <ExerciseModeSwitch mode={exerciseMode} disabled={exerciseAutoSaving} onChange={setExerciseMode} />
         <nav
           aria-label="Exercise sections"
           className="inline-flex w-fit max-w-full rounded-2xl border border-app-border bg-app-surface p-1 shadow-sm"
         >
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <NavLink
               key={tab.to}
               to={{ pathname: tab.to, search: currentSearch }}
