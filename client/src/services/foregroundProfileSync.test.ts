@@ -9,7 +9,7 @@ describe('applyForegroundProfileSync', () => {
     const first = applyForegroundProfileSync({
       generation: ++generation,
       isCurrent: (value) => value === generation,
-      loadMe: () => new Promise((resolve) => setTimeout(() => resolve('me-old'), 30)),
+      loadMe: () => new Promise<string>((resolve) => setTimeout(() => resolve('me-old'), 30)),
       syncApple: () => Promise.resolve('apple-old'),
       apply: (user) => applied.push(user)
     });
