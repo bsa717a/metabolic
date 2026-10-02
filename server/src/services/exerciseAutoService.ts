@@ -10,7 +10,10 @@ import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey } from '../utils/dates.js';
 import { getActiveProgram } from './exerciseService.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
-import { applyTemplateExercisesToDate } from './exerciseTemplateApply.js';
+import {
+  applyTemplateExercisesToDate,
+  type TemplateItemPrescriptionOverride
+} from './exerciseTemplateApply.js';
 import {
   applyCheckIn,
   buildAutoView,
@@ -172,6 +175,18 @@ async function writeProgress(userId: string, location: AutoLocation, level: Auto
   });
 }
 
+function exerciseFinished(status: ExerciseStatus) {
+  return status === ExerciseStatus.DONE || status === ExerciseStatus.SKIPPED;
+}
+
+async function scheduledDayFinished(userId: string, date: string) {
+  const items = await prisma.scheduledExercise.findMany({
+    where: { userId, scheduledDate: parseDateParam(date) },
+    select: { status: true }
+  });
+  return items.length > 0 && items.every((item) => exerciseFinished(item.status));
+}
+
 async function todayWorkoutComplete(
   userId: string,
   today: string,
@@ -179,11 +194,28 @@ async function todayWorkoutComplete(
   templateId: string | undefined
 ) {
   if (!templateId || progress.appliedOn !== today || progress.appliedTemplateId !== templateId) return false;
-  const items = await prisma.scheduledExercise.findMany({
-    where: { userId, scheduledDate: parseDateParam(today) },
-    select: { status: true }
-  });
-  return items.length > 0 && items.every((item) => item.status === ExerciseStatus.DONE);
+  return scheduledDayFinished(userId, today);
+}
+
+async function creditFinishedAppliedDay(
+  userId: string,
+  today: string,
+  progress: AutoProgress,
+  templateId: string | undefined
+): Promise<AutoProgress> {
+  const appliedOn = progress.appliedOn;
+  if (
+    progress.pendingCheckIn !== 'NONE' ||
+    progress.dayCompletedOn != null ||
+    !appliedOn ||
+    appliedOn >= today ||
+    !templateId ||
+    progress.appliedTemplateId !== templateId
+  ) {
+    return progress;
+  }
+  const finished = await scheduledDayFinished(userId, appliedOn);
+  return finished ? { ...progress, dayCompletedOn: appliedOn } : progress;
 }
 
 async function resolveTrack(userId: string, location: AutoLocation, level: AutoLevel, today: string) {
@@ -191,9 +223,10 @@ async function resolveTrack(userId: string, location: AutoLocation, level: AutoL
   const catalog = await syncAutoTracks(plans);
   const blocks = catalog.find((track) => track.location === location && track.level === level)?.blocks ?? [];
   const existing = await readProgress(userId, location, level);
-  const stored = existing ?? initialProgress(today);
-  const block = blocks[Math.min(stored.blockIndex, Math.max(blocks.length - 1, 0))];
-  const day = block?.days[stored.dayIndex];
+  const baseline = existing ?? initialProgress(today);
+  const block = blocks[Math.min(baseline.blockIndex, Math.max(blocks.length - 1, 0))];
+  const day = block?.days[baseline.dayIndex];
+  const stored = await creditFinishedAppliedDay(userId, today, baseline, day?.id);
   const complete = await todayWorkoutComplete(userId, today, stored, day?.id);
   const built = buildAutoView({
     blocks,
@@ -201,7 +234,7 @@ async function resolveTrack(userId: string, location: AutoLocation, level: AutoL
     today,
     todayWorkoutComplete: complete
   });
-  if (!existing || !progressEquals(stored, built.progress)) {
+  if (!existing || !progressEquals(baseline, built.progress)) {
     await writeProgress(userId, location, level, built.progress);
   }
   return { blocks, progress: built.progress, track: built.track };
@@ -289,10 +322,20 @@ export async function startExerciseAutoWorkout(userId: string, today: string) {
   const day = plans.flatMap((plan) => plan.days).find((entry) => entry.id === todayPlan.templateId);
   if (!day) throw new ExerciseAutoError('That workout is no longer on a plan');
   const scheme = state.track.scheme;
-  const overrides = new Map(
+  const overrides = new Map<string, TemplateItemPrescriptionOverride>(
     day.items
       .filter((item) => item.reps != null && item.reps.trim() !== '')
-      .map((item) => [item.id, { reps: scheme }] as const)
+      .map((item) => [
+        item.id,
+        {
+          sets: item.sets,
+          reps: scheme,
+          speed: item.speed,
+          durationSeconds: item.durationSeconds,
+          distance: item.distance,
+          weight: item.weight
+        }
+      ])
   );
 
   await prisma.$transaction(async (tx) => {
