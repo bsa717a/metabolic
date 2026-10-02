@@ -7,6 +7,18 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.34.0](https://github.com/bsa717a/metabolic/compare/v0.33.0...v0.34.0) (2026-10-02)
+
+
+### Features
+
+* client notes on each meal (Piper [#5](https://github.com/bsa717a/metabolic/issues/5)) ([#308](https://github.com/bsa717a/metabolic/issues/308)) ([4e23ded](https://github.com/bsa717a/metabolic/commit/4e23ded8772cda37efe54b61e8a6f89696aed31c))
+
+
+### Bug Fixes
+
+* **client:** unblock deploy build (test type error) ([#311](https://github.com/bsa717a/metabolic/issues/311)) ([7082a0a](https://github.com/bsa717a/metabolic/commit/7082a0a457df3319440684a2e955e218fef1729f))
+
 ## [0.33.0](https://github.com/bsa717a/metabolic/compare/v0.32.1...v0.33.0) (2026-09-22)
 
 
