@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
-import type { Meal, PlanPeriodInfo } from '../types';
+import type { AppUser, Meal, PlanPeriodInfo } from '../types';
 import { Button } from '../components/ui/Button';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
@@ -14,6 +14,8 @@ import { ShoppingListDrawer } from '../components/nutrition/ShoppingListDrawer';
 import { MealPrepDrawer } from '../components/nutrition/MealPrepDrawer';
 import { NutritionTargetsDrawer } from '../components/nutrition/NutritionTargetsDrawer';
 import { PlanActionsMenu } from '../components/nutrition/PlanActionsMenu';
+import { DownloadPlanPdfButton } from '../components/nutrition/DownloadPlanPdfButton';
+import { MealPlanLayoutToggle } from '../components/nutrition/MealPlanLayoutToggle';
 import { DailyMealBuilderModal } from '../components/nutrition/DailyMealBuilderModal';
 import { PlanPeriodBanner } from '../components/nutrition/PlanPeriodBanner';
 import {
@@ -28,13 +30,24 @@ import { UpgradePrompt } from '../components/entitlements/UpgradePrompt';
 import { printNutritionPlan, printNutritionWeekPlan } from '../utils/printNutritionPlan';
 import { shareNutritionDayPlan } from '../utils/nutritionPlanShare';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useMealPlanLayout } from '../hooks/useMealPlanLayout';
+import { loadMasterPlanDocument } from '../utils/loadMasterPlanDocument';
+import { buildMasterPlanPdf } from '../utils/masterPlanPdf';
+import { masterPlanHasContent, masterPlanPdfFilename } from '../utils/masterPlanPdfModel';
+import { deliverPlanPdf } from '../utils/deliverPlanPdf';
 
 function dateFromParams(params: URLSearchParams) {
   const date = params.get('date');
   return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey();
 }
 
-export function NutritionPage() {
+export function NutritionPage({
+  user,
+  onUserUpdated
+}: {
+  user?: AppUser | null;
+  onUserUpdated?: (user: AppUser) => void;
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
   useWakeLock(true);
@@ -47,6 +60,8 @@ export function NutritionPage() {
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [mealBuilderOpen, setMealBuilderOpen] = useState(false);
   const [printing, setPrinting] = useState<'day' | 'week' | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const { layout, saving: savingLayout, error: layoutError, updateLayout } = useMealPlanLayout(user, onUserUpdated);
   const [sharingDay, setSharingDay] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   const [copyingDay, setCopyingDay] = useState(false);
@@ -207,6 +222,37 @@ export function NutritionPage() {
     }
   }
 
+  async function handleDownloadPlanPdf() {
+    setPrintError(null);
+    if (!user?.id) {
+      setPrintError('Sign in again to download your plan.');
+      return;
+    }
+    setPdfBusy(true);
+    try {
+      const clientName = `${user.firstName} ${user.lastName}`.trim();
+      const doc = await loadMasterPlanDocument({
+        userId: user.id,
+        clientName,
+        anchorDate: selectedDate,
+        layout
+      });
+      if (!masterPlanHasContent(doc)) {
+        setPrintError('No meals or exercises planned for this week.');
+        return;
+      }
+      const logoResponse = await fetch('/logo.png');
+      const logoPng = logoResponse.ok ? new Uint8Array(await logoResponse.arrayBuffer()) : null;
+      const bytes = await buildMasterPlanPdf(doc, { logoPng });
+      await deliverPlanPdf(bytes, masterPlanPdfFilename(clientName));
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      setPrintError(error instanceof Error ? error.message : 'Could not download the plan PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   async function handlePrintWeek() {
     setPrintError(null);
     setPrinting('week');
@@ -261,7 +307,10 @@ export function NutritionPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">Nutrition</h1>
-        <PlanActionsMenu
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <MealPlanLayoutToggle value={layout} disabled={savingLayout} onChange={(next) => void updateLayout(next)} />
+          <DownloadPlanPdfButton busy={pdfBusy} onClick={() => void handleDownloadPlanPdf()} />
+          <PlanActionsMenu
           onCopyDay={() => void handleCopyDay()}
           copyDayDisabled={false}
           copyingDay={copyingDay}
@@ -283,6 +332,7 @@ export function NutritionPage() {
           onPrintDay={handlePrintDay}
           onPrintWeek={handlePrintWeek}
         />
+        </div>
       </div>
 
       {(planPeriod?.weekNumber != null || planPeriod?.calorieTarget != null) && (
@@ -301,6 +351,7 @@ export function NutritionPage() {
         }
       />
 
+      {layoutError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{layoutError}</div>}
       {printError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError}</div>}
       {loadError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>}
 
@@ -309,6 +360,7 @@ export function NutritionPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0 space-y-4">
               <MealPlanner
+                layout={layout}
                 meals={currentDayMeals}
                 selectedDate={selectedDate}
                 onChange={() => void reloadWeek()}

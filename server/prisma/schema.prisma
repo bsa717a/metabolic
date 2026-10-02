@@ -38,6 +38,11 @@ enum SubscriptionSource {
   APPLE
   STRIPE
 }
+/// How the client sees meals in the plan view and on the printable PDF.
+enum MealPlanLayout {
+  VERTICAL
+  HORIZONTAL
+}
 enum CoachRelationshipStatus {
   ACTIVE
   COMPLETED
@@ -223,6 +228,8 @@ model User {
   defaultNutritionTemplateId String?
   defaultExerciseTemplateId String?
   waterGoalOz Int @default(64)
+  /// Vertical list is the default. Horizontal is four meal columns.
+  mealPlanLayout MealPlanLayout @default(VERTICAL)
   timezone String?
   smsOptedOut Boolean @default(false)
   smsRemindersEnabled Boolean @default(true)

@@ -150,6 +150,7 @@ export const MealCard = forwardRef<
     onRequestCancelAll?: () => void;
     externalSaving?: boolean;
     onDraftTotalsChange?: (totals: MacroTotals) => void;
+    variant?: 'list' | 'column';
   }
 >(function MealCard(
   {
@@ -170,7 +171,8 @@ export const MealCard = forwardRef<
     onRequestSaveAll,
     onRequestCancelAll,
     externalSaving,
-    onDraftTotalsChange
+    onDraftTotalsChange,
+    variant = 'list'
   },
   ref
 ) {
@@ -253,11 +255,12 @@ export const MealCard = forwardRef<
   }
 
   return (
-    <div onClick={() => onSelect?.(meal.id)}>
+      <div className={clsx(variant === 'column' && 'h-full min-w-[15rem]')} onClick={() => onSelect?.(meal.id)}>
       <Card
         className={clsx(
           onSelect && 'cursor-pointer',
-          selected && 'border-brand-green ring-2 ring-brand-green/30'
+          selected && 'border-brand-green ring-2 ring-brand-green/30',
+          variant === 'column' && 'h-full p-3'
         )}
       >
       {isEditing ? (
@@ -284,7 +287,7 @@ export const MealCard = forwardRef<
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm text-app-text-muted">Meal {meal.mealNumber}</p>
-              <h3 className="text-lg font-bold">
+              <h3 className={clsx('font-bold', variant === 'column' ? 'text-base' : 'text-lg')}>
                 {plannedTime ? `${meal.name} — ${plannedTime}` : meal.name}
               </h3>
             </div>

@@ -19,6 +19,8 @@ export type AppUser = {
   gender?: string | null;
   birthDate?: string | null;
   timezone?: string | null;
+  /** vertical = stacked meal list (default). horizontal = four portion columns. */
+  mealPlanLayout?: 'vertical' | 'horizontal';
   dashboardTutorialCompletedAt?: string | null;
   smsRemindersIntroCompletedAt?: string | null;
   coachWelcomeCompletedAt?: string | null;

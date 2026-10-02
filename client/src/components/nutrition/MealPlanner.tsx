@@ -11,6 +11,7 @@ import type {
 } from './MealCardEditor';
 import type { MacroTotals } from './MacroSummaryFooter';
 import { clearDraftTotalsIfNeeded, nextDraftTotalsByMeal } from '../../utils/draftMealTotals';
+import type { MealPlanLayout } from '../../utils/mealPlanLayout';
 
 export type CardMealInfo = {
   mealNumber: number;
@@ -40,6 +41,7 @@ export const MealPlanner = forwardRef<
     multiMealEdit?: boolean;
     onEditingChange?: (editing: boolean) => void;
     onDraftPlannedTotalsChange?: (totals: MacroTotals) => void;
+    layout?: MealPlanLayout;
   }
 >(function MealPlanner(
   {
@@ -53,7 +55,8 @@ export const MealPlanner = forwardRef<
     onBuildMeal,
     multiMealEdit = false,
     onEditingChange,
-    onDraftPlannedTotalsChange
+    onDraftPlannedTotalsChange,
+    layout = 'vertical'
   },
   ref
 ) {
@@ -210,7 +213,11 @@ export const MealPlanner = forwardRef<
 
   return (
     <>
-      <div className="space-y-4">
+      <div
+        className={
+          layout === 'horizontal' ? 'grid grid-cols-4 gap-3 overflow-x-auto pb-1' : 'space-y-4'
+        }
+      >
         {saveAllError && (
           <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{saveAllError}</div>
         )}
@@ -222,6 +229,7 @@ export const MealPlanner = forwardRef<
               <MealCard
                 key={meal.id}
                 ref={(handle) => setEditorRef(meal.id, handle)}
+                variant={layout === 'horizontal' ? 'column' : 'list'}
                 meal={meal}
                 selectedDate={selectedDate}
                 onChange={onChange}

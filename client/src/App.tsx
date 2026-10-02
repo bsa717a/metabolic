@@ -396,7 +396,7 @@ export default function App() {
             <Route index element={<DashboardPage user={appUser} onUserUpdated={setAppUser} />} />
             <Route path="program" element={<ProgramPage user={appUser} />} />
             <Route path="nutrition" element={<NutritionLogPage />} />
-            <Route path="nutrition/plan" element={<NutritionPage />} />
+            <Route path="nutrition/plan" element={<NutritionPage user={appUser} onUserUpdated={setAppUser} />} />
             <Route path="exercise" element={<ExerciseAreaLayout />}>
               <Route index element={<TodayTab />} />
               <Route path="plan" element={<PlanTab />} />

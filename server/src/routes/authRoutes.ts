@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { prisma } from '../db/prisma.js';
 import { serializeAppUser } from '../services/userSerialization.js';
+import { mealPlanLayoutToPrisma } from '../utils/mealPlanLayout.js';
 import { getUserDemographics, getUserProfile, updateUserDemographics, updateUserProfile } from '../services/userProfileService.js';
 import { deleteUserAccount } from '../services/userDeletionService.js';
 import { UserDeletionError } from '../services/userDeletionPolicy.js';
@@ -100,6 +101,18 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/api/me', { preHandler: requireAuth }, async (request) => ({
     user: await serializeAppUser(request.appUser!)
   }));
+
+  app.put('/api/me/meal-plan-layout', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = z.object({ layout: z.enum(['vertical', 'horizontal']) }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Choose vertical or horizontal.' });
+    }
+    const user = await prisma.user.update({
+      where: { id: request.appUser!.id },
+      data: { mealPlanLayout: mealPlanLayoutToPrisma(parsed.data.layout) }
+    });
+    return { user: await serializeAppUser(user) };
+  });
 
   app.put('/api/me/ai-consent', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = z.object({ accepted: z.boolean() }).safeParse(request.body);

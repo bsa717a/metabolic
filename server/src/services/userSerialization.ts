@@ -2,6 +2,7 @@ import { CoachRelationshipStatus, type User } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { planToSlug } from './entitlements.js';
 import { getStoreEnabled, getFeedbackWidgetEnabled } from './appSettings.js';
+import { mealPlanLayoutToSlug } from '../utils/mealPlanLayout.js';
 
 type UserWithCoach = User & {
   userAssignments?: Array<{
@@ -39,6 +40,7 @@ export async function serializeAppUser(user: User) {
     role: user.role,
     phone: user.phone,
     timezone: user.timezone,
+    mealPlanLayout: mealPlanLayoutToSlug(user.mealPlanLayout),
     smsRemindersEnabled: user.smsRemindersEnabled,
     smsMealRemindersEnabled: user.smsMealRemindersEnabled,
     smsEveningRecapEnabled: user.smsEveningRecapEnabled,
