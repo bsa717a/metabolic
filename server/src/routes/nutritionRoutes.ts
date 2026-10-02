@@ -18,6 +18,7 @@ import { recommendMeals, saveMealRecommendation } from '../services/mealRecommen
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
+import { registerMealNoteRoutes } from './mealNoteRoutes.js';
 
 const plannedTimeSchema = z
   .string()
@@ -86,6 +87,7 @@ async function mealItemOwnerForActor(actor: { id: string; role: Role }, itemId: 
 }
 
 export async function nutritionRoutes(app: FastifyInstance) {
+  registerMealNoteRoutes(app);
   app.get('/api/daily-logs/:date/meals', { preHandler: requireAuth }, async (request) => getMealsForDate(request.appUser!.id, (request.params as { date: string }).date));
   app.post('/api/daily-logs/:date/ensure', { preHandler: requireAuth }, async (request) => {
     const date = (request.params as { date: string }).date;

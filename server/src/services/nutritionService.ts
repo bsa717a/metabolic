@@ -6,6 +6,7 @@ import { recalculateDailyLogTotals, recalculateMealTotals } from './totalsServic
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { notifyMealActivity } from '../gamification/mealActivity.js';
 import { dedupeMealsByNumber } from '../utils/dedupeMealsByNumber.js';
+import { withClientNotes } from './mealNoteService.js';
 
 function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }) {
   return meal.items.length > 0 || n(meal.plannedCalories) > 0 || n(meal.actualCalories) > 0 || meal.status !== MealStatus.PLANNED;
@@ -40,7 +41,7 @@ export async function getMealsForDate(userId: string, date: string) {
     include: { items: true },
     orderBy: { mealNumber: 'asc' }
   });
-  return mealsForNutritionDisplay(dedupeMealsByNumber(meals));
+  return withClientNotes(userId, day, mealsForNutritionDisplay(dedupeMealsByNumber(meals)));
 }
 
 async function resolvePlannedTime(mealNumber: number, plannedTime?: string | null) {

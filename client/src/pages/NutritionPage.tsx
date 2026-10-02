@@ -311,6 +311,7 @@ export function NutritionPage() {
               <MealPlanner
                 meals={currentDayMeals}
                 selectedDate={selectedDate}
+                allowClientNote
                 onChange={() => void reloadWeek()}
                 onLogActual={(mealId) => setLogActualMealId(mealId)}
                 selectedMealId={effectiveSelectedMealId}
