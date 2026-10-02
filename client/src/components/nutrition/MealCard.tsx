@@ -15,6 +15,7 @@ import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
 import { MacroSummaryInline, type MacroTotals } from './MacroSummaryFooter';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
 import { DeleteMealScopeModal } from './DeleteMealScopeModal';
+import { MealClientNote, MealClientNoteReadOnly } from './MealClientNote';
 
 function formatPlannedTime(plannedTime?: string | null) {
   if (!plannedTime) return null;
@@ -150,6 +151,7 @@ export const MealCard = forwardRef<
     onRequestCancelAll?: () => void;
     externalSaving?: boolean;
     onDraftTotalsChange?: (totals: MacroTotals) => void;
+    allowClientNote?: boolean;
   }
 >(function MealCard(
   {
@@ -170,7 +172,8 @@ export const MealCard = forwardRef<
     onRequestSaveAll,
     onRequestCancelAll,
     externalSaving,
-    onDraftTotalsChange
+    onDraftTotalsChange,
+    allowClientNote = false
   },
   ref
 ) {
@@ -377,6 +380,11 @@ export const MealCard = forwardRef<
           </div>
         </>
       )}
+      {allowClientNote ? (
+        <MealClientNote meal={meal} onChange={onChange} />
+      ) : meal.clientNote ? (
+        <MealClientNoteReadOnly note={meal.clientNote} />
+      ) : null}
       </Card>
 
       <MealMacroDetailsDrawer open={macroDetailsOpen} meal={meal} onClose={() => setMacroDetailsOpen(false)} />

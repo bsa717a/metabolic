@@ -189,7 +189,7 @@ export type ReviewFood = AdminFood & {
   createdBy: Pick<AppUser, 'id' | 'firstName' | 'lastName' | 'email'> | null;
 };
 export type MealItem = { id: string; type: 'PLANNED' | 'ACTUAL'; linkedPlannedItemId?: string | null; foodId?: string | null; nameSnapshot: string; quantity: number; unit: string; calories: number; protein: number; carbs: number; fat: number };
-export type Meal = { id: string; mealNumber: number; name: string; plannedTime?: string; status: string; plannedCalories: number; plannedProtein: number; plannedCarbs: number; plannedFat: number; actualCalories: number; actualProtein: number; actualCarbs: number; actualFat: number; items: MealItem[] };
+export type Meal = { id: string; mealNumber: number; name: string; plannedTime?: string; status: string; plannedCalories: number; plannedProtein: number; plannedCarbs: number; plannedFat: number; actualCalories: number; actualProtein: number; actualCarbs: number; actualFat: number; clientNote?: string | null; items: MealItem[] };
 export type ShoppingListItem = { name: string; unit: string; quantity: number; occurrenceCount: number };
 export type GroceryListItem = {
   id: string;

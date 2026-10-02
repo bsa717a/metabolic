@@ -256,6 +256,7 @@ model User {
   programs Program[] @relation("ProgramUser")
   dailyLogs DailyLog[]
   meals Meal[]
+  mealNotes MealNote[]
   mealItemsCreated Food[] @relation("FoodCreator")
   ownedFoods Food[] @relation("FoodOwner")
   scheduledExercises ScheduledExercise[]
@@ -664,6 +665,22 @@ model Meal {
   items MealItem[]
   gamificationLog GamificationMealLog?
   @@unique([dailyLogId, mealNumber])
+}
+
+/// Client-authored note for one meal slot on a calendar day.
+/// Keyed by client + date + meal number (not Meal.id) so the note survives meal
+/// row recreation, and a later weekly PDF can load a Notes column with one range query.
+model MealNote {
+  id String @id @default(cuid())
+  userId String
+  /// UTC calendar day, same convention as DailyLog.date.
+  date DateTime
+  mealNumber Int
+  note String @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, date, mealNumber])
 }
 
 model MealItem {
