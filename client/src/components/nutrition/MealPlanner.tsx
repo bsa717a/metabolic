@@ -215,7 +215,9 @@ export const MealPlanner = forwardRef<
     <>
       <div
         className={
-          layout === 'horizontal' ? 'grid grid-cols-4 gap-3 overflow-x-auto pb-1' : 'space-y-4'
+          layout === 'horizontal'
+            ? 'grid auto-cols-[minmax(15rem,1fr)] grid-flow-col gap-3 overflow-x-auto pb-1'
+            : 'space-y-4'
         }
       >
         {saveAllError && (
