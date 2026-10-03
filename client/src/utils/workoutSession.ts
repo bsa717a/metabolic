@@ -46,6 +46,8 @@ export type SessionExerciseMeta = {
 export type PerExerciseState = {
   setsDone: number;
   actualReps?: number | null;
+  /** Last reps the stepper was set to. Survives the per-set reset so the log keeps what they entered. */
+  enteredReps?: number | null;
   actualWeight?: number | null;
   actualDurationSeconds?: number | null;
   actualDistance?: number | null;
@@ -130,8 +132,14 @@ export function totalSets(meta: SessionExerciseMeta): number {
   return hasSets(meta) ? (meta.sets as number) : 1;
 }
 
+/** Positive work time. Sets and reps may be set at the same time; duration is not overloaded into reps. */
+export function hasWorkDuration(meta: SessionExerciseMeta): boolean {
+  return meta.durationSeconds != null && meta.durationSeconds > 0;
+}
+
+/** Single continuous countdown: a duration with no sets. */
 export function isDurationBased(meta: SessionExerciseMeta): boolean {
-  return !hasSets(meta) && meta.durationSeconds != null && meta.durationSeconds > 0;
+  return !hasSets(meta) && hasWorkDuration(meta);
 }
 
 export function isDistanceBased(meta: SessionExerciseMeta): boolean {
@@ -150,7 +158,7 @@ export function isDistanceBased(meta: SessionExerciseMeta): boolean {
 function enterExercise(state: WorkoutSessionState, index: number, currentSet: number, nowMs: number): WorkoutSessionState {
   const meta = state.plan[state.order[index]];
   const durationEndsAtMs =
-    meta && isDurationBased(meta) ? nowMs + (meta.durationSeconds as number) * 1000 : null;
+    meta && hasWorkDuration(meta) ? nowMs + (meta.durationSeconds as number) * 1000 : null;
   return {
     ...state,
     currentIndex: index,
@@ -245,39 +253,38 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
       const per = state.perExercise[currentId] ?? { setsDone: 0 };
       const setsDone = per.setsDone + 1;
       const total = totalSets(meta);
-      const nextPer = { ...state.perExercise, [currentId]: { ...per, setsDone } };
+      const loggedDuration = nextLoggedDuration(state, per, meta, action.nowMs);
+      const progressed: PerExerciseState = {
+        ...per,
+        setsDone,
+        ...(loggedDuration !== undefined ? { actualDurationSeconds: loggedDuration } : {})
+      };
+      const nextPer = { ...state.perExercise, [currentId]: progressed };
 
       if (setsDone < total) {
         // More sets remain: rest, then continue the same exercise at the next set.
         // Clear actualReps so descending schemes (15/12/10) reset to the next set target.
+        // Keep actualDurationSeconds so each set's elapsed time sums onto one log row.
         const betweenSets = {
           ...nextPer,
-          [currentId]: { ...nextPer[currentId], actualReps: undefined }
+          [currentId]: { ...progressed, actualReps: undefined }
         };
         const rested = enterRest({ ...state, perExercise: betweenSets }, state.settings.restSetSec, action.nowMs);
         return { ...rested, currentSet: state.currentSet + 1 };
       }
 
-      // Exercise complete. For duration work, log elapsed time (not only the prescription).
-      const completedPer = {
-        ...nextPer[currentId],
-        ...(isDurationBased(meta)
-          ? {
-              actualDurationSeconds:
-                nextPer[currentId].actualDurationSeconds ??
-                elapsedDurationSeconds(state, action.nowMs, meta.durationSeconds)
-            }
-          : {}),
+      const completedPer: PerExerciseState = {
+        ...progressed,
         ...(isDistanceBased(meta)
           ? {
-              actualDistance:
-                nextPer[currentId].actualDistance ?? meta.distance ?? null
+              actualDistance: progressed.actualDistance ?? meta.distance ?? null
             }
-          : {})
+          : {}),
+        outcome: 'done'
       };
       const done = {
         ...state,
-        perExercise: { ...nextPer, [currentId]: { ...completedPer, outcome: 'done' as const } }
+        perExercise: { ...nextPer, [currentId]: completedPer }
       };
       const next = nextIndex(state);
       if (next == null) return enterSummary(done, action.nowMs);
@@ -296,7 +303,9 @@ export function sessionReducer(state: WorkoutSessionState, action: SessionAction
           ...state.perExercise,
           [currentId]: {
             ...per,
-            ...(action.patch.reps !== undefined ? { actualReps: action.patch.reps } : {}),
+            ...(action.patch.reps !== undefined
+              ? { actualReps: action.patch.reps, enteredReps: action.patch.reps }
+              : {}),
             ...(action.patch.weight !== undefined ? { actualWeight: action.patch.weight } : {}),
             ...(action.patch.durationSeconds !== undefined
               ? { actualDurationSeconds: action.patch.durationSeconds }
@@ -464,7 +473,27 @@ export function remainingMs(state: WorkoutSessionState, nowMs: number): number |
   return null;
 }
 
-/** Elapsed duration seconds for a timed exercise (prescribed − remaining), min 1. */
+/**
+ * Duration to store on the exercise log after one set (or the single continuous block).
+ * Timed sets sum elapsed seconds. Early Done counts time actually spent, not the full
+ * prescription. A no-set block keeps a manually typed actual when one was entered.
+ */
+function nextLoggedDuration(
+  state: WorkoutSessionState,
+  per: PerExerciseState,
+  meta: SessionExerciseMeta,
+  nowMs: number
+): number | undefined {
+  if (!hasWorkDuration(meta)) return per.actualDurationSeconds ?? undefined;
+  if (!hasSets(meta)) {
+    if (per.actualDurationSeconds != null) return per.actualDurationSeconds;
+    return elapsedDurationSeconds(state, nowMs, meta.durationSeconds);
+  }
+  const elapsed = elapsedDurationSeconds(state, nowMs, meta.durationSeconds);
+  return (per.actualDurationSeconds ?? 0) + elapsed;
+}
+
+/** Elapsed duration seconds for the active work countdown (prescribed − remaining), min 1. */
 export function elapsedDurationSeconds(
   state: WorkoutSessionState,
   nowMs: number,
@@ -482,6 +511,16 @@ export function elapsedDurationSeconds(
 
 export function currentMeta(state: WorkoutSessionState): SessionExerciseMeta | null {
   return state.plan[state.order[state.currentIndex]] ?? null;
+}
+
+/**
+ * A work countdown finishes itself at zero (timed sets and a single duration block),
+ * then rest. Rep-only sets stay until Complete set.
+ */
+export function shouldAutoCompleteTimedSet(state: WorkoutSessionState): boolean {
+  if (state.phase !== 'exercise' || state.durationEndsAtMs == null) return false;
+  const meta = currentMeta(state);
+  return Boolean(meta && hasWorkDuration(meta));
 }
 
 export function upNextMeta(state: WorkoutSessionState): SessionExerciseMeta | null {
@@ -533,7 +572,7 @@ export function actualsForExercise(state: WorkoutSessionState, id: string) {
     };
   }
   return {
-    actualReps: per.actualReps ?? undefined,
+    actualReps: per.actualReps ?? per.enteredReps ?? undefined,
     actualWeight: per.actualWeight ?? undefined,
     actualDurationSeconds: per.actualDurationSeconds ?? undefined,
     actualSets: per.setsDone || undefined
