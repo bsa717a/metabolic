@@ -34,6 +34,7 @@ export function ExerciseAreaLayout() {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
   const [exerciseAuto, setExerciseAuto] = useState<ExerciseAutoState | null>(null);
+  const [exerciseAutoReady, setExerciseAutoReady] = useState(false);
   const [exerciseAutoSaving, setExerciseAutoSaving] = useState(false);
   const [exerciseAutoError, setExerciseAutoError] = useState<string | null>(null);
   const [weekDays, setWeekDays] = useState<DayExercises[]>([]);
@@ -134,6 +135,8 @@ export function ExerciseAreaLayout() {
       setExerciseAutoError(null);
     } catch (error) {
       setExerciseAutoError(error instanceof Error ? error.message : 'Could not load exercise mode.');
+    } finally {
+      setExerciseAutoReady(true);
     }
   }, []);
 
@@ -250,8 +253,9 @@ export function ExerciseAreaLayout() {
 
   const currentSearch = searchParams.toString();
   const visibleTabs = exerciseMode === 'AUTOMATIC' ? TABS.filter((tab) => tab.label !== 'Manage') : TABS;
-  const subtitle =
-    exerciseMode === 'AUTOMATIC'
+  const subtitle = !exerciseAutoReady
+    ? null
+    : exerciseMode === 'AUTOMATIC'
       ? "We'll build your weeks. You just show up."
       : "Start today's workout, plan your week, manage routines.";
 
@@ -260,38 +264,45 @@ export function ExerciseAreaLayout() {
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
           <h1 className="text-3xl font-bold text-app-text">Exercise</h1>
-          <p className="text-app-text-muted sm:pt-1">{subtitle}</p>
+          {subtitle && <p className="text-app-text-muted sm:pt-1">{subtitle}</p>}
         </div>
-        <ExerciseModeSwitch mode={exerciseMode} disabled={exerciseAutoSaving} onChange={setExerciseMode} />
-        <nav
-          aria-label="Exercise sections"
-          className="inline-flex w-fit max-w-full rounded-2xl border border-app-border bg-app-surface p-1 shadow-sm"
-        >
-          {visibleTabs.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={{ pathname: tab.to, search: currentSearch }}
-              end={tab.end}
-              className={({ isActive }) =>
-                clsx(
-                  'rounded-xl px-4 py-2 text-center text-base font-bold tracking-wide transition',
-                  isActive
-                    ? 'bg-brand-green text-white shadow-sm'
-                    : 'text-app-text hover:bg-app-muted'
-                )
-              }
+        {exerciseAutoReady && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ExerciseModeSwitch mode={exerciseMode} disabled={exerciseAutoSaving} onChange={setExerciseMode} />
+            <nav
+              aria-label="Exercise sections"
+              className="inline-flex w-fit max-w-full rounded-2xl border border-app-border bg-app-surface p-1 shadow-sm"
             >
-              {tab.label}
-            </NavLink>
-          ))}
-        </nav>
+              {visibleTabs.map((tab) => (
+                <NavLink
+                  key={tab.to}
+                  to={{ pathname: tab.to, search: currentSearch }}
+                  end={tab.end}
+                  className={({ isActive }) =>
+                    clsx(
+                      'rounded-xl px-4 py-2 text-center text-base font-bold tracking-wide transition',
+                      isActive
+                        ? 'bg-brand-green text-white shadow-sm'
+                        : 'text-app-text hover:bg-app-muted'
+                    )
+                  }
+                >
+                  {tab.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+        )}
+        {exerciseAutoReady && exerciseMode === 'MANUAL' && exerciseAutoError && (
+          <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{exerciseAutoError}</div>
+        )}
       </div>
 
       {loadError && (
         <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>
       )}
 
-      <Outlet context={context} />
+      {exerciseAutoReady && <Outlet context={context} />}
 
       <ExercisePlanUndoToast
         message={undo?.message ?? null}

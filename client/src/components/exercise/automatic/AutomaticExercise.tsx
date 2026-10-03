@@ -64,7 +64,7 @@ export function ExerciseModeSwitch({
             disabled={disabled}
             onClick={() => onChange(value)}
             className={clsx(
-              'rounded-xl px-4 py-2 text-sm font-bold tracking-wide transition',
+              'rounded-xl px-4 py-2 text-sm font-bold tracking-wide transition disabled:opacity-50',
               selected ? 'bg-brand-green text-white shadow-sm' : 'text-app-text hover:bg-app-muted'
             )}
           >
@@ -90,29 +90,30 @@ function RadioRow<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="min-w-32 text-sm font-semibold text-app-text">{label}</span>
-      <div role="radiogroup" aria-label={label} className="inline-flex max-w-full flex-wrap rounded-xl border border-app-border bg-app-surface p-0.5">
-        {options.map((option) => {
-          const selected = option.value === value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              disabled={disabled}
-              onClick={() => onChange(option.value)}
-              className={clsx(
-                'rounded-lg px-3 py-1.5 text-sm font-semibold transition',
-                selected ? 'bg-brand-green text-white' : 'text-app-text hover:bg-app-muted'
-              )}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex max-w-full flex-wrap rounded-xl border border-app-border bg-app-surface p-0.5"
+    >
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+            className={clsx(
+              'rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+              selected ? 'bg-brand-green text-white' : 'text-app-text hover:bg-app-muted'
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -230,7 +231,7 @@ export function AutomaticExercise({
 
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <RadioRow label="Gym preference" value={location} options={LOCATIONS} disabled={busy} onChange={onLocation} />
         <RadioRow label="Activity level" value={level} options={LEVELS} disabled={busy} onChange={onLevel} />
       </div>
