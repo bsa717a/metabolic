@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { api, getWeekDates, startOfWeek, todayKey } from '../../services/api';
+import { api, getWeekDates, startOfWeek, todayDateParam, todayKey } from '../../services/api';
 import { PlanPrintButton } from '../../components/export/PlanPrintButton';
 import type { PlanPrintOrientation } from '../../utils/planPrintOrientation';
 import { printExercisePlan, printExerciseWeekPlan } from '../../utils/printExercisePlan';
 import type { ExerciseRoutine } from '../../types';
+import type {
+  ExerciseAutoChoice,
+  ExerciseAutoLevel,
+  ExerciseAutoLocation,
+  ExerciseAutoMode,
+  ExerciseAutoState
+} from '../../types/exerciseAuto';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
 import { type DayExercises, fetchExercisesForDates, formatWeekExportLabel, weekHasExercises } from '../../utils/planExportData';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../../components/exercise/ExercisePlanUndoToast';
+import { ExerciseModeSwitch } from '../../components/exercise/automatic/AutomaticExercise';
 import type { ExerciseAreaContext } from './exerciseAreaContext';
 
 function dateFromParams(params: URLSearchParams) {
@@ -25,7 +33,13 @@ const TABS = [
 
 export function ExerciseAreaLayout() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(() => dateFromParams(searchParams));
+  const [exerciseAuto, setExerciseAuto] = useState<ExerciseAutoState | null>(null);
+  const [exerciseAutoReady, setExerciseAutoReady] = useState(false);
+  const [exerciseAutoSaving, setExerciseAutoSaving] = useState(false);
+  const [exerciseAutoError, setExerciseAutoError] = useState<string | null>(null);
   const [weekDays, setWeekDays] = useState<DayExercises[]>([]);
   const [routine, setRoutine] = useState<ExerciseRoutine | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -116,6 +130,105 @@ export function ExerciseAreaLayout() {
     [reloadWeek, registerUndo]
   );
 
+  const exerciseMode: ExerciseAutoMode = exerciseAuto?.mode ?? 'MANUAL';
+
+  const loadExerciseAuto = useCallback(async () => {
+    try {
+      const next = await api<ExerciseAutoState>(`/api/exercise-auto?${todayDateParam()}`);
+      setExerciseAuto(next);
+      setExerciseAutoError(null);
+    } catch (error) {
+      setExerciseAutoError(error instanceof Error ? error.message : 'Could not load exercise mode.');
+    } finally {
+      setExerciseAutoReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadExerciseAuto();
+  }, [loadExerciseAuto]);
+
+  const saveExerciseAuto = useCallback(async (patch: Partial<Pick<ExerciseAutoState, 'mode' | 'location' | 'level'>>) => {
+    setExerciseAutoSaving(true);
+    setExerciseAutoError(null);
+    try {
+      const next = await api<ExerciseAutoState>(`/api/exercise-auto?${todayDateParam()}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch)
+      });
+      setExerciseAuto(next);
+    } catch (error) {
+      setExerciseAutoError(error instanceof Error ? error.message : 'Could not save exercise mode.');
+      await loadExerciseAuto();
+    } finally {
+      setExerciseAutoSaving(false);
+    }
+  }, [loadExerciseAuto]);
+
+  const setExerciseMode = useCallback(
+    (mode: ExerciseAutoMode) => {
+      void saveExerciseAuto({ mode });
+    },
+    [saveExerciseAuto]
+  );
+
+  const setExerciseAutoLocation = useCallback(
+    (locationChoice: ExerciseAutoLocation) => {
+      void saveExerciseAuto({ location: locationChoice });
+    },
+    [saveExerciseAuto]
+  );
+
+  const setExerciseAutoLevel = useCallback(
+    (level: ExerciseAutoLevel) => {
+      void saveExerciseAuto({ level });
+    },
+    [saveExerciseAuto]
+  );
+
+  const answerExerciseCheckIn = useCallback(
+    (choice: ExerciseAutoChoice) => {
+      void (async () => {
+        setExerciseAutoSaving(true);
+        setExerciseAutoError(null);
+        try {
+          const next = await api<ExerciseAutoState>(`/api/exercise-auto/check-in?${todayDateParam()}`, {
+            method: 'POST',
+            body: JSON.stringify({ choice })
+          });
+          setExerciseAuto(next);
+        } catch (error) {
+          setExerciseAutoError(error instanceof Error ? error.message : 'Could not save that choice.');
+        } finally {
+          setExerciseAutoSaving(false);
+        }
+      })();
+    },
+    []
+  );
+
+  const startAutomaticWorkout = useCallback(() => {
+    void (async () => {
+      setExerciseAutoSaving(true);
+      setExerciseAutoError(null);
+      try {
+        const result = await api<{ date: string }>(`/api/exercise-auto/start?${todayDateParam()}`, {
+          method: 'POST'
+        });
+        navigate(`/exercise/session?date=${result.date}`);
+      } catch (error) {
+        setExerciseAutoError(error instanceof Error ? error.message : 'Could not start the workout.');
+        setExerciseAutoSaving(false);
+      }
+    })();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (exerciseMode === 'AUTOMATIC' && location.pathname.startsWith('/exercise/manage')) {
+      navigate({ pathname: '/exercise', search: searchParams.toString() }, { replace: true });
+    }
+  }, [exerciseMode, location.pathname, navigate, searchParams]);
+
   const context: ExerciseAreaContext = {
     selectedDate,
     selectDate,
@@ -130,10 +243,25 @@ export function ExerciseAreaLayout() {
     registerUndo,
     loadError,
     actionError,
-    setActionError
+    setActionError,
+    exerciseMode,
+    exerciseAuto,
+    exerciseAutoSaving,
+    exerciseAutoError,
+    setExerciseMode,
+    setExerciseAutoLocation,
+    setExerciseAutoLevel,
+    answerExerciseCheckIn,
+    startAutomaticWorkout
   };
 
   const currentSearch = searchParams.toString();
+  const visibleTabs = exerciseMode === 'AUTOMATIC' ? TABS.filter((tab) => tab.label !== 'Manage') : TABS;
+  const subtitle = !exerciseAutoReady
+    ? null
+    : exerciseMode === 'AUTOMATIC'
+      ? "We'll build your weeks. You just show up."
+      : "Start today's workout, plan your week, manage routines.";
 
   function handlePrint(orientation: PlanPrintOrientation) {
     setPrintError(null);
@@ -162,32 +290,40 @@ export function ExerciseAreaLayout() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
             <h1 className="text-3xl font-bold text-app-text">Exercise</h1>
-            <p className="text-app-text-muted sm:pt-1">Start today&apos;s workout, plan your week, manage routines.</p>
+            {subtitle && <p className="text-app-text-muted sm:pt-1">{subtitle}</p>}
           </div>
-          <PlanPrintButton onPrint={handlePrint} />
+          {exerciseAutoReady && exerciseMode === 'MANUAL' && <PlanPrintButton onPrint={handlePrint} />}
         </div>
-        <nav
-          aria-label="Exercise sections"
-          className="inline-flex w-fit max-w-full rounded-2xl border border-app-border bg-app-surface p-1 shadow-sm"
-        >
-          {TABS.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={{ pathname: tab.to, search: currentSearch }}
-              end={tab.end}
-              className={({ isActive }) =>
-                clsx(
-                  'rounded-xl px-4 py-2 text-center text-base font-bold tracking-wide transition',
-                  isActive
-                    ? 'bg-brand-green text-white shadow-sm'
-                    : 'text-app-text hover:bg-app-muted'
-                )
-              }
+        {exerciseAutoReady && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ExerciseModeSwitch mode={exerciseMode} disabled={exerciseAutoSaving} onChange={setExerciseMode} />
+            <nav
+              aria-label="Exercise sections"
+              className="inline-flex w-fit max-w-full rounded-2xl border border-app-border bg-app-surface p-1 shadow-sm"
             >
-              {tab.label}
-            </NavLink>
-          ))}
-        </nav>
+              {visibleTabs.map((tab) => (
+                <NavLink
+                  key={tab.to}
+                  to={{ pathname: tab.to, search: currentSearch }}
+                  end={tab.end}
+                  className={({ isActive }) =>
+                    clsx(
+                      'rounded-xl px-4 py-2 text-center text-base font-bold tracking-wide transition',
+                      isActive
+                        ? 'bg-brand-green text-white shadow-sm'
+                        : 'text-app-text hover:bg-app-muted'
+                    )
+                  }
+                >
+                  {tab.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+        )}
+        {exerciseAutoReady && exerciseMode === 'MANUAL' && exerciseAutoError && (
+          <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{exerciseAutoError}</div>
+        )}
       </div>
 
       {loadError && (
@@ -197,7 +333,7 @@ export function ExerciseAreaLayout() {
         <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{printError}</div>
       )}
 
-      <Outlet context={context} />
+      {exerciseAutoReady && <Outlet context={context} />}
 
       <ExercisePlanUndoToast
         message={undo?.message ?? null}
