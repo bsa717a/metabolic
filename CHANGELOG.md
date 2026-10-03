@@ -7,6 +7,24 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.35.0](https://github.com/bsa717a/metabolic/compare/v0.34.0...v0.35.0) (2026-10-03)
+
+
+### Features
+
+* **exercise:** manual and automatic plan modes ([554b40c](https://github.com/bsa717a/metabolic/commit/554b40cfad6dbafbf0d7a39d1d4d3e994c3fe061))
+* **exercise:** manual and automatic plan modes ([a7b7418](https://github.com/bsa717a/metabolic/commit/a7b7418a04a93dc29b8f65589c5d43d399fbf6db))
+* **nutrition:** open print choices under the Print button ([0040813](https://github.com/bsa717a/metabolic/commit/0040813e5fd092d5c7287c86cda12f17f58265c1))
+* one-click print for nutrition + workout plans with horizontal/vertical option ([8208ee1](https://github.com/bsa717a/metabolic/commit/8208ee1dc313774b3345979bb34344a934465d75))
+* one-click print for nutrition and workout plans ([e0d42c6](https://github.com/bsa717a/metabolic/commit/e0d42c62df6b2ddb9b6e109c2fc84a5144bd1e2e))
+
+
+### Bug Fixes
+
+* **exercise:** keep automatic prescriptions and advance finished days ([2155285](https://github.com/bsa717a/metabolic/commit/2155285b56a7a6822e56d6c93c9cf5d5c6d2dc4b))
+* **exercise:** tighten automatic controls and wait for saved mode ([7135b85](https://github.com/bsa717a/metabolic/commit/7135b85482597289502f0596774926186e5a8020))
+* print template reminders, not plan-period system notes ([25e45fd](https://github.com/bsa717a/metabolic/commit/25e45fd496e1976fbd18fa76cee17cd19af220c6))
+
 ## [0.34.0](https://github.com/bsa717a/metabolic/compare/v0.33.0...v0.34.0) (2026-10-02)
 
 
