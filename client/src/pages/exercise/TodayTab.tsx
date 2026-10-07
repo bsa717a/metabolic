@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import { isFuture } from '../../services/api';
 import { DayExerciseEditor } from '../../components/exercise/DayExerciseEditor';
+import { AutomaticExercise } from '../../components/exercise/automatic/AutomaticExercise';
 import { Button } from '../../components/ui/Button';
 import { hasStoredSessionForDate } from '../../utils/workoutSession';
 import { primeAudio } from '../../utils/sessionCues';
@@ -17,7 +18,15 @@ export function TodayTab() {
     reloadWeek,
     removeExercise,
     actionError,
-    setActionError
+    setActionError,
+    exerciseMode,
+    exerciseAuto,
+    exerciseAutoSaving,
+    exerciseAutoError,
+    setExerciseAutoLocation,
+    setExerciseAutoLevel,
+    answerExerciseCheckIn,
+    startAutomaticWorkout
   } = useExerciseArea();
   const navigate = useNavigate();
 
@@ -29,6 +38,26 @@ export function TodayTab() {
   const plannedCount = exercises.filter((item) => item.status === 'PLANNED').length;
   const future = isFuture(selectedDate);
   const canStart = !future && plannedCount > 0;
+
+  if (exerciseMode === 'AUTOMATIC') {
+    return (
+      <AutomaticExercise
+        location={exerciseAuto?.location ?? 'GYM'}
+        level={exerciseAuto?.level ?? 'BEGINNER'}
+        track={exerciseAuto?.track ?? null}
+        showToday
+        busy={exerciseAutoSaving}
+        error={exerciseAutoError}
+        onLocation={setExerciseAutoLocation}
+        onLevel={setExerciseAutoLevel}
+        onCheckIn={answerExerciseCheckIn}
+        onStart={() => {
+          primeAudio();
+          startAutomaticWorkout();
+        }}
+      />
+    );
+  }
 
   return (
     <DayExerciseEditor
