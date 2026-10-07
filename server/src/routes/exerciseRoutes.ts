@@ -348,7 +348,8 @@ export async function exerciseRoutes(app: FastifyInstance) {
       .object({
         mode: z.nativeEnum(ExercisePageMode).optional(),
         location: z.nativeEnum(ExerciseAutoLocation).optional(),
-        level: z.nativeEnum(ExerciseAutoLevel).optional()
+        level: z.nativeEnum(ExerciseAutoLevel).optional(),
+        planId: z.string().trim().min(1).optional()
       })
       .parse(request.body);
     try {

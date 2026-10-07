@@ -18,6 +18,7 @@ export function PlanTab() {
     exerciseAutoError,
     setExerciseAutoLocation,
     setExerciseAutoLevel,
+    setExerciseAutoPlan,
     answerExerciseCheckIn,
     startAutomaticWorkout
   } = useExerciseArea();
@@ -40,6 +41,7 @@ export function PlanTab() {
         error={exerciseAutoError}
         onLocation={setExerciseAutoLocation}
         onLevel={setExerciseAutoLevel}
+        onPlan={setExerciseAutoPlan}
         onCheckIn={answerExerciseCheckIn}
         onStart={startAutomaticWorkout}
       />

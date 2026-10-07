@@ -20,6 +20,7 @@ import {
   buildTrackCatalog,
   initialProgress,
   progressEquals,
+  progressStartingOnPlan,
   type AutoChoice,
   type AutoLevel,
   type AutoLocation,
@@ -218,10 +219,14 @@ async function creditFinishedAppliedDay(
   return finished ? { ...progress, dayCompletedOn: appliedOn } : progress;
 }
 
-async function resolveTrack(userId: string, location: AutoLocation, level: AutoLevel, today: string) {
+async function blocksFor(location: AutoLocation, level: AutoLevel) {
   const plans = await loadPlans();
   const catalog = await syncAutoTracks(plans);
-  const blocks = catalog.find((track) => track.location === location && track.level === level)?.blocks ?? [];
+  return catalog.find((track) => track.location === location && track.level === level)?.blocks ?? [];
+}
+
+async function resolveTrack(userId: string, location: AutoLocation, level: AutoLevel, today: string) {
+  const blocks = await blocksFor(location, level);
   const existing = await readProgress(userId, location, level);
   const baseline = existing ?? initialProgress(today);
   const block = blocks[Math.min(baseline.blockIndex, Math.max(blocks.length - 1, 0))];
@@ -259,7 +264,7 @@ export async function getExerciseAuto(userId: string, today: string): Promise<Ex
 export async function updateExerciseAuto(
   userId: string,
   today: string,
-  patch: { mode?: ExercisePageMode; location?: ExerciseAutoLocation; level?: ExerciseAutoLevel }
+  patch: { mode?: ExercisePageMode; location?: ExerciseAutoLocation; level?: ExerciseAutoLevel; planId?: string }
 ): Promise<ExerciseAutoResponse> {
   const current = await readSetting(userId);
   const mode = patch.mode ?? current.mode;
@@ -271,6 +276,27 @@ export async function updateExerciseAuto(
     update: { mode, location, level }
   });
   if (mode !== 'AUTOMATIC') return { mode: 'MANUAL', location, level, track: null };
+  if (patch.planId) {
+    const blocks = await blocksFor(location, level);
+    const existing = await readProgress(userId, location, level);
+    const currentBlock = blocks[Math.min(existing?.blockIndex ?? 0, Math.max(blocks.length - 1, 0))];
+    if (!(existing && currentBlock?.planId === patch.planId)) {
+      let started;
+      try {
+        started = progressStartingOnPlan(blocks, patch.planId, today);
+      } catch (error) {
+        throw new ExerciseAutoError(error instanceof Error ? error.message : 'That plan is not available for this level');
+      }
+      const built = buildAutoView({
+        blocks,
+        progress: started,
+        today,
+        todayWorkoutComplete: false
+      });
+      await writeProgress(userId, location, level, built.progress);
+      return { mode: 'AUTOMATIC', location, level, track: built.track };
+    }
+  }
   const { track } = await resolveTrack(userId, location, level, today);
   return { mode: 'AUTOMATIC', location, level, track };
 }

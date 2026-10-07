@@ -148,7 +148,9 @@ export function ExerciseAreaLayout() {
     void loadExerciseAuto();
   }, [loadExerciseAuto]);
 
-  const saveExerciseAuto = useCallback(async (patch: Partial<Pick<ExerciseAutoState, 'mode' | 'location' | 'level'>>) => {
+  const saveExerciseAuto = useCallback(async (
+    patch: Partial<Pick<ExerciseAutoState, 'mode' | 'location' | 'level'>> & { planId?: string }
+  ) => {
     setExerciseAutoSaving(true);
     setExerciseAutoError(null);
     try {
@@ -182,6 +184,13 @@ export function ExerciseAreaLayout() {
   const setExerciseAutoLevel = useCallback(
     (level: ExerciseAutoLevel) => {
       void saveExerciseAuto({ level });
+    },
+    [saveExerciseAuto]
+  );
+
+  const setExerciseAutoPlan = useCallback(
+    (planId: string) => {
+      void saveExerciseAuto({ planId });
     },
     [saveExerciseAuto]
   );
@@ -251,6 +260,7 @@ export function ExerciseAreaLayout() {
     setExerciseMode,
     setExerciseAutoLocation,
     setExerciseAutoLevel,
+    setExerciseAutoPlan,
     answerExerciseCheckIn,
     startAutomaticWorkout
   };

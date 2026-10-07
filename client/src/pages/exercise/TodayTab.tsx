@@ -25,6 +25,7 @@ export function TodayTab() {
     exerciseAutoError,
     setExerciseAutoLocation,
     setExerciseAutoLevel,
+    setExerciseAutoPlan,
     answerExerciseCheckIn,
     startAutomaticWorkout
   } = useExerciseArea();
@@ -50,6 +51,7 @@ export function TodayTab() {
         error={exerciseAutoError}
         onLocation={setExerciseAutoLocation}
         onLevel={setExerciseAutoLevel}
+        onPlan={setExerciseAutoPlan}
         onCheckIn={answerExerciseCheckIn}
         onStart={() => {
           primeAudio();

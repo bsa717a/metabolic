@@ -7,6 +7,7 @@ import {
   buildTrackCatalog,
   initialProgress,
   planLocation,
+  progressStartingOnPlan,
   reconcileProgress,
   type AutoPlanInput,
   type AutoProgress
@@ -82,6 +83,14 @@ describe('plan grouping', () => {
       ['5-day gym split']
     );
     assert.deepEqual(
+      intermediateGym?.blocks.map((block) => block.name),
+      ['4 Day Gym Split', '5 Day Gym Split']
+    );
+    assert.deepEqual(
+      beginnerGym?.blocks.map((block) => block.name),
+      ['3 Day Gym Split', '4 Day Gym Split', '5 Day Gym Split']
+    );
+    assert.deepEqual(
       beginnerHome?.blocks.map((block) => block.label),
       ['3-day home', '4-day home']
     );
@@ -109,6 +118,24 @@ describe('progression asks and never decides', () => {
     );
     assert.equal(track.upNext?.label, '4-day gym split');
     assert.equal(track.checkIn, null);
+    assert.equal(track.selectedPlanId, '3 Day Gym Split');
+    assert.deepEqual(
+      track.plans.map((plan) => plan.name),
+      ['3 Day Gym Split', '4 Day Gym Split', '5 Day Gym Split']
+    );
+  });
+
+  it('starts on the plan chosen for this level', () => {
+    const started = progressStartingOnPlan(blocks, '5 Day Gym Split', '2026-10-02');
+    assert.equal(started.blockIndex, 2);
+    assert.equal(started.weekIndex, 0);
+    assert.equal(started.dayIndex, 0);
+    assert.equal(started.pendingCheckIn, 'NONE');
+    const { track } = view(started, '2026-10-02');
+    assert.equal(track.selectedPlanId, '5 Day Gym Split');
+    assert.equal(track.today?.headline, 'Day 1 · Push · 10');
+    assert.equal(track.today?.summary, 'Week 1 of 3 · 5-day gym split');
+    assert.throws(() => progressStartingOnPlan(blocks, '3 Day Home', '2026-10-02'), /not available for this level/);
   });
 
   it('shows the current week scheme on every day in the block', () => {

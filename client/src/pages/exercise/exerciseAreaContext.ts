@@ -32,6 +32,7 @@ export type ExerciseAreaContext = {
   setExerciseMode: (mode: ExerciseAutoMode) => void;
   setExerciseAutoLocation: (location: ExerciseAutoLocation) => void;
   setExerciseAutoLevel: (level: ExerciseAutoLevel) => void;
+  setExerciseAutoPlan: (planId: string) => void;
   answerExerciseCheckIn: (choice: ExerciseAutoChoice) => void;
   startAutomaticWorkout: () => void;
 };
