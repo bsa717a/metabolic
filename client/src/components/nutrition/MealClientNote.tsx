@@ -117,9 +117,11 @@ export function MealClientNote({ meal, onChange }: { meal: Meal; onChange: () =>
   );
 }
 
-export function MealClientNoteReadOnly({ note }: { note: string }) {
+export function MealClientNoteReadOnly({ note, position = 'end' }: { note: string; position?: 'start' | 'end' }) {
+  const frame =
+    position === 'start' ? 'mb-3 border-b border-app-border pb-3' : 'mt-3 border-t border-app-border pt-3';
   return (
-    <div className="mt-3 border-t border-app-border pt-3">
+    <div className={frame}>
       <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Client note</p>
       <p className="mt-1 whitespace-pre-wrap text-base text-app-text sm:text-sm">{note}</p>
     </div>
