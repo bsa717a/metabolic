@@ -289,7 +289,7 @@ export const MealCard = forwardRef<
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
+            <div className="w-full shrink-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:shrink">
               <p className="text-sm text-app-text-muted">Meal {meal.mealNumber}</p>
               <h3 className="text-lg font-bold">
                 {plannedTime ? `${meal.name} — ${plannedTime}` : meal.name}
