@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { CoachClientPlanStatus, Meal, NutritionPlanTemplateSummary } from '../../types';
+import { MealClientNoteReadOnly } from '../nutrition/MealClientNote';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
@@ -70,14 +71,14 @@ export function FoodPlanEditor({
     onSavingChange(true);
     onError('');
     try {
-      const updated = await api<Meal[]>(
+      await api<Meal[]>(
         `/api/coach/users/${clientId}/daily-logs/${planDate}/apply-template`,
         {
           method: 'POST',
           body: JSON.stringify({ templateId, setAsDefault })
         }
       );
-      setMeals(updated);
+      await loadMeals();
       await onRefresh();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unable to apply nutrition plan');
@@ -178,6 +179,7 @@ export function FoodPlanEditor({
                 ) : (
                   <p className="mt-2 text-sm text-app-text-muted">No planned foods yet.</p>
                 )}
+                {meal.clientNote?.trim() ? <MealClientNoteReadOnly note={meal.clientNote.trim()} /> : null}
               </li>
             );
           })}
