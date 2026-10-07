@@ -249,6 +249,7 @@ export const MealCard = forwardRef<
   }
 
   const [editorKey, setEditorKey] = useState(0);
+  const readOnlyClientNote = !allowClientNote ? meal.clientNote?.trim() ?? '' : '';
 
   async function refreshAfterSaveFailure() {
     await onChange();
@@ -264,24 +265,27 @@ export const MealCard = forwardRef<
         )}
       >
       {isEditing ? (
-        <MealCardEditor
-          key={editorKey}
-          ref={ref}
-          meal={meal}
-          macroTargets={macroTargets}
-          dailyTargets={dailyTargets}
-          onSaved={() => {
-            onExitEditMode();
-            void onChange();
-          }}
-          onCancel={onExitEditMode}
-          onRefresh={refreshAfterSaveFailure}
-          onRequestRebalance={() => onAiSuggestions(meal)}
-          onRequestSaveAll={onRequestSaveAll}
-          onRequestCancelAll={onRequestCancelAll}
-          externalSaving={externalSaving}
-          onDraftTotalsChange={onDraftTotalsChange}
-        />
+        <>
+          {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
+          <MealCardEditor
+            key={editorKey}
+            ref={ref}
+            meal={meal}
+            macroTargets={macroTargets}
+            dailyTargets={dailyTargets}
+            onSaved={() => {
+              onExitEditMode();
+              void onChange();
+            }}
+            onCancel={onExitEditMode}
+            onRefresh={refreshAfterSaveFailure}
+            onRequestRebalance={() => onAiSuggestions(meal)}
+            onRequestSaveAll={onRequestSaveAll}
+            onRequestCancelAll={onRequestCancelAll}
+            externalSaving={externalSaving}
+            onDraftTotalsChange={onDraftTotalsChange}
+          />
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -329,6 +333,8 @@ export const MealCard = forwardRef<
               })()}
             </div>
           </div>
+
+          {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
 
           {toggleError && <p className="mt-2 text-sm text-red-600">{toggleError}</p>}
           {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
@@ -380,11 +386,7 @@ export const MealCard = forwardRef<
           </div>
         </>
       )}
-      {allowClientNote ? (
-        <MealClientNote meal={meal} onChange={onChange} />
-      ) : meal.clientNote ? (
-        <MealClientNoteReadOnly note={meal.clientNote} />
-      ) : null}
+      {allowClientNote ? <MealClientNote meal={meal} onChange={onChange} /> : null}
       </Card>
 
       <MealMacroDetailsDrawer open={macroDetailsOpen} meal={meal} onClose={() => setMacroDetailsOpen(false)} />

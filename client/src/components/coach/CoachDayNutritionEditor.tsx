@@ -133,18 +133,23 @@ export function CoachDayNutritionEditor({
     if (!editingPlan) setDraftPlannedTotals(null);
   }, [editingPlan]);
 
+  const loadGeneration = useRef(0);
+
   const reloadMeals = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     try {
       const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${selectedDate}/meals`);
+      if (generation !== loadGeneration.current) return;
       setMeals(data);
       setLoadError(null);
     } catch (error) {
+      if (generation !== loadGeneration.current) return;
       setLoadError(error instanceof Error ? error.message : 'Could not load meals.');
     }
   }, [clientId, selectedDate]);
 
   useEffect(() => {
-    if (open) setSelectedDate(planDate);
+    if (!open) setSelectedDate(planDate);
   }, [open, planDate]);
 
   useEffect(() => {
