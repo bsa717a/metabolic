@@ -7,6 +7,18 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.36.0](https://github.com/bsa717a/metabolic/compare/v0.35.0...v0.36.0) (2026-10-07)
+
+
+### Features
+
+* **nutrition:** show client meal notes to coaches ([#317](https://github.com/bsa717a/metabolic/issues/317)) ([5271cc2](https://github.com/bsa717a/metabolic/commit/5271cc23e2436cdaf7a318c92b5096f64093c966))
+
+
+### Bug Fixes
+
+* **nutrition:** show client meal notes in the coach day editor ([#322](https://github.com/bsa717a/metabolic/issues/322)) ([6d8a581](https://github.com/bsa717a/metabolic/commit/6d8a581f19300a586c579ead4abb22868db80453))
+
 ## [0.35.0](https://github.com/bsa717a/metabolic/compare/v0.34.0...v0.35.0) (2026-10-03)
 
 
