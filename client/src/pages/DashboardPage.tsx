@@ -285,7 +285,7 @@ export function DashboardPage({
             target: Number(data.dailyLog?.fatTarget ?? 0)
           }}
         />
-        <PlanStatusCard />
+        <PlanStatusCard user={user} meals={data.allMeals ?? data.meals} />
       </div>
 
       {isCoachRole(user?.role) && <UpcomingCheckInsCard />}
