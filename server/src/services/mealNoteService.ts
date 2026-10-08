@@ -94,16 +94,13 @@ export async function getMealClientNote(actor: { id: string; role: Role }, mealI
   };
 }
 
-/** Only the meal's client may write. Coaches and admins who can read the client get 403. */
+/**
+ * The client, an assigned coach, or an admin may write the same MealNote row.
+ * Anyone who cannot access the client gets 404, including an unassigned coach.
+ */
 export async function setMealClientNote(actor: { id: string; role: Role }, mealId: string, note: string) {
   const meal = await loadMeal(mealId);
-  if (!meal) throw new MealNoteError('Meal not found', 404);
-  if (actor.id !== meal.userId) {
-    if (await canAccessUser(actor, meal.userId)) {
-      throw new MealNoteError('Only the client can edit meal notes', 403);
-    }
-    throw new MealNoteError('Meal not found', 404);
-  }
+  if (!meal || !(await canAccessUser(actor, meal.userId))) throw new MealNoteError('Meal not found', 404);
 
   const trimmed = note.trim();
   const key = {

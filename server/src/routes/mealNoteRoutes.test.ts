@@ -92,6 +92,15 @@ describe('meal note API', () => {
         role: 'ADMIN'
       }
     });
+    const unassignedCoach = await prisma.user.create({
+      data: {
+        firebaseUid: `meal-note-unassigned-${suffix}`,
+        email: `meal-note-unassigned-${suffix}@test.local`,
+        firstName: 'Riley',
+        lastName: 'Unassigned',
+        role: 'COACH'
+      }
+    });
     await prisma.coachAssignment.create({
       data: { coachId: coach.id, userId: client.id, status: 'ACTIVE' }
     });
@@ -161,13 +170,14 @@ describe('meal note API', () => {
       coach,
       stranger,
       admin,
+      unassignedCoach,
       log,
       breakfast,
       snack,
       lunch,
       async cleanup() {
         await prisma.user.deleteMany({
-          where: { id: { in: [client.id, coach.id, stranger.id, admin.id] } }
+          where: { id: { in: [client.id, coach.id, stranger.id, admin.id, unassignedCoach.id] } }
         });
       }
     };
@@ -402,7 +412,7 @@ describe('meal note API', () => {
     }
   });
 
-  it('lets the assigned coach and an admin read notes and blocks their writes', async (t) => {
+  it('lets the assigned coach and an admin write the same client note', async (t) => {
     if (!dbReady) return t.skip('postgres is not reachable');
     const fixture = await createFixture();
     const clientApp = await appFor(fixture.client);
@@ -430,25 +440,93 @@ describe('meal note API', () => {
       const coachWrite = await coachApp.inject({
         method: 'PUT',
         url: `/api/meals/${fixture.breakfast.id}/note`,
-        payload: { note: 'Coach should not overwrite this' }
+        payload: { note: '  Pack oats tonight.  ' }
       });
-      assert.equal(coachWrite.statusCode, 403);
+      assert.equal(coachWrite.statusCode, 200);
+      assert.equal(coachWrite.json().note, 'Pack oats tonight.');
+
+      const clientSeesCoach = await clientApp.inject({ method: 'GET', url: `/api/meals/${fixture.breakfast.id}/note` });
+      assert.equal(clientSeesCoach.statusCode, 200);
+      assert.equal(clientSeesCoach.json().note, 'Pack oats tonight.');
+      const meals = await getMealsForDate(fixture.client.id, '2026-10-02');
+      assert.equal(meals.find((meal) => meal.mealNumber === 1)?.clientNote, 'Pack oats tonight.');
+
+      const tooLong = await coachApp.inject({
+        method: 'PUT',
+        url: `/api/meals/${fixture.breakfast.id}/note`,
+        payload: { note: 'a'.repeat(2001) }
+      });
+      assert.equal(tooLong.statusCode, 400);
+      const unchanged = await clientApp.inject({ method: 'GET', url: `/api/meals/${fixture.breakfast.id}/note` });
+      assert.equal(unchanged.json().note, 'Pack oats tonight.');
 
       const adminRead = await adminApp.inject({ method: 'GET', url: `/api/meals/${fixture.breakfast.id}/note` });
       assert.equal(adminRead.statusCode, 200);
       const adminWrite = await adminApp.inject({
         method: 'PUT',
-        url: `/api/meals/${fixture.breakfast.id}/note`,
-        payload: { note: 'Admin should not overwrite this' }
+        url: `/api/meals/${fixture.snack.id}/note`,
+        payload: { note: 'Apple, not crackers' }
       });
-      assert.equal(adminWrite.statusCode, 403);
+      assert.equal(adminWrite.statusCode, 200);
+      assert.equal(adminWrite.json().note, 'Apple, not crackers');
 
-      const still = await clientApp.inject({ method: 'GET', url: `/api/meals/${fixture.breakfast.id}/note` });
-      assert.equal(still.json().note, 'Travel day — keep it simple');
+      const clientSeesAdmin = await clientApp.inject({ method: 'GET', url: `/api/meals/${fixture.snack.id}/note` });
+      assert.equal(clientSeesAdmin.json().note, 'Apple, not crackers');
+
+      const cleared = await coachApp.inject({
+        method: 'PUT',
+        url: `/api/meals/${fixture.breakfast.id}/note`,
+        payload: { note: '   ' }
+      });
+      assert.equal(cleared.statusCode, 200);
+      assert.equal(cleared.json().note, null);
+      const breakfastGone = await clientApp.inject({ method: 'GET', url: `/api/meals/${fixture.breakfast.id}/note` });
+      assert.equal(breakfastGone.json().note, null);
+      const snackRemains = await prisma.mealNote.findUnique({
+        where: {
+          userId_date_mealNumber: {
+            userId: fixture.client.id,
+            date: new Date('2026-10-02T00:00:00.000Z'),
+            mealNumber: 2
+          }
+        }
+      });
+      assert.equal(snackRemains?.note, 'Apple, not crackers');
     } finally {
       await clientApp.close();
       await coachApp.close();
       await adminApp.close();
+      await fixture.cleanup();
+    }
+  });
+
+  it('rejects an unassigned coach from writing a client meal note', async (t) => {
+    if (!dbReady) return t.skip('postgres is not reachable');
+    const fixture = await createFixture();
+    const clientApp = await appFor(fixture.client);
+    const outsiderApp = await appFor(fixture.unassignedCoach);
+    try {
+      const saved = await clientApp.inject({
+        method: 'PUT',
+        url: `/api/meals/${fixture.breakfast.id}/note`,
+        payload: { note: 'Private to this coach assignment' }
+      });
+      assert.equal(saved.statusCode, 200);
+
+      const write = await outsiderApp.inject({
+        method: 'PUT',
+        url: `/api/meals/${fixture.breakfast.id}/note`,
+        payload: { note: 'Should not land' }
+      });
+      const read = await outsiderApp.inject({ method: 'GET', url: `/api/meals/${fixture.breakfast.id}/note` });
+      assert.equal(write.statusCode, 404);
+      assert.equal(read.statusCode, 404);
+
+      const still = await clientApp.inject({ method: 'GET', url: `/api/meals/${fixture.breakfast.id}/note` });
+      assert.equal(still.json().note, 'Private to this coach assignment');
+    } finally {
+      await clientApp.close();
+      await outsiderApp.close();
       await fixture.cleanup();
     }
   });
