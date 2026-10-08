@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { CoachClientPlanStatus, Meal, NutritionPlanTemplateSummary } from '../../types';
-import { MealClientNoteReadOnly } from '../nutrition/MealClientNote';
+import { MealClientNote } from '../nutrition/MealClientNote';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
@@ -40,8 +40,8 @@ export function FoodPlanEditor({
   const [templateId, setTemplateId] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(true);
 
-  const loadMeals = useCallback(async () => {
-    setLoading(true);
+  const loadMeals = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     try {
       const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`);
       setMeals(data);
@@ -49,7 +49,7 @@ export function FoodPlanEditor({
       setMeals([]);
       onError(err instanceof Error ? err.message : 'Unable to load meals');
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [clientId, onError, planDate]);
 
@@ -179,7 +179,7 @@ export function FoodPlanEditor({
                 ) : (
                   <p className="mt-2 text-sm text-app-text-muted">No planned foods yet.</p>
                 )}
-                {meal.clientNote?.trim() ? <MealClientNoteReadOnly note={meal.clientNote.trim()} /> : null}
+                <MealClientNote meal={meal} onChange={() => loadMeals({ silent: true })} />
               </li>
             );
           })}

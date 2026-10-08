@@ -152,6 +152,7 @@ export const MealCard = forwardRef<
     externalSaving?: boolean;
     onDraftTotalsChange?: (totals: MacroTotals) => void;
     allowClientNote?: boolean;
+    coachCanEditNote?: boolean;
   }
 >(function MealCard(
   {
@@ -173,7 +174,8 @@ export const MealCard = forwardRef<
     onRequestCancelAll,
     externalSaving,
     onDraftTotalsChange,
-    allowClientNote = false
+    allowClientNote = false,
+    coachCanEditNote = false
   },
   ref
 ) {
@@ -249,7 +251,8 @@ export const MealCard = forwardRef<
   }
 
   const [editorKey, setEditorKey] = useState(0);
-  const readOnlyClientNote = !allowClientNote ? meal.clientNote?.trim() ?? '' : '';
+  const readOnlyClientNote = !allowClientNote && !coachCanEditNote ? meal.clientNote?.trim() ?? '' : '';
+  const coachNote = coachCanEditNote ? <MealClientNote meal={meal} onChange={onChange} position="start" /> : null;
 
   async function refreshAfterSaveFailure() {
     await onChange();
@@ -267,6 +270,7 @@ export const MealCard = forwardRef<
       {isEditing ? (
         <>
           {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
+          {coachNote}
           <MealCardEditor
             key={editorKey}
             ref={ref}
@@ -335,6 +339,7 @@ export const MealCard = forwardRef<
           </div>
 
           {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
+          {coachNote}
 
           {toggleError && <p className="mt-2 text-sm text-red-600">{toggleError}</p>}
           {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}

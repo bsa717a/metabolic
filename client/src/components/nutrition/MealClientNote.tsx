@@ -5,13 +5,22 @@ import { Button } from '../ui/Button';
 
 const MAX_NOTE_LENGTH = 2000;
 
-export function MealClientNote({ meal, onChange }: { meal: Meal; onChange: () => void | Promise<void> }) {
+export function MealClientNote({
+  meal,
+  onChange,
+  position = 'end'
+}: {
+  meal: Meal;
+  onChange: () => void | Promise<void>;
+  position?: 'start' | 'end';
+}) {
   const fieldId = useId();
   const saved = meal.clientNote?.trim() ? meal.clientNote : '';
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(saved);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const frame = position === 'start' ? 'mb-3 border-b border-app-border pb-3' : 'mt-3 border-t border-app-border pt-3';
 
   function openEditor(initial: string) {
     setDraft(initial);
@@ -39,7 +48,7 @@ export function MealClientNote({ meal, onChange }: { meal: Meal; onChange: () =>
   if (!editing) {
     if (!saved) {
       return (
-        <div className="mt-3 border-t border-app-border pt-3">
+        <div className={frame}>
           <button
             type="button"
             className="inline-flex min-h-11 items-center rounded-xl px-3 text-base font-medium text-brand-green transition hover:bg-app-muted sm:text-sm"
@@ -52,7 +61,7 @@ export function MealClientNote({ meal, onChange }: { meal: Meal; onChange: () =>
     }
 
     return (
-      <div className="mt-3 border-t border-app-border pt-3">
+      <div className={frame}>
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Note</p>
           <div className="flex shrink-0 gap-1">
@@ -80,7 +89,7 @@ export function MealClientNote({ meal, onChange }: { meal: Meal; onChange: () =>
   }
 
   return (
-    <div className="mt-3 border-t border-app-border pt-3">
+    <div className={frame}>
       <label htmlFor={fieldId} className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">
         Note
       </label>
