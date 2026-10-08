@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getVirtualCoach } from '../../data/virtualCoaches';
 import { advanceCoachOnboarding, getOnboardingProgress } from './coachOnboardingFlow';
 import { applyDraftToForm, buildSetupPayload, createEmptySetupForm } from './setupForm';
-import { goalWeightNeedsEntry } from '../../utils/onboardingWeight';
+import { goalWeightEntryError, goalWeightNeedsEntry } from '../../utils/onboardingWeight';
 
 const coach = getVirtualCoach('kali')!;
 
@@ -209,6 +209,11 @@ describe('imported setup payload', () => {
     expect(goalWeightNeedsEntry('189.4', '189.4')).toBe(true);
     expect(goalWeightNeedsEntry('189.4', '')).toBe(true);
     expect(goalWeightNeedsEntry('189.4', '165')).toBe(false);
+    expect(goalWeightEntryError('189.4', '')).toBe('Enter your goal weight.');
+    expect(goalWeightEntryError('189.4', '189.4')).toBe(
+      'Enter a goal weight that is different from your current weight.'
+    );
+    expect(goalWeightEntryError('189.4', '165')).toBe('');
   });
 
   it('prefills height, food notes, and diet notes from the imported profile', () => {

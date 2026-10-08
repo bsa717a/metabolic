@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { BirthDateInput } from '../ui/BirthDateInput';
 import { NumberInput } from '../ui/NumberInput';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
-import { goalWeightNeedsEntry } from '../../utils/onboardingWeight';
-import { resolveTimezone, timezoneOptions } from '../../utils/timezoneOptions';
+import { goalWeightEntryError, goalWeightNeedsEntry } from '../../utils/onboardingWeight';
+import { formatTimezoneLabel, resolveTimezone, timezoneOptions } from '../../utils/timezoneOptions';
 import { getVirtualCoach, type VirtualCoachId } from '../../data/virtualCoaches';
 import {
   OnboardingChecklist,
@@ -82,6 +82,7 @@ export function MigrationConfirmationFlow({
   const [index, setIndex] = useState(0);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [goalDraft, setGoalDraft] = useState<string | null>(null);
 
   const step = steps[index] ?? 'done';
   const virtualCoach = getVirtualCoach(form.selectedVirtualCoachId);
@@ -98,6 +99,11 @@ export function MigrationConfirmationFlow({
 
   async function handleFinish() {
     setError('');
+    const goalError = goalWeightEntryError(form.weight, form.goalWeight);
+    if (goalError) {
+      setError(goalError);
+      return;
+    }
     setSubmitting(true);
     try {
       await submitSetupForm(form, {
@@ -140,7 +146,7 @@ export function MigrationConfirmationFlow({
         </div>
 
         <div className="mt-6">
-          <OnboardingPrimaryButton onClick={goNext}>Review My Info →</OnboardingPrimaryButton>
+          <OnboardingPrimaryButton onClick={goNext}>Review My Info</OnboardingPrimaryButton>
         </div>
       </OnboardingShell>
     );
@@ -170,12 +176,14 @@ export function MigrationConfirmationFlow({
           <ConfirmRow label="Diet notes" value={form.dietaryPreferences.trim()} />
           {form.birthDate.trim() ? <ConfirmRow label="Birth date" value={form.birthDate.trim()} /> : null}
           {activity ? <ConfirmRow label="Day-to-day activity" value={activity.label} /> : null}
-          {hasStoredTimezone ? <ConfirmRow label="Timezone" value={form.timezone.trim()} /> : null}
+          {hasStoredTimezone ? (
+            <ConfirmRow label="Timezone" value={formatTimezoneLabel(form.timezone.trim())} />
+          ) : null}
         </dl>
 
         <div className="mt-6 space-y-3">
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
-          <OnboardingPrimaryButton onClick={goNext}>Looks Good →</OnboardingPrimaryButton>
+          <OnboardingPrimaryButton onClick={goNext}>Looks Good</OnboardingPrimaryButton>
           {backButton}
         </div>
       </OnboardingShell>
@@ -184,11 +192,12 @@ export function MigrationConfirmationFlow({
 
   if (step === 'timezone') {
     const zone = resolveTimezone(form.timezone);
+    const zoneLabel = formatTimezoneLabel(zone);
     return (
       <OnboardingShell footer="We use your timezone to schedule meal reminders and daily check-ins at the right time for you.">
         <OnboardingStepHeader
           headline="Your timezone"
-          subheadline={`I've got your timezone as ${zone} — this is used for meal reminders and scheduling. Is that right?`}
+          subheadline={`I've got your timezone as ${zoneLabel} — this is used for meal reminders and scheduling. Is that right?`}
         />
 
         <div className="space-y-4">
@@ -201,7 +210,7 @@ export function MigrationConfirmationFlow({
           >
             {timezoneOptions(zone).map((option) => (
               <option key={option} value={option}>
-                {option}
+                {formatTimezoneLabel(option)}
               </option>
             ))}
           </select>
@@ -214,7 +223,7 @@ export function MigrationConfirmationFlow({
               goNext();
             }}
           >
-            {`Yes — ${zone}`}
+            {`Yes — ${zoneLabel}`}
           </OnboardingPrimaryButton>
           {backButton}
         </div>
@@ -223,6 +232,10 @@ export function MigrationConfirmationFlow({
   }
 
   if (step === 'goalWeight') {
+    const storedMatchesCurrent =
+      form.goalWeight.trim() !== '' && goalWeightNeedsEntry(form.weight, form.goalWeight);
+    const goalFieldValue = goalDraft !== null ? goalDraft : storedMatchesCurrent ? '' : form.goalWeight;
+    const currentWeightHint = form.weight.trim();
     return (
       <OnboardingShell footer="Your current weight stays on your imported program. This only sets the goal.">
         <OnboardingStepHeader
@@ -238,31 +251,34 @@ export function MigrationConfirmationFlow({
             <NumberInput
               id="goal-weight"
               className={onboardingInputClass}
-              value={form.goalWeight}
-              onChange={(value) => onChange('goalWeight', value)}
-              placeholder="165"
+              value={goalFieldValue}
+              onChange={(value) => {
+                setGoalDraft(value);
+                onChange('goalWeight', value);
+              }}
+              placeholder=""
               inputMode="decimal"
               min={1}
               step={0.1}
             />
+            {currentWeightHint ? (
+              <p className="mt-2 text-sm text-app-text-muted">Your current weight is {currentWeightHint} lb.</p>
+            ) : null}
           </div>
 
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
 
           <OnboardingPrimaryButton
             onClick={() => {
-              if (goalWeightNeedsEntry(form.weight, form.goalWeight) && !form.goalWeight.trim()) {
-                setError('Enter your goal weight.');
-                return;
-              }
-              if (!Number(form.goalWeight) || Number(form.goalWeight) <= 0) {
-                setError('Enter your goal weight.');
+              const message = goalWeightEntryError(form.weight, goalFieldValue);
+              if (message) {
+                setError(message);
                 return;
               }
               goNext();
             }}
           >
-            Continue →
+            Continue
           </OnboardingPrimaryButton>
           {backButton}
         </div>
@@ -297,7 +313,7 @@ export function MigrationConfirmationFlow({
               goNext();
             }}
           >
-            Continue →
+            Continue
           </OnboardingPrimaryButton>
           <button
             type="button"
@@ -362,7 +378,7 @@ export function MigrationConfirmationFlow({
           />
 
           {form.selectedVirtualCoachId ? (
-            <OnboardingPrimaryButton onClick={goNext}>Continue →</OnboardingPrimaryButton>
+            <OnboardingPrimaryButton onClick={goNext}>Continue</OnboardingPrimaryButton>
           ) : null}
 
           <button
@@ -442,7 +458,7 @@ export function MigrationConfirmationFlow({
           loadingLabel="Saving your info…"
           onClick={() => void handleFinish()}
         >
-          Go to My Dashboard →
+          Go to My Dashboard
         </OnboardingPrimaryButton>
         {backButton}
       </div>
