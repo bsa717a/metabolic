@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getVirtualCoach } from '../../data/virtualCoaches';
 import { advanceCoachOnboarding, getOnboardingProgress } from './coachOnboardingFlow';
-import { buildSetupPayload, createEmptySetupForm } from './setupForm';
+import { applyDraftToForm, buildSetupPayload, createEmptySetupForm } from './setupForm';
+import { goalWeightNeedsEntry } from '../../utils/onboardingWeight';
 
 const coach = getVirtualCoach('kali')!;
 
@@ -200,5 +201,99 @@ describe('body fat visual estimate', () => {
     expect(result.formPatch).toEqual({ bodyFat: '20' });
     expect(result.next.stage).toBe('bodyFatCurrent');
     expect(result.next.assistantMessage).toContain('20%');
+  });
+});
+
+describe('imported setup payload', () => {
+  it('asks for a goal when the import copied the current weight', () => {
+    expect(goalWeightNeedsEntry('189.4', '189.4')).toBe(true);
+    expect(goalWeightNeedsEntry('189.4', '')).toBe(true);
+    expect(goalWeightNeedsEntry('189.4', '165')).toBe(false);
+  });
+
+  it('prefills height, food notes, and diet notes from the imported profile', () => {
+    const form = applyDraftToForm(
+      createEmptySetupForm(),
+      {
+        weight: '189.4',
+        goalWeight: '189.4',
+        bodyFat: '35.5',
+        gender: 'f',
+        timezone: '',
+        phone: '(385) 555-0100',
+        heightFeet: '5',
+        heightInches: '6',
+        foodAllergies: 'Lactose',
+        dietaryPreferences: 'High protein',
+        activityLevel: ''
+      },
+      {
+        heightFeet: 5,
+        heightInches: 4,
+        foodAllergies: 'Should not override draft',
+        dietaryPreferences: 'Should not override draft'
+      }
+    );
+
+    expect(form.heightFeet).toBe('5');
+    expect(form.heightInches).toBe('6');
+    expect(form.foodAllergies).toBe('Lactose');
+    expect(form.dietaryPreferences).toBe('High protein');
+    expect(form.phone).toBe('(385) 555-0100');
+    expect(form.weight).toBe('189.4');
+  });
+
+  it('falls back to the profile when the draft omits height and food notes', () => {
+    const form = applyDraftToForm(createEmptySetupForm(), { weight: '180' }, {
+      heightFeet: 5,
+      heightInches: 0,
+      foodAllergies: 'Shellfish',
+      dietaryPreferences: 'No late meals',
+      activityLevel: 3,
+      phone: '3855550100'
+    });
+
+    expect(form.heightFeet).toBe('5');
+    expect(form.heightInches).toBe('0');
+    expect(form.foodAllergies).toBe('Shellfish');
+    expect(form.dietaryPreferences).toBe('No late meals');
+    expect(form.activityLevel).toBe('3');
+  });
+
+  it('does not send a coach code or blank food notes for an imported user', () => {
+    const payload = buildSetupPayload(
+      {
+        ...createEmptySetupForm(),
+        weight: '189.4',
+        goalWeight: '170',
+        coachCode: 'DF',
+        wantsCoach: true,
+        trackingOnly: true,
+        foodAllergies: '   ',
+        dietaryPreferences: '',
+        textReminders: 'yes',
+        timezone: 'America/Chicago',
+        heightFeet: '5',
+        heightInches: '6'
+      },
+      { preserveAssignedCoach: true }
+    );
+
+    expect(payload.coachCode).toBeUndefined();
+    expect(payload.wantsCoach).toBeUndefined();
+    expect(payload.trackingOnly).toBeUndefined();
+    expect(payload.foodAllergies).toBeUndefined();
+    expect(payload.dietaryPreferences).toBeUndefined();
+    expect(payload.textReminders).toBe(true);
+    expect(payload.heightFeet).toBe(5);
+    expect(payload.heightInches).toBe(6);
+  });
+
+  it('omits text reminders when the optional step is skipped', () => {
+    const payload = buildSetupPayload({
+      ...formWithVirtualCoach(),
+      textReminders: ''
+    });
+    expect(payload.textReminders).toBeUndefined();
   });
 });
