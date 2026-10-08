@@ -24,6 +24,7 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
   const [isMigratedUser, setIsMigratedUser] = useState(false);
   const [hasStoredTimezone, setHasStoredTimezone] = useState(false);
   const [coachName, setCoachName] = useState('');
+  const [hasAssignedCoach, setHasAssignedCoach] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [form, setForm] = useState<SetupFormState>(() => ({
     ...createEmptySetupForm(),
@@ -54,7 +55,9 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
       const assignedFromUser = [user.assignedCoach?.firstName, user.assignedCoach?.lastName]
         .filter(Boolean)
         .join(' ');
-      setCoachName(draft.assignedCoachName?.trim() || assignedFromUser);
+      const name = draft.assignedCoachName?.trim() || assignedFromUser;
+      setCoachName(name);
+      setHasAssignedCoach(draft.hasAssignedCoach ?? Boolean(name || user.assignedCoach));
     } catch (err) {
       setProfileLoadError(
         err instanceof Error ? err.message : 'Unable to load your profile details.'
@@ -87,6 +90,7 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
         onChange={handleChange}
         onComplete={onComplete}
         coachName={coachName}
+        hasAssignedCoach={hasAssignedCoach}
         hasStoredTimezone={hasStoredTimezone}
       />
     );
