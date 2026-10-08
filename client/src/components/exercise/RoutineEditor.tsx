@@ -980,6 +980,7 @@ export function RoutineEditorContent({
     previous: DayAssignment[];
     previousPlanId: string | null;
     atSettlement: DayAssignment[];
+    rejected: DayAssignment[];
   } | null>(null);
   const [savedRoutineDays, setSavedRoutineDays] = useState<ExerciseRoutineDay[]>([]);
 
@@ -1137,6 +1138,13 @@ export function RoutineEditorContent({
       setError('');
       // Persist now with an explicit reset. A later Save must not keep sending
       // resetDayEdits, or weekday adds and removals made after this pick are wiped.
+      let failedSettlement: {
+        succeeded: false;
+        previous: DayAssignment[];
+        previousPlanId: string | null;
+        atSettlement: DayAssignment[];
+        rejected: DayAssignment[];
+      } | null = null;
       const apply = (async () => {
         let succeeded = false;
         try {
@@ -1147,18 +1155,26 @@ export function RoutineEditorContent({
             });
             succeeded = true;
           } catch (err) {
-            // Settle before this promise resolves. A waiting add/remove then
-            // reads this week, not the optimistic plan from its render.
-            rememberAssignments(
-              assignmentsAfterPlanApply({
-                succeeded: false,
-                sent: nextAssignments,
-                local: liveAssignmentsRef.current,
-                previous: previousAssignments,
-                server: previousAssignments
-              })
-            );
+            // The in-flight swap is the rejected plan. Put the previous week
+            // back before this promise resolves so a waiting add does not save it.
+            const inFlight = liveAssignmentsRef.current.map((day) => ({ ...day }));
+            const rolledBack = assignmentsAfterPlanApply({
+              succeeded: false,
+              sent: nextAssignments,
+              local: inFlight,
+              previous: previousAssignments,
+              server: previousAssignments
+            });
+            rememberAssignments(rolledBack);
             rememberPlanId(previousPlanId);
+            failedSettlement = {
+              succeeded: false,
+              previous: previousAssignments,
+              previousPlanId,
+              atSettlement: rolledBack.map((day) => ({ ...day })),
+              rejected: inFlight
+            };
+            planApplySettlementRef.current = failedSettlement;
             setError(err instanceof Error ? err.message : 'Unable to apply plan');
           }
           if (succeeded) {
@@ -1169,22 +1185,30 @@ export function RoutineEditorContent({
             }
           }
         } finally {
-          // Rollback is done. Drop the settlement so a later swap is saved
-          // instead of being treated as an edit from this failed apply.
-          planApplySettlementRef.current = succeeded
-            ? {
-                succeeded: true,
-                previous: previousAssignments,
-                previousPlanId,
-                atSettlement: liveAssignmentsRef.current.map((day) => ({ ...day }))
-              }
-            : null;
+          if (succeeded) {
+            planApplySettlementRef.current = {
+              succeeded: true,
+              previous: previousAssignments,
+              previousPlanId,
+              atSettlement: liveAssignmentsRef.current.map((day) => ({ ...day })),
+              rejected: liveAssignmentsRef.current.map((day) => ({ ...day }))
+            };
+          }
           setSaving(false);
         }
       })();
       planApplyRef.current = apply;
       void apply.finally(() => {
         if (planApplyRef.current === apply) planApplyRef.current = null;
+        const settlement = failedSettlement;
+        if (!settlement) return;
+        // Waiters already queued on this apply read the settlement first.
+        // The clear runs after them, so a later swap is not treated as in-flight.
+        queueMicrotask(() => {
+          if (planApplySettlementRef.current === settlement) {
+            planApplySettlementRef.current = null;
+          }
+        });
       });
       return;
     }
@@ -1379,6 +1403,7 @@ export function RoutineEditorContent({
           succeeded: settlement.succeeded,
           settled: currentAssignments,
           atSettlement: settlement.atSettlement,
+          rejected: settlement.rejected,
           previous: settlement.previous,
           assignmentsNeedSave: need,
           routineExists: liveSavedDaysRef.current.length > 0

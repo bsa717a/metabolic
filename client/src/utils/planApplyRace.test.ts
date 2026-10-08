@@ -46,7 +46,7 @@ describe('assignmentsAfterPlanApply', () => {
     ).toEqual(swapped);
   });
 
-  it('keeps a swap when the plan apply fails instead of wiping it', () => {
+  it('restores the previous plan when a swap was in flight during a failed apply', () => {
     expect(
       assignmentsAfterPlanApply({
         succeeded: false,
@@ -55,7 +55,7 @@ describe('assignmentsAfterPlanApply', () => {
         previous,
         server: sent
       })
-    ).toEqual(swapped);
+    ).toEqual(previous);
   });
 
   it('adopts the server week when nothing changed during a successful save', () => {
@@ -112,12 +112,22 @@ describe('shouldPersistAfterPlanApply', () => {
     ).toEqual({ persist: true, assignments: 'settled' });
   });
 
-  it('does not write a rejected plan that still has an in-flight swap on screen', () => {
+  it('does not save an in-flight swap as the rejected plan', () => {
+    const display = assignmentsAfterPlanApply({
+      succeeded: false,
+      sent,
+      local: swapped,
+      previous,
+      server: sent
+    });
+    expect(display).toEqual(previous);
+    expect(weekAssignmentsNeedSave(display, previous)).toBe(false);
     expect(
       shouldPersistAfterPlanApply({
         succeeded: false,
         settled: swapped,
         atSettlement: swapped,
+        rejected: swapped,
         previous,
         assignmentsNeedSave: true,
         routineExists: true
@@ -135,6 +145,7 @@ describe('shouldPersistAfterPlanApply', () => {
         succeeded: false,
         settled: later,
         atSettlement: previous,
+        rejected: swapped,
         previous,
         assignmentsNeedSave: true,
         routineExists: true
