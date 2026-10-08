@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.37.0](https://github.com/bsa717a/metabolic/compare/v0.36.0...v0.37.0) (2026-10-08)
+
+
+### Features
+
+* **exercise:** choose an automatic plan for the selected level ([#324](https://github.com/bsa717a/metabolic/issues/324)) ([44ccbe7](https://github.com/bsa717a/metabolic/commit/44ccbe7da3b26c498e37bdaf3808a9c26e6b6222))
+
 ## [0.36.0](https://github.com/bsa717a/metabolic/compare/v0.35.0...v0.36.0) (2026-10-07)
 
 
