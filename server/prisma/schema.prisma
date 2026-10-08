@@ -789,6 +789,7 @@ model Exercise {
   updatedAt DateTime @updatedAt
   scheduledExercises ScheduledExercise[]
   templateItems ExerciseTemplateItem[]
+  routineDayExtras ExerciseRoutineDayExtra[]
   aiLookups AiExerciseLookup[]
 }
 
@@ -1092,6 +1093,7 @@ model ExerciseTemplateItem {
   template ExerciseTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id])
   routineDayOverrides ExerciseRoutineDayItem[]
+  routineDayExclusions ExerciseRoutineDayExclusion[]
 }
 
 /// One weekly exercise routine per program — maps each weekday to a workout template or rest.
@@ -1114,14 +1116,50 @@ model ExerciseRoutineDay {
   routineId String
   /// Monday = 0 … Sunday = 6
   weekday Int
-  /// Null means an explicit rest day.
+  /// Null means rest when this day has no added exercises.
   templateId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   routine ExerciseRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
   template ExerciseTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   itemOverrides ExerciseRoutineDayItem[]
+  exclusions ExerciseRoutineDayExclusion[]
+  extras ExerciseRoutineDayExtra[]
   @@unique([routineId, weekday])
+}
+
+/// Plan exercises hidden on this weekday of one user's routine. The shared template item stays.
+model ExerciseRoutineDayExclusion {
+  id String @id @default(cuid())
+  routineDayId String
+  templateItemId String
+  createdAt DateTime @default(now())
+  routineDay ExerciseRoutineDay @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  templateItem ExerciseTemplateItem @relation(fields: [templateItemId], references: [id], onDelete: Cascade)
+  @@unique([routineDayId, templateItemId])
+  @@index([templateItemId])
+}
+
+/// Exercises added to a weekday on one user's routine, not written onto the shared plan.
+model ExerciseRoutineDayExtra {
+  id String @id @default(cuid())
+  routineDayId String
+  exerciseId String
+  sortOrder Int @default(0)
+  sets Int?
+  /// Prescription scheme, e.g. "10", "15/12/10", "20/17/15".
+  reps String?
+  /// Tempo/speed scheme, e.g. "1/3", "1/2", "1/1".
+  speed String?
+  durationSeconds Int?
+  distance Decimal? @db.Decimal(10, 2)
+  weight Decimal? @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  routineDay ExerciseRoutineDay @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  @@index([routineDayId])
+  @@index([exerciseId])
 }
 
 /// Per-weekday prescription overrides for a template item (sets/reps/duration/lbs can differ by day).

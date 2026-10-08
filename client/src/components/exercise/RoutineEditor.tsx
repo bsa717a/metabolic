@@ -1,19 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Plus } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus, Search, X } from 'lucide-react';
 import { api } from '../../services/api';
 import type {
+  ExerciseCatalogItem,
   ExercisePlanSummary,
   ExercisePlanTemplate,
   ExercisePlanTemplateSummary,
   ExerciseRoutine,
   ExerciseRoutineDay,
+  ExerciseRoutineDayExtra,
   ExerciseRoutineDayItemOverride,
   ExerciseTemplateItem
 } from '../../types';
 import type { ExercisePlanUndoSnapshot } from '../../types/exercisePlanUndo';
+import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exerciseCatalogFilter';
 import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { formatPlanShort } from '../../utils/exerciseFormat';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
+import {
+  assignmentsAfterPlanApply,
+  shouldPersistAfterPlanApply,
+  weekAssignmentsEqual,
+  weekAssignmentsNeedSave
+} from '../../utils/planApplyRace';
+import { type RoutineDayExerciseView, visibleRoutineDayExercises } from '../../utils/routineDayEdits';
 import { sharedField } from '../../utils/sharedPrescription';
 import { WEEKDAY_LABELS, type WeekdayIndex } from '../../utils/weekdayPattern';
 import { Button } from '../ui/Button';
@@ -42,24 +52,6 @@ function parseOptionalNumber(value: string): number | null {
 function exerciseItemSummary(item: ExerciseTemplateItem) {
   const label = formatPlanShort(item);
   return label === '—' ? null : label;
-}
-
-function mergeItemWithOverride(
-  item: ExerciseTemplateItem,
-  overrides: ExerciseRoutineDayItemOverride[]
-): ExerciseTemplateItem {
-  const override = overrides.find((entry) => entry.templateItemId === item.id);
-  if (!override) return item;
-  return {
-    ...item,
-    sets: override.sets !== undefined ? override.sets : item.sets,
-    reps: override.reps !== undefined ? override.reps : item.reps,
-    speed: override.speed !== undefined ? override.speed : item.speed,
-    durationSeconds:
-      override.durationSeconds !== undefined ? override.durationSeconds : item.durationSeconds,
-    distance: override.distance !== undefined ? override.distance : item.distance,
-    weight: override.weight !== undefined ? override.weight : item.weight
-  };
 }
 
 function PrescriptionNumberChip({
@@ -99,7 +91,7 @@ function DayTitlePrescription({
   disabled,
   onApply
 }: {
-  items: ExerciseTemplateItem[];
+  items: { sets?: number | null; reps?: string | null; speed?: string | null }[];
   disabled?: boolean;
   onApply: (patch: { sets?: number | null; reps?: string | null; speed?: string | null }) => void;
 }) {
@@ -178,10 +170,11 @@ function EditableDayExerciseRow({
   index,
   item,
   disabled,
-  onPatch
+  onPatch,
+  onRemove
 }: {
   index: number;
-  item: ExerciseTemplateItem;
+  item: RoutineDayExerciseView;
   disabled?: boolean;
   onPatch: (patch: {
     sets?: number | null;
@@ -190,6 +183,7 @@ function EditableDayExerciseRow({
     durationSeconds?: number | null;
     weight?: number | null;
   }) => void;
+  onRemove: () => void;
 }) {
   const initialDuration = secondsToInput(item.durationSeconds);
   const [sets, setSets] = useState(toInput(item.sets));
@@ -207,7 +201,7 @@ function EditableDayExerciseRow({
     setDurationValue(next.value);
     setDurationUnit(next.unit);
     setWeight(toInput(item.weight));
-  }, [item.id, item.sets, item.reps, item.speed, item.durationSeconds, item.weight]);
+  }, [item.key, item.sets, item.reps, item.speed, item.durationSeconds, item.weight]);
 
   function commit(
     next: {
@@ -246,12 +240,22 @@ function EditableDayExerciseRow({
   return (
     <li className="rounded-xl border border-app-border bg-app-surface px-2.5 py-2">
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label={`Remove ${item.name}`}
+          title={`Remove ${item.name} from this day`}
+          disabled={disabled}
+          onClick={onRemove}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-red-500 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+        >
+          <Minus className="h-4 w-4" strokeWidth={2.5} />
+        </button>
         <span className="w-4 shrink-0 text-[10px] font-bold tabular-nums text-app-text-muted">
           {index}
         </span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
           <p className="min-w-[6rem] flex-1 truncate text-xs font-semibold text-app-text">
-            {item.exercise.name}
+            {item.name}
           </p>
           <div className="flex shrink-0 flex-wrap items-center gap-1">
             <PrescriptionNumberChip
@@ -439,11 +443,23 @@ function PaletteRoutineCard({
 }
 
 /** Weekday drop target; expandable when a routine is assigned. Prescriptions editable when assigned. */
+function usualPrescriptionLabel(item: ExerciseCatalogItem) {
+  if (item.defaultSets != null && item.defaultReps != null) {
+    return `Adds as ${item.defaultSets}×${item.defaultReps}`;
+  }
+  if (item.defaultDurationSeconds != null && item.defaultDurationSeconds > 0) {
+    return 'Adds with its usual duration';
+  }
+  return 'Adds with its usual sets and reps';
+}
+
 function WeekdayAssignmentRow({
   weekday,
   templateId,
   savedTemplateId,
   itemOverrides,
+  excludedTemplateItemIds,
+  extras,
   label,
   isDropTarget,
   awaitingAssign,
@@ -451,13 +467,15 @@ function WeekdayAssignmentRow({
   onActivate,
   onPointerDown,
   onEnsureSaved,
-  onOverridesSaved,
+  onDayUpdated,
   onApplied
 }: {
   weekday: WeekdayIndex;
   templateId: string | null;
   savedTemplateId: string | null | undefined;
   itemOverrides: ExerciseRoutineDayItemOverride[];
+  excludedTemplateItemIds: string[];
+  extras: ExerciseRoutineDayExtra[];
   label: string;
   isDropTarget: boolean;
   awaitingAssign: boolean;
@@ -465,35 +483,69 @@ function WeekdayAssignmentRow({
   onActivate: () => void;
   onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onEnsureSaved: () => Promise<void>;
-  onOverridesSaved: (
-    overrides: ExerciseRoutineDayItemOverride[],
-    undoSnapshot?: ExercisePlanUndoSnapshot
-  ) => void;
+  onDayUpdated: (day: ExerciseRoutineDay, undoSnapshot?: ExercisePlanUndoSnapshot) => void;
   onApplied?: () => void | Promise<void>;
 }) {
   const endpoints = useMemo(() => exercisePlanApi(clientId), [clientId]);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [patchError, setPatchError] = useState('');
   const [applyingAll, setApplyingAll] = useState(false);
-  const hasRoutine = Boolean(templateId);
-  const assignmentSaved = Boolean(templateId && savedTemplateId && templateId === savedTemplateId);
-  const { items, loading, loadError } = useRoutineExercisePreview(
-    hasRoutine ? templateId : null,
-    hasRoutine,
-    clientId
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<ExerciseCatalogItem[]>([]);
+  const [query, setQuery] = useState('');
+  const [hideGym, setHideGym] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const editsMatch = (templateId ?? null) === (savedTemplateId ?? null);
+  const { items, loading, loadError } = useRoutineExercisePreview(templateId, Boolean(templateId), clientId);
+  const templateReady = !templateId || (!loading && items != null);
+  const visibleItems = useMemo(
+    () =>
+      templateReady
+        ? visibleRoutineDayExercises({
+            templateItems: items,
+            excludedTemplateItemIds: editsMatch ? excludedTemplateItemIds : [],
+            itemOverrides: editsMatch ? itemOverrides : [],
+            extras: editsMatch ? extras : []
+          })
+        : [],
+    [templateReady, items, editsMatch, excludedTemplateItemIds, itemOverrides, extras]
   );
-
-  const mergedItems = useMemo(
-    () => (items ?? []).map((item) => mergeItemWithOverride(item, itemOverrides)),
-    [items, itemOverrides]
+  const onDayExerciseIds = useMemo(
+    () => new Set(visibleItems.map((item) => item.exerciseId)),
+    [visibleItems]
   );
+  const searchResults = useMemo(() => {
+    const available = filterExerciseCatalog(catalog, { query, hideGym }).filter(
+      (item) => !onDayExerciseIds.has(item.id)
+    );
+    if (!query.trim()) return available.slice(0, 8);
+    return available.slice(0, 12);
+  }, [catalog, hideGym, query, onDayExerciseIds]);
 
   useEffect(() => {
-    if (!hasRoutine) setOpen(false);
-  }, [hasRoutine, templateId]);
+    if (!open) return;
+    let cancelled = false;
+    api<ExerciseCatalogItem[]>('/api/exercises')
+      .then((data) => {
+        if (!cancelled) setCatalog(data);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  async function saveDayResult(result: { day: ExerciseRoutineDay; undoSnapshot?: ExercisePlanUndoSnapshot }) {
+    onDayUpdated(result.day, result.undoSnapshot);
+    await onApplied?.();
+  }
 
   async function handlePatch(
-    item: ExerciseTemplateItem,
+    item: RoutineDayExerciseView,
     patch: {
       sets?: number | null;
       reps?: string | null;
@@ -502,19 +554,23 @@ function WeekdayAssignmentRow({
       weight?: number | null;
     }
   ) {
-    if (!templateId) return;
     setPatchError('');
     try {
-      if (!assignmentSaved) await onEnsureSaved();
-      const result = await api<{
-        override: ExerciseRoutineDayItemOverride;
-        undoSnapshot?: ExercisePlanUndoSnapshot;
-      }>(endpoints.routineDayItem(weekday, item.id), {
-        method: 'PATCH',
-        body: JSON.stringify(patch)
-      });
-      onOverridesSaved([result.override], result.undoSnapshot);
-      await onApplied?.();
+      await onEnsureSaved();
+      if (item.source === 'template' && item.templateItemId) {
+        const result = await api<{ day: ExerciseRoutineDay; undoSnapshot?: ExercisePlanUndoSnapshot }>(
+          endpoints.routineDayItem(weekday, item.templateItemId),
+          { method: 'PATCH', body: JSON.stringify(patch) }
+        );
+        await saveDayResult(result);
+        return;
+      }
+      if (!item.extraId) return;
+      const result = await api<{ day: ExerciseRoutineDay; undoSnapshot?: ExercisePlanUndoSnapshot }>(
+        endpoints.routineDayExtra(weekday, item.extraId),
+        { method: 'PATCH', body: JSON.stringify(patch) }
+      );
+      await saveDayResult(result);
     } catch (err) {
       setPatchError(err instanceof Error ? err.message : 'Unable to update prescription');
     }
@@ -525,20 +581,16 @@ function WeekdayAssignmentRow({
     reps?: string | null;
     speed?: string | null;
   }) {
-    if (!templateId) return;
+    if (!visibleItems.length) return;
     setPatchError('');
     setApplyingAll(true);
     try {
-      if (!assignmentSaved) await onEnsureSaved();
-      const result = await api<{
-        overrides: ExerciseRoutineDayItemOverride[];
-        undoSnapshot?: ExercisePlanUndoSnapshot;
-      }>(endpoints.routineDayItems(weekday), {
-        method: 'PATCH',
-        body: JSON.stringify(patch)
-      });
-      onOverridesSaved(result.overrides, result.undoSnapshot);
-      await onApplied?.();
+      await onEnsureSaved();
+      const result = await api<{ day: ExerciseRoutineDay; undoSnapshot?: ExercisePlanUndoSnapshot }>(
+        endpoints.routineDayItems(weekday),
+        { method: 'PATCH', body: JSON.stringify(patch) }
+      );
+      await saveDayResult(result);
     } catch (err) {
       setPatchError(err instanceof Error ? err.message : 'Unable to update prescription');
     } finally {
@@ -546,10 +598,58 @@ function WeekdayAssignmentRow({
     }
   }
 
+  async function handleRemove(item: RoutineDayExerciseView) {
+    setPatchError('');
+    setRemovingKey(item.key);
+    try {
+      await onEnsureSaved();
+      const result = await api<{ day: ExerciseRoutineDay; undoSnapshot?: ExercisePlanUndoSnapshot }>(
+        endpoints.removeRoutineDayExercise(weekday),
+        {
+          method: 'POST',
+          body: JSON.stringify(
+            item.source === 'template'
+              ? { templateItemId: item.templateItemId }
+              : { extraId: item.extraId }
+          )
+        }
+      );
+      await saveDayResult(result);
+    } catch (err) {
+      setPatchError(err instanceof Error ? err.message : 'Unable to remove exercise');
+    } finally {
+      setRemovingKey(null);
+    }
+  }
+
+  async function handleAdd(item: ExerciseCatalogItem) {
+    setPatchError('');
+    setAddingId(item.id);
+    try {
+      await onEnsureSaved();
+      const result = await api<{ day: ExerciseRoutineDay; undoSnapshot?: ExercisePlanUndoSnapshot }>(
+        endpoints.addRoutineDayExercise(weekday),
+        { method: 'POST', body: JSON.stringify({ exerciseId: item.id }) }
+      );
+      setQuery('');
+      setSearchOpen(false);
+      await saveDayResult(result);
+    } catch (err) {
+      setPatchError(err instanceof Error ? err.message : 'Unable to add exercise');
+    } finally {
+      setAddingId(null);
+    }
+  }
+
+  const emphasized = label !== 'Rest';
+  const busy = applyingAll || removingKey != null || addingId != null;
+
   return (
     <div
       data-routine-weekday={weekday}
-      className={`overflow-hidden rounded-xl border transition ${
+      className={`rounded-xl border transition ${
+        open ? 'relative z-20 overflow-visible' : 'overflow-hidden'
+      } ${
         isDropTarget
           ? 'border-brand-green bg-brand-green/10 ring-2 ring-brand-green/30'
           : awaitingAssign
@@ -560,15 +660,13 @@ function WeekdayAssignmentRow({
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
         <button
           type="button"
-          aria-expanded={hasRoutine ? open : undefined}
+          aria-expanded={open}
           aria-label={
             awaitingAssign
               ? `Assign selected routine to ${WEEKDAY_LABELS[weekday]}`
-              : hasRoutine
-                ? open
-                  ? `Hide exercises for ${label}`
-                  : `Show exercises for ${label}`
-                : `${WEEKDAY_LABELS[weekday]} · ${label}`
+              : open
+                ? `Hide exercises for ${WEEKDAY_LABELS[weekday]}`
+                : `Show exercises for ${WEEKDAY_LABELS[weekday]}`
           }
           onPointerDown={onPointerDown}
           onClick={() => {
@@ -576,57 +674,145 @@ function WeekdayAssignmentRow({
               onActivate();
               return;
             }
-            if (hasRoutine) setOpen((current) => !current);
+            setOpen((current) => !current);
           }}
-          className={`flex min-w-0 flex-1 touch-none items-center gap-3 text-left transition hover:bg-app-muted/40 ${
-            hasRoutine || awaitingAssign ? 'cursor-pointer' : 'cursor-grab'
-          }`}
+          className="flex min-w-0 flex-1 touch-none cursor-pointer items-center gap-3 text-left transition hover:bg-app-muted/40"
         >
           <span className="w-10 shrink-0 text-sm font-semibold text-app-text">
             {WEEKDAY_LABELS[weekday]}
           </span>
           <span
             className={`min-w-0 flex-1 truncate text-sm ${
-              hasRoutine ? 'font-medium text-app-text' : 'text-app-text-muted'
+              emphasized ? 'font-medium text-app-text' : 'text-app-text-muted'
             }`}
           >
             {label}
           </span>
-          {hasRoutine && (
-            <ChevronDown
-              aria-hidden
-              className={`h-4 w-4 shrink-0 text-app-text-muted transition ${open ? 'rotate-180' : ''}`}
-            />
-          )}
+          <ChevronDown
+            aria-hidden
+            className={`h-4 w-4 shrink-0 text-app-text-muted transition ${open ? 'rotate-180' : ''}`}
+          />
         </button>
-        {hasRoutine && !awaitingAssign && (
+        {emphasized && !awaitingAssign && (
           <DayTitlePrescription
-            items={mergedItems}
-            disabled={applyingAll || Boolean(loadError) || (!loading && mergedItems.length === 0)}
+            items={visibleItems}
+            disabled={busy || Boolean(loadError) || !templateReady || visibleItems.length === 0}
             onApply={(patch) => void handleApplyAll(patch)}
           />
         )}
       </div>
-      {hasRoutine && open && (
-        <div className="border-t border-app-border bg-app-muted/30 px-3 py-2">
+      {open && (
+        <div className="space-y-2 border-t border-app-border bg-app-muted/30 px-3 py-2">
           {loading && <p className="text-xs text-app-text-muted">Loading…</p>}
           {!loading && loadError && <p className="text-xs text-red-600">{loadError}</p>}
-          {!loading && !loadError && mergedItems.length === 0 && (
-            <p className="text-xs text-app-text-muted">No exercises yet</p>
+          {templateReady && !loadError && visibleItems.length === 0 && (
+            <p className="text-xs text-app-text-muted">Rest day. Search below to add an exercise.</p>
           )}
-          {!loading && !loadError && mergedItems.length > 0 && (
+          {templateReady && visibleItems.length > 0 && (
             <ul className="space-y-1.5">
-              {mergedItems.map((item, index) => (
+              {visibleItems.map((item, index) => (
                 <EditableDayExerciseRow
-                  key={item.id}
+                  key={item.key}
                   index={index + 1}
                   item={item}
+                  disabled={busy}
                   onPatch={(patch) => void handlePatch(item, patch)}
+                  onRemove={() => void handleRemove(item)}
                 />
               ))}
             </ul>
           )}
-          {patchError && <p className="mt-2 text-xs text-red-600">{patchError}</p>}
+          {templateReady && (
+            <div className="relative pt-1">
+              <label className="mb-2 flex items-center gap-1.5 text-xs text-app-text-muted">
+                <input
+                  type="checkbox"
+                  checked={hideGym}
+                  onChange={(event) => setHideGym(event.target.checked)}
+                />
+                Hide gym exercises
+              </label>
+              <div className="flex items-center gap-2 rounded-2xl border border-dashed border-brand-green/40 bg-brand-green/5 px-3 py-2.5">
+                <Search className="h-4 w-4 shrink-0 text-brand-green" />
+                <input
+                  ref={searchRef}
+                  type="search"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setSearchOpen(true);
+                  }}
+                  onFocus={() => setSearchOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setSearchOpen(false), 150);
+                  }}
+                  placeholder="Search to add an exercise"
+                  aria-label={`Add an exercise on ${WEEKDAY_LABELS[weekday]}`}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-app-text outline-none placeholder:text-app-text-muted"
+                  autoComplete="off"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    className="text-app-text-muted hover:text-app-text"
+                    onClick={() => {
+                      setQuery('');
+                      searchRef.current?.focus();
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              {searchOpen && (
+                <ul className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-2xl border border-app-border bg-app-surface shadow-lg">
+                  {searchResults.length === 0 ? (
+                    <li className="px-3 py-3 text-sm text-app-text-muted">
+                      {query.trim() ? 'No matching exercises.' : 'No exercises to add.'}
+                    </li>
+                  ) : (
+                    searchResults.map((item) => {
+                      const adding = addingId === item.id;
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => void handleAdd(item)}
+                            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-brand-green/10 disabled:opacity-60"
+                          >
+                            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-green/15 text-brand-green">
+                              {adding ? (
+                                <span className="text-[10px] font-bold">…</span>
+                              ) : (
+                                <Plus className="h-4 w-4" />
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-app-text">
+                                {item.name}
+                                {exerciseRequiresGym(item) && (
+                                  <span className="ml-2 text-xs font-normal uppercase text-app-text-muted">
+                                    Gym
+                                  </span>
+                                )}
+                              </span>
+                              <span className="block text-xs text-app-text-muted">
+                                {usualPrescriptionLabel(item)}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
+          {patchError && <p className="text-xs text-red-600">{patchError}</p>}
         </div>
       )}
     </div>
@@ -644,8 +830,16 @@ function workoutOptionLabel(workout: ExercisePlanTemplateSummary) {
   return `${prefix}${workout.name}${count}`;
 }
 
-function assignmentLabel(templateId: string | null, workouts: ExercisePlanTemplateSummary[]) {
-  if (!templateId) return 'Rest';
+function assignmentLabel(
+  templateId: string | null,
+  workouts: ExercisePlanTemplateSummary[],
+  addedCount = 0
+) {
+  if (!templateId) {
+    if (addedCount === 1) return '1 added exercise';
+    if (addedCount > 1) return `${addedCount} added exercises`;
+    return 'Rest';
+  }
   const workout = workouts.find((entry) => entry.id === templateId);
   if (!workout) return 'Workout';
   return workoutOptionLabel(workout);
@@ -689,18 +883,27 @@ function assignmentsFromPlanDays(planDays: ExercisePlanTemplateSummary[]): DayAs
   }));
 }
 
-function routineSummary(days: DayAssignment[], workouts: ExercisePlanTemplateSummary[]) {
+function routineSummary(
+  days: DayAssignment[],
+  workouts: ExercisePlanTemplateSummary[],
+  savedDays: ExerciseRoutineDay[]
+) {
   const workoutName = (id: string | null) =>
     id ? workouts.find((w) => w.id === id)?.name ?? 'Workout' : 'Rest';
   const counts = new Map<string, number>();
   for (const day of days) {
-    const key = day.templateId ?? REST_VALUE;
+    const saved = savedDays.find((entry) => entry.weekday === day.weekday);
+    const editsMatch = Boolean(saved) && (saved?.templateId ?? null) === (day.templateId ?? null);
+    const added = editsMatch ? (saved?.extras?.length ?? 0) : 0;
+    const key = day.templateId ?? (added > 0 ? `added:${day.weekday}` : REST_VALUE);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const parts: string[] = [];
   for (const [key, count] of counts) {
     if (key === REST_VALUE) {
       parts.push(`${count} rest day${count > 1 ? 's' : ''}`);
+    } else if (key.startsWith('added:')) {
+      parts.push(`${count} added day${count > 1 ? 's' : ''}`);
     } else {
       parts.push(`${count}× ${workoutName(key)}`);
     }
@@ -767,7 +970,38 @@ export function RoutineEditorContent({
   const [plans, setPlans] = useState<ExercisePlanSummary[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<DayAssignment[]>(defaultAssignments);
+  /** In-flight plan apply. Day edits wait for it so they read the settled week, not a stale plan. */
+  const planApplyRef = useRef<Promise<void> | null>(null);
+  const liveAssignmentsRef = useRef<DayAssignment[]>(defaultAssignments());
+  const livePlanIdRef = useRef<string | null>(null);
+  const liveSavedDaysRef = useRef<ExerciseRoutineDay[]>([]);
+  const planApplySettlementRef = useRef<{
+    succeeded: boolean;
+    previous: DayAssignment[];
+    previousPlanId: string | null;
+    atSettlement: DayAssignment[];
+    rejected: DayAssignment[];
+  } | null>(null);
   const [savedRoutineDays, setSavedRoutineDays] = useState<ExerciseRoutineDay[]>([]);
+
+  function rememberAssignments(next: DayAssignment[]) {
+    liveAssignmentsRef.current = next;
+    setAssignments(next);
+  }
+
+  function updateLiveAssignments(updater: (current: DayAssignment[]) => DayAssignment[]) {
+    rememberAssignments(updater(liveAssignmentsRef.current));
+  }
+
+  function rememberPlanId(next: string | null) {
+    livePlanIdRef.current = next;
+    setSelectedPlanId(next);
+  }
+
+  function rememberSavedDays(next: ExerciseRoutineDay[]) {
+    liveSavedDaysRef.current = next;
+    setSavedRoutineDays(next);
+  }
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -796,7 +1030,10 @@ export function RoutineEditorContent({
     [selectedPlanId, plans, workouts]
   );
 
-  const summary = useMemo(() => routineSummary(assignments, dayOptions), [assignments, dayOptions]);
+  const summary = useMemo(
+    () => routineSummary(assignments, dayOptions, savedRoutineDays),
+    [assignments, dayOptions, savedRoutineDays]
+  );
 
   const myWorkouts = useMemo(
     () => workouts.filter((workout) => workout.visibility === 'USER' && !workout.planId),
@@ -826,7 +1063,7 @@ export function RoutineEditorContent({
       return;
     }
     setSaved(false);
-    setAssignments((current) => {
+    updateLiveAssignments((current) => {
       const fromId = current.find((day) => day.weekday === from)?.templateId ?? null;
       const toId = current.find((day) => day.weekday === to)?.templateId ?? null;
       return current.map((day) => {
@@ -859,9 +1096,9 @@ export function RoutineEditorContent({
       .then(([routine, templates, nextPlans]) => {
         setWorkouts(templates);
         setPlans(nextPlans);
-        setAssignments(assignmentsFromRoutine(routine));
-        setSavedRoutineDays(routine?.days ?? []);
-        setSelectedPlanId(resolveSelectedPlanId(routine, templates));
+        rememberAssignments(assignmentsFromRoutine(routine));
+        rememberSavedDays(routine?.days ?? []);
+        rememberPlanId(resolveSelectedPlanId(routine, templates));
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Unable to load routine');
@@ -871,7 +1108,7 @@ export function RoutineEditorContent({
 
   function setDayTemplate(weekday: WeekdayIndex, value: string) {
     setSaved(false);
-    setAssignments((current) =>
+    updateLiveAssignments((current) =>
       current.map((day) =>
         day.weekday === weekday ? { ...day, templateId: value === REST_VALUE ? null : value } : day
       )
@@ -892,9 +1129,87 @@ export function RoutineEditorContent({
       ) {
         return;
       }
-      setSelectedPlanId(nextPlanId);
-      setAssignments(nextAssignments);
+      const previousPlanId = livePlanIdRef.current;
+      const previousAssignments = liveAssignmentsRef.current.map((day) => ({ ...day }));
+      rememberPlanId(nextPlanId);
+      rememberAssignments(nextAssignments);
       setSaved(false);
+      setSaving(true);
+      setError('');
+      // Persist now with an explicit reset. A later Save must not keep sending
+      // resetDayEdits, or weekday adds and removals made after this pick are wiped.
+      let failedSettlement: {
+        succeeded: false;
+        previous: DayAssignment[];
+        previousPlanId: string | null;
+        atSettlement: DayAssignment[];
+        rejected: DayAssignment[];
+      } | null = null;
+      const apply = (async () => {
+        let succeeded = false;
+        try {
+          try {
+            await persistAssignments(nextAssignments, {
+              exercisePlanId: nextPlanId,
+              resetDayEdits: true
+            });
+            succeeded = true;
+          } catch (err) {
+            // The in-flight swap is the rejected plan. Put the previous week
+            // back before this promise resolves so a waiting add does not save it.
+            const inFlight = liveAssignmentsRef.current.map((day) => ({ ...day }));
+            const rolledBack = assignmentsAfterPlanApply({
+              succeeded: false,
+              sent: nextAssignments,
+              local: inFlight,
+              previous: previousAssignments,
+              server: previousAssignments
+            });
+            rememberAssignments(rolledBack);
+            rememberPlanId(previousPlanId);
+            failedSettlement = {
+              succeeded: false,
+              previous: previousAssignments,
+              previousPlanId,
+              atSettlement: rolledBack.map((day) => ({ ...day })),
+              rejected: inFlight
+            };
+            planApplySettlementRef.current = failedSettlement;
+            setError(err instanceof Error ? err.message : 'Unable to apply plan');
+          }
+          if (succeeded) {
+            try {
+              await onSaved();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Unable to refresh after applying the plan');
+            }
+          }
+        } finally {
+          if (succeeded) {
+            planApplySettlementRef.current = {
+              succeeded: true,
+              previous: previousAssignments,
+              previousPlanId,
+              atSettlement: liveAssignmentsRef.current.map((day) => ({ ...day })),
+              rejected: liveAssignmentsRef.current.map((day) => ({ ...day }))
+            };
+          }
+          setSaving(false);
+        }
+      })();
+      planApplyRef.current = apply;
+      void apply.finally(() => {
+        if (planApplyRef.current === apply) planApplyRef.current = null;
+        const settlement = failedSettlement;
+        if (!settlement) return;
+        // Waiters already queued on this apply read the settlement first.
+        // The clear runs after them, so a later swap is not treated as in-flight.
+        queueMicrotask(() => {
+          if (planApplySettlementRef.current === settlement) {
+            planApplySettlementRef.current = null;
+          }
+        });
+      });
       return;
     }
 
@@ -907,10 +1222,10 @@ export function RoutineEditorContent({
     ) {
       return;
     }
-    setSelectedPlanId(null);
+    rememberPlanId(null);
     setSaved(false);
     if (invalid) {
-      setAssignments((current) =>
+      updateLiveAssignments((current) =>
         current.map((day) =>
           day.templateId && !allowed.has(day.templateId) ? { ...day, templateId: null } : day
         )
@@ -1034,7 +1349,13 @@ export function RoutineEditorContent({
     assignToDay(weekday, selectedPaletteValue);
   }
 
-  async function persistAssignments(nextAssignments: DayAssignment[] = assignments) {
+  async function persistAssignments(
+    nextAssignments: DayAssignment[] = assignments,
+    overrides?: { exercisePlanId?: string | null; resetDayEdits?: boolean }
+  ) {
+    const planId =
+      overrides && 'exercisePlanId' in overrides ? (overrides.exercisePlanId ?? null) : livePlanIdRef.current;
+    const resetDayEdits = overrides?.resetDayEdits === true;
     const result = await api<{ routine: ExerciseRoutine; undoSnapshot?: ExercisePlanUndoSnapshot }>(
       endpoints.routine,
       {
@@ -1044,38 +1365,67 @@ export function RoutineEditorContent({
             weekday: day.weekday,
             templateId: day.templateId
           })),
-          exercisePlanId: selectedPlanId,
-          applyForward: true
+          exercisePlanId: planId,
+          applyForward: true,
+          resetDayEdits
         })
       }
     );
     registerUndo?.('Weekly routine updated', result.undoSnapshot);
-    setAssignments(assignmentsFromRoutine(result.routine));
-    setSavedRoutineDays(result.routine.days);
-    setSelectedPlanId(result.routine.exercisePlanId ?? null);
-    setSaved(true);
+    const serverAssignments = assignmentsFromRoutine(result.routine);
+    const kept = assignmentsAfterPlanApply({
+      succeeded: true,
+      sent: nextAssignments,
+      local: liveAssignmentsRef.current,
+      previous: nextAssignments,
+      server: serverAssignments
+    });
+    const editedDuringSave = !weekAssignmentsEqual(nextAssignments, liveAssignmentsRef.current);
+    if (!editedDuringSave) rememberAssignments(kept);
+    rememberSavedDays(result.routine.days);
+    rememberPlanId(result.routine.exercisePlanId ?? null);
+    setSaved(!editedDuringSave);
     return result.routine;
   }
 
-  function assignmentsDirty() {
-    if (savedRoutineDays.length === 0 && assignments.some((day) => day.templateId)) return true;
-    const savedByWeekday = new Map(savedRoutineDays.map((day) => [day.weekday, day.templateId ?? null]));
-    return assignments.some(
-      (day) => (savedByWeekday.get(day.weekday) ?? null) !== (day.templateId ?? null)
-    );
-  }
-
   async function ensureAssignmentsSaved() {
-    if (!assignmentsDirty()) return;
-    await persistAssignments();
+    if (planApplyRef.current) await planApplyRef.current;
+    const settlement = planApplySettlementRef.current;
+    planApplySettlementRef.current = null;
+    const currentAssignments = liveAssignmentsRef.current;
+    const savedDays = liveSavedDaysRef.current.map((day) => ({
+      weekday: day.weekday,
+      templateId: day.templateId ?? null
+    }));
+    const need = weekAssignmentsNeedSave(currentAssignments, savedDays);
+    const decision = settlement
+      ? shouldPersistAfterPlanApply({
+          succeeded: settlement.succeeded,
+          settled: currentAssignments,
+          atSettlement: settlement.atSettlement,
+          rejected: settlement.rejected,
+          previous: settlement.previous,
+          assignmentsNeedSave: need,
+          routineExists: liveSavedDaysRef.current.length > 0
+        })
+      : { persist: need, assignments: 'settled' as const };
+    if (!decision.persist) return;
+    const toSave = decision.assignments === 'previous' ? settlement!.previous : currentAssignments;
+    const planId =
+      decision.assignments === 'previous' ? settlement!.previousPlanId : livePlanIdRef.current;
+    await persistAssignments(toSave, { exercisePlanId: planId });
     await onSaved();
   }
 
   async function handleSave() {
+    if (planApplyRef.current) await planApplyRef.current;
+    planApplySettlementRef.current = null;
     setSaving(true);
     setError('');
     try {
-      await persistAssignments();
+      await persistAssignments(liveAssignmentsRef.current, {
+        exercisePlanId: livePlanIdRef.current
+      });
       await onSaved();
       onCancel?.();
     } catch (err) {
@@ -1085,14 +1435,17 @@ export function RoutineEditorContent({
     }
   }
 
-  function handleDayOverridesSaved(weekday: WeekdayIndex, overrides: ExerciseRoutineDayItemOverride[]) {
-    setSavedRoutineDays((current) =>
-      current.map((day) => {
-        if (day.weekday !== weekday) return day;
-        const incoming = new Map(overrides.map((entry) => [entry.templateItemId, entry]));
-        const kept = day.itemOverrides.filter((entry) => !incoming.has(entry.templateItemId));
-        return { ...day, itemOverrides: [...kept, ...overrides] };
-      })
+  function handleDayUpdated(day: ExerciseRoutineDay, undoSnapshot?: ExercisePlanUndoSnapshot) {
+    if (undoSnapshot) registerUndo?.('Weekly routine updated', undoSnapshot);
+    rememberSavedDays(
+      [...liveSavedDaysRef.current.filter((entry) => entry.weekday !== day.weekday), day].sort(
+        (a, b) => a.weekday - b.weekday
+      )
+    );
+    updateLiveAssignments((current) =>
+      current.map((entry) =>
+        entry.weekday === day.weekday ? { ...entry, templateId: day.templateId } : entry
+      )
     );
   }
 
@@ -1256,7 +1609,7 @@ export function RoutineEditorContent({
                                 endpoints.templates
                               );
                               if (!templates.some((entry) => entry.id === workout.id)) {
-                                setAssignments((current) =>
+                                updateLiveAssignments((current) =>
                                   current.map((day) =>
                                     day.templateId === workout.id
                                       ? { ...day, templateId: null }
@@ -1281,9 +1634,10 @@ export function RoutineEditorContent({
           <h3 className="text-sm font-semibold text-app-text">Weekly routine</h3>
           <p className="text-sm text-app-text-muted">
             Choose an exercise plan to pre-fill the week (first routine → Mon, next → Tue, and so on).
-            Drag days to swap them, or drag from the work area / Rest to replace a day. Set sets, reps,
-            and speed on a day title to apply them to every exercise that day. Your schedule repeats
-            every week and fills in upcoming days automatically.
+            Open a day to take an exercise off that weekday, or search at the bottom to add one. Those
+            changes stay on your routine. Drag days to swap them, or drag from the work area / Rest to
+            replace a day. Set sets, reps, and speed on a day title to apply them to every exercise that
+            day. Your schedule repeats every week and fills in upcoming days automatically.
           </p>
 
           {loading ? (
@@ -1297,8 +1651,9 @@ export function RoutineEditorContent({
                 <div className="relative w-full max-w-xs">
                   <select
                     value={selectedPlanId ?? CUSTOM_PLAN_VALUE}
+                    disabled={saving || loading}
                     onChange={(event) => handlePlanChange(event.target.value)}
-                    className="h-11 w-full appearance-none rounded-xl border border-app-border bg-app-surface px-3 pr-9 text-sm font-medium text-app-text"
+                    className="h-11 w-full appearance-none rounded-xl border border-app-border bg-app-surface px-3 pr-9 text-sm font-medium text-app-text disabled:opacity-60"
                   >
                     <option value={CUSTOM_PLAN_VALUE}>Custom (my workouts)</option>
                     {plans.map((plan) => (
@@ -1319,17 +1674,20 @@ export function RoutineEditorContent({
                 <div className="min-w-0 flex-1 space-y-2">
                   {assignments.map((day) => {
                     const savedDay = savedRoutineDays.find((entry) => entry.weekday === day.weekday);
-                    const overridesMatch = Boolean(
-                      day.templateId && savedDay?.templateId && day.templateId === savedDay.templateId
-                    );
+                    const editsMatch = (day.templateId ?? null) === (savedDay?.templateId ?? null);
+                    const addedCount = editsMatch ? (savedDay?.extras?.length ?? 0) : 0;
                     return (
                       <WeekdayAssignmentRow
                         key={day.weekday}
                         weekday={day.weekday}
                         templateId={day.templateId}
                         savedTemplateId={savedDay?.templateId}
-                        itemOverrides={overridesMatch ? (savedDay?.itemOverrides ?? []) : []}
-                        label={assignmentLabel(day.templateId, workouts)}
+                        itemOverrides={editsMatch ? (savedDay?.itemOverrides ?? []) : []}
+                        excludedTemplateItemIds={
+                          editsMatch ? (savedDay?.excludedTemplateItemIds ?? []) : []
+                        }
+                        extras={editsMatch ? (savedDay?.extras ?? []) : []}
+                        label={assignmentLabel(day.templateId, workouts, addedCount)}
                         isDropTarget={dragOverWeekday === day.weekday}
                         awaitingAssign={selectedPaletteValue != null && draggingValue == null}
                         clientId={clientId}
@@ -1338,9 +1696,7 @@ export function RoutineEditorContent({
                           handleWeekdayPointerDown(day.weekday, day.templateId, event)
                         }
                         onEnsureSaved={ensureAssignmentsSaved}
-                        onOverridesSaved={(overrides) => {
-                          handleDayOverridesSaved(day.weekday, overrides);
-                        }}
+                        onDayUpdated={handleDayUpdated}
                         onApplied={onSaved}
                       />
                     );
