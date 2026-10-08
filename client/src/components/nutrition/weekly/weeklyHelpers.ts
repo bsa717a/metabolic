@@ -1,4 +1,4 @@
-import { api, isFuture, isToday } from '../../../services/api';
+import { api, isFuture, isToday, todayKey } from '../../../services/api';
 import type { Food, Meal, MealItem } from '../../../types';
 
 export type DayMeals = { date: string; meals: Meal[] };
@@ -154,17 +154,22 @@ export function mealKcalTargetStatus(
 }
 
 /** Day column: green within plan, red when over or fully skipped on a past day. */
-export function dayKcalTargetStatus(actual: number, planned: number, date: string): KcalTargetStatus {
-  const zeroActualIsOver = !isFuture(date) && !isToday(date) && actual <= 0;
+export function dayKcalTargetStatus(
+  actual: number,
+  planned: number,
+  date: string,
+  today = todayKey()
+): KcalTargetStatus {
+  const zeroActualIsOver = date < today && actual <= 0;
   return kcalTargetStatusFromTotals(actual, planned, zeroActualIsOver);
 }
 
-export function isPastDate(date: string): boolean {
-  return !isFuture(date) && !isToday(date);
+export function isPastDate(date: string, today = todayKey()): boolean {
+  return date < today;
 }
 
-export function dayKcalTargetStatusForMeals(date: string, meals: Meal[]): KcalTargetStatus {
-  return dayKcalTargetStatus(Math.round(dayActualKcal(meals)), Math.round(dayPlannedKcal(meals)), date);
+export function dayKcalTargetStatusForMeals(date: string, meals: Meal[], today = todayKey()): KcalTargetStatus {
+  return dayKcalTargetStatus(Math.round(dayActualKcal(meals)), Math.round(dayPlannedKcal(meals)), date, today);
 }
 
 export function kcalTargetHighlightClass(status: KcalTargetStatus): string {

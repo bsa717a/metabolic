@@ -148,6 +148,7 @@ export async function listCoachClients(coachId: string) {
       lastName: user.lastName,
       email: user.email,
       phone: user.phone,
+      timezone: user.timezone,
       textPhone,
       status: user.status,
       assignedAt: assignment.createdAt.toISOString(),

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api } from '../../services/api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { api, getWeekDates, startOfWeek } from '../../services/api';
 import type { CoachClientPlanStatus, Meal, NutritionPlanTemplateSummary } from '../../types';
+import { fetchCoachMealsForDates, type DayMeals } from '../../utils/planExportData';
 import { AiFoodLookupDrawer } from '../nutrition/AiFoodLookupDrawer';
 import { EditMealPlanDrawer } from '../nutrition/EditMealPlanDrawer';
 import { MealPlanner } from '../nutrition/MealPlanner';
+import { WeekDateStrip } from '../nutrition/WeekDateStrip';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
@@ -11,6 +13,8 @@ import { Button } from '../ui/Button';
 export function FoodPlanEditor({
   clientId,
   planDate,
+  clientToday,
+  onPlanDateChange,
   nutritionTemplates,
   planStatus,
   saving,
@@ -23,6 +27,9 @@ export function FoodPlanEditor({
 }: {
   clientId: string;
   planDate: string;
+  /** The client's today (YYYY-MM-DD) in the client's timezone. */
+  clientToday: string;
+  onPlanDateChange: (date: string) => void;
   nutritionTemplates: NutritionPlanTemplateSummary[];
   planStatus: CoachClientPlanStatus | null;
   saving: boolean;
@@ -39,12 +46,20 @@ export function FoodPlanEditor({
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [logActualMealId, setLogActualMealId] = useState<string>();
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
+  const [weekDays, setWeekDays] = useState<DayMeals[]>([]);
+  const weekStart = startOfWeek(planDate);
+  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
+
+  const loadWeekDays = useCallback(async () => {
+    setWeekDays(await fetchCoachMealsForDates(clientId, weekDates));
+  }, [clientId, weekDates]);
 
   const loadMeals = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
     try {
       const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`);
       setMeals(data);
+      void loadWeekDays();
     } catch (err) {
       // A note save refetches with silent: true. Keep the meals already on screen if that GET fails.
       if (!options?.silent) setMeals([]);
@@ -52,7 +67,7 @@ export function FoodPlanEditor({
     } finally {
       if (!options?.silent) setLoading(false);
     }
-  }, [clientId, onError, planDate]);
+  }, [clientId, loadWeekDays, onError, planDate]);
 
   useEffect(() => {
     void loadMeals();
@@ -94,6 +109,13 @@ export function FoodPlanEditor({
 
   return (
     <div className="space-y-4">
+      <WeekDateStrip
+        selectedDate={planDate}
+        onSelectDate={onPlanDateChange}
+        todayDate={clientToday}
+        days={weekDays}
+      />
+
       {planStatus ? (
         <MacroOverridePanel
           key={`${planStatus.overrideTargets.calories}|${planStatus.overrideTargets.protein}|${planStatus.overrideTargets.carbs}|${planStatus.overrideTargets.fat}`}
@@ -189,6 +211,7 @@ export function FoodPlanEditor({
         open={manualOpen}
         clientId={clientId}
         planDate={planDate}
+        clientToday={clientToday}
         nutritionTemplates={nutritionTemplates}
         onClose={() => {
           onManualOpenChange(false);
