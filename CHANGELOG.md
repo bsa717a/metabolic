@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.0](https://github.com/bsa717a/metabolic/compare/v0.37.0...v0.38.0) (2026-10-08)
+
+
+### Features
+
+* **nutrition:** let coaches edit a client meal note ([#327](https://github.com/bsa717a/metabolic/issues/327)) ([7e1b179](https://github.com/bsa717a/metabolic/commit/7e1b179576044a894497a983201bfb2e75813b46))
+
 ## [0.37.0](https://github.com/bsa717a/metabolic/compare/v0.36.0...v0.37.0) (2026-10-08)
 
 
