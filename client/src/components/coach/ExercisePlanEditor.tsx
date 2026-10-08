@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, getWeekDates, startOfWeek } from '../../services/api';
-import type { ExercisePlanTemplateSummary, ExerciseRoutine, ScheduledExercise } from '../../types';
+import type { ExercisePlanSummary, ExerciseRoutine } from '../../types';
 import type { DayExercises } from '../../utils/planExportData';
 import { fetchCoachExercisesForDates } from '../../utils/planExportData';
-import { assignedTemplateIdForDate } from '../../utils/exerciseRoutineDisplay';
-import { weekdayIndex } from '../../utils/weekdayPattern';
+import { exercisePlanApi } from '../../utils/exercisePlanApi';
+import {
+  assignedExercisePlan,
+  exercisePlanPickerOptions,
+  exercisePlanPickerValue,
+  weekdayAssignmentsFromPlanDays
+} from '../../utils/exerciseRoutineDisplay';
 import { AssignedExerciseWeek } from '../exercise/AssignedExerciseWeek';
 import { CoachDayExerciseEditor } from './CoachDayExerciseEditor';
 import { Button } from '../ui/Button';
@@ -15,9 +20,9 @@ export function ExercisePlanEditorView({
   weekDates,
   weekDays,
   loading,
-  exerciseTemplates,
-  templateId,
-  onTemplateIdChange,
+  plans,
+  planId,
+  onPlanIdChange,
   setAsDefault,
   onSetAsDefaultChange,
   saving,
@@ -29,20 +34,16 @@ export function ExercisePlanEditorView({
   weekDates: string[];
   weekDays: DayExercises[];
   loading: boolean;
-  exerciseTemplates: ExercisePlanTemplateSummary[];
-  templateId: string;
-  onTemplateIdChange: (templateId: string) => void;
+  plans: { id: string; name: string }[];
+  planId: string;
+  onPlanIdChange: (planId: string) => void;
   setAsDefault: boolean;
   onSetAsDefaultChange: (value: boolean) => void;
   saving: boolean;
   onApply: () => void;
   onSelectDay: (date: string) => void;
 }) {
-  const assignedTemplate = routine?.days.find((day) => day.weekday === weekdayIndex(planDate))?.template ?? null;
-  const templates =
-    assignedTemplate && !exerciseTemplates.some((template) => template.id === assignedTemplate.id)
-      ? [assignedTemplate, ...exerciseTemplates]
-      : exerciseTemplates;
+  const options = exercisePlanPickerOptions(plans, assignedExercisePlan(routine));
 
   return (
     <div className="space-y-4">
@@ -64,18 +65,18 @@ export function ExercisePlanEditorView({
           <span className="mb-1 block font-medium">Exercise plan</span>
           <select
             className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-            value={templateId}
-            onChange={(event) => onTemplateIdChange(event.target.value)}
+            value={planId}
+            onChange={(event) => onPlanIdChange(event.target.value)}
           >
             <option value="">Choose a plan</option>
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
+            {options.map((plan) => (
+              <option key={plan.id} value={plan.id}>
+                {plan.name}
               </option>
             ))}
           </select>
         </label>
-        <Button disabled={saving || !templateId} onClick={onApply}>
+        <Button disabled={saving || !planId} onClick={onApply}>
           Apply plan
         </Button>
       </div>
@@ -91,7 +92,6 @@ export function ExercisePlanEditorView({
 export function ExercisePlanEditor({
   clientId,
   planDate,
-  exerciseTemplates,
   saving,
   manualOpen,
   onManualOpenChange,
@@ -102,7 +102,6 @@ export function ExercisePlanEditor({
 }: {
   clientId: string;
   planDate: string;
-  exerciseTemplates: ExercisePlanTemplateSummary[];
   saving: boolean;
   manualOpen: boolean;
   onManualOpenChange: (open: boolean) => void;
@@ -113,8 +112,9 @@ export function ExercisePlanEditor({
 }) {
   const [weekDays, setWeekDays] = useState<DayExercises[]>([]);
   const [routine, setRoutine] = useState<ExerciseRoutine | null>(null);
+  const [plans, setPlans] = useState<ExercisePlanSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [templateOverride, setTemplateOverride] = useState<{ date: string; id: string } | null>(null);
+  const [planOverride, setPlanOverride] = useState<string | null>(null);
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -127,21 +127,26 @@ export function ExercisePlanEditor({
     setLoading(true);
   }
 
+  const endpoints = useMemo(() => exercisePlanApi(clientId), [clientId]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [days, nextRoutine] = await Promise.all([
+        const [days, nextRoutine, nextPlans] = await Promise.all([
           fetchCoachExercisesForDates(clientId, weekDates),
-          api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`)
+          api<ExerciseRoutine | null>(endpoints.routine),
+          api<ExercisePlanSummary[]>(endpoints.plans).catch(() => [] as ExercisePlanSummary[])
         ]);
         if (cancelled) return;
         setWeekDays(days);
         setRoutine(nextRoutine);
+        setPlans(nextPlans);
       } catch (err) {
         if (cancelled) return;
         setWeekDays([]);
         setRoutine(null);
+        setPlans([]);
         onError(err instanceof Error ? err.message : 'Unable to load exercises');
       } finally {
         if (!cancelled) setLoading(false);
@@ -150,26 +155,33 @@ export function ExercisePlanEditor({
     return () => {
       cancelled = true;
     };
-  }, [clientId, onError, reloadToken, weekDates]);
+  }, [clientId, endpoints.plans, endpoints.routine, onError, reloadToken, weekDates]);
 
-  const assignedId = assignedTemplateIdForDate(routine, planDate) ?? '';
-  const templateId = templateOverride?.date === planDate ? templateOverride.id : assignedId;
+  const assigned = assignedExercisePlan(routine);
+  const planId = exercisePlanPickerValue(assigned?.id ?? null, planOverride);
 
-  async function applyTemplate() {
-    if (!templateId) {
+  async function applyPlan() {
+    if (!planId) {
+      onError('Choose an exercise plan first.');
+      return;
+    }
+    const plan = plans.find((entry) => entry.id === planId);
+    if (!plan) {
       onError('Choose an exercise plan first.');
       return;
     }
     onSavingChange(true);
     onError('');
     try {
-      await api<{ exercises: ScheduledExercise[] }>(
-        `/api/coach/users/${clientId}/daily-logs/${planDate}/apply-exercise-template`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ templateId, setAsDefault })
-        }
-      );
+      await api(endpoints.routine, {
+        method: 'PUT',
+        body: JSON.stringify({
+          days: weekdayAssignmentsFromPlanDays(plan.days),
+          exercisePlanId: plan.id,
+          applyForward: setAsDefault
+        })
+      });
+      setPlanOverride(null);
       setReloadToken((token) => token + 1);
       await onRefresh();
     } catch (err) {
@@ -187,13 +199,13 @@ export function ExercisePlanEditor({
         weekDates={weekDates}
         weekDays={weekDays}
         loading={loading}
-        exerciseTemplates={exerciseTemplates}
-        templateId={templateId}
-        onTemplateIdChange={(id) => setTemplateOverride({ date: planDate, id })}
+        plans={plans}
+        planId={planId}
+        onPlanIdChange={setPlanOverride}
         setAsDefault={setAsDefault}
         onSetAsDefaultChange={setSetAsDefault}
         saving={saving}
-        onApply={() => void applyTemplate()}
+        onApply={() => void applyPlan()}
         onSelectDay={onPlanDateChange}
       />
 

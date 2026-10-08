@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import { todayKey, tomorrowKey } from '../../services/api';
-import type { CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
+import type { CoachClient, CoachClientPlanStatus, Dashboard, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
 import { clientInitials, clientName, formatNextSession } from '../../utils/coachClientUtils';
@@ -63,7 +63,6 @@ export function ClientDetailTabs({
   planStatus,
   engagement,
   nutritionTemplates,
-  exerciseTemplates,
   saving,
   sendingEmail,
   sendingSms,
@@ -85,7 +84,6 @@ export function ClientDetailTabs({
   planStatus: CoachClientPlanStatus | null;
   engagement: CoachEngagement | null;
   nutritionTemplates: NutritionPlanTemplateSummary[];
-  exerciseTemplates: ExercisePlanTemplateSummary[];
   saving: boolean;
   sendingEmail: boolean;
   sendingSms: boolean;
@@ -340,7 +338,6 @@ export function ClientDetailTabs({
           <ExercisePlanEditor
             clientId={client.id}
             planDate={exercisePlanDate}
-            exerciseTemplates={exerciseTemplates}
             saving={saving}
             manualOpen={exerciseManualOpen}
             onManualOpenChange={setExerciseManualOpen}
