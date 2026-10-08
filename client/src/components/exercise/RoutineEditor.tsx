@@ -759,7 +759,7 @@ export function RoutineEditorContent({
   active: boolean;
   selectedDate: string;
   clientId?: string;
-  onSaved: () => void | Promise<void>;
+  onSaved: (routine?: ExerciseRoutine) => void | Promise<void>;
   onCancel?: () => void;
   registerUndo?: (message: string, snapshot: ExercisePlanUndoSnapshot | undefined) => void;
 }) {
@@ -1067,16 +1067,16 @@ export function RoutineEditorContent({
 
   async function ensureAssignmentsSaved() {
     if (!assignmentsDirty()) return;
-    await persistAssignments();
-    await onSaved();
+    const routine = await persistAssignments();
+    await onSaved(routine);
   }
 
   async function handleSave() {
     setSaving(true);
     setError('');
     try {
-      await persistAssignments();
-      await onSaved();
+      const routine = await persistAssignments();
+      await onSaved(routine);
       onCancel?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save routine');
@@ -1453,7 +1453,7 @@ export function RoutineEditor({
   selectedDate: string;
   clientId?: string;
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (routine?: ExerciseRoutine) => void | Promise<void>;
   registerUndo?: (message: string, snapshot: ExercisePlanUndoSnapshot | undefined) => void;
 }) {
   return (

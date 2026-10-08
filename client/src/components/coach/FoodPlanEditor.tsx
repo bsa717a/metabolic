@@ -44,7 +44,9 @@ export function FoodPlanEditor({
   const loadMeals = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
     try {
-      const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`);
+      const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`, {
+        cache: 'no-store'
+      });
       setMeals(data);
     } catch (err) {
       // A note save refetches with silent: true. Keep the meals already on screen if that GET fails.
@@ -65,10 +67,11 @@ export function FoodPlanEditor({
 
   const dailyTotal = meals.reduce((sum, meal) => sum + Number(meal.plannedCalories), 0);
   const [planPeriod, setPlanPeriod] = useState<PlanPeriodInfo | null>(null);
+  const [planPeriodToken, setPlanPeriodToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`)
+    api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`, { cache: 'no-store' })
       .then((info) => {
         if (!cancelled) setPlanPeriod(info);
       })
@@ -78,7 +81,7 @@ export function FoodPlanEditor({
     return () => {
       cancelled = true;
     };
-  }, [clientId, planDate]);
+  }, [clientId, planDate, planPeriodToken]);
 
   async function applyTemplate() {
     if (!templateId) {
@@ -95,8 +98,9 @@ export function FoodPlanEditor({
           body: JSON.stringify({ templateId, setAsDefault })
         }
       );
-      await loadMeals();
-      await onRefresh();
+      setPlanPeriodToken((token) => token + 1);
+      await Promise.all([loadMeals(), onRefreshPlanStatus()]);
+      void onRefresh();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unable to apply nutrition plan');
     } finally {

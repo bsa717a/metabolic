@@ -29,13 +29,15 @@ export function CoachDayExerciseEditor({
   clientId,
   planDate,
   onClose,
-  onRefresh
+  onRefresh,
+  onRoutineSaved
 }: {
   open: boolean;
   clientId: string;
   planDate: string;
   onClose: () => void;
   onRefresh: () => Promise<void>;
+  onRoutineSaved?: (routine: ExerciseRoutine | null) => void | Promise<void>;
 }) {
   const [selectedDate, setSelectedDate] = useState(planDate);
   const [activeTab, setActiveTab] = useState<ExerciseEditorTab>('manage');
@@ -66,10 +68,14 @@ export function CoachDayExerciseEditor({
 
   const reloadRoutine = useCallback(async () => {
     try {
-      const next = await api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`);
+      const next = await api<ExerciseRoutine | null>(`/api/coach/users/${clientId}/exercise-routine`, {
+        cache: 'no-store'
+      });
       setRoutine(next);
+      return next;
     } catch {
       setRoutine(null);
+      return null;
     }
   }, [clientId]);
 
@@ -152,8 +158,11 @@ export function CoachDayExerciseEditor({
     }
   }
 
-  async function handleRoutineSaved() {
-    await Promise.all([reloadRoutine(), reloadWeek()]);
+  async function handleRoutineSaved(saved?: ExerciseRoutine) {
+    const next = saved ?? (await reloadRoutine());
+    if (saved) setRoutine(saved);
+    await reloadWeek();
+    await onRoutineSaved?.(next);
   }
 
   if (!open) return null;

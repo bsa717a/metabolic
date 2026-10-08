@@ -1,4 +1,5 @@
-import type { ExerciseRoutine } from '../types';
+import type { ExerciseRoutine, ScheduledExercise } from '../types';
+import type { DayExercises } from './planExportData';
 import { weekdayIndex } from './weekdayPattern';
 
 /** Saved exercise-plan name, e.g. "5 Day Split (#5)". Null when unset. Never a day's workout. */
@@ -65,6 +66,31 @@ export function assignedTemplateIdForDate(routine: ExerciseRoutine | null, date:
   if (!routine) return null;
   const day = routine.days.find((entry) => entry.weekday === weekdayIndex(date));
   return day?.templateId ?? null;
+}
+
+/**
+ * Week cards after Apply plan or Save routine. Saved workouts stay visible even when
+ * the exercise list is still empty, so assigned days are not shown as rest.
+ */
+export function coachWeekDaysForRoutine(
+  routine: ExerciseRoutine | null,
+  weekDates: string[],
+  fetched: DayExercises[]
+): DayExercises[] {
+  return weekDates.map((date) => {
+    const fromServer = fetched.find((day) => day.date === date);
+    if (fromServer && fromServer.exercises.length > 0) return fromServer;
+    const weekday = weekdayIndex(date);
+    const assignment = routine?.days.find((day) => day.weekday === weekday);
+    const name = assignment?.templateId ? assignment.template?.name?.trim() : '';
+    if (!name) return fromServer ?? { date, exercises: [] };
+    const placeholder: ScheduledExercise = {
+      id: `assigned-${date}`,
+      status: 'PLANNED',
+      exercise: { name }
+    };
+    return { date, exercises: [placeholder] };
+  });
 }
 
 /** Dates within `weekDates` that the routine marks as explicit rest days (templateId === null). */

@@ -3,6 +3,7 @@ import type { ExerciseRoutine } from '../types';
 import {
   assignedExercisePlan,
   assignedTemplateIdForDate,
+  coachWeekDaysForRoutine,
   APPLY_EXERCISE_PLAN_HINT,
   exercisePlanPickerOptions,
   exercisePlanPickerValue,
@@ -119,5 +120,45 @@ describe('exercise plan picker', () => {
       { weekday: 5, templateId: null },
       { weekday: 6, templateId: null }
     ]);
+  });
+});
+
+describe('coachWeekDaysForRoutine', () => {
+  const saved = routine({
+    exercisePlanId: 'split-5',
+    exercisePlan: { id: 'split-5', name: '5 Day Split (#5)' },
+    days: [
+      {
+        id: 'mon',
+        weekday: 0,
+        templateId: 'push',
+        template: {
+          id: 'push',
+          name: 'Push',
+          visibility: 'GLOBAL',
+          exerciseCount: 4,
+          createdAt: '',
+          updatedAt: ''
+        },
+        itemOverrides: []
+      },
+      { id: 'sun', weekday: 6, templateId: null, template: null, itemOverrides: [] }
+    ]
+  });
+
+  it('keeps an assigned workout visible when the exercise list is still empty', () => {
+    const days = coachWeekDaysForRoutine(saved, ['2026-10-05', '2026-10-11'], [
+      { date: '2026-10-05', exercises: [] },
+      { date: '2026-10-11', exercises: [] }
+    ]);
+    expect(days[0]?.exercises[0]?.exercise.name).toBe('Push');
+    expect(days[1]?.exercises).toEqual([]);
+  });
+
+  it('uses exercises already returned for the day', () => {
+    const days = coachWeekDaysForRoutine(saved, ['2026-10-05'], [
+      { date: '2026-10-05', exercises: [{ id: 'real', status: 'PLANNED', exercise: { name: 'Bench press' } }] }
+    ]);
+    expect(days[0]?.exercises.map((item) => item.exercise.name)).toEqual(['Bench press']);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, getWeekDates, startOfWeek } from '../../services/api';
 import type { ExercisePlanSummary, ExerciseRoutine } from '../../types';
 import type { DayExercises } from '../../utils/planExportData';
@@ -10,6 +10,7 @@ import {
   exercisePlanPickerOptions,
   exercisePlanPickerValue,
   NO_EXERCISE_PLAN_ASSIGNED,
+  coachWeekDaysForRoutine,
   weekdayAssignmentsFromPlanDays
 } from '../../utils/exerciseRoutineDisplay';
 import { AssignedExerciseWeek } from '../exercise/AssignedExerciseWeek';
@@ -104,6 +105,7 @@ export function ExercisePlanEditor({
   onSavingChange,
   onError,
   onRefresh,
+  onRefreshPlanStatus,
   onPlanDateChange
 }: {
   clientId: string;
@@ -114,6 +116,7 @@ export function ExercisePlanEditor({
   onSavingChange: (saving: boolean) => void;
   onError: (message: string) => void;
   onRefresh: () => Promise<void>;
+  onRefreshPlanStatus: (exercisePlan?: { name: string } | null) => Promise<void>;
   onPlanDateChange: (date: string) => void;
 }) {
   const [weekDays, setWeekDays] = useState<DayExercises[]>([]);
@@ -123,45 +126,58 @@ export function ExercisePlanEditor({
   const [planOverride, setPlanOverride] = useState<string | null>(null);
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
+  const loadGeneration = useRef(0);
 
   const weekStart = startOfWeek(planDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
-  const weekKey = `${clientId}:${weekStart}:${reloadToken}`;
-  const [requestedKey, setRequestedKey] = useState(weekKey);
-  if (requestedKey !== weekKey) {
-    setRequestedKey(weekKey);
+  const scopeKey = `${clientId}:${weekStart}`;
+  const [requestedScope, setRequestedScope] = useState(scopeKey);
+  if (requestedScope !== scopeKey) {
+    setRequestedScope(scopeKey);
     setLoading(true);
   }
 
   const endpoints = useMemo(() => exercisePlanApi(clientId), [clientId]);
 
   useEffect(() => {
+    const generation = ++loadGeneration.current;
     let cancelled = false;
     void (async () => {
       try {
         const [days, nextRoutine, nextPlans] = await Promise.all([
           fetchCoachExercisesForDates(clientId, weekDates),
-          api<ExerciseRoutine | null>(endpoints.routine),
-          api<ExercisePlanSummary[]>(endpoints.plans).catch(() => [] as ExercisePlanSummary[])
+          api<ExerciseRoutine | null>(endpoints.routine, { cache: 'no-store' }),
+          api<ExercisePlanSummary[]>(endpoints.plans, { cache: 'no-store' }).catch(() => [] as ExercisePlanSummary[])
         ]);
-        if (cancelled) return;
-        setWeekDays(days);
+        if (cancelled || generation !== loadGeneration.current) return;
+        setWeekDays(coachWeekDaysForRoutine(nextRoutine, weekDates, days));
         setRoutine(nextRoutine);
         setPlans(nextPlans);
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled || generation !== loadGeneration.current) return;
         setWeekDays([]);
         setRoutine(null);
         setPlans([]);
         onError(err instanceof Error ? err.message : 'Unable to load exercises');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && generation === loadGeneration.current) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [clientId, endpoints.plans, endpoints.routine, onError, reloadToken, weekDates]);
+
+  async function showSavedRoutine(nextRoutine: ExerciseRoutine | null) {
+    const generation = ++loadGeneration.current;
+    setRoutine(nextRoutine);
+    setPlanOverride(null);
+    setLoading(false);
+    const days = await fetchCoachExercisesForDates(clientId, weekDates);
+    if (generation !== loadGeneration.current) return;
+    setWeekDays(coachWeekDaysForRoutine(nextRoutine, weekDates, days));
+    await onRefreshPlanStatus(assignedExercisePlan(nextRoutine));
+  }
 
   const assigned = assignedExercisePlan(routine);
   const planId = exercisePlanPickerValue(assigned?.id ?? null, planOverride);
@@ -179,7 +195,7 @@ export function ExercisePlanEditor({
     onSavingChange(true);
     onError('');
     try {
-      await api(endpoints.routine, {
+      const result = await api<{ routine: ExerciseRoutine }>(endpoints.routine, {
         method: 'PUT',
         body: JSON.stringify({
           days: weekdayAssignmentsFromPlanDays(plan.days),
@@ -187,9 +203,8 @@ export function ExercisePlanEditor({
           applyForward: setAsDefault
         })
       });
-      setPlanOverride(null);
-      setReloadToken((token) => token + 1);
-      await onRefresh();
+      await showSavedRoutine(result.routine);
+      void onRefresh();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unable to apply exercise plan');
     } finally {
@@ -224,6 +239,7 @@ export function ExercisePlanEditor({
           setReloadToken((token) => token + 1);
         }}
         onRefresh={onRefresh}
+        onRoutineSaved={showSavedRoutine}
       />
     </>
   );
