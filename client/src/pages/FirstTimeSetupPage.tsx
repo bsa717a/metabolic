@@ -22,6 +22,8 @@ type FirstTimeSetupPageProps = {
 export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps) {
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const [isMigratedUser, setIsMigratedUser] = useState(false);
+  const [hasStoredTimezone, setHasStoredTimezone] = useState(false);
+  const [coachName, setCoachName] = useState('');
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [form, setForm] = useState<SetupFormState>(() => ({
     ...createEmptySetupForm(),
@@ -48,6 +50,11 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
 
       setForm((current) => applyDraftToForm(current, draft, profile, user));
       setIsMigratedUser(isMigratedOnboardingUser(draft));
+      setHasStoredTimezone(Boolean(draft.timezone?.trim()));
+      const assignedFromUser = [user.assignedCoach?.firstName, user.assignedCoach?.lastName]
+        .filter(Boolean)
+        .join(' ');
+      setCoachName(draft.assignedCoachName?.trim() || assignedFromUser);
     } catch (err) {
       setProfileLoadError(
         err instanceof Error ? err.message : 'Unable to load your profile details.'
@@ -75,7 +82,13 @@ export function FirstTimeSetupPage({ user, onComplete }: FirstTimeSetupPageProps
 
   if (isMigratedUser) {
     return (
-      <MigrationConfirmationFlow form={form} onChange={handleChange} onComplete={onComplete} />
+      <MigrationConfirmationFlow
+        form={form}
+        onChange={handleChange}
+        onComplete={onComplete}
+        coachName={coachName}
+        hasStoredTimezone={hasStoredTimezone}
+      />
     );
   }
 

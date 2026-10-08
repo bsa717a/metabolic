@@ -8,6 +8,14 @@ export type SetupDraft = {
   timezone: string;
   wantsCoach: boolean;
   hasExistingWeight: boolean;
+  heightFeet: string;
+  heightInches: string;
+  foodAllergies: string;
+  dietaryPreferences: string;
+  activityLevel: string;
+  phone: string;
+  occupation: string;
+  assignedCoachName: string;
 };
 
 export type SetupFormState = {
@@ -28,4 +36,6 @@ export type SetupFormState = {
   timezone: string;
   phone: string;
   foodAllergies: string;
+  dietaryPreferences: string;
+  textReminders: '' | 'yes' | 'no';
 };
