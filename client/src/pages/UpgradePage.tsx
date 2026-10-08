@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { api } from '../services/api';
 import { loadAppleIapProducts, purchaseApplePlan, restoreApplePurchases, type AppleIapProduct } from '../services/appleIap';
@@ -9,7 +9,8 @@ import { Card } from '../components/ui/Card';
 import { appleFallbackPrice, appleProductIdForPlan } from '../data/appleIap';
 import { PUBLIC_PLANS } from '../data/plans';
 import type { AppUser, PlanSlug } from '../types';
-import { planLabel } from '../utils/entitlements';
+import { getRequiredPlan, planLabel } from '../utils/entitlements';
+import { WEEKLY_PLAN_BILLING_PARAM, weeklyPlanUnlockName } from '../utils/homePlanStatus';
 import { usesAppleIapCheckout } from '../utils/nativePlatform';
 
 export function UpgradePage({
@@ -19,6 +20,10 @@ export function UpgradePage({
   user: AppUser | null;
   onUserUpdated?: (user: AppUser) => void;
 }) {
+  const [searchParams] = useSearchParams();
+  const showWeeklyPlanUnlock = searchParams.get(WEEKLY_PLAN_BILLING_PARAM) === '1';
+  const weeklyPlanName = weeklyPlanUnlockName();
+  const weeklyPlanId = getRequiredPlan('weekly_nutrition_plan');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState<PlanSlug | 'restore' | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
@@ -119,6 +124,12 @@ export function UpgradePage({
         </p>
       </div>
 
+      {showWeeklyPlanUnlock ? (
+        <p className="rounded-2xl border border-brand-green/30 bg-brand-green/10 px-4 py-3 text-sm text-app-text">
+          <span className="font-bold">{weeklyPlanName}</span> unlocks a weekly plan.
+        </p>
+      ) : null}
+
       {user?.gracePeriodEndsAt && user.nextPlanAfterCoach ? (
         <Card className="border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
           After your grace period, you&apos;ll move to {planLabel(user.nextPlanAfterCoach)} unless you choose
@@ -140,6 +151,9 @@ export function UpgradePage({
                 </span>
               ) : null}
               <h2 className="text-lg font-bold">{plan.name}</h2>
+              {showWeeklyPlanUnlock && plan.id === weeklyPlanId ? (
+                <p className="mt-1 text-sm font-semibold text-brand-green">Unlocks a weekly plan</p>
+              ) : null}
               <p className="text-2xl font-bold text-brand-green">{priceFor(plan.id)}</p>
               <ul className="mt-4 flex-1 space-y-2">
                 {plan.bullets.slice(0, 5).map((bullet) => (
