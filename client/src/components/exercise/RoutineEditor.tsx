@@ -963,8 +963,9 @@ export function RoutineEditorContent({
   const [workouts, setWorkouts] = useState<ExercisePlanTemplateSummary[]>([]);
   const [plans, setPlans] = useState<ExercisePlanSummary[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [resetDayEdits, setResetDayEdits] = useState(false);
   const [assignments, setAssignments] = useState<DayAssignment[]>(defaultAssignments);
+  /** In-flight plan apply. Day edits wait for it so a reset cannot land after them. */
+  const planApplyRef = useRef<Promise<void> | null>(null);
   const [savedRoutineDays, setSavedRoutineDays] = useState<ExerciseRoutineDay[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1093,10 +1094,41 @@ export function RoutineEditorContent({
       ) {
         return;
       }
+      const previousPlanId = selectedPlanId;
+      const previousAssignments = assignments;
       setSelectedPlanId(nextPlanId);
       setAssignments(nextAssignments);
-      setResetDayEdits(true);
       setSaved(false);
+      setSaving(true);
+      setError('');
+      // Persist now with an explicit reset. A later Save must not keep sending
+      // resetDayEdits, or weekday adds and removals made after this pick are wiped.
+      const apply = (async () => {
+        try {
+          try {
+            await persistAssignments(nextAssignments, {
+              exercisePlanId: nextPlanId,
+              resetDayEdits: true
+            });
+          } catch (err) {
+            setSelectedPlanId(previousPlanId);
+            setAssignments(previousAssignments);
+            setError(err instanceof Error ? err.message : 'Unable to apply plan');
+            return;
+          }
+          try {
+            await onSaved();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unable to refresh after applying the plan');
+          }
+        } finally {
+          setSaving(false);
+        }
+      })();
+      planApplyRef.current = apply;
+      void apply.finally(() => {
+        if (planApplyRef.current === apply) planApplyRef.current = null;
+      });
       return;
     }
 
@@ -1236,7 +1268,13 @@ export function RoutineEditorContent({
     assignToDay(weekday, selectedPaletteValue);
   }
 
-  async function persistAssignments(nextAssignments: DayAssignment[] = assignments) {
+  async function persistAssignments(
+    nextAssignments: DayAssignment[] = assignments,
+    overrides?: { exercisePlanId?: string | null; resetDayEdits?: boolean }
+  ) {
+    const planId =
+      overrides && 'exercisePlanId' in overrides ? (overrides.exercisePlanId ?? null) : selectedPlanId;
+    const resetDayEdits = overrides?.resetDayEdits === true;
     const result = await api<{ routine: ExerciseRoutine; undoSnapshot?: ExercisePlanUndoSnapshot }>(
       endpoints.routine,
       {
@@ -1246,7 +1284,7 @@ export function RoutineEditorContent({
             weekday: day.weekday,
             templateId: day.templateId
           })),
-          exercisePlanId: selectedPlanId,
+          exercisePlanId: planId,
           applyForward: true,
           resetDayEdits
         })
@@ -1256,7 +1294,6 @@ export function RoutineEditorContent({
     setAssignments(assignmentsFromRoutine(result.routine));
     setSavedRoutineDays(result.routine.days);
     setSelectedPlanId(result.routine.exercisePlanId ?? null);
-    setResetDayEdits(false);
     setSaved(true);
     return result.routine;
   }
@@ -1270,6 +1307,7 @@ export function RoutineEditorContent({
   }
 
   async function ensureAssignmentsSaved() {
+    if (planApplyRef.current) await planApplyRef.current;
     if (assignmentsDirty() || savedRoutineDays.length === 0) {
       await persistAssignments();
       await onSaved();
@@ -1277,6 +1315,10 @@ export function RoutineEditorContent({
   }
 
   async function handleSave() {
+    if (planApplyRef.current) {
+      await planApplyRef.current;
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -1505,8 +1547,9 @@ export function RoutineEditorContent({
                 <div className="relative w-full max-w-xs">
                   <select
                     value={selectedPlanId ?? CUSTOM_PLAN_VALUE}
+                    disabled={saving || loading}
                     onChange={(event) => handlePlanChange(event.target.value)}
-                    className="h-11 w-full appearance-none rounded-xl border border-app-border bg-app-surface px-3 pr-9 text-sm font-medium text-app-text"
+                    className="h-11 w-full appearance-none rounded-xl border border-app-border bg-app-surface px-3 pr-9 text-sm font-medium text-app-text disabled:opacity-60"
                   >
                     <option value={CUSTOM_PLAN_VALUE}>Custom (my workouts)</option>
                     {plans.map((plan) => (
