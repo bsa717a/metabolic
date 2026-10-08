@@ -1,7 +1,7 @@
 import type { ExerciseRoutine } from '../types';
 import { weekdayIndex } from './weekdayPattern';
 
-/** Saved exercise-plan name, e.g. "Core #3". Null when the week is custom or unset. */
+/** Saved exercise-plan name, e.g. "5 Day Split (#5)". Null when unset. Never a day's workout. */
 export function exerciseWeekPlanHeading(routine: ExerciseRoutine | null): string | null {
   return assignedExercisePlan(routine)?.name ?? null;
 }
@@ -38,6 +38,13 @@ export function exercisePlanPickerValue(assignedId: string | null, override: str
   if (override !== null) return override;
   return assignedId ?? '';
 }
+
+/** Week title when the client has no saved exercise plan. */
+export const NO_EXERCISE_PLAN_ASSIGNED = 'No plan is assigned.';
+
+/** Shown by Apply plan. Uncovered weekdays are stored as rest. */
+export const APPLY_EXERCISE_PLAN_HINT =
+  'Applying replaces the whole week, and weekdays the plan does not cover become rest days.';
 
 /** Mon=0 … Sun=6 from a plan's day templates (dayIndex order). Leftover weekdays are rest. */
 export function weekdayAssignmentsFromPlanDays(
