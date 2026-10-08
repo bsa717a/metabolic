@@ -41,7 +41,6 @@ export const MealPlanner = forwardRef<
     onEditingChange?: (editing: boolean) => void;
     onDraftPlannedTotalsChange?: (totals: MacroTotals) => void;
     allowClientNote?: boolean;
-    coachCanEditNote?: boolean;
   }
 >(function MealPlanner(
   {
@@ -56,8 +55,7 @@ export const MealPlanner = forwardRef<
     multiMealEdit = false,
     onEditingChange,
     onDraftPlannedTotalsChange,
-    allowClientNote = false,
-    coachCanEditNote = false
+    allowClientNote = false
   },
   ref
 ) {
@@ -247,7 +245,6 @@ export const MealPlanner = forwardRef<
                   mealEditing ? (totals) => handleDraftTotalsChange(meal.id, totals) : undefined
                 }
                 allowClientNote={allowClientNote}
-                coachCanEditNote={coachCanEditNote}
               />
             );
           })

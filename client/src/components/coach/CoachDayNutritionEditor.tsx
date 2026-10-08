@@ -395,7 +395,7 @@ export function CoachDayNutritionEditor({
                   selectedMealId={effectiveSelectedMealId}
                   onSelectMeal={setSelectedMealId}
                   multiMealEdit
-                  coachCanEditNote
+                  allowClientNote
                   onEditingChange={setEditingPlan}
                   onDraftPlannedTotalsChange={handleDraftPlannedTotalsChange}
                 />

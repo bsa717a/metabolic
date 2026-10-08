@@ -152,7 +152,6 @@ export const MealCard = forwardRef<
     externalSaving?: boolean;
     onDraftTotalsChange?: (totals: MacroTotals) => void;
     allowClientNote?: boolean;
-    coachCanEditNote?: boolean;
   }
 >(function MealCard(
   {
@@ -174,8 +173,7 @@ export const MealCard = forwardRef<
     onRequestCancelAll,
     externalSaving,
     onDraftTotalsChange,
-    allowClientNote = false,
-    coachCanEditNote = false
+    allowClientNote = false
   },
   ref
 ) {
@@ -251,11 +249,7 @@ export const MealCard = forwardRef<
   }
 
   const [editorKey, setEditorKey] = useState(0);
-  const readOnlyClientNote = !allowClientNote && !coachCanEditNote ? meal.clientNote?.trim() ?? '' : '';
-  // One instance, outside the plan-edit branches, so an in-progress draft survives Edit plan / Cancel / Save.
-  const coachNote = coachCanEditNote ? (
-    <MealClientNote key="coach-meal-note" meal={meal} onChange={onChange} position="start" />
-  ) : null;
+  const readOnlyClientNote = !allowClientNote ? meal.clientNote?.trim() ?? '' : '';
 
   async function refreshAfterSaveFailure() {
     await onChange();
@@ -270,76 +264,78 @@ export const MealCard = forwardRef<
           selected && 'border-brand-green ring-2 ring-brand-green/30'
         )}
       >
-      {!isEditing && (
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="w-full shrink-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:shrink">
-            <p className="text-sm text-app-text-muted">Meal {meal.mealNumber}</p>
-            <h3 className="text-lg font-bold">
-              {plannedTime ? `${meal.name} — ${plannedTime}` : meal.name}
-            </h3>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-1">
-            {onBuildMeal && (
-              <button
-                type="button"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-green px-3 text-sm font-semibold text-white transition hover:bg-brand-deep"
-                onClick={onBuildMeal}
-              >
-                🃏 Build
-              </button>
-            )}
-            <button
-              type="button"
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
-              onClick={() => onEnterEditMode(meal.id)}
-            >
-              Edit plan
-            </button>
-            <ActionsDropdown
-              future={future}
-              onLogActual={() => onLogActual(meal.id)}
-              onMarkEaten={() => void markPlannedAsEaten()}
-              onCopyFromYesterday={() => void copyFromYesterday()}
-              onAiSuggestions={() => onAiSuggestions(meal)}
-              onSwapMeal={() => onSwapMeal(meal)}
-              onSaveAsPlan={() => void saveAsPlan()}
-              onViewMacroDetails={() => setMacroDetailsOpen(true)}
-              onDeleteMeal={openDeleteMealScope}
-            />
-            {(() => {
-              const displayStatus = meal.status === 'SKIPPED' ? 'PLANNED' : meal.status;
-              return (
-                <Badge tone={displayStatus.includes('EATEN') || displayStatus === 'MODIFIED' ? 'green' : 'slate'}>
-                  {displayStatus.replaceAll('_', ' ')}
-                </Badge>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-      {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
-      {coachNote}
       {isEditing ? (
-        <MealCardEditor
-          key={editorKey}
-          ref={ref}
-          meal={meal}
-          macroTargets={macroTargets}
-          dailyTargets={dailyTargets}
-          onSaved={() => {
-            onExitEditMode();
-            void onChange();
-          }}
-          onCancel={onExitEditMode}
-          onRefresh={refreshAfterSaveFailure}
-          onRequestRebalance={() => onAiSuggestions(meal)}
-          onRequestSaveAll={onRequestSaveAll}
-          onRequestCancelAll={onRequestCancelAll}
-          externalSaving={externalSaving}
-          onDraftTotalsChange={onDraftTotalsChange}
-        />
+        <>
+          {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
+          <MealCardEditor
+            key={editorKey}
+            ref={ref}
+            meal={meal}
+            macroTargets={macroTargets}
+            dailyTargets={dailyTargets}
+            onSaved={() => {
+              onExitEditMode();
+              void onChange();
+            }}
+            onCancel={onExitEditMode}
+            onRefresh={refreshAfterSaveFailure}
+            onRequestRebalance={() => onAiSuggestions(meal)}
+            onRequestSaveAll={onRequestSaveAll}
+            onRequestCancelAll={onRequestCancelAll}
+            externalSaving={externalSaving}
+            onDraftTotalsChange={onDraftTotalsChange}
+          />
+        </>
       ) : (
         <>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="w-full shrink-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:shrink">
+              <p className="text-sm text-app-text-muted">Meal {meal.mealNumber}</p>
+              <h3 className="text-lg font-bold">
+                {plannedTime ? `${meal.name} — ${plannedTime}` : meal.name}
+              </h3>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-1">
+              {onBuildMeal && (
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-green px-3 text-sm font-semibold text-white transition hover:bg-brand-deep"
+                  onClick={onBuildMeal}
+                >
+                  🃏 Build
+                </button>
+              )}
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+                onClick={() => onEnterEditMode(meal.id)}
+              >
+                Edit plan
+              </button>
+              <ActionsDropdown
+                future={future}
+                onLogActual={() => onLogActual(meal.id)}
+                onMarkEaten={() => void markPlannedAsEaten()}
+                onCopyFromYesterday={() => void copyFromYesterday()}
+                onAiSuggestions={() => onAiSuggestions(meal)}
+                onSwapMeal={() => onSwapMeal(meal)}
+                onSaveAsPlan={() => void saveAsPlan()}
+                onViewMacroDetails={() => setMacroDetailsOpen(true)}
+                onDeleteMeal={openDeleteMealScope}
+              />
+              {(() => {
+                const displayStatus = meal.status === 'SKIPPED' ? 'PLANNED' : meal.status;
+                return (
+                  <Badge tone={displayStatus.includes('EATEN') || displayStatus === 'MODIFIED' ? 'green' : 'slate'}>
+                    {displayStatus.replaceAll('_', ' ')}
+                  </Badge>
+                );
+              })()}
+            </div>
+          </div>
+
+          {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
+
           {toggleError && <p className="mt-2 text-sm text-red-600">{toggleError}</p>}
           {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
 

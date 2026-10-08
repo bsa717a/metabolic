@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { CoachClientPlanStatus, Meal, NutritionPlanTemplateSummary } from '../../types';
-import { MealClientNote } from '../nutrition/MealClientNote';
+import { AiFoodLookupDrawer } from '../nutrition/AiFoodLookupDrawer';
+import { EditMealPlanDrawer } from '../nutrition/EditMealPlanDrawer';
+import { MealPlanner } from '../nutrition/MealPlanner';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
-
-function mealCalories(meal: Meal) {
-  return Math.round(Number(meal.plannedCalories));
-}
 
 export function FoodPlanEditor({
   clientId,
@@ -39,6 +37,8 @@ export function FoodPlanEditor({
   const [loading, setLoading] = useState(false);
   const [templateId, setTemplateId] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(true);
+  const [logActualMealId, setLogActualMealId] = useState<string>();
+  const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
 
   const loadMeals = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
@@ -46,7 +46,7 @@ export function FoodPlanEditor({
       const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`);
       setMeals(data);
     } catch (err) {
-      // A silent refresh (note save) must keep the meals already on screen if the follow-up GET fails.
+      // A note save refetches with silent: true. Keep the meals already on screen if that GET fails.
       if (!options?.silent) setMeals([]);
       onError(err instanceof Error ? err.message : 'Unable to load meals');
     } finally {
@@ -157,35 +157,33 @@ export function FoodPlanEditor({
           No meals planned for this day. Apply a plan to get started.
         </p>
       ) : (
-        <ul className="space-y-3">
-          {meals.map((meal) => {
-            const plannedItems = meal.items.filter((item) => item.type === 'PLANNED');
-            return (
-              <li key={meal.id} className="rounded-xl border border-app-border p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold">{meal.name}</p>
-                  <span className="text-sm font-medium tabular-nums text-app-text-muted">{mealCalories(meal)} cal</span>
-                </div>
-                {plannedItems.length > 0 ? (
-                  <ul className="mt-2 space-y-1 text-sm text-app-text-muted">
-                    {plannedItems.map((item) => (
-                      <li key={item.id} className="flex justify-between gap-2">
-                        <span className="truncate">{item.nameSnapshot}</span>
-                        <span className="shrink-0 tabular-nums">
-                          {item.quantity} {item.unit} · {Math.round(Number(item.calories))} cal
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-app-text-muted">No planned foods yet.</p>
-                )}
-                <MealClientNote meal={meal} onChange={() => loadMeals({ silent: true })} />
-              </li>
-            );
-          })}
-        </ul>
+        <MealPlanner
+          meals={meals}
+          selectedDate={planDate}
+          allowClientNote
+          onChange={() => loadMeals({ silent: true })}
+          onLogActual={setLogActualMealId}
+        />
       )}
+
+      <EditMealPlanDrawer
+        open={Boolean(logActualMealId)}
+        meal={meals.find((meal) => meal.id === logActualMealId)}
+        mode="ACTUAL"
+        onClose={() => setLogActualMealId(undefined)}
+        onSaved={() => loadMeals({ silent: true })}
+        onAskAi={(mealId, mode) => {
+          setLogActualMealId(undefined);
+          setAiState({ mealId, itemType: mode });
+        }}
+      />
+      <AiFoodLookupDrawer
+        open={Boolean(aiState)}
+        mealId={aiState?.mealId}
+        itemType={aiState?.itemType ?? 'ACTUAL'}
+        onClose={() => setAiState(undefined)}
+        onSaved={() => loadMeals({ silent: true })}
+      />
 
       <CoachDayNutritionEditor
         open={manualOpen}
