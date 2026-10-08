@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.6](https://github.com/bsa717a/metabolic/compare/v0.38.5...v0.38.6) (2026-10-08)
+
+
+### Bug Fixes
+
+* **coach:** match header to the assigned exercise plan ([#343](https://github.com/bsa717a/metabolic/issues/343)) ([cf83d1c](https://github.com/bsa717a/metabolic/commit/cf83d1c98fc58498b9552073d5289ca3e01a6060))
+
 ## [0.38.5](https://github.com/bsa717a/metabolic/compare/v0.38.4...v0.38.5) (2026-10-08)
 
 
