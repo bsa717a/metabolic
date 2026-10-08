@@ -1,4 +1,6 @@
+import { useEffect, useId, useRef, useState } from 'react';
 import { clsx } from 'clsx';
+import { Check, ChevronDown } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { formatPlan } from '../../../utils/exerciseFormat';
 import type {
@@ -81,19 +83,24 @@ function RadioRow<T extends string>({
   value,
   options,
   disabled,
+  nowrap,
   onChange
 }: {
   label: string;
   value: T;
   options: { value: T; label: string }[];
   disabled?: boolean;
+  nowrap?: boolean;
   onChange: (value: T) => void;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex max-w-full flex-wrap rounded-xl border border-app-border bg-app-surface p-0.5"
+      className={clsx(
+        'inline-flex rounded-xl border border-app-border bg-app-surface p-0.5',
+        nowrap ? 'shrink-0 flex-nowrap' : 'max-w-full flex-wrap'
+      )}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -114,6 +121,90 @@ function RadioRow<T extends string>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function PlanDropdown({
+  plans,
+  value,
+  disabled,
+  onChange
+}: {
+  plans: Array<{ id: string; name: string }>;
+  value: string | null;
+  disabled?: boolean;
+  onChange: (planId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const selected = plans.find((plan) => plan.id === value) ?? null;
+  const empty = plans.length === 0;
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative w-[5.75rem] shrink-0 sm:w-40">
+      <button
+        type="button"
+        aria-label="Plan for this level"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        disabled={disabled || empty}
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-9 w-full items-center justify-between gap-1 rounded-xl border border-app-border bg-app-surface px-2.5 text-left text-sm font-semibold text-app-text shadow-sm transition disabled:opacity-50"
+      >
+        <span className="truncate">{selected?.name ?? (empty ? 'No plans' : 'Choose')}</span>
+        <ChevronDown aria-hidden className={clsx('h-3.5 w-3.5 shrink-0 text-app-text-muted transition', open && 'rotate-180')} />
+      </button>
+      {open && !empty && (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="Plans for this level"
+          className="absolute right-0 z-20 mt-1 max-h-64 w-max min-w-full overflow-auto rounded-xl border border-app-border bg-app-surface py-1 shadow-lg"
+        >
+          {plans.map((plan) => {
+            const isSelected = plan.id === value;
+            return (
+              <li key={plan.id} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  className={clsx(
+                    'flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium',
+                    isSelected ? 'bg-brand-green/15 text-app-text' : 'text-app-text hover:bg-app-muted'
+                  )}
+                  onClick={() => {
+                    setOpen(false);
+                    if (plan.id !== value) onChange(plan.id);
+                  }}
+                >
+                  <Check aria-hidden className={clsx('h-4 w-4 shrink-0', isSelected ? 'text-brand-green' : 'opacity-0')} />
+                  <span className="truncate">{plan.name}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -212,6 +303,7 @@ export function AutomaticExercise({
   error,
   onLocation,
   onLevel,
+  onPlan,
   onCheckIn,
   onStart
 }: {
@@ -223,6 +315,7 @@ export function AutomaticExercise({
   error: string | null;
   onLocation: (location: ExerciseAutoLocation) => void;
   onLevel: (level: ExerciseAutoLevel) => void;
+  onPlan: (planId: string) => void;
   onCheckIn: (choice: ExerciseAutoChoice) => void;
   onStart: () => void;
 }) {
@@ -233,7 +326,18 @@ export function AutomaticExercise({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <RadioRow label="Gym preference" value={location} options={LOCATIONS} disabled={busy} onChange={onLocation} />
-        <RadioRow label="Activity level" value={level} options={LEVELS} disabled={busy} onChange={onLevel} />
+        <div className="flex max-w-full items-center gap-1.5">
+          <RadioRow nowrap label="Activity level" value={level} options={LEVELS} disabled={busy} onChange={onLevel} />
+          {track && (
+            <PlanDropdown
+              key={`${location}-${level}`}
+              plans={track.plans}
+              value={track.selectedPlanId}
+              disabled={busy}
+              onChange={onPlan}
+            />
+          )}
+        </div>
       </div>
 
       {error && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}

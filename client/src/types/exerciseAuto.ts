@@ -44,6 +44,8 @@ export type ExerciseAutoTrack = {
   weeks: Array<{ index: number; scheme: string; status: 'done' | 'current' | 'upcoming' }>;
   days: Array<{ name: string; isCurrent: boolean; exercises: ExerciseAutoExercise[] }>;
   upNext: { label: string; dayNames: string[] } | null;
+  plans: Array<{ id: string; name: string }>;
+  selectedPlanId: string | null;
 };
 
 export type ExerciseAutoState = {

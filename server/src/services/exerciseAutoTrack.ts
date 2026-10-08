@@ -42,8 +42,14 @@ export type AutoPlanInput = {
   days: AutoPlanDay[];
 };
 
+export type AutoTrackPlan = {
+  id: string;
+  name: string;
+};
+
 export type AutoTrackBlock = {
   planId: string;
+  name: string;
   label: string;
   days: AutoPlanDay[];
 };
@@ -106,6 +112,8 @@ export type AutoTrackView = {
   weeks: Array<{ index: number; scheme: string; status: WeekTileStatus }>;
   days: Array<{ name: string; isCurrent: boolean; exercises: AutoExerciseLine[] }>;
   upNext: { label: string; dayNames: string[] } | null;
+  plans: AutoTrackPlan[];
+  selectedPlanId: string | null;
 };
 
 export function initialProgress(today: string): AutoProgress {
@@ -188,6 +196,7 @@ export function buildTrackCatalog(plans: AutoPlanInput[]): AutoTrack[] {
         level,
         blocks: windows[level].map((plan) => ({
           planId: plan.id,
+          name: plan.name,
           label: blockLabel(plan.name),
           days: sortedDays(plan.days)
         }))
@@ -328,6 +337,19 @@ export function applyCheckIn(
   return cleared;
 }
 
+function planOptions(blocks: AutoTrackBlock[]): AutoTrackPlan[] {
+  return blocks.map((block) => ({ id: block.planId, name: block.name }));
+}
+
+/** Week 1, day 1 of the chosen plan inside this level's track. */
+export function progressStartingOnPlan(blocks: AutoTrackBlock[], planId: string, today: string): AutoProgress {
+  const blockIndex = blocks.findIndex((block) => block.planId === planId);
+  if (blockIndex < 0) {
+    throw new Error('That plan is not available for this level');
+  }
+  return { ...initialProgress(today), blockIndex };
+}
+
 function checkInCopy(pending: AutoCheckIn, block: string | null, nextBlock: string | null): AutoTrackView['checkIn'] {
   if (pending === 'BLOCK_COMPLETE' && block) {
     return {
@@ -394,7 +416,9 @@ export function buildAutoView(args: {
         today: null,
         weeks: [],
         days: [],
-        upNext: null
+        upNext: null,
+        plans: planOptions(blocks),
+        selectedPlanId: null
       }
     };
   }
@@ -446,7 +470,9 @@ export function buildAutoView(args: {
       upNext: {
         label: next?.label ?? `Repeat ${block.label}`,
         dayNames: (next ?? block).days.map((entry) => entry.name)
-      }
+      },
+      plans: planOptions(blocks),
+      selectedPlanId: block.planId
     }
   };
 }
