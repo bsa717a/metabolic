@@ -46,7 +46,8 @@ export function FoodPlanEditor({
       const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`);
       setMeals(data);
     } catch (err) {
-      setMeals([]);
+      // A silent refresh (note save) must keep the meals already on screen if the follow-up GET fails.
+      if (!options?.silent) setMeals([]);
       onError(err instanceof Error ? err.message : 'Unable to load meals');
     } finally {
       if (!options?.silent) setLoading(false);
