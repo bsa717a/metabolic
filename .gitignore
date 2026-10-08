@@ -15,5 +15,7 @@ coverage
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/**
+!.cursor/config/
+!.cursor/config/bugbot.yaml
 backups/
 client/public/tutorial/presrenter.mp4
