@@ -8,6 +8,12 @@ import { PlanPeriodBanner } from '../nutrition/PlanPeriodBanner';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
+import {
+  APPLY_NUTRITION_PLAN_HINT,
+  assignedNutritionPlan,
+  NO_NUTRITION_PLAN_ASSIGNED,
+  useNutritionPlanPicker
+} from '../../utils/nutritionPlanPicker';
 
 export function FoodPlanEditor({
   clientId,
@@ -36,7 +42,6 @@ export function FoodPlanEditor({
 }) {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(false);
-  const [templateId, setTemplateId] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [logActualMealId, setLogActualMealId] = useState<string>();
   const [aiState, setAiState] = useState<{ mealId: string; itemType: 'PLANNED' | 'ACTUAL' }>();
@@ -59,29 +64,48 @@ export function FoodPlanEditor({
     void loadMeals();
   }, [loadMeals]);
 
-  useEffect(() => {
-    setTemplateId((current) => current || nutritionTemplates[0]?.id || '');
-  }, [nutritionTemplates]);
-
   const dailyTotal = meals.reduce((sum, meal) => sum + Number(meal.plannedCalories), 0);
-  const [planPeriod, setPlanPeriod] = useState<PlanPeriodInfo | null>(null);
+  const periodKey = `${clientId}:${planDate}`;
+  const [planPeriodState, setPlanPeriodState] = useState<{ key: string; period: PlanPeriodInfo | null } | null>(null);
+  const planPeriod = planPeriodState?.key === periodKey ? planPeriodState.period : null;
+  const planPeriodLoaded = planPeriodState?.key === periodKey;
+
+  const loadPlanPeriod = useCallback(async () => {
+    const key = `${clientId}:${planDate}`;
+    try {
+      setPlanPeriodState({
+        key,
+        period: await api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`)
+      });
+    } catch {
+      setPlanPeriodState({ key, period: null });
+    }
+  }, [clientId, planDate]);
 
   useEffect(() => {
     let cancelled = false;
+    const key = `${clientId}:${planDate}`;
     api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`)
       .then((info) => {
-        if (!cancelled) setPlanPeriod(info);
+        if (!cancelled) setPlanPeriodState({ key, period: info });
       })
       .catch(() => {
-        if (!cancelled) setPlanPeriod(null);
+        if (!cancelled) setPlanPeriodState({ key, period: null });
       });
     return () => {
       cancelled = true;
     };
   }, [clientId, planDate]);
 
+  const assigned = assignedNutritionPlan(planPeriod);
+  const { options, planId, onPlanIdChange, clearOverride } = useNutritionPlanPicker(
+    nutritionTemplates,
+    assigned,
+    `${clientId}:${planDate}`
+  );
+
   async function applyTemplate() {
-    if (!templateId) {
+    if (!planId) {
       onError('Choose a nutrition plan first.');
       return;
     }
@@ -92,11 +116,11 @@ export function FoodPlanEditor({
         `/api/coach/users/${clientId}/daily-logs/${planDate}/apply-template`,
         {
           method: 'POST',
-          body: JSON.stringify({ templateId, setAsDefault })
+          body: JSON.stringify({ templateId: planId, setAsDefault })
         }
       );
-      await loadMeals();
-      await onRefresh();
+      clearOverride();
+      await Promise.all([loadMeals(), loadPlanPeriod(), onRefresh()]);
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unable to apply nutrition plan');
     } finally {
@@ -132,24 +156,40 @@ export function FoodPlanEditor({
         />
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="min-w-[12rem] flex-1 text-sm">
-          <span className="mb-1 block font-medium">Nutrition plan</span>
-          <select
-            className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-            value={templateId}
-            onChange={(event) => setTemplateId(event.target.value)}
-          >
-            {nutritionTemplates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button disabled={saving || !nutritionTemplates.length} onClick={() => void applyTemplate()}>
-          Apply plan
-        </Button>
+      {planPeriodLoaded ? (
+        assigned ? (
+          <p className="text-sm text-app-text-muted">
+            Plan <span className="font-medium text-app-text">{assigned.name}</span>
+          </p>
+        ) : (
+          <p className="text-sm text-app-text-muted">
+            <span className="font-medium text-app-text">{NO_NUTRITION_PLAN_ASSIGNED}</span>
+          </p>
+        )
+      ) : null}
+
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[12rem] flex-1 text-sm">
+            <span className="mb-1 block font-medium">Nutrition plan</span>
+            <select
+              className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
+              value={planId}
+              onChange={(event) => onPlanIdChange(event.target.value)}
+            >
+              <option value="">Choose a plan</option>
+              {options.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button disabled={saving || !planId} onClick={() => void applyTemplate()}>
+            Apply plan
+          </Button>
+        </div>
+        <p className="text-sm text-app-text-muted">{APPLY_NUTRITION_PLAN_HINT}</p>
       </div>
 
       {!nutritionTemplates.length && (

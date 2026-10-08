@@ -225,27 +225,56 @@ export async function listTemplatesFullForAdmin() {
   return templates.map(serializeTemplate);
 }
 
-export async function listTemplatesForActor(actor: { id: string; role: Role }, clientId?: string) {
-  if (isAdmin(actor)) return listTemplatesForAdmin();
+/**
+ * Who `GET /api/coach/nutrition-templates` returns.
+ * A clientId scopes everyone, including super admins: library plans, the viewing
+ * coach's own templates, and templates already assigned to that client.
+ * Without a clientId, admins still see the full catalog (coach settings).
+ */
+export function coachNutritionTemplateScope(clientId: string | undefined, actorIsAdmin: boolean) {
+  if (clientId) return 'client' as const;
+  if (actorIsAdmin) return 'all' as const;
+  return 'own-and-library' as const;
+}
 
-  if (clientId) {
+/** Profile-matching library and coach templates, plus plans already assigned to the client. */
+export function clientScopedNutritionTemplateWhere(input: {
+  actorId: string;
+  profileMatch: Prisma.NutritionPlanTemplateWhereInput | null;
+  assignedIds: string[];
+}): Prisma.NutritionPlanTemplateWhereInput | null {
+  const visibilityWhere: Prisma.NutritionPlanTemplateWhereInput = {
+    OR: [{ visibility: Visibility.GLOBAL }, { createdById: input.actorId }]
+  };
+  const matchFilters: Prisma.NutritionPlanTemplateWhereInput[] = [];
+  if (input.profileMatch) {
+    matchFilters.push({ AND: [visibilityWhere, input.profileMatch] });
+  }
+  if (input.assignedIds.length) {
+    matchFilters.push({ id: { in: input.assignedIds } });
+  }
+  if (!matchFilters.length) return null;
+  return { OR: matchFilters };
+}
+
+export async function listTemplatesForActor(actor: { id: string; role: Role }, clientId?: string) {
+  const scope = coachNutritionTemplateScope(clientId, isAdmin(actor));
+  if (scope === 'all') return listTemplatesForAdmin();
+
+  if (scope === 'client' && clientId) {
     const [matchWhere, assignedIds] = await Promise.all([
       buildProfileMatchListWhere(clientId),
       getClientAssignedNutritionTemplateIds(clientId)
     ]);
-
-    const visibilityWhere = { OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }] };
-    const matchFilters: Prisma.NutritionPlanTemplateWhereInput[] = [];
-    if (matchWhere) {
-      matchFilters.push({ AND: [visibilityWhere, matchWhere] });
-    }
-    if (assignedIds.length) {
-      matchFilters.push({ id: { in: assignedIds } });
-    }
-    if (!matchFilters.length) return [];
+    const where = clientScopedNutritionTemplateWhere({
+      actorId: actor.id,
+      profileMatch: matchWhere,
+      assignedIds
+    });
+    if (!where) return [];
 
     const templates = await prisma.nutritionPlanTemplate.findMany({
-      where: { OR: matchFilters },
+      where,
       include: templateListInclude,
       orderBy: { updatedAt: 'desc' }
     });

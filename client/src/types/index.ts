@@ -694,6 +694,7 @@ export type PlanPeriodInfo = {
   weekNumber: number | null;
   effectiveDate: string | null;
   endDate: string | null;
+  templateId?: string | null;
   templateName: string | null;
   calorieTarget: number | null;
   proteinTarget?: number | null;
