@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.7](https://github.com/bsa717a/metabolic/compare/v0.38.6...v0.38.7) (2026-10-08)
+
+
+### Bug Fixes
+
+* **coach:** refresh the week after Apply plan ([#347](https://github.com/bsa717a/metabolic/issues/347)) ([11fd8eb](https://github.com/bsa717a/metabolic/commit/11fd8eb0f3220a36df108ef327a71f50109f13d4))
+
 ## [0.38.6](https://github.com/bsa717a/metabolic/compare/v0.38.5...v0.38.6) (2026-10-08)
 
 

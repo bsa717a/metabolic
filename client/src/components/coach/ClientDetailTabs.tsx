@@ -332,6 +332,7 @@ export function ClientDetailTabs({
             onSavingChange={onSavingChange}
             onError={onError}
             onRefresh={onRefresh}
+            onRefreshPlanStatus={onRefreshPlanStatus}
             onPlanDateChange={setExercisePlanDate}
           />
         )}

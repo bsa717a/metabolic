@@ -23,6 +23,20 @@ export function formatPlanStatusLine(planStatus: CoachClientPlanStatus | null): 
   return 'Self-directed tracking';
 }
 
+/**
+ * Header after Apply plan or Save routine. The name we just saved wins until
+ * plan-status catches up, so a slow or stale read cannot put the old line back.
+ */
+export function planStatusWithExercisePlan(
+  status: CoachClientPlanStatus | null,
+  exercisePlanName: string | null
+): CoachClientPlanStatus | null {
+  if (!status) return status;
+  const name = exercisePlanName?.trim() || null;
+  if ((status.exercisePlanName?.trim() || null) === name) return status;
+  return { ...status, exercisePlanName: name };
+}
+
 /** Secondary exercise line. Omitted when the status line already names the exercise plan. */
 export function formatCoachExerciseLine(planStatus: CoachClientPlanStatus | null): string | null {
   const exercisePlan = planStatus?.exercisePlanName?.trim() || '';

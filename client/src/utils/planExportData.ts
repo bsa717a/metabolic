@@ -63,7 +63,7 @@ export async function fetchCoachExercisesForDates(clientId: string, dates: strin
       try {
         const exercises = await api<ScheduledExercise[]>(
           `/api/coach/users/${clientId}/daily-logs/${date}/exercises`,
-          { signal }
+          { signal, cache: 'no-store' }
         );
         return { date, exercises };
       } catch {

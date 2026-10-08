@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Settings } from 'lucide-react';
@@ -18,6 +18,7 @@ import { EditAccountDetailsDrawer } from '../components/user/EditAccountDetailsD
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { clientName } from '../utils/coachClientUtils';
+import { planStatusWithExercisePlan } from '../utils/coachPlanStatusLine';
 
 type CoachSettings = {
   coachCode: string | null;
@@ -59,6 +60,14 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+  // Name from the save that just succeeded. Kept until plan-status returns that same name.
+  const exercisePlanNameOverride = useRef<string | null | undefined>(undefined);
+  const planStatusClientId = useRef<string | null>(null);
+  const planStatusGeneration = useRef(0);
+  const selectedClientIdRef = useRef(selectedClientId);
+  const searchParamsRef = useRef(searchParams);
+  selectedClientIdRef.current = selectedClientId;
+  searchParamsRef.current = searchParams;
 
   const clearDeepLinkParams = useCallback(() => {
     setSearchParams(
@@ -151,8 +160,36 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
     }
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // "No active program" is an expected empty state (client not enrolled) → null, no error.
+  // Any other failure (network, 403, 500) is surfaced instead of silently hiding the panel.
+  const fetchClientPlanStatus = useCallback(async (clientId: string) => {
+    try {
+      return await api<CoachClientPlanStatus>(`/api/coach/users/${clientId}/plan-status`, { cache: 'no-store' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to load plan status';
+      if (message !== 'No active program') setError(message);
+      return null;
+    }
+  }, []);
+
+  const publishPlanStatus = useCallback((status: CoachClientPlanStatus | null, generation: number, keepCurrentOnNull = false) => {
+    if (generation !== planStatusGeneration.current) return;
+    setPlanStatus((current) => {
+      const base = status ?? (keepCurrentOnNull ? current : null);
+      const override = exercisePlanNameOverride.current;
+      if (override === undefined || !base) return base;
+      const wanted = override?.trim() || null;
+      const serverName = base.exercisePlanName?.trim() || null;
+      if (serverName === wanted) {
+        exercisePlanNameOverride.current = undefined;
+        return base;
+      }
+      return planStatusWithExercisePlan(base, wanted);
+    });
+  }, []);
+
+  const load = useCallback(async (options?: { background?: boolean }) => {
+    if (!options?.background) setLoading(true);
     setError('');
     try {
       const [clientRows, nutritionRows, exerciseRows] = await Promise.all([
@@ -160,9 +197,16 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
         api<NutritionPlanTemplateSummary[]>('/api/coach/nutrition-templates'),
         api<ExercisePlanTemplateSummary[]>('/api/coach/exercise-templates')
       ]);
-      const [coachSettings, groupRows] = await Promise.all([
+      const urlClient = searchParamsRef.current.get('client');
+      const preferredId = options?.background
+        ? selectedClientIdRef.current
+        : (urlClient && clientRows.some((client) => client.id === urlClient) ? urlClient : clientRows[0]?.id) ?? '';
+      const [coachSettings, groupRows, initialPlanStatus] = await Promise.all([
         api<CoachSettings>('/api/coach/settings'),
-        api<ClientGroup[]>('/api/coach/client-groups').catch(() => [] as ClientGroup[])
+        api<ClientGroup[]>('/api/coach/client-groups').catch(() => [] as ClientGroup[]),
+        !options?.background && preferredId
+          ? fetchClientPlanStatus(preferredId)
+          : Promise.resolve(undefined)
       ]);
       setClients(clientRows);
       setClientGroups(groupRows);
@@ -173,24 +217,19 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       setDefaultNutritionTemplateId(coachSettings.defaultNutritionTemplateId ?? '');
       setDefaultExerciseTemplateId(coachSettings.defaultExerciseTemplateId ?? '');
       setSelectedGroupId((current) => (current && groupRows.some((group) => group.id === current) ? current : ''));
+      if (!options?.background && preferredId) {
+        setSelectedClientId(preferredId);
+        planStatusClientId.current = preferredId;
+      }
+      if (initialPlanStatus !== undefined) {
+        publishPlanStatus(initialPlanStatus, ++planStatusGeneration.current, true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load coach workspace');
     } finally {
-      setLoading(false);
+      if (!options?.background) setLoading(false);
     }
-  }, []);
-
-  // "No active program" is an expected empty state (client not enrolled) → null, no error.
-  // Any other failure (network, 403, 500) is surfaced instead of silently hiding the panel.
-  const fetchClientPlanStatus = useCallback(async (clientId: string) => {
-    try {
-      return await api<CoachClientPlanStatus>(`/api/coach/users/${clientId}/plan-status`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to load plan status';
-      if (message !== 'No active program') setError(message);
-      return null;
-    }
-  }, []);
+  }, [fetchClientPlanStatus, publishPlanStatus]);
 
   const loadDashboard = useCallback(async (clientId: string) => {
     if (!clientId) {
@@ -199,27 +238,42 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
       setEngagement(null);
       return;
     }
+    const clientChanged = planStatusClientId.current !== clientId;
+    if (clientChanged) {
+      exercisePlanNameOverride.current = undefined;
+      planStatusClientId.current = clientId;
+    }
+    const generation = clientChanged ? ++planStatusGeneration.current : planStatusGeneration.current;
+    const planStatusPromise = clientChanged
+      ? fetchClientPlanStatus(clientId).then((status) => {
+          publishPlanStatus(status, generation, true);
+        })
+      : Promise.resolve();
     try {
-      const [dashboardData, engagementData, planStatusData] = await Promise.all([
+      const [dashboardData, engagementData] = await Promise.all([
         api<Dashboard>(`/api/coach/users/${clientId}/dashboard`),
         api<CoachEngagement>(`/api/coach/users/${clientId}/engagement`),
-        fetchClientPlanStatus(clientId)
+        planStatusPromise
       ]);
       setDashboard(dashboardData);
       setEngagement(engagementData);
-      setPlanStatus(planStatusData);
       setClientWaterGoalDraft(String(engagementData.hydration.waterGoalOz));
     } catch {
       setDashboard(null);
-      setPlanStatus(null);
       setEngagement(null);
     }
-  }, [fetchClientPlanStatus]);
+  }, [fetchClientPlanStatus, publishPlanStatus]);
 
-  const refreshPlanStatus = useCallback(async () => {
+  const refreshPlanStatus = useCallback(async (exercisePlan?: { name: string } | null) => {
     if (!selectedClientId) return;
-    setPlanStatus(await fetchClientPlanStatus(selectedClientId));
-  }, [selectedClientId, fetchClientPlanStatus]);
+    const generation = ++planStatusGeneration.current;
+    if (exercisePlan !== undefined) {
+      exercisePlanNameOverride.current = exercisePlan?.name?.trim() || null;
+      planStatusClientId.current = selectedClientId;
+      setPlanStatus((current) => planStatusWithExercisePlan(current, exercisePlanNameOverride.current ?? null));
+    }
+    publishPlanStatus(await fetchClientPlanStatus(selectedClientId), generation, true);
+  }, [fetchClientPlanStatus, publishPlanStatus, selectedClientId]);
 
   useEffect(() => {
     void load();
@@ -308,7 +362,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
     if (!selectedClient) return;
     const programId = dashboard?.program?.id;
     await Promise.all([
-      load(),
+      load({ background: true }),
       loadDashboard(selectedClient.id),
       loadClients(),
       programId ? loadSnapshots(programId) : Promise.resolve()

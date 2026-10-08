@@ -49,7 +49,9 @@ export function FoodPlanEditor({
   const loadMeals = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
     try {
-      const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`);
+      const data = await api<Meal[]>(`/api/coach/users/${clientId}/daily-logs/${planDate}/meals`, {
+        cache: 'no-store'
+      });
       setMeals(data);
     } catch (err) {
       // A note save refetches with silent: true. Keep the meals already on screen if that GET fails.
@@ -75,7 +77,9 @@ export function FoodPlanEditor({
     try {
       setPlanPeriodState({
         key,
-        period: await api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`)
+        period: await api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`, {
+          cache: 'no-store'
+        })
       });
     } catch {
       setPlanPeriodState({ key, period: null });
@@ -85,7 +89,7 @@ export function FoodPlanEditor({
   useEffect(() => {
     let cancelled = false;
     const key = `${clientId}:${planDate}`;
-    api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`)
+    api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`, { cache: 'no-store' })
       .then((info) => {
         if (!cancelled) setPlanPeriodState({ key, period: info });
       })
@@ -120,7 +124,8 @@ export function FoodPlanEditor({
         }
       );
       clearOverride();
-      await Promise.all([loadMeals(), loadPlanPeriod(), onRefresh()]);
+      await Promise.all([loadMeals(), loadPlanPeriod(), onRefreshPlanStatus()]);
+      void onRefresh();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unable to apply nutrition plan');
     } finally {
