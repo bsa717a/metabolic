@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.8](https://github.com/bsa717a/metabolic/compare/v0.38.7...v0.38.8) (2026-10-08)
+
+
+### Bug Fixes
+
+* **nutrition:** choose a plan when none is assigned ([#346](https://github.com/bsa717a/metabolic/issues/346)) ([86daa12](https://github.com/bsa717a/metabolic/commit/86daa12c80a3de7f3c91d8e602aba6bc48860995))
+
 ## [0.38.7](https://github.com/bsa717a/metabolic/compare/v0.38.6...v0.38.7) (2026-10-08)
 
 
