@@ -1,6 +1,22 @@
 import type { ExerciseRoutine } from '../types';
 import { weekdayIndex } from './weekdayPattern';
 
+/** Saved exercise-plan name, e.g. "Core #3". Null when the week is custom or unset. */
+export function exerciseWeekPlanHeading(routine: ExerciseRoutine | null): string | null {
+  const name = routine?.exercisePlan?.name?.trim();
+  return name || null;
+}
+
+/**
+ * Workout template assigned to this calendar day by the weekly routine.
+ * Null for rest days and when no routine is saved — never a catalog default.
+ */
+export function assignedTemplateIdForDate(routine: ExerciseRoutine | null, date: string): string | null {
+  if (!routine) return null;
+  const day = routine.days.find((entry) => entry.weekday === weekdayIndex(date));
+  return day?.templateId ?? null;
+}
+
 /** Dates within `weekDates` that the routine marks as explicit rest days (templateId === null). */
 export function routineRestDatesForWeek(routine: ExerciseRoutine | null, weekDates: string[]): Set<string> {
   if (!routine?.days.length) return new Set<string>();
