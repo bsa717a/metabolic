@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import type { Meal } from '../../types';
 import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import {
   MealCardEditor,
@@ -100,15 +101,17 @@ function ActionsDropdown({
 
   return (
     <div ref={ref} className="relative">
-      <button
+      <Button
         type="button"
+        variant="secondary"
         aria-label="Meal actions"
         aria-expanded={open}
-        className="inline-flex h-9 items-center gap-1 rounded-xl px-3 text-sm text-app-text-muted transition hover:bg-app-muted hover:text-app-text"
+        aria-haspopup="menu"
         onClick={() => setOpen((v) => !v)}
       >
-        Actions <ChevronDown size={14} />
-      </button>
+        Meal actions
+        <ChevronDown className="ml-1 inline h-4 w-4" />
+      </Button>
       {open && (
         <ul className="absolute right-0 z-50 mt-1 min-w-[200px] rounded-xl border border-app-border bg-app-surface py-1 shadow-lg">
           {items.map((item) => (
@@ -297,21 +300,13 @@ export const MealCard = forwardRef<
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-1">
               {onBuildMeal && (
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-green px-3 text-sm font-semibold text-white transition hover:bg-brand-deep"
-                  onClick={onBuildMeal}
-                >
+                <Button type="button" variant="secondary" onClick={onBuildMeal}>
                   🃏 Build
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
-                onClick={() => onEnterEditMode(meal.id)}
-              >
+              <Button type="button" onClick={() => onEnterEditMode(meal.id)}>
                 Edit plan
-              </button>
+              </Button>
               <ActionsDropdown
                 future={future}
                 onLogActual={() => onLogActual(meal.id)}
