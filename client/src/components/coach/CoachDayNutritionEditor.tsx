@@ -301,11 +301,11 @@ export function CoachDayNutritionEditor({
   if (!open) return null;
 
   return createPortal(
-    <div className="nutrition-ui-lg fixed inset-0 z-50 flex flex-col bg-app-bg">
+    <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
       <header className="shrink-0 border-b border-app-border bg-app-surface px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-app-text">Edit nutrition plan</h2>
+            <h2 className="text-3xl font-bold text-app-text">Edit nutrition plan</h2>
             <p className="text-sm text-app-text-muted">
               {editingPlan
                 ? 'Editing all meals for this day. Save anywhere to save the whole page.'
@@ -320,7 +320,6 @@ export function CoachDayNutritionEditor({
                 </Button>
                 <Button
                   type="button"
-                  className="bg-emerald-600 text-white hover:bg-emerald-700"
                   onClick={() => void handleSaveDay()}
                   disabled={savingDay}
                 >
@@ -352,14 +351,9 @@ export function CoachDayNutritionEditor({
                 </Button>
               </>
             )}
-            <button
-              type="button"
-              aria-label="Close editor"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-app-border text-app-text-muted transition hover:bg-app-muted hover:text-app-text"
-              onClick={() => void handleClose()}
-            >
-              <X size={18} />
-            </button>
+            <Button type="button" variant="secondary" aria-label="Close editor" onClick={() => void handleClose()}>
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>
