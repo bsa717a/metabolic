@@ -4,6 +4,7 @@ import { canAccessUser } from '../auth/requireRole.js';
 import { parseDateParam, toDateKey, addUtcDays, userDayKey } from '../utils/dates.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { getPlanStatus } from './planStatusService.js';
+import { getPlanPeriodInfo } from './planAdvancement.js';
 import { resolvePlanForDate } from './planResolution.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import {
@@ -255,6 +256,11 @@ export async function updateCoachSettings(
 export async function getCoachClientDashboard(actor: { id: string; role: Role }, userId: string) {
   await requireCoachClient(actor, userId);
   return getTodayDashboard(userId);
+}
+
+export async function getCoachClientPlanPeriod(actor: { id: string; role: Role }, userId: string, date: string) {
+  await requireCoachClient(actor, userId);
+  return getPlanPeriodInfo(userId, date);
 }
 
 export async function getCoachClientPlanStatus(actor: { id: string; role: Role }, userId: string) {

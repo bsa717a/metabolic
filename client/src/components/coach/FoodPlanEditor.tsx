@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import type { CoachClientPlanStatus, Meal, NutritionPlanTemplateSummary } from '../../types';
+import type { CoachClientPlanStatus, Meal, NutritionPlanTemplateSummary, PlanPeriodInfo } from '../../types';
 import { AiFoodLookupDrawer } from '../nutrition/AiFoodLookupDrawer';
 import { EditMealPlanDrawer } from '../nutrition/EditMealPlanDrawer';
 import { MealPlanner } from '../nutrition/MealPlanner';
+import { PlanPeriodBanner } from '../nutrition/PlanPeriodBanner';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
@@ -63,6 +64,21 @@ export function FoodPlanEditor({
   }, [nutritionTemplates]);
 
   const dailyTotal = meals.reduce((sum, meal) => sum + Number(meal.plannedCalories), 0);
+  const [planPeriod, setPlanPeriod] = useState<PlanPeriodInfo | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${planDate}/plan-period`)
+      .then((info) => {
+        if (!cancelled) setPlanPeriod(info);
+      })
+      .catch(() => {
+        if (!cancelled) setPlanPeriod(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, planDate]);
 
   async function applyTemplate() {
     if (!templateId) {
@@ -94,6 +110,9 @@ export function FoodPlanEditor({
 
   return (
     <div className="space-y-4">
+      {planPeriod && (planPeriod.weekNumber != null || planPeriod.calorieTarget != null) ? (
+        <PlanPeriodBanner planPeriod={planPeriod} viewedDate={planDate} />
+      ) : null}
       {planStatus ? (
         <MacroOverridePanel
           key={`${planStatus.overrideTargets.calories}|${planStatus.overrideTargets.protein}|${planStatus.overrideTargets.carbs}|${planStatus.overrideTargets.fat}`}

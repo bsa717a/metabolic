@@ -20,6 +20,7 @@ import {
   deleteCoachClientGroup,
   deleteCoachCheckIn,
   getCoachClientDashboard,
+  getCoachClientPlanPeriod,
   getCoachClientPlanStatus,
   getCoachClientEngagement,
   getCoachClientExercises,
@@ -405,6 +406,19 @@ export async function coachRoutes(app: FastifyInstance) {
       return status ?? reply.code(404).send({ error: 'No active program' });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save targets' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/daily-logs/:date/plan-period', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    try {
+      const info = await getCoachClientPlanPeriod(request.appUser!, userId, date);
+      return info ?? reply.code(404).send({ error: 'No active program' });
+    } catch (error) {
+      return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load plan' });
     }
   });
 
