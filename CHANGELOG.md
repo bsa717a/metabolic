@@ -7,6 +7,22 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.2](https://github.com/bsa717a/metabolic/compare/v0.38.1...v0.38.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **onboarding:** confirm imported setup without replacing the program ([#335](https://github.com/bsa717a/metabolic/issues/335)) ([97cb349](https://github.com/bsa717a/metabolic/commit/97cb349315b9d6e2339ad973c821843c6f3c9bab))
+* **topbar:** remove the click-anywhere hint from the back bar ([#334](https://github.com/bsa717a/metabolic/issues/334)) ([28951b2](https://github.com/bsa717a/metabolic/commit/28951b2c66ed82ffa2a8f3b6674c41ae5b4dd85e))
+
+## [0.38.1](https://github.com/bsa717a/metabolic/compare/v0.38.0...v0.38.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **home:** say when today has planned food and open billing for a weekly plan ([#330](https://github.com/bsa717a/metabolic/issues/330)) ([3c21254](https://github.com/bsa717a/metabolic/commit/3c212549149efe7d31070c7fff143ebe40071a61))
+* **nutrition:** share one type scale and button style ([#331](https://github.com/bsa717a/metabolic/issues/331)) ([92878c8](https://github.com/bsa717a/metabolic/commit/92878c88e70f601d2571657881ad0a7e1acae8c4))
+
 ## [0.38.0](https://github.com/bsa717a/metabolic/compare/v0.37.0...v0.38.0) (2026-10-08)
 
 

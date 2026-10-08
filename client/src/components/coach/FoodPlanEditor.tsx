@@ -93,7 +93,7 @@ export function FoodPlanEditor({
   }, [loadMeals, onRefresh, onRefreshPlanStatus]);
 
   return (
-    <div className="nutrition-ui-lg space-y-4">
+    <div className="space-y-4">
       {planStatus ? (
         <MacroOverridePanel
           key={`${planStatus.overrideTargets.calories}|${planStatus.overrideTargets.protein}|${planStatus.overrideTargets.carbs}|${planStatus.overrideTargets.fat}`}
