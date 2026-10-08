@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.4](https://github.com/bsa717a/metabolic/compare/v0.38.3...v0.38.4) (2026-10-08)
+
+
+### Bug Fixes
+
+* **nutrition:** show the current week on the plan title ([#338](https://github.com/bsa717a/metabolic/issues/338)) ([46c8206](https://github.com/bsa717a/metabolic/commit/46c820609c828f40b9900e15eef2464fc6caa250))
+
 ## [0.38.3](https://github.com/bsa717a/metabolic/compare/v0.38.2...v0.38.3) (2026-10-08)
 
 
