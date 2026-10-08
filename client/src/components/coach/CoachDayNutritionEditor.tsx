@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { CopyPlus, LayoutTemplate, X } from 'lucide-react';
 import { api, formatDayAbbrev, formatDayNumber, isToday } from '../../services/api';
-import type { Meal, NutritionPlanTemplateSummary } from '../../types';
+import type { Meal, NutritionPlanTemplateSummary, PlanPeriodInfo } from '../../types';
 import { MealPlanner, type MealPlannerHandle } from '../nutrition/MealPlanner';
+import { PlanPeriodBanner } from '../nutrition/PlanPeriodBanner';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
 import { AddFoodsPanel } from '../nutrition/weekly/AddFoodsPanel';
 import { CopyDayForward } from '../nutrition/weekly/CopyDayForward';
@@ -120,6 +121,7 @@ export function CoachDayNutritionEditor({
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [selectedDate, setSelectedDate] = useState(planDate);
+  const [planPeriod, setPlanPeriod] = useState<PlanPeriodInfo | null>(null);
   const [editingPlan, setEditingPlan] = useState(false);
   const [savingDay, setSavingDay] = useState(false);
   const [draftPlannedTotals, setDraftPlannedTotals] = useState<MacroTotals | null>(null);
@@ -151,6 +153,21 @@ export function CoachDayNutritionEditor({
   useEffect(() => {
     if (!open) setSelectedDate(planDate);
   }, [open, planDate]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    api<PlanPeriodInfo>(`/api/coach/users/${clientId}/daily-logs/${selectedDate}/plan-period`)
+      .then((info) => {
+        if (!cancelled) setPlanPeriod(info);
+      })
+      .catch(() => {
+        if (!cancelled) setPlanPeriod(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, clientId, selectedDate]);
 
   useEffect(() => {
     if (!open) return;
@@ -360,6 +377,9 @@ export function CoachDayNutritionEditor({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-7xl space-y-4">
+          {planPeriod && (planPeriod.weekNumber != null || planPeriod.calorieTarget != null) ? (
+            <PlanPeriodBanner planPeriod={planPeriod} viewedDate={selectedDate} />
+          ) : null}
           <WeekDateStrip selectedDate={selectedDate} onSelectDate={handleSelectDate} />
 
           {defaultTemplateName && (
