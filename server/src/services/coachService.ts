@@ -29,6 +29,7 @@ import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, re
 import { normalizePhone } from '../utils/phone.js';
 import { env } from '../config/env.js';
 import { coachExerciseStatusName } from './coachExerciseStatus.js';
+import { exercisePlanNameFromRoutine } from './coachPlanHeader.js';
 
 export async function requireCoachClient(actor: { id: string; role: Role }, userId: string) {
   if (!(await canAccessUser(actor, userId))) {
@@ -284,7 +285,7 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
   ]);
   const savedRoutine = await prisma.exerciseRoutine.findUnique({
     where: { programId: program.id },
-    select: { id: true }
+    select: { id: true, exercisePlan: { select: { name: true } } }
   });
   const [nutritionTemplate, exerciseTemplate] = await Promise.all([
     resolved.nutritionTemplateId
@@ -299,6 +300,7 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
     ...status,
     nutritionTemplateName: nutritionTemplate?.name ?? null,
     exerciseTemplateName: coachExerciseStatusName(Boolean(savedRoutine), exerciseTemplate?.name ?? null),
+    exercisePlanName: exercisePlanNameFromRoutine(savedRoutine),
     // Resolved macros, provenance, and raw override so the food tab can prefill + label.
     targetSource: nutritionTargets.source,
     resolvedTargets: nutritionTargets.resolvedTargets,

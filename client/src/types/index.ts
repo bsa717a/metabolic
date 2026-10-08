@@ -754,6 +754,8 @@ export type UserNutritionTargets = {
 export type CoachClientPlanStatus = PlanStatus & {
   nutritionTemplateName: string | null;
   exerciseTemplateName: string | null;
+  /** Saved ExerciseRoutine plan, e.g. "5 Day Split (#5)". Distinct from a day workout. */
+  exercisePlanName?: string | null;
   targetSource: NutritionTargetSource | null;
   resolvedTargets: NutritionMacroTargets | null;
   overrideTargets: NutritionMacroTargets;
