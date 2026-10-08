@@ -28,6 +28,7 @@ import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsRe
 import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, resolveOutboundChannel } from './twilioOutboundService.js';
 import { normalizePhone } from '../utils/phone.js';
 import { env } from '../config/env.js';
+import { coachExerciseStatusName } from './coachExerciseStatus.js';
 import { exercisePlanNameFromRoutine } from './coachPlanHeader.js';
 
 export async function requireCoachClient(actor: { id: string; role: Role }, userId: string) {
@@ -282,24 +283,24 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
     resolvePlanForDate(program, parseDateParam(todayKey)),
     getUserNutritionTargets(userId)
   ]);
-  const [nutritionTemplate, exerciseTemplate, routinePlan] = await Promise.all([
+  const savedRoutine = await prisma.exerciseRoutine.findUnique({
+    where: { programId: program.id },
+    select: { id: true, exercisePlan: { select: { name: true } } }
+  });
+  const [nutritionTemplate, exerciseTemplate] = await Promise.all([
     resolved.nutritionTemplateId
       ? prisma.nutritionPlanTemplate.findUnique({ where: { id: resolved.nutritionTemplateId }, select: { name: true } })
       : null,
-    resolved.exerciseTemplateId
+    savedRoutine && resolved.exerciseTemplateId
       ? prisma.exerciseTemplate.findUnique({ where: { id: resolved.exerciseTemplateId }, select: { name: true } })
-      : null,
-    prisma.exerciseRoutine.findUnique({
-      where: { programId: program.id },
-      select: { exercisePlan: { select: { name: true } } }
-    })
+      : null
   ]);
 
   return {
     ...status,
     nutritionTemplateName: nutritionTemplate?.name ?? null,
-    exerciseTemplateName: exerciseTemplate?.name ?? null,
-    exercisePlanName: exercisePlanNameFromRoutine(routinePlan),
+    exerciseTemplateName: coachExerciseStatusName(Boolean(savedRoutine), exerciseTemplate?.name ?? null),
+    exercisePlanName: exercisePlanNameFromRoutine(savedRoutine),
     // Resolved macros, provenance, and raw override so the food tab can prefill + label.
     targetSource: nutritionTargets.source,
     resolvedTargets: nutritionTargets.resolvedTargets,

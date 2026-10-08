@@ -11,7 +11,8 @@ export function AssignedExerciseWeek({
   days,
   selectedDate,
   onSelectDay,
-  intro
+  intro,
+  emptyPlanLabel
 }: {
   routine: ExerciseRoutine | null;
   weekDates: string[];
@@ -19,6 +20,7 @@ export function AssignedExerciseWeek({
   selectedDate: string;
   onSelectDay: (date: string) => void;
   intro?: string;
+  emptyPlanLabel?: string;
 }) {
   const planName = exerciseWeekPlanHeading(routine);
   const routineRestDates = useMemo(
@@ -32,6 +34,10 @@ export function AssignedExerciseWeek({
       {planName ? (
         <p className="text-sm text-app-text-muted">
           Plan <span className="font-medium text-app-text">{planName}</span>
+        </p>
+      ) : emptyPlanLabel ? (
+        <p className="text-sm text-app-text-muted">
+          <span className="font-medium text-app-text">{emptyPlanLabel}</span>
         </p>
       ) : null}
       <WeekAgendaList
