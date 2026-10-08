@@ -17,6 +17,12 @@ import { exerciseRequiresGym, filterExerciseCatalog } from '../../utils/exercise
 import { type DurationUnit, inputToSeconds, secondsToInput } from '../../utils/duration';
 import { formatPlanShort } from '../../utils/exerciseFormat';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
+import {
+  assignmentsAfterPlanApply,
+  shouldPersistAfterPlanApply,
+  weekAssignmentsEqual,
+  weekAssignmentsNeedSave
+} from '../../utils/planApplyRace';
 import { type RoutineDayExerciseView, visibleRoutineDayExercises } from '../../utils/routineDayEdits';
 import { sharedField } from '../../utils/sharedPrescription';
 import { WEEKDAY_LABELS, type WeekdayIndex } from '../../utils/weekdayPattern';
@@ -964,9 +970,36 @@ export function RoutineEditorContent({
   const [plans, setPlans] = useState<ExercisePlanSummary[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<DayAssignment[]>(defaultAssignments);
-  /** In-flight plan apply. Day edits wait for it so a reset cannot land after them. */
+  /** In-flight plan apply. Day edits wait for it so they read the settled week, not a stale plan. */
   const planApplyRef = useRef<Promise<void> | null>(null);
+  const liveAssignmentsRef = useRef<DayAssignment[]>(defaultAssignments());
+  const livePlanIdRef = useRef<string | null>(null);
+  const liveSavedDaysRef = useRef<ExerciseRoutineDay[]>([]);
+  const planApplySettlementRef = useRef<{
+    succeeded: boolean;
+    previous: DayAssignment[];
+    previousPlanId: string | null;
+  } | null>(null);
   const [savedRoutineDays, setSavedRoutineDays] = useState<ExerciseRoutineDay[]>([]);
+
+  function rememberAssignments(next: DayAssignment[]) {
+    liveAssignmentsRef.current = next;
+    setAssignments(next);
+  }
+
+  function updateLiveAssignments(updater: (current: DayAssignment[]) => DayAssignment[]) {
+    rememberAssignments(updater(liveAssignmentsRef.current));
+  }
+
+  function rememberPlanId(next: string | null) {
+    livePlanIdRef.current = next;
+    setSelectedPlanId(next);
+  }
+
+  function rememberSavedDays(next: ExerciseRoutineDay[]) {
+    liveSavedDaysRef.current = next;
+    setSavedRoutineDays(next);
+  }
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1028,7 +1061,7 @@ export function RoutineEditorContent({
       return;
     }
     setSaved(false);
-    setAssignments((current) => {
+    updateLiveAssignments((current) => {
       const fromId = current.find((day) => day.weekday === from)?.templateId ?? null;
       const toId = current.find((day) => day.weekday === to)?.templateId ?? null;
       return current.map((day) => {
@@ -1061,9 +1094,9 @@ export function RoutineEditorContent({
       .then(([routine, templates, nextPlans]) => {
         setWorkouts(templates);
         setPlans(nextPlans);
-        setAssignments(assignmentsFromRoutine(routine));
-        setSavedRoutineDays(routine?.days ?? []);
-        setSelectedPlanId(resolveSelectedPlanId(routine, templates));
+        rememberAssignments(assignmentsFromRoutine(routine));
+        rememberSavedDays(routine?.days ?? []);
+        rememberPlanId(resolveSelectedPlanId(routine, templates));
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Unable to load routine');
@@ -1073,7 +1106,7 @@ export function RoutineEditorContent({
 
   function setDayTemplate(weekday: WeekdayIndex, value: string) {
     setSaved(false);
-    setAssignments((current) =>
+    updateLiveAssignments((current) =>
       current.map((day) =>
         day.weekday === weekday ? { ...day, templateId: value === REST_VALUE ? null : value } : day
       )
@@ -1094,34 +1127,48 @@ export function RoutineEditorContent({
       ) {
         return;
       }
-      const previousPlanId = selectedPlanId;
-      const previousAssignments = assignments;
-      setSelectedPlanId(nextPlanId);
-      setAssignments(nextAssignments);
+      const previousPlanId = livePlanIdRef.current;
+      const previousAssignments = liveAssignmentsRef.current.map((day) => ({ ...day }));
+      rememberPlanId(nextPlanId);
+      rememberAssignments(nextAssignments);
       setSaved(false);
       setSaving(true);
       setError('');
       // Persist now with an explicit reset. A later Save must not keep sending
       // resetDayEdits, or weekday adds and removals made after this pick are wiped.
       const apply = (async () => {
+        let succeeded = false;
         try {
           try {
             await persistAssignments(nextAssignments, {
               exercisePlanId: nextPlanId,
               resetDayEdits: true
             });
+            succeeded = true;
           } catch (err) {
-            setSelectedPlanId(previousPlanId);
-            setAssignments(previousAssignments);
+            // Settle before this promise resolves. A waiting add/remove then
+            // reads this week, not the optimistic plan from its render.
+            rememberAssignments(
+              assignmentsAfterPlanApply({
+                succeeded: false,
+                sent: nextAssignments,
+                local: liveAssignmentsRef.current,
+                previous: previousAssignments,
+                server: previousAssignments
+              })
+            );
+            rememberPlanId(previousPlanId);
             setError(err instanceof Error ? err.message : 'Unable to apply plan');
-            return;
           }
-          try {
-            await onSaved();
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unable to refresh after applying the plan');
+          if (succeeded) {
+            try {
+              await onSaved();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Unable to refresh after applying the plan');
+            }
           }
         } finally {
+          planApplySettlementRef.current = { succeeded, previous: previousAssignments, previousPlanId };
           setSaving(false);
         }
       })();
@@ -1141,10 +1188,10 @@ export function RoutineEditorContent({
     ) {
       return;
     }
-    setSelectedPlanId(null);
+    rememberPlanId(null);
     setSaved(false);
     if (invalid) {
-      setAssignments((current) =>
+      updateLiveAssignments((current) =>
         current.map((day) =>
           day.templateId && !allowed.has(day.templateId) ? { ...day, templateId: null } : day
         )
@@ -1273,7 +1320,7 @@ export function RoutineEditorContent({
     overrides?: { exercisePlanId?: string | null; resetDayEdits?: boolean }
   ) {
     const planId =
-      overrides && 'exercisePlanId' in overrides ? (overrides.exercisePlanId ?? null) : selectedPlanId;
+      overrides && 'exercisePlanId' in overrides ? (overrides.exercisePlanId ?? null) : livePlanIdRef.current;
     const resetDayEdits = overrides?.resetDayEdits === true;
     const result = await api<{ routine: ExerciseRoutine; undoSnapshot?: ExercisePlanUndoSnapshot }>(
       endpoints.routine,
@@ -1291,38 +1338,58 @@ export function RoutineEditorContent({
       }
     );
     registerUndo?.('Weekly routine updated', result.undoSnapshot);
-    setAssignments(assignmentsFromRoutine(result.routine));
-    setSavedRoutineDays(result.routine.days);
-    setSelectedPlanId(result.routine.exercisePlanId ?? null);
-    setSaved(true);
+    const serverAssignments = assignmentsFromRoutine(result.routine);
+    const kept = assignmentsAfterPlanApply({
+      succeeded: true,
+      sent: nextAssignments,
+      local: liveAssignmentsRef.current,
+      previous: nextAssignments,
+      server: serverAssignments
+    });
+    const editedDuringSave = !weekAssignmentsEqual(nextAssignments, liveAssignmentsRef.current);
+    if (!editedDuringSave) rememberAssignments(kept);
+    rememberSavedDays(result.routine.days);
+    rememberPlanId(result.routine.exercisePlanId ?? null);
+    setSaved(!editedDuringSave);
     return result.routine;
-  }
-
-  function assignmentsDirty() {
-    if (savedRoutineDays.length === 0 && assignments.some((day) => day.templateId)) return true;
-    const savedByWeekday = new Map(savedRoutineDays.map((day) => [day.weekday, day.templateId ?? null]));
-    return assignments.some(
-      (day) => (savedByWeekday.get(day.weekday) ?? null) !== (day.templateId ?? null)
-    );
   }
 
   async function ensureAssignmentsSaved() {
     if (planApplyRef.current) await planApplyRef.current;
-    if (assignmentsDirty() || savedRoutineDays.length === 0) {
-      await persistAssignments();
-      await onSaved();
-    }
+    const settlement = planApplySettlementRef.current;
+    planApplySettlementRef.current = null;
+    const currentAssignments = liveAssignmentsRef.current;
+    const savedDays = liveSavedDaysRef.current.map((day) => ({
+      weekday: day.weekday,
+      templateId: day.templateId ?? null
+    }));
+    const need = weekAssignmentsNeedSave(currentAssignments, savedDays);
+    const decision = settlement
+      ? shouldPersistAfterPlanApply({
+          succeeded: settlement.succeeded,
+          settled: currentAssignments,
+          previous: settlement.previous,
+          assignmentsNeedSave: need,
+          routineExists: liveSavedDaysRef.current.length > 0
+        })
+      : { persist: need, assignments: 'settled' as const };
+    if (!decision.persist) return;
+    const toSave = decision.assignments === 'previous' ? settlement!.previous : currentAssignments;
+    const planId =
+      decision.assignments === 'previous' ? settlement!.previousPlanId : livePlanIdRef.current;
+    await persistAssignments(toSave, { exercisePlanId: planId });
+    await onSaved();
   }
 
   async function handleSave() {
-    if (planApplyRef.current) {
-      await planApplyRef.current;
-      return;
-    }
+    if (planApplyRef.current) await planApplyRef.current;
+    planApplySettlementRef.current = null;
     setSaving(true);
     setError('');
     try {
-      await persistAssignments();
+      await persistAssignments(liveAssignmentsRef.current, {
+        exercisePlanId: livePlanIdRef.current
+      });
       await onSaved();
       onCancel?.();
     } catch (err) {
@@ -1334,11 +1401,12 @@ export function RoutineEditorContent({
 
   function handleDayUpdated(day: ExerciseRoutineDay, undoSnapshot?: ExercisePlanUndoSnapshot) {
     if (undoSnapshot) registerUndo?.('Weekly routine updated', undoSnapshot);
-    setSavedRoutineDays((current) => {
-      const others = current.filter((entry) => entry.weekday !== day.weekday);
-      return [...others, day].sort((a, b) => a.weekday - b.weekday);
-    });
-    setAssignments((current) =>
+    rememberSavedDays(
+      [...liveSavedDaysRef.current.filter((entry) => entry.weekday !== day.weekday), day].sort(
+        (a, b) => a.weekday - b.weekday
+      )
+    );
+    updateLiveAssignments((current) =>
       current.map((entry) =>
         entry.weekday === day.weekday ? { ...entry, templateId: day.templateId } : entry
       )
@@ -1505,7 +1573,7 @@ export function RoutineEditorContent({
                                 endpoints.templates
                               );
                               if (!templates.some((entry) => entry.id === workout.id)) {
-                                setAssignments((current) =>
+                                updateLiveAssignments((current) =>
                                   current.map((day) =>
                                     day.templateId === workout.id
                                       ? { ...day, templateId: null }
