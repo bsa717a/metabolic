@@ -437,12 +437,27 @@ export type ExerciseRoutineDayItemOverride = {
   weight?: number | null;
 };
 
+export type ExerciseRoutineDayExtra = {
+  id: string;
+  exerciseId: string;
+  sortOrder: number;
+  sets?: number | null;
+  reps?: string | null;
+  speed?: string | null;
+  durationSeconds?: number | null;
+  distance?: number | null;
+  weight?: number | null;
+  exercise: { id: string; name: string };
+};
+
 export type ExerciseRoutineDay = {
   id: string;
   weekday: number;
   templateId: string | null;
   template: ExercisePlanTemplateSummary | null;
   itemOverrides: ExerciseRoutineDayItemOverride[];
+  excludedTemplateItemIds?: string[];
+  extras?: ExerciseRoutineDayExtra[];
 };
 
 export type ExerciseRoutine = {

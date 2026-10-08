@@ -33,8 +33,11 @@ import {
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
 import {
+  addRoutineDayExercise,
   applyRoutineDayItemOverrides,
   getRoutineForUser,
+  removeRoutineDayExercise,
+  updateRoutineDayExtra,
   upsertRoutine,
   upsertRoutineDayItemOverride
 } from '../services/exerciseRoutineService.js';
@@ -396,13 +399,15 @@ export async function exerciseRoutes(app: FastifyInstance) {
           )
           .length(7),
         applyForward: z.boolean().optional(),
-        exercisePlanId: z.string().nullable().optional()
+        exercisePlanId: z.string().nullable().optional(),
+        resetDayEdits: z.boolean().optional()
       })
       .parse(request.body);
     try {
       return await upsertRoutine(request.appUser!.id, body.days, {
         applyForward: body.applyForward,
-        exercisePlanId: body.exercisePlanId
+        exercisePlanId: body.exercisePlanId,
+        resetDayEdits: body.resetDayEdits
       });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
@@ -421,6 +426,65 @@ export async function exerciseRoutes(app: FastifyInstance) {
         return reply
           .code(400)
           .send({ error: error instanceof Error ? error.message : 'Unable to update day prescription' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/exercise-routine/days/:weekday/exercises',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z.object({ weekday: z.coerce.number().int().min(0).max(6) }).parse(request.params);
+      const body = z.object({ exerciseId: z.string().trim().min(1) }).parse(request.body);
+      try {
+        return await addRoutineDayExercise(request.appUser!.id, params.weekday, body.exerciseId);
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/exercise-routine/days/:weekday/exercises/remove',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z.object({ weekday: z.coerce.number().int().min(0).max(6) }).parse(request.params);
+      const body = z
+        .object({
+          templateItemId: z.string().trim().min(1).optional(),
+          extraId: z.string().trim().min(1).optional()
+        })
+        .refine((value) => Boolean(value.templateItemId) !== Boolean(value.extraId), {
+          message: 'Provide a plan exercise or an added exercise'
+        })
+        .parse(request.body);
+      try {
+        return await removeRoutineDayExercise(
+          request.appUser!.id,
+          params.weekday,
+          body.templateItemId ? { templateItemId: body.templateItemId } : { extraId: body.extraId! }
+        );
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to remove exercise' });
+      }
+    }
+  );
+
+  app.patch(
+    '/api/exercise-routine/days/:weekday/extras/:extraId',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z
+        .object({
+          weekday: z.coerce.number().int().min(0).max(6),
+          extraId: z.string().min(1)
+        })
+        .parse(request.params);
+      const body = templateExerciseItemUpdateBody.parse(request.body);
+      try {
+        return await updateRoutineDayExtra(request.appUser!.id, params.weekday, params.extraId, body);
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update exercise' });
       }
     }
   );
