@@ -10,6 +10,7 @@ import { ensureDailyLogByUserId } from './dailyLogService.js';
 import {
   copyExercisesToDates,
   createScheduledExercise,
+  ensureExercisesForDate,
   getScheduledExercises,
   reorderScheduledExercises,
   restoreExercisePlanSnapshot,
@@ -354,9 +355,9 @@ export async function copyCoachClientDayToDates(
 
 export async function getCoachClientExercises(actor: { id: string; role: Role }, userId: string, date: string) {
   await requireCoachClient(actor, userId);
-  const log = await ensureDailyLogByUserId(userId, date);
-  if (!log) throw new Error('No active program found');
-  return getScheduledExercises(userId, date);
+  const exercises = await ensureExercisesForDate(userId, date);
+  if (!exercises) throw new Error('No active program found');
+  return exercises;
 }
 
 export async function createCoachClientScheduledExercise(
