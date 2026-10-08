@@ -27,9 +27,9 @@ export function weekAssignmentsNeedSave(
 /**
  * What the editor should display when a plan-apply request settles.
  *
- * Weekday swaps made while the request was in flight always win. Otherwise a
- * failure restores the week from before the pick, and a success adopts the
- * server week.
+ * A swap made during a successful save stays on screen. A failed save restores
+ * the previous plan, including when a swap was already on screen, so that swap
+ * is not kept as the rejected plan.
  */
 export function assignmentsAfterPlanApply<T extends WeekAssignment>(input: {
   succeeded: boolean;
@@ -38,27 +38,39 @@ export function assignmentsAfterPlanApply<T extends WeekAssignment>(input: {
   previous: readonly T[];
   server: readonly T[];
 }): T[] {
-  if (!weekAssignmentsEqual(input.sent, input.local)) return [...input.local];
+  if (input.succeeded && !weekAssignmentsEqual(input.sent, input.local)) return [...input.local];
   return input.succeeded ? [...input.server] : [...input.previous];
 }
 
 /**
  * Whether a waiting add/remove should PUT after a plan apply settles.
  *
- * A failed apply is not written again, and a swap that was already on screen
- * when that apply finished stays unsaved. A weekday change made after the
- * rollback is a new edit and must be saved, so the following add or remove
- * lands on that day.
+ * An in-flight swap of the rejected plan must not be written: changing those
+ * template ids drops exclusions, extras, and overrides. A weekday change made
+ * after the rollback (it differs from the week at settlement) is a new edit
+ * and must be saved, so the following add or remove lands on that day.
  */
 export function shouldPersistAfterPlanApply(input: {
   succeeded: boolean;
   settled: readonly WeekAssignment[];
   /** Week on screen when the apply finished, before any later edit. */
   atSettlement: readonly WeekAssignment[];
+  /** In-flight week that must not be saved when the apply failed. */
+  rejected?: readonly WeekAssignment[];
   previous: readonly WeekAssignment[];
   assignmentsNeedSave: boolean;
   routineExists: boolean;
 }): { persist: boolean; assignments: 'settled' | 'previous' } {
+  const rejectedSwap =
+    !input.succeeded &&
+    input.rejected != null &&
+    weekAssignmentsEqual(input.settled, input.rejected) &&
+    !weekAssignmentsEqual(input.rejected, input.previous);
+  if (rejectedSwap) {
+    if (!input.routineExists) return { persist: true, assignments: 'previous' };
+    return { persist: false, assignments: 'settled' };
+  }
+
   const editedSinceSettlement = !weekAssignmentsEqual(input.settled, input.atSettlement);
   if (editedSinceSettlement) {
     if (!input.assignmentsNeedSave) return { persist: false, assignments: 'settled' };
