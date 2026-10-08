@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
-import { todayKey, tomorrowKey } from '../../services/api';
+import { dateKeyInTimeZone, todayKey } from '../../services/api';
 import type { CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
@@ -103,8 +103,8 @@ export function ClientDetailTabs({
   snapshots: ProgramMetricSnapshot[];
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
-  // Food defaults to tomorrow so the coach plans ahead while the client is still on today.
-  const [foodPlanDate, setFoodPlanDate] = useState(() => tomorrowKey());
+  const clientToday = dateKeyInTimeZone(client.timezone);
+  const [foodPlanDate, setFoodPlanDate] = useState(clientToday);
   const [exercisePlanDate, setExercisePlanDate] = useState(() => todayKey());
   const [weeklyFoodReportOpen, setWeeklyFoodReportOpen] = useState(false);
   const [weeklyExerciseReportOpen, setWeeklyExerciseReportOpen] = useState(false);
@@ -179,19 +179,17 @@ export function ClientDetailTabs({
         </div>
         {(activeTab === 'food' || activeTab === 'exercise') && (
           <div className="flex items-end gap-2 pb-2">
-            <label className="text-sm">
-              <span className="mb-1 block text-app-text-muted">Plan date</span>
-              <input
-                type="date"
-                className="rounded-xl border border-app-border bg-app-surface px-3 py-1.5"
-                value={activeTab === 'food' ? foodPlanDate : exercisePlanDate}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  if (activeTab === 'food') setFoodPlanDate(next);
-                  else setExercisePlanDate(next);
-                }}
-              />
-            </label>
+            {activeTab === 'exercise' && (
+              <label className="text-sm">
+                <span className="mb-1 block text-app-text-muted">Plan date</span>
+                <input
+                  type="date"
+                  className="rounded-xl border border-app-border bg-app-surface px-3 py-1.5"
+                  value={exercisePlanDate}
+                  onChange={(event) => setExercisePlanDate(event.target.value)}
+                />
+              </label>
+            )}
             {activeTab === 'food' && (
               <>
                 <Button type="button" variant="secondary" onClick={() => setWeeklyFoodReportOpen(true)}>
@@ -324,6 +322,8 @@ export function ClientDetailTabs({
           <FoodPlanEditor
             clientId={client.id}
             planDate={foodPlanDate}
+            clientToday={clientToday}
+            onPlanDateChange={setFoodPlanDate}
             nutritionTemplates={nutritionTemplates}
             planStatus={planStatus}
             saving={saving}

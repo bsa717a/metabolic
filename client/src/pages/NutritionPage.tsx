@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { api, getWeekDates, isToday, startOfWeek, todayKey } from '../services/api';
+import { api, dayTotalsDateLabel, getWeekDates, startOfWeek, todayKey } from '../services/api';
 import type { Meal, PlanPeriodInfo } from '../types';
 import { Button } from '../components/ui/Button';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
@@ -174,6 +174,8 @@ export function NutritionPage() {
       actualFat: 0
     }
   );
+
+  const totalsDateLabel = dayTotalsDateLabel(selectedDate, todayKey());
 
   function formatDayLine(label: string, calories: number, protein: number, carbs: number, fat: number) {
     return `${label}: ${Math.round(calories)} kcal · ${Math.round(protein)}g protein · ${Math.round(carbs)}g carbs · ${Math.round(fat)}g fat`;
@@ -387,7 +389,7 @@ export function NutritionPage() {
               {currentDayMeals.length > 0 && (
                 <div className="rounded-2xl border border-app-border bg-app-surface p-4">
                   <p className="font-semibold text-app-text">Day totals</p>
-                  {!isToday(selectedDate) && <p className="text-sm text-app-text-muted">{selectedDate}</p>}
+                  {totalsDateLabel ? <p className="text-sm text-app-text-muted">{totalsDateLabel}</p> : null}
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl bg-brand-gold/10 p-3 text-sm text-app-text ring-1 ring-brand-gold/20">
                       {formatDayLine('Planned', dayTotals.plannedCalories, dayTotals.plannedProtein, dayTotals.plannedCarbs, dayTotals.plannedFat)}

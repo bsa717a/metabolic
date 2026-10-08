@@ -20,7 +20,8 @@ export function WeekDateStrip({
   endAction,
   hideHeader = false,
   days,
-  exerciseDays
+  exerciseDays,
+  todayDate
 }: {
   selectedDate: string;
   onSelectDate: (date: string) => void;
@@ -30,6 +31,8 @@ export function WeekDateStrip({
   days?: DayMeals[];
   /** When set, past days tint green/red by exercise completion. */
   exerciseDays?: DayExercises[];
+  /** Whose "today" the dot marks. Defaults to this browser's calendar day. */
+  todayDate?: string;
 }) {
   const weekStart = startOfWeek(selectedDate);
   const weekDates = getWeekDates(weekStart);
@@ -53,7 +56,7 @@ export function WeekDateStrip({
         <div className="grid min-w-0 flex-1 grid-cols-7 gap-1 sm:flex sm:gap-2 sm:overflow-x-auto sm:pb-1 sm:snap-x sm:snap-mandatory">
         {weekDates.map((date) => {
           const selected = date === selectedDate;
-          const today = isToday(date);
+          const today = todayDate ? date === todayDate : isToday(date);
           const meals = days?.find((day) => day.date === date)?.meals ?? [];
           const targetStatus = days ? dayKcalTargetStatusForMeals(date, meals) : 'none';
           const showMealTint = Boolean(days) && isPastDate(date) && targetStatus !== 'none';

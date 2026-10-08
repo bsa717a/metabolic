@@ -227,3 +227,24 @@ describe('apiBlob', () => {
     expect(result).toBe(mockBlob);
   });
 });
+
+describe('client day labels', () => {
+  it('uses the client timezone for today and falls back to the UTC day', async () => {
+    const { dateKeyInTimeZone } = await import('./api');
+    const instant = new Date('2026-10-09T04:00:00.000Z');
+
+    expect(dateKeyInTimeZone('America/Denver', instant)).toBe('2026-10-08');
+    expect(dateKeyInTimeZone(null, instant)).toBe('2026-10-09');
+    expect(dateKeyInTimeZone('   ', instant)).toBe('2026-10-09');
+    expect(dateKeyInTimeZone('Not/AZone', instant)).toBe('2026-10-09');
+  });
+
+  it('formats the nutrition week and day like the client plan', async () => {
+    const { dayTotalsDateLabel, formatDayLabel, formatWeekRange } = await import('./api');
+
+    expect(formatWeekRange('2026-10-05')).toBe('Oct 5 – 11');
+    expect(formatDayLabel('2026-10-08')).toBe('Thu 8');
+    expect(dayTotalsDateLabel('2026-10-08', '2026-10-08')).toBeNull();
+    expect(dayTotalsDateLabel('2026-10-09', '2026-10-08')).toBe('Fri 9');
+  });
+});

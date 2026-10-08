@@ -493,6 +493,8 @@ export type CoachClient = {
   lastName: string;
   email: string;
   phone?: string | null;
+  /** IANA timezone used for this client's "today". Empty means the UTC day. */
+  timezone?: string | null;
   textPhone?: string | null;
   status: UserStatus;
   assignedAt: string;

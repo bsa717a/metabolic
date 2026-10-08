@@ -174,6 +174,32 @@ export function tomorrowKey(date = new Date()) {
   return addDays(todayKey(date), 1);
 }
 
+/**
+ * Calendar day (YYYY-MM-DD) for a person in their timezone.
+ * Matches the server `userDayKey`: profile timezone when set, otherwise the UTC day.
+ */
+export function dateKeyInTimeZone(timeZone: string | null | undefined, date = new Date()) {
+  const trimmed = timeZone?.trim();
+  if (trimmed) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: trimmed,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(date);
+      const value = (type: string) => parts.find((part) => part.type === type)?.value;
+      const year = value('year');
+      const month = value('month');
+      const day = value('day');
+      if (year && month && day) return `${year}-${month}-${day}`;
+    } catch {
+      // Invalid zone falls through to the UTC day.
+    }
+  }
+  return toDateKey(date);
+}
+
 export function startOfWeek(date: string) {
   const d = parseDateKey(date);
   const day = d.getUTCDay();
@@ -213,6 +239,20 @@ export function formatDayAbbrev(date: string) {
 
 export function formatDayNumber(date: string) {
   return parseDateKey(date).getUTCDate();
+}
+
+/** Client nutrition day label, e.g. "Thu 8". */
+export function formatDayLabel(date: string) {
+  return `${formatDayAbbrev(date)} ${formatDayNumber(date)}`;
+}
+
+/**
+ * Day-totals subtitle. Hidden on that person's today; otherwise the client-style
+ * label, never a raw YYYY-MM-DD.
+ */
+export function dayTotalsDateLabel(selectedDate: string, todayDate: string) {
+  if (selectedDate === todayDate) return null;
+  return formatDayLabel(selectedDate);
 }
 
 export function startOfMonth(date: string) {

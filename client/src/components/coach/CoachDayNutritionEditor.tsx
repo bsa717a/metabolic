@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { CopyPlus, LayoutTemplate, X } from 'lucide-react';
-import { api, formatDayAbbrev, formatDayNumber, isToday } from '../../services/api';
+import { api, dayTotalsDateLabel, formatDayLabel } from '../../services/api';
 import type { Meal, NutritionPlanTemplateSummary } from '../../types';
 import { MealPlanner, type MealPlannerHandle } from '../nutrition/MealPlanner';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
@@ -68,14 +68,17 @@ function DayTotalsPanel({
   actual,
   layout,
   selectedDate,
+  todayDate,
   pinWhileScrolling = false
 }: {
   planned: MacroTotals;
   actual: MacroTotals;
   layout: 'horizontal' | 'vertical';
   selectedDate: string;
+  todayDate: string;
   pinWhileScrolling?: boolean;
 }) {
+  const dateLabel = dayTotalsDateLabel(selectedDate, todayDate);
   return (
     <div
       className={clsx(
@@ -85,7 +88,7 @@ function DayTotalsPanel({
       )}
     >
       <p className="font-semibold text-app-text">Day totals</p>
-      {!isToday(selectedDate) && <p className="text-sm text-app-text-muted">{selectedDate}</p>}
+      {dateLabel ? <p className="text-sm text-app-text-muted">{dateLabel}</p> : null}
       <div className={layout === 'vertical' ? 'mt-3 space-y-3' : 'mt-3 grid gap-3 sm:grid-cols-2'}>
         <MacroTotalsBlock label="Planned" totals={planned} variant="gold" layout={layout} />
         <MacroTotalsBlock label="Actual" totals={actual} variant="green" layout={layout} />
@@ -98,6 +101,7 @@ export function CoachDayNutritionEditor({
   open,
   clientId,
   planDate,
+  clientToday,
   nutritionTemplates,
   onClose,
   onRefresh
@@ -105,6 +109,7 @@ export function CoachDayNutritionEditor({
   open: boolean;
   clientId: string;
   planDate: string;
+  clientToday: string;
   nutritionTemplates: NutritionPlanTemplateSummary[];
   onClose: () => void;
   onRefresh: () => Promise<void>;
@@ -265,7 +270,7 @@ export function CoachDayNutritionEditor({
     }
   }
 
-  const dayLabel = `${formatDayAbbrev(selectedDate)} ${formatDayNumber(selectedDate)}`;
+  const dayLabel = formatDayLabel(selectedDate);
 
   async function handleClose() {
     if (!confirmDiscardIfDirty()) return;
@@ -360,7 +365,11 @@ export function CoachDayNutritionEditor({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-7xl space-y-4">
-          <WeekDateStrip selectedDate={selectedDate} onSelectDate={handleSelectDate} />
+          <WeekDateStrip
+            selectedDate={selectedDate}
+            onSelectDate={handleSelectDate}
+            todayDate={clientToday}
+          />
 
           {defaultTemplateName && (
             <p className="text-sm text-app-text-muted">
@@ -400,6 +409,7 @@ export function CoachDayNutritionEditor({
                     actual={actualTotals}
                     layout="horizontal"
                     selectedDate={selectedDate}
+                    todayDate={clientToday}
                   />
                 )}
               </div>
@@ -411,6 +421,7 @@ export function CoachDayNutritionEditor({
                     actual={actualTotals}
                     layout="vertical"
                     selectedDate={selectedDate}
+                    todayDate={clientToday}
                     pinWhileScrolling
                   />
                 ) : (
@@ -434,7 +445,7 @@ export function CoachDayNutritionEditor({
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-xl">
             <h3 className="text-lg font-bold text-app-text">Apply nutrition plan</h3>
             <p className="mt-1 text-sm text-app-text-muted">
-              Replace planned meals for <strong>{selectedDate}</strong>.
+              Replace planned meals for <strong>{formatDayLabel(selectedDate)}</strong>.
             </p>
             <label className="mt-4 block text-sm">
               <span className="mb-1 block font-medium">Plan</span>
