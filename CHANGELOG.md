@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.3](https://github.com/bsa717a/metabolic/compare/v0.38.2...v0.38.3) (2026-10-08)
+
+
+### Bug Fixes
+
+* **exercise:** show the same plan on client and coach ([#332](https://github.com/bsa717a/metabolic/issues/332)) ([83da7f9](https://github.com/bsa717a/metabolic/commit/83da7f9b253c79d08830038b116a999f5bec113a))
+
 ## [0.38.2](https://github.com/bsa717a/metabolic/compare/v0.38.1...v0.38.2) (2026-10-08)
 
 
