@@ -1,7 +1,7 @@
 import type { ExerciseRoutine } from '../types';
 import { weekdayIndex } from './weekdayPattern';
 
-/** Saved exercise-plan name, e.g. "Core #3". Null when the week is custom or unset. */
+/** Saved exercise-plan name, e.g. "5 Day Split (#5)". Null when unset. Never a day's workout. */
 export function exerciseWeekPlanHeading(routine: ExerciseRoutine | null): string | null {
   return assignedExercisePlan(routine)?.name ?? null;
 }

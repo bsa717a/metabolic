@@ -24,9 +24,9 @@ describe('exerciseWeekPlanHeading', () => {
   it('returns the saved plan name', () => {
     expect(
       exerciseWeekPlanHeading(
-        routine({ exercisePlan: { id: 'plan', name: 'Core #3' }, exercisePlanId: 'plan' })
+        routine({ exercisePlan: { id: 'split-5', name: '5 Day Split (#5)' }, exercisePlanId: 'split-5' })
       )
-    ).toBe('Core #3');
+    ).toBe('5 Day Split (#5)');
   });
 
   it('returns null when no plan is saved', () => {
@@ -37,7 +37,7 @@ describe('exerciseWeekPlanHeading', () => {
 
 describe('assignedTemplateIdForDate', () => {
   const saved = routine({
-    exercisePlan: { id: 'plan', name: 'Core #3' },
+    exercisePlan: { id: 'split-5', name: '5 Day Split (#5)' },
     days: [
       { id: 'd0', weekday: 0, templateId: 'chest', template: null, itemOverrides: [] },
       { id: 'd3', weekday: 3, templateId: null, template: null, itemOverrides: [] }
@@ -56,16 +56,16 @@ describe('assignedTemplateIdForDate', () => {
 
 describe('exercise plan picker', () => {
   const saved = routine({
-    exercisePlanId: 'plan',
-    exercisePlan: { id: 'plan', name: 'Core #3' },
+    exercisePlanId: 'split-5',
+    exercisePlan: { id: 'split-5', name: '5 Day Split (#5)' },
     days: [
       {
-        id: 'd3',
-        weekday: 3,
-        templateId: 'legs',
+        id: 'fri',
+        weekday: 4,
+        templateId: 'core-3',
         template: {
-          id: 'legs',
-          name: 'Legs',
+          id: 'core-3',
+          name: 'Core #3',
           visibility: 'GLOBAL',
           exerciseCount: 2,
           createdAt: '',
@@ -76,15 +76,17 @@ describe('exercise plan picker', () => {
     ]
   });
 
-  it('selects the week plan, not the selected day workout', () => {
-    expect(assignedExercisePlan(saved)).toEqual({ id: 'plan', name: 'Core #3' });
-    expect(exerciseWeekPlanHeading(saved)).toBe('Core #3');
-    expect(exercisePlanPickerValue('plan', null)).toBe('plan');
+  it('selects the week plan, not Friday Core #3', () => {
+    expect(assignedExercisePlan(saved)).toEqual({ id: 'split-5', name: '5 Day Split (#5)' });
+    expect(exerciseWeekPlanHeading(saved)).toBe('5 Day Split (#5)');
+    expect(exercisePlanPickerValue('split-5', null)).toBe('split-5');
+    expect(exercisePlanPickerValue('split-5', null)).not.toBe('core-3');
     const options = exercisePlanPickerOptions(
-      [{ id: 'other', name: 'Legs' }],
+      [{ id: 'split-5', name: '5 Day Split (#5)' }],
       assignedExercisePlan(saved)
     );
-    expect(options.map((plan) => plan.name)).toEqual(['Core #3', 'Legs']);
+    expect(options.map((plan) => plan.name)).toEqual(['5 Day Split (#5)']);
+    expect(options.map((plan) => plan.name)).not.toContain('Core #3');
   });
 
   it('is Choose a plan when nothing is assigned', () => {
@@ -92,8 +94,9 @@ describe('exercise plan picker', () => {
     expect(assignedExercisePlan(routine({}))).toBeNull();
     expect(exerciseWeekPlanHeading(null)).toBeNull();
     expect(exercisePlanPickerValue(null, null)).toBe('');
-    const library = exercisePlanPickerOptions([{ id: 'core-3', name: 'Core #3' }], null);
-    expect(library.map((plan) => plan.name)).toEqual(['Core #3']);
+    const library = exercisePlanPickerOptions([{ id: 'split-5', name: '5 Day Split (#5)' }], null);
+    expect(library.map((plan) => plan.name)).toEqual(['5 Day Split (#5)']);
+    expect(library.map((plan) => plan.name)).not.toContain('Core #3');
     expect(exercisePlanPickerValue(null, null)).not.toBe(library[0]?.id);
     expect(NO_EXERCISE_PLAN_ASSIGNED).toBe('No plan is assigned.');
     expect(APPLY_EXERCISE_PLAN_HINT).toBe(
