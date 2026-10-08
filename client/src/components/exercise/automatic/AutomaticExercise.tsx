@@ -83,19 +83,24 @@ function RadioRow<T extends string>({
   value,
   options,
   disabled,
+  nowrap,
   onChange
 }: {
   label: string;
   value: T;
   options: { value: T; label: string }[];
   disabled?: boolean;
+  nowrap?: boolean;
   onChange: (value: T) => void;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex max-w-full flex-wrap rounded-xl border border-app-border bg-app-surface p-0.5"
+      className={clsx(
+        'inline-flex rounded-xl border border-app-border bg-app-surface p-0.5',
+        nowrap ? 'shrink-0 flex-nowrap' : 'max-w-full flex-wrap'
+      )}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -154,26 +159,26 @@ function PlanDropdown({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative w-full max-w-sm">
+    <div ref={rootRef} className="relative w-[5.75rem] shrink-0 sm:w-40">
       <button
         type="button"
-        aria-labelledby="automatic-plan-label"
+        aria-label="Plan for this level"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
         disabled={disabled || empty}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-app-border bg-app-surface px-3 text-left text-sm font-semibold text-app-text shadow-sm transition disabled:opacity-50"
+        className="flex h-9 w-full items-center justify-between gap-1 rounded-xl border border-app-border bg-app-surface px-2.5 text-left text-sm font-semibold text-app-text shadow-sm transition disabled:opacity-50"
       >
-        <span className="truncate">{selected?.name ?? (empty ? 'No plans for this level' : 'Choose a plan')}</span>
-        <ChevronDown aria-hidden className={clsx('h-4 w-4 shrink-0 text-app-text-muted transition', open && 'rotate-180')} />
+        <span className="truncate">{selected?.name ?? (empty ? 'No plans' : 'Choose')}</span>
+        <ChevronDown aria-hidden className={clsx('h-3.5 w-3.5 shrink-0 text-app-text-muted transition', open && 'rotate-180')} />
       </button>
       {open && !empty && (
         <ul
           id={listId}
           role="listbox"
           aria-label="Plans for this level"
-          className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-app-border bg-app-surface py-1 shadow-lg"
+          className="absolute right-0 z-20 mt-1 max-h-64 w-max min-w-full overflow-auto rounded-xl border border-app-border bg-app-surface py-1 shadow-lg"
         >
           {plans.map((plan) => {
             const isSelected = plan.id === value;
@@ -321,23 +326,19 @@ export function AutomaticExercise({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <RadioRow label="Gym preference" value={location} options={LOCATIONS} disabled={busy} onChange={onLocation} />
-        <RadioRow label="Activity level" value={level} options={LEVELS} disabled={busy} onChange={onLevel} />
-      </div>
-
-      {track && (
-        <div className="w-full max-w-sm space-y-1.5">
-          <p id="automatic-plan-label" className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">
-            Plan
-          </p>
-          <PlanDropdown
-            key={`${location}-${level}`}
-            plans={track.plans}
-            value={track.selectedPlanId}
-            disabled={busy}
-            onChange={onPlan}
-          />
+        <div className="flex max-w-full items-center gap-1.5">
+          <RadioRow nowrap label="Activity level" value={level} options={LEVELS} disabled={busy} onChange={onLevel} />
+          {track && (
+            <PlanDropdown
+              key={`${location}-${level}`}
+              plans={track.plans}
+              value={track.selectedPlanId}
+              disabled={busy}
+              onChange={onPlan}
+            />
+          )}
         </div>
-      )}
+      </div>
 
       {error && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
 
