@@ -91,6 +91,7 @@ describe('shouldPersistAfterPlanApply', () => {
       shouldPersistAfterPlanApply({
         succeeded: false,
         settled: previous,
+        atSettlement: previous,
         previous,
         assignmentsNeedSave: false,
         routineExists: true
@@ -103,6 +104,7 @@ describe('shouldPersistAfterPlanApply', () => {
       shouldPersistAfterPlanApply({
         succeeded: false,
         settled: previous,
+        atSettlement: previous,
         previous,
         assignmentsNeedSave: true,
         routineExists: true
@@ -115,6 +117,7 @@ describe('shouldPersistAfterPlanApply', () => {
       shouldPersistAfterPlanApply({
         succeeded: false,
         settled: swapped,
+        atSettlement: swapped,
         previous,
         assignmentsNeedSave: true,
         routineExists: true
@@ -122,11 +125,29 @@ describe('shouldPersistAfterPlanApply', () => {
     ).toEqual({ persist: false, assignments: 'settled' });
   });
 
+  it('saves a weekday reassignment made after a failed apply rolls back', () => {
+    const later: WeekAssignment[] = [
+      { weekday: 0, templateId: 'core' },
+      { weekday: 1, templateId: 'legs' }
+    ];
+    expect(
+      shouldPersistAfterPlanApply({
+        succeeded: false,
+        settled: later,
+        atSettlement: previous,
+        previous,
+        assignmentsNeedSave: true,
+        routineExists: true
+      })
+    ).toEqual({ persist: true, assignments: 'settled' });
+  });
+
   it('creates the previous week when a failed apply left no routine for an add', () => {
     expect(
       shouldPersistAfterPlanApply({
         succeeded: false,
         settled: swapped,
+        atSettlement: swapped,
         previous,
         assignmentsNeedSave: true,
         routineExists: false
@@ -139,6 +160,7 @@ describe('shouldPersistAfterPlanApply', () => {
       shouldPersistAfterPlanApply({
         succeeded: true,
         settled: swapped,
+        atSettlement: sent,
         previous,
         assignmentsNeedSave: true,
         routineExists: true

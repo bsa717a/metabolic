@@ -979,6 +979,7 @@ export function RoutineEditorContent({
     succeeded: boolean;
     previous: DayAssignment[];
     previousPlanId: string | null;
+    atSettlement: DayAssignment[];
   } | null>(null);
   const [savedRoutineDays, setSavedRoutineDays] = useState<ExerciseRoutineDay[]>([]);
 
@@ -1168,7 +1169,16 @@ export function RoutineEditorContent({
             }
           }
         } finally {
-          planApplySettlementRef.current = { succeeded, previous: previousAssignments, previousPlanId };
+          // Rollback is done. Drop the settlement so a later swap is saved
+          // instead of being treated as an edit from this failed apply.
+          planApplySettlementRef.current = succeeded
+            ? {
+                succeeded: true,
+                previous: previousAssignments,
+                previousPlanId,
+                atSettlement: liveAssignmentsRef.current.map((day) => ({ ...day }))
+              }
+            : null;
           setSaving(false);
         }
       })();
@@ -1368,6 +1378,7 @@ export function RoutineEditorContent({
       ? shouldPersistAfterPlanApply({
           succeeded: settlement.succeeded,
           settled: currentAssignments,
+          atSettlement: settlement.atSettlement,
           previous: settlement.previous,
           assignmentsNeedSave: need,
           routineExists: liveSavedDaysRef.current.length > 0

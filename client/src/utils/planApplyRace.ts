@@ -44,17 +44,28 @@ export function assignmentsAfterPlanApply<T extends WeekAssignment>(input: {
 
 /**
  * Whether a waiting add/remove should PUT after a plan apply settles.
- * A failed apply is not written again. In-flight weekday edits stay on screen
- * until an explicit save. If the routine row does not exist yet, the previous
- * week is created so the add still has somewhere to land.
+ *
+ * A failed apply is not written again, and a swap that was already on screen
+ * when that apply finished stays unsaved. A weekday change made after the
+ * rollback is a new edit and must be saved, so the following add or remove
+ * lands on that day.
  */
 export function shouldPersistAfterPlanApply(input: {
   succeeded: boolean;
   settled: readonly WeekAssignment[];
+  /** Week on screen when the apply finished, before any later edit. */
+  atSettlement: readonly WeekAssignment[];
   previous: readonly WeekAssignment[];
   assignmentsNeedSave: boolean;
   routineExists: boolean;
 }): { persist: boolean; assignments: 'settled' | 'previous' } {
+  const editedSinceSettlement = !weekAssignmentsEqual(input.settled, input.atSettlement);
+  if (editedSinceSettlement) {
+    if (!input.assignmentsNeedSave) return { persist: false, assignments: 'settled' };
+    return { persist: true, assignments: 'settled' };
+  }
+
+  // Still the week from the moment the apply finished.
   if (!input.succeeded && !weekAssignmentsEqual(input.settled, input.previous)) {
     if (!input.routineExists) return { persist: true, assignments: 'previous' };
     return { persist: false, assignments: 'settled' };
