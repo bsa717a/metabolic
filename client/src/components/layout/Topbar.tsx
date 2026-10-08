@@ -190,9 +190,6 @@ export function Topbar({
                 <LayoutDashboard size={14} className="shrink-0" aria-hidden />
                 <span className="hidden sm:inline">Back to dashboard</span>
               </p>
-              <p className="mt-0.5 hidden text-[10px] text-app-text-muted md:block">
-                Click anywhere on this bar
-              </p>
             </div>
           )}
         </div>
