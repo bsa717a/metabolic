@@ -9,7 +9,7 @@ import type { SetupFormState } from '../../types/onboarding';
 type SubmitOptions = {
   requireGoalWeight?: boolean;
   requireTimezone?: boolean;
-  /** Imported users already have a coach. Never send a code that would replace them. */
+  /** When the imported user already has a coach, never send a code or request. */
   preserveAssignedCoach?: boolean;
 };
 
