@@ -1,6 +1,6 @@
 {
   "name": "metabolic",
-  "version": "0.38.4",
+  "version": "0.38.5",
   "private": true,
   "description": "Metabolic web app foundation for nutrition, exercise, and program tracking.",
   "type": "module",
