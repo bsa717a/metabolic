@@ -6,12 +6,12 @@ import { api, getWeekDates, startOfWeek } from '../../services/api';
 import type { ExerciseRoutine } from '../../types';
 import { DayExerciseEditor } from '../exercise/DayExerciseEditor';
 import { RoutineEditorContent } from '../exercise/RoutineEditor';
-import { WeekAgendaList } from '../exercise/weekly/WeekAgendaList';
+import { AssignedExerciseWeek } from '../exercise/AssignedExerciseWeek';
 import { PlanPrintMenu } from '../export/PlanPrintMenu';
 import { coachRestoreExercisePlanApi } from '../../utils/coachExerciseApi';
 import { fetchCoachExercisesForDates, formatWeekExportLabel, weekHasExercises } from '../../utils/planExportData';
 import { printExercisePlan, printExerciseWeekPlan } from '../../utils/printExercisePlan';
-import { routineRestDatesForWeek, routineSummaryLabel } from '../../utils/exerciseRoutineDisplay';
+import { exerciseWeekPlanHeading, routineSummaryLabel } from '../../utils/exerciseRoutineDisplay';
 import { exercisePlanUndoMessage, useExercisePlanUndo } from '../../hooks/useExercisePlanUndo';
 import { ExercisePlanUndoToast } from '../exercise/ExercisePlanUndoToast';
 import type { ExercisePlanUndoResponse } from '../../types/exercisePlanUndo';
@@ -48,7 +48,6 @@ export function CoachDayExerciseEditor({
 
   const weekStart = startOfWeek(selectedDate);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
-  const routineRestDates = useMemo(() => routineRestDatesForWeek(routine, weekDates), [routine, weekDates]);
 
   const reloadWeek = useCallback(async () => {
     try {
@@ -160,6 +159,7 @@ export function CoachDayExerciseEditor({
   if (!open) return null;
 
   const displayError = activeTab === 'today' ? actionError ?? loadError : loadError;
+  const planName = exerciseWeekPlanHeading(routine);
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-app-bg">
@@ -220,7 +220,11 @@ export function CoachDayExerciseEditor({
                 setLoadError(null);
               }}
               beforeChecklist={
-                routine && routineSummaryLabel(routine) ? (
+                planName ? (
+                  <p className="text-sm text-app-text-muted">
+                    Plan <span className="font-medium text-app-text">{planName}</span>
+                  </p>
+                ) : routine && routineSummaryLabel(routine) ? (
                   <p className="text-sm text-app-text-muted">
                     Weekly routine:{' '}
                     <span className="font-medium text-app-text">{routineSummaryLabel(routine)}</span>
@@ -247,11 +251,11 @@ export function CoachDayExerciseEditor({
                 <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>
               )}
 
-              <WeekAgendaList
+              <AssignedExerciseWeek
+                routine={routine}
                 weekDates={weekDates}
                 days={weekDays}
                 selectedDate={selectedDate}
-                routineRestDates={routineRestDates}
                 onSelectDay={openDay}
               />
             </div>

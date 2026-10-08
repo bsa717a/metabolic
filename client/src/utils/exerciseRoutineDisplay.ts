@@ -1,6 +1,65 @@
 import type { ExerciseRoutine } from '../types';
 import { weekdayIndex } from './weekdayPattern';
 
+/** Saved exercise-plan name, e.g. "Core #3". Null when the week is custom or unset. */
+export function exerciseWeekPlanHeading(routine: ExerciseRoutine | null): string | null {
+  return assignedExercisePlan(routine)?.name ?? null;
+}
+
+/** The plan the week is on. Null when nothing is assigned — never a day's workout. */
+export function assignedExercisePlan(
+  routine: ExerciseRoutine | null
+): { id: string; name: string } | null {
+  const name = routine?.exercisePlan?.name?.trim();
+  const id = routine?.exercisePlanId ?? routine?.exercisePlan?.id ?? null;
+  if (!id || !name) return null;
+  return { id, name };
+}
+
+/**
+ * Options for the Exercise plan picker. The saved plan is always included so the
+ * control shows the same name as the week, even before the catalog finishes loading.
+ */
+export function exercisePlanPickerOptions(
+  plans: { id: string; name: string }[],
+  assigned: { id: string; name: string } | null
+): { id: string; name: string }[] {
+  const options = plans
+    .filter((plan) => plan.id && plan.name.trim())
+    .map((plan) => ({ id: plan.id, name: plan.name.trim() }));
+  if (assigned && !options.some((plan) => plan.id === assigned.id)) {
+    return [assigned, ...options];
+  }
+  return options;
+}
+
+/** Saved plan, unless the coach has picked a different one and not applied it yet. */
+export function exercisePlanPickerValue(assignedId: string | null, override: string | null): string {
+  if (override !== null) return override;
+  return assignedId ?? '';
+}
+
+/** Mon=0 … Sun=6 from a plan's day templates (dayIndex order). Leftover weekdays are rest. */
+export function weekdayAssignmentsFromPlanDays(
+  days: { id: string; dayIndex?: number | null }[]
+): { weekday: number; templateId: string | null }[] {
+  const sorted = [...days].sort((a, b) => (a.dayIndex ?? 0) - (b.dayIndex ?? 0));
+  return Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    templateId: sorted[weekday]?.id ?? null
+  }));
+}
+
+/**
+ * Workout template assigned to this calendar day by the weekly routine.
+ * Null for rest days and when no routine is saved — never a catalog default.
+ */
+export function assignedTemplateIdForDate(routine: ExerciseRoutine | null, date: string): string | null {
+  if (!routine) return null;
+  const day = routine.days.find((entry) => entry.weekday === weekdayIndex(date));
+  return day?.templateId ?? null;
+}
+
 /** Dates within `weekDates` that the routine marks as explicit rest days (templateId === null). */
 export function routineRestDatesForWeek(routine: ExerciseRoutine | null, weekDates: string[]): Set<string> {
   if (!routine?.days.length) return new Set<string>();

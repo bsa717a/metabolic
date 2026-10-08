@@ -514,7 +514,6 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 planStatus={planStatus}
                 engagement={engagement}
                 nutritionTemplates={clientNutritionTemplates}
-                exerciseTemplates={exerciseTemplates}
                 saving={saving}
                 sendingEmail={sendingEmail}
                 sendingSms={sendingSms}
