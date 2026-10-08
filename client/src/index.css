@@ -449,7 +449,8 @@ select {
   box-shadow: 0 0 40px rgba(125, 163, 93, 0.2);
 }
 
-/* +2pt typography bump for nutrition plan editor and add-foods panel */
+/* +2pt typography bump for the add-foods panel and admin meal-card preview.
+   Coach and client nutrition editors use the shared page scale instead. */
 .nutrition-ui-lg {
   font-size: calc(0.875rem + 2pt);
 }

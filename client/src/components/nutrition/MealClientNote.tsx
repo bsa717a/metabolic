@@ -41,13 +41,9 @@ export function MealClientNote({ meal, onChange }: { meal: Meal; onChange: () =>
     if (!saved) {
       return (
         <div className={frame}>
-          <button
-            type="button"
-            className="inline-flex min-h-11 items-center rounded-xl px-3 text-base font-medium text-brand-green transition hover:bg-app-muted sm:text-sm"
-            onClick={() => openEditor('')}
-          >
+          <Button type="button" variant="secondary" onClick={() => openEditor('')}>
             Add note
-          </button>
+          </Button>
         </div>
       );
     }
@@ -56,22 +52,13 @@ export function MealClientNote({ meal, onChange }: { meal: Meal; onChange: () =>
       <div className={frame}>
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Note</p>
-          <div className="flex shrink-0 gap-1">
-            <button
-              type="button"
-              className="inline-flex min-h-11 items-center rounded-xl px-3 text-base font-medium text-app-text transition hover:bg-app-muted sm:text-sm"
-              onClick={() => openEditor(saved)}
-            >
+          <div className="flex shrink-0 gap-2">
+            <Button type="button" variant="secondary" onClick={() => openEditor(saved)}>
               Edit note
-            </button>
-            <button
-              type="button"
-              className="inline-flex min-h-11 items-center rounded-xl px-3 text-base font-medium text-app-text-muted transition hover:bg-app-muted sm:text-sm"
-              disabled={saving}
-              onClick={() => void save('')}
-            >
+            </Button>
+            <Button type="button" variant="secondary" disabled={saving} onClick={() => void save('')}>
               Remove
-            </button>
+            </Button>
           </div>
         </div>
         <p className="mt-1 whitespace-pre-wrap text-base text-app-text sm:text-sm">{saved}</p>
