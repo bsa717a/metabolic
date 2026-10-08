@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CoachClientPlanStatus } from '../types';
-import { formatCoachExerciseLine, formatPlanStatusLine } from './coachPlanStatusLine';
+import { formatCoachExerciseLine, formatPlanStatusLine, planStatusWithExercisePlan } from './coachPlanStatusLine';
 
 function status(partial: Partial<CoachClientPlanStatus>): CoachClientPlanStatus {
   return {
@@ -60,6 +60,23 @@ describe('formatPlanStatusLine', () => {
     expect(formatPlanStatusLine(status({ state: 'self_directed', mode: 'SELF_DIRECTED' }))).toBe(
       'Self-directed tracking'
     );
+  });
+});
+
+describe('planStatusWithExercisePlan', () => {
+  it('shows the plan that was just applied while plan-status is still stale', () => {
+    const next = planStatusWithExercisePlan(status({ exercisePlanName: null }), '5 Day Split (#5)');
+    expect(formatPlanStatusLine(next)).toBe('No food plan assigned · Exercise: 5 Day Split (#5)');
+    expect(next?.nutritionTemplateName).toBeNull();
+  });
+
+  it('clears the exercise name when the saved routine has no plan', () => {
+    const next = planStatusWithExercisePlan(status({ exercisePlanName: '5 Day Split (#5)' }), null);
+    expect(formatPlanStatusLine(next)).toBe('Tracking freely — no weekly plan assigned yet');
+  });
+
+  it('leaves a missing status empty', () => {
+    expect(planStatusWithExercisePlan(null, '5 Day Split (#5)')).toBeNull();
   });
 });
 
