@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { CopyPlus, LayoutTemplate, X } from 'lucide-react';
-import { api, dayTotalsDateLabel, formatDayLabel } from '../../services/api';
+import { api, dayTotalsDateLabel, formatDayLabel, getWeekDates, startOfWeek } from '../../services/api';
 import type { Meal, NutritionPlanTemplateSummary } from '../../types';
+import { fetchCoachMealsForDates, type DayMeals } from '../../utils/planExportData';
 import { MealPlanner, type MealPlannerHandle } from '../nutrition/MealPlanner';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
 import { AddFoodsPanel } from '../nutrition/weekly/AddFoodsPanel';
@@ -125,6 +126,9 @@ export function CoachDayNutritionEditor({
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [selectedDate, setSelectedDate] = useState(planDate);
+  const [weekDays, setWeekDays] = useState<DayMeals[]>([]);
+  const weekStart = startOfWeek(selectedDate);
+  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const [editingPlan, setEditingPlan] = useState(false);
   const [savingDay, setSavingDay] = useState(false);
   const [draftPlannedTotals, setDraftPlannedTotals] = useState<MacroTotals | null>(null);
@@ -140,6 +144,10 @@ export function CoachDayNutritionEditor({
 
   const loadGeneration = useRef(0);
 
+  const reloadWeekDays = useCallback(async () => {
+    setWeekDays(await fetchCoachMealsForDates(clientId, weekDates));
+  }, [clientId, weekDates]);
+
   const reloadMeals = useCallback(async () => {
     const generation = ++loadGeneration.current;
     try {
@@ -147,11 +155,12 @@ export function CoachDayNutritionEditor({
       if (generation !== loadGeneration.current) return;
       setMeals(data);
       setLoadError(null);
+      void reloadWeekDays();
     } catch (error) {
       if (generation !== loadGeneration.current) return;
       setLoadError(error instanceof Error ? error.message : 'Could not load meals.');
     }
-  }, [clientId, selectedDate]);
+  }, [clientId, reloadWeekDays, selectedDate]);
 
   useEffect(() => {
     if (!open) setSelectedDate(planDate);
@@ -369,6 +378,7 @@ export function CoachDayNutritionEditor({
             selectedDate={selectedDate}
             onSelectDate={handleSelectDate}
             todayDate={clientToday}
+            days={weekDays}
           />
 
           {defaultTemplateName && (

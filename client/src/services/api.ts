@@ -200,6 +200,14 @@ export function dateKeyInTimeZone(timeZone: string | null | undefined, date = ne
   return toDateKey(date);
 }
 
+/**
+ * Day the coach nutrition editor opens on: the day after the client's today.
+ * Editing the client's current day partway through rewrites the meals still ahead of them.
+ */
+export function coachNutritionStartDate(timeZone: string | null | undefined, date = new Date()) {
+  return addDays(dateKeyInTimeZone(timeZone, date), 1);
+}
+
 export function startOfWeek(date: string) {
   const d = parseDateKey(date);
   const day = d.getUTCDay();

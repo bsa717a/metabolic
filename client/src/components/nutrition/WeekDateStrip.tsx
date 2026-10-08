@@ -58,8 +58,8 @@ export function WeekDateStrip({
           const selected = date === selectedDate;
           const today = todayDate ? date === todayDate : isToday(date);
           const meals = days?.find((day) => day.date === date)?.meals ?? [];
-          const targetStatus = days ? dayKcalTargetStatusForMeals(date, meals) : 'none';
-          const showMealTint = Boolean(days) && isPastDate(date) && targetStatus !== 'none';
+          const targetStatus = days ? dayKcalTargetStatusForMeals(date, meals, todayDate) : 'none';
+          const showMealTint = Boolean(days) && isPastDate(date, todayDate) && targetStatus !== 'none';
           const exercises = exerciseDays ? exercisesForDay(exerciseDays, date) : [];
           const exerciseStatus = exerciseDays ? dayExerciseCompletionStatus(exercises, date) : 'none';
           const showExerciseTint = Boolean(exerciseDays) && isExercisePastDate(date) && exerciseStatus !== 'none';

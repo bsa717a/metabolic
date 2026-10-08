@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
-import { dateKeyInTimeZone, todayKey } from '../../services/api';
+import { coachNutritionStartDate, dateKeyInTimeZone, todayKey } from '../../services/api';
 import type { CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
@@ -104,7 +104,8 @@ export function ClientDetailTabs({
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const clientToday = dateKeyInTimeZone(client.timezone);
-  const [foodPlanDate, setFoodPlanDate] = useState(clientToday);
+  // Tomorrow in the client's timezone, so a mid-day edit does not rewrite today's remaining meals.
+  const [foodPlanDate, setFoodPlanDate] = useState(() => coachNutritionStartDate(client.timezone));
   const [exercisePlanDate, setExercisePlanDate] = useState(() => todayKey());
   const [weeklyFoodReportOpen, setWeeklyFoodReportOpen] = useState(false);
   const [weeklyExerciseReportOpen, setWeeklyExerciseReportOpen] = useState(false);

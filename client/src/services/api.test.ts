@@ -239,6 +239,14 @@ describe('client day labels', () => {
     expect(dateKeyInTimeZone('Not/AZone', instant)).toBe('2026-10-09');
   });
 
+  it('starts coach nutrition editing the day after the client today', async () => {
+    const { coachNutritionStartDate } = await import('./api');
+    const instant = new Date('2026-10-09T04:00:00.000Z');
+
+    expect(coachNutritionStartDate('America/Denver', instant)).toBe('2026-10-09');
+    expect(coachNutritionStartDate(null, instant)).toBe('2026-10-10');
+  });
+
   it('formats the nutrition week and day like the client plan', async () => {
     const { dayTotalsDateLabel, formatDayLabel, formatWeekRange } = await import('./api');
 
