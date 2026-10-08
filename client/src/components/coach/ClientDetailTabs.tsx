@@ -5,6 +5,7 @@ import type { CoachClient, CoachClientPlanStatus, Dashboard, NutritionPlanTempla
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
 import { clientInitials, clientName, formatNextSession } from '../../utils/coachClientUtils';
+import { formatCoachExerciseLine, formatPlanStatusLine } from '../../utils/coachPlanStatusLine';
 import { SendResultsMenu } from './SendResultsMenu';
 import { FoodPlanEditor } from './FoodPlanEditor';
 import { CoachWeeklyFoodReportModal } from './CoachWeeklyFoodReportModal';
@@ -40,21 +41,6 @@ function TabButton({
       {label}
     </button>
   );
-}
-
-function formatPlanStatusLine(planStatus: CoachClientPlanStatus | null) {
-  if (!planStatus) return null;
-  if (planStatus.state === 'on_plan') {
-    const parts = [
-      planStatus.nutritionTemplateName ?? 'Weekly plan',
-      planStatus.weekNumber != null ? `Week ${planStatus.weekNumber}` : null,
-      planStatus.planDayIndex != null ? `day ${planStatus.planDayIndex}` : null,
-      planStatus.calorieTarget != null ? `${planStatus.calorieTarget} kcal` : null
-    ].filter(Boolean);
-    return parts.join(' · ');
-  }
-  if (planStatus.state === 'coached_no_plan') return 'Tracking freely — no weekly plan assigned yet';
-  return 'Self-directed tracking';
 }
 
 export function ClientDetailTabs({
@@ -112,6 +98,8 @@ export function ClientDetailTabs({
   const pct = client.compliancePct;
   const hydrationToday = engagement?.hydration.todayActualOz ?? 0;
   const hydrationTarget = engagement?.hydration.todayTargetOz ?? 0;
+  const planStatusLine = formatPlanStatusLine(planStatus);
+  const exerciseLine = formatCoachExerciseLine(planStatus);
 
   return (
     <Card>
@@ -125,11 +113,11 @@ export function ClientDetailTabs({
             <p className="text-sm text-app-text-muted">
               {client.activeProgram?.name ?? 'No active program'} · {formatNextSession(client.nextCheckInAt)}
             </p>
-            {formatPlanStatusLine(planStatus) ? (
-              <p className="mt-1 text-sm text-app-text">{formatPlanStatusLine(planStatus)}</p>
+            {planStatusLine ? (
+              <p className="mt-1 text-sm text-app-text">{planStatusLine}</p>
             ) : null}
-            {planStatus?.exerciseTemplateName ? (
-              <p className="text-sm text-app-text-muted">Exercise: {planStatus.exerciseTemplateName}</p>
+            {exerciseLine ? (
+              <p className="text-sm text-app-text-muted">{exerciseLine}</p>
             ) : null}
           </div>
         </div>

@@ -28,6 +28,7 @@ import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsRe
 import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, resolveOutboundChannel } from './twilioOutboundService.js';
 import { normalizePhone } from '../utils/phone.js';
 import { env } from '../config/env.js';
+import { exercisePlanNameFromRoutine } from './coachPlanHeader.js';
 
 export async function requireCoachClient(actor: { id: string; role: Role }, userId: string) {
   if (!(await canAccessUser(actor, userId))) {
@@ -281,19 +282,24 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
     resolvePlanForDate(program, parseDateParam(todayKey)),
     getUserNutritionTargets(userId)
   ]);
-  const [nutritionTemplate, exerciseTemplate] = await Promise.all([
+  const [nutritionTemplate, exerciseTemplate, routinePlan] = await Promise.all([
     resolved.nutritionTemplateId
       ? prisma.nutritionPlanTemplate.findUnique({ where: { id: resolved.nutritionTemplateId }, select: { name: true } })
       : null,
     resolved.exerciseTemplateId
       ? prisma.exerciseTemplate.findUnique({ where: { id: resolved.exerciseTemplateId }, select: { name: true } })
-      : null
+      : null,
+    prisma.exerciseRoutine.findUnique({
+      where: { programId: program.id },
+      select: { exercisePlan: { select: { name: true } } }
+    })
   ]);
 
   return {
     ...status,
     nutritionTemplateName: nutritionTemplate?.name ?? null,
     exerciseTemplateName: exerciseTemplate?.name ?? null,
+    exercisePlanName: exercisePlanNameFromRoutine(routinePlan),
     // Resolved macros, provenance, and raw override so the food tab can prefill + label.
     targetSource: nutritionTargets.source,
     resolvedTargets: nutritionTargets.resolvedTargets,
