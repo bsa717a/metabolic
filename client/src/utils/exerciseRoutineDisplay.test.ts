@@ -3,9 +3,11 @@ import type { ExerciseRoutine } from '../types';
 import {
   assignedExercisePlan,
   assignedTemplateIdForDate,
+  APPLY_EXERCISE_PLAN_HINT,
   exercisePlanPickerOptions,
   exercisePlanPickerValue,
   exerciseWeekPlanHeading,
+  NO_EXERCISE_PLAN_ASSIGNED,
   weekdayAssignmentsFromPlanDays
 } from './exerciseRoutineDisplay';
 
@@ -88,7 +90,15 @@ describe('exercise plan picker', () => {
   it('is Choose a plan when nothing is assigned', () => {
     expect(assignedExercisePlan(null)).toBeNull();
     expect(assignedExercisePlan(routine({}))).toBeNull();
+    expect(exerciseWeekPlanHeading(null)).toBeNull();
     expect(exercisePlanPickerValue(null, null)).toBe('');
+    const library = exercisePlanPickerOptions([{ id: 'core-3', name: 'Core #3' }], null);
+    expect(library.map((plan) => plan.name)).toEqual(['Core #3']);
+    expect(exercisePlanPickerValue(null, null)).not.toBe(library[0]?.id);
+    expect(NO_EXERCISE_PLAN_ASSIGNED).toBe('No plan is assigned.');
+    expect(APPLY_EXERCISE_PLAN_HINT).toBe(
+      'Applying replaces the whole week, and weekdays the plan does not cover become rest days.'
+    );
   });
 
   it('maps plan days onto Monday onward', () => {

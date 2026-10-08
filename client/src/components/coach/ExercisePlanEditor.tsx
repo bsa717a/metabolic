@@ -5,9 +5,11 @@ import type { DayExercises } from '../../utils/planExportData';
 import { fetchCoachExercisesForDates } from '../../utils/planExportData';
 import { exercisePlanApi } from '../../utils/exercisePlanApi';
 import {
+  APPLY_EXERCISE_PLAN_HINT,
   assignedExercisePlan,
   exercisePlanPickerOptions,
   exercisePlanPickerValue,
+  NO_EXERCISE_PLAN_ASSIGNED,
   weekdayAssignmentsFromPlanDays
 } from '../../utils/exerciseRoutineDisplay';
 import { AssignedExerciseWeek } from '../exercise/AssignedExerciseWeek';
@@ -57,28 +59,32 @@ export function ExercisePlanEditorView({
           selectedDate={planDate}
           onSelectDay={onSelectDay}
           intro="Your week at a glance. Tap any day to open and edit it."
+          emptyPlanLabel={NO_EXERCISE_PLAN_ASSIGNED}
         />
       )}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="min-w-[12rem] flex-1 text-sm">
-          <span className="mb-1 block font-medium">Exercise plan</span>
-          <select
-            className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
-            value={planId}
-            onChange={(event) => onPlanIdChange(event.target.value)}
-          >
-            <option value="">Choose a plan</option>
-            {options.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button disabled={saving || !planId} onClick={onApply}>
-          Apply plan
-        </Button>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[12rem] flex-1 text-sm">
+            <span className="mb-1 block font-medium">Exercise plan</span>
+            <select
+              className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
+              value={planId}
+              onChange={(event) => onPlanIdChange(event.target.value)}
+            >
+              <option value="">Choose a plan</option>
+              {options.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button disabled={saving || !planId} onClick={onApply}>
+            Apply plan
+          </Button>
+        </div>
+        <p className="text-sm text-app-text-muted">{APPLY_EXERCISE_PLAN_HINT}</p>
       </div>
 
       <label className="flex items-center gap-2 text-sm">

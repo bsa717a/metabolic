@@ -39,6 +39,13 @@ export function exercisePlanPickerValue(assignedId: string | null, override: str
   return assignedId ?? '';
 }
 
+/** Week title when the client has no saved exercise plan. */
+export const NO_EXERCISE_PLAN_ASSIGNED = 'No plan is assigned.';
+
+/** Shown by Apply plan. Uncovered weekdays are stored as rest. */
+export const APPLY_EXERCISE_PLAN_HINT =
+  'Applying replaces the whole week, and weekdays the plan does not cover become rest days.';
+
 /** Mon=0 … Sun=6 from a plan's day templates (dayIndex order). Leftover weekdays are rest. */
 export function weekdayAssignmentsFromPlanDays(
   days: { id: string; dayIndex?: number | null }[]
