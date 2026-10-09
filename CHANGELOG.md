@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.11](https://github.com/bsa717a/metabolic/compare/v0.38.10...v0.38.11) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** cite sources for health calculations ([#354](https://github.com/bsa717a/metabolic/issues/354)) ([9d8d353](https://github.com/bsa717a/metabolic/commit/9d8d35346d326161b3f53144b231933fb5255c95))
+
 ## [0.38.10](https://github.com/bsa717a/metabolic/compare/v0.38.9...v0.38.10) (2026-10-09)
 
 
