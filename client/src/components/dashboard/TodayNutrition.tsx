@@ -7,6 +7,7 @@ import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
 import { parseFoodEntry } from '../../utils/foodEntryParse';
 import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
+import { SourcesBesideTargets } from '../nutrition/SourcesLink';
 import { MealStatusMenu } from '../nutrition/MealStatusMenu';
 import { Card } from '../ui/Card';
 import { Drawer } from '../ui/Drawer';
@@ -465,8 +466,11 @@ export function TodayNutrition({
 
   return (
     <Card>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Today&apos;s Nutrition</h2>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Today&apos;s Nutrition</h2>
+          <SourcesBesideTargets className="mt-1" />
+        </div>
         <Link
           to="/nutrition/plan"
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-app-border text-app-text-muted transition hover:border-brand-green/50 hover:text-brand-green"

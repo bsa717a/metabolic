@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { todayKey } from '../../services/api';
 import type { PlanPeriodInfo } from '../../types';
 import { planWeekTitle } from '../../utils/planPeriodTitle';
+import { SourcesBesideTargets } from './SourcesLink';
 
 export function PlanPeriodBanner({
   planPeriod,
@@ -43,6 +44,7 @@ export function PlanPeriodBanner({
           aria-hidden
         />
       </button>
+      <SourcesBesideTargets className="mt-2" />
       {expanded && (
         <p className="mt-2 text-xs text-app-text-muted">
           A new week starts when you complete your weekly check-in — skip it and this plan continues.
