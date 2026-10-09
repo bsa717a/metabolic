@@ -13,6 +13,7 @@ import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { ProgramPage } from './pages/ProgramPage';
 import { NutritionPage } from './pages/NutritionPage';
 import { NutritionLogPage } from './pages/NutritionLogPage';
+import { NutritionSourcesPage } from './pages/NutritionSourcesPage';
 import { ExerciseAreaLayout } from './pages/exercise/ExerciseAreaLayout';
 import { TodayTab } from './pages/exercise/TodayTab';
 import { PlanTab } from './pages/exercise/PlanTab';
@@ -397,6 +398,7 @@ export default function App() {
             <Route path="program" element={<ProgramPage user={appUser} />} />
             <Route path="nutrition" element={<NutritionLogPage />} />
             <Route path="nutrition/plan" element={<NutritionPage />} />
+            <Route path="nutrition/sources" element={<NutritionSourcesPage />} />
             <Route path="exercise" element={<ExerciseAreaLayout />}>
               <Route index element={<TodayTab />} />
               <Route path="plan" element={<PlanTab />} />

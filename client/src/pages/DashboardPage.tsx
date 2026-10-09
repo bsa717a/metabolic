@@ -20,6 +20,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useDashboardLayout } from '../utils/dashboardLayoutPreference';
 import { CoachHomeDashboard } from '../components/dashboard/coachHome/CoachHomeDashboard';
 import { ClassicDashboardHint } from '../components/dashboard/ClassicDashboardHint';
+import { SourcesBesideTargets } from '../components/nutrition/SourcesLink';
 import {
   FirstDayChecklist,
   isFirstDayChecklistDismissedLocally,
@@ -83,6 +84,10 @@ function RemainingMacrosDisplay({
 }) {
   return (
     <div data-tour="macros-remaining">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-app-text">Today&apos;s targets</p>
+        <SourcesBesideTargets />
+      </div>
       <div className="grid grid-cols-4 gap-3">
         <MacroDonut label="Kcal" actual={calories.actual} target={calories.target} color="#eab308" />
         <MacroDonut label="Protein" actual={protein.actual} target={protein.target} unit="g" color="#22c55e" />

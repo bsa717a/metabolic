@@ -8,6 +8,7 @@ import { clientInitials, clientName, formatNextSession } from '../../utils/coach
 import { formatCoachExerciseLine, formatPlanStatusLine } from '../../utils/coachPlanStatusLine';
 import { SendResultsMenu } from './SendResultsMenu';
 import { FoodPlanEditor } from './FoodPlanEditor';
+import { SourcesBesideTargets } from '../nutrition/SourcesLink';
 import { CoachWeeklyFoodReportModal } from './CoachWeeklyFoodReportModal';
 import { CoachWeeklyExerciseReportModal } from './CoachWeeklyExerciseReportModal';
 import { ExercisePlanEditor } from './ExercisePlanEditor';
@@ -156,6 +157,7 @@ export function ClientDetailTabs({
           </p>
         </div>
       </div>
+      <SourcesBesideTargets className="mt-3" />
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-3 border-b border-app-border">
         <div className="flex gap-4">
