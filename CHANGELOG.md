@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.10](https://github.com/bsa717a/metabolic/compare/v0.38.9...v0.38.10) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** group food plans by body type ([#352](https://github.com/bsa717a/metabolic/issues/352)) ([67184b0](https://github.com/bsa717a/metabolic/commit/67184b0db63225da6b12075f1d0307e45906d1ae))
+
 ## [0.38.9](https://github.com/bsa717a/metabolic/compare/v0.38.8...v0.38.9) (2026-10-09)
 
 
