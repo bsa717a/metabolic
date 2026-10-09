@@ -30,6 +30,33 @@ describe('coach nutrition template scope', () => {
     });
   });
 
+  it('lists every library and coach template when the profile cannot be matched', () => {
+    const where = clientScopedNutritionTemplateWhere({
+      actorId: 'coach-1',
+      profileMatch: null,
+      profileIncomplete: true,
+      assignedIds: ['assigned-plan']
+    });
+    assert.deepEqual(where, {
+      OR: [
+        { OR: [{ visibility: Visibility.GLOBAL }, { createdById: 'coach-1' }] },
+        { id: { in: ['assigned-plan'] } }
+      ]
+    });
+  });
+
+  it('still lists the catalog when an incomplete profile has nothing assigned', () => {
+    assert.deepEqual(
+      clientScopedNutritionTemplateWhere({
+        actorId: 'coach-1',
+        profileMatch: null,
+        profileIncomplete: true,
+        assignedIds: []
+      }),
+      { OR: [{ OR: [{ visibility: Visibility.GLOBAL }, { createdById: 'coach-1' }] }] }
+    );
+  });
+
   it('does not list every template when nothing matches and nothing is assigned', () => {
     assert.equal(
       clientScopedNutritionTemplateWhere({
