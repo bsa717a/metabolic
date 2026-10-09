@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { groupNutritionPlanOptions, type NutritionPlanGroupSource } from './nutritionPlanGroups';
 
 /** Week title when the client has no saved nutrition plan. */
 export const NO_NUTRITION_PLAN_ASSIGNED = 'No plan is assigned.';
@@ -33,15 +34,15 @@ export function assignedNutritionPlan(
 }
 
 /** The saved plan stays in the list so the control can show its name. */
-export function nutritionPlanPickerOptions(
-  plans: { id: string; name: string }[],
+export function nutritionPlanPickerOptions<T extends { id: string; name: string }>(
+  plans: T[],
   assigned: { id: string; name: string } | null
-): { id: string; name: string }[] {
+): T[] {
   const options = plans
     .filter((plan) => plan.id && plan.name.trim())
-    .map((plan) => ({ id: plan.id, name: plan.name.trim() }));
+    .map((plan) => ({ ...plan, name: plan.name.trim() }));
   if (assigned && !options.some((plan) => plan.id === assigned.id)) {
-    return [assigned, ...options];
+    return [{ ...assigned, name: assigned.name.trim() } as T, ...options];
   }
   return options;
 }
@@ -53,7 +54,7 @@ export function nutritionPlanPickerValue(assignedId: string | null, override: st
 }
 
 export function useNutritionPlanPicker(
-  templates: { id: string; name: string }[],
+  templates: NutritionPlanGroupSource[],
   assigned: { id: string; name: string } | null,
   scopeKey: string
 ) {
@@ -63,8 +64,10 @@ export function useNutritionPlanPicker(
     setSeenScope(scopeKey);
     setOverride(null);
   }
+  const options = nutritionPlanPickerOptions(templates, assigned);
   return {
-    options: nutritionPlanPickerOptions(templates, assigned),
+    options,
+    groups: groupNutritionPlanOptions(options, assigned),
     planId: nutritionPlanPickerValue(assigned?.id ?? null, override),
     onPlanIdChange: setOverride,
     clearOverride: () => setOverride(null)

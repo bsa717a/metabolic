@@ -8,6 +8,7 @@ import { PlanPeriodBanner } from '../nutrition/PlanPeriodBanner';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
+import { NutritionPlanSelect } from './NutritionPlanSelect';
 import {
   APPLY_NUTRITION_PLAN_HINT,
   assignedNutritionPlan,
@@ -105,7 +106,7 @@ export function FoodPlanEditor({
   }, [clientId, planDate]);
 
   const assigned = assignedNutritionPlan(planPeriod);
-  const { options, planId, onPlanIdChange, clearOverride } = useNutritionPlanPicker(
+  const { groups, planId, onPlanIdChange, clearOverride } = useNutritionPlanPicker(
     nutritionTemplates,
     assigned,
     `${clientId}:${planDate}`
@@ -180,18 +181,12 @@ export function FoodPlanEditor({
         <div className="flex flex-wrap items-end gap-2">
           <label className="min-w-[12rem] flex-1 text-sm">
             <span className="mb-1 block font-medium">Nutrition plan</span>
-            <select
+            <NutritionPlanSelect
               className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
+              groups={groups}
               value={planId}
-              onChange={(event) => onPlanIdChange(event.target.value)}
-            >
-              <option value="">Choose a plan</option>
-              {options.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
+              onChange={onPlanIdChange}
+            />
           </label>
           <Button disabled={saving || !planId} onClick={() => void applyTemplate()}>
             Apply plan
