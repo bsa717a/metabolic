@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.9](https://github.com/bsa717a/metabolic/compare/v0.38.8...v0.38.9) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** list all plans when the profile is incomplete ([#350](https://github.com/bsa717a/metabolic/issues/350)) ([1cbef1c](https://github.com/bsa717a/metabolic/commit/1cbef1cbdef2198928c3b4374cbf7ebda4668897))
+
 ## [0.38.8](https://github.com/bsa717a/metabolic/compare/v0.38.7...v0.38.8) (2026-10-08)
 
 
