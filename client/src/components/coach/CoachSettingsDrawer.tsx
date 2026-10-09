@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Check, Copy, Link } from 'lucide-react';
 import type { ExercisePlanTemplateSummary, NutritionPlanTemplateSummary } from '../../types';
+import { groupNutritionPlanOptions } from '../../utils/nutritionPlanGroups';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { NutritionPlanSelect } from './NutritionPlanSelect';
 
 function buildInviteUrl(coachCode: string): string {
   const baseUrl = window.location.origin;
@@ -111,18 +113,13 @@ export function CoachSettingsDrawer({
 
       <label className="mt-4 block text-sm">
         <span className="mb-1 block font-medium">Default nutrition plan</span>
-        <select
+        <NutritionPlanSelect
           className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
+          groups={groupNutritionPlanOptions(nutritionTemplates, null)}
           value={defaultNutritionTemplateId}
-          onChange={(event) => onDefaultNutritionTemplateChange(event.target.value)}
-        >
-          <option value="">Use global starter plan</option>
-          {nutritionTemplates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.name}
-            </option>
-          ))}
-        </select>
+          onChange={onDefaultNutritionTemplateChange}
+          emptyLabel="Use global starter plan"
+        />
       </label>
 
       <label className="mt-4 block text-sm">

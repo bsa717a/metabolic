@@ -13,6 +13,7 @@ import { EditMealPlanDrawer } from '../nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../nutrition/AiFoodLookupDrawer';
 import type { MacroTotals } from '../nutrition/MacroSummaryFooter';
 import { Button } from '../ui/Button';
+import { NutritionPlanSelect } from './NutritionPlanSelect';
 import {
   APPLY_NUTRITION_PLAN_HINT,
   assignedNutritionPlan,
@@ -203,7 +204,7 @@ export function CoachDayNutritionEditor({
   }, [open, reloadMeals]);
 
   const assignedPlan = assignedNutritionPlan(planPeriod);
-  const { options: planOptions, planId, onPlanIdChange, clearOverride } = useNutritionPlanPicker(
+  const { groups: planGroups, planId, onPlanIdChange, clearOverride } = useNutritionPlanPicker(
     nutritionTemplates,
     assignedPlan,
     `${clientId}:${selectedDate}`
@@ -482,19 +483,13 @@ export function CoachDayNutritionEditor({
             <p className="mt-1 text-sm text-app-text-muted">{APPLY_NUTRITION_PLAN_HINT}</p>
             <label className="mt-4 block text-sm">
               <span className="mb-1 block font-medium">Plan</span>
-              <select
+              <NutritionPlanSelect
                 className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"
+                groups={planGroups}
                 value={planId}
-                onChange={(event) => onPlanIdChange(event.target.value)}
+                onChange={onPlanIdChange}
                 disabled={applyingTemplate}
-              >
-                <option value="">Choose a plan</option>
-                {planOptions.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
             <label className="mt-3 flex items-center gap-2 text-sm">
               <input
