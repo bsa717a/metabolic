@@ -49,6 +49,7 @@ export function ClientDetailTabs({
   planStatus,
   engagement,
   nutritionTemplates,
+  missingProfileFields = [],
   saving,
   sendingEmail,
   sendingSms,
@@ -70,6 +71,7 @@ export function ClientDetailTabs({
   planStatus: CoachClientPlanStatus | null;
   engagement: CoachEngagement | null;
   nutritionTemplates: NutritionPlanTemplateSummary[];
+  missingProfileFields?: string[];
   saving: boolean;
   sendingEmail: boolean;
   sendingSms: boolean;
@@ -311,6 +313,7 @@ export function ClientDetailTabs({
             clientId={client.id}
             planDate={foodPlanDate}
             nutritionTemplates={nutritionTemplates}
+            missingProfileFields={missingProfileFields}
             planStatus={planStatus}
             saving={saving}
             manualOpen={foodManualOpen}

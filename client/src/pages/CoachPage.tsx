@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Settings } from 'lucide-react';
 import { api, todayKey } from '../services/api';
-import type { ClientGroup, CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../types';
+import type { ClientGroup, CoachClient, CoachClientNutritionTemplates, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../types';
 import type { GamificationDashboard } from '../types/gamification';
 import type { CoachHydrationStats } from '../types/hydration';
 import { CoachCalendar } from '../components/coach/CoachCalendar';
@@ -41,6 +41,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   const [clientWaterGoalDraft, setClientWaterGoalDraft] = useState('64');
   const [nutritionTemplates, setNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
   const [clientNutritionTemplates, setClientNutritionTemplates] = useState<NutritionPlanTemplateSummary[]>([]);
+  const [missingProfileFields, setMissingProfileFields] = useState<string[]>([]);
   const [exerciseTemplates, setExerciseTemplates] = useState<ExercisePlanTemplateSummary[]>([]);
   const [coachCodeDraft, setCoachCodeDraft] = useState('');
   const [savedCoachCode, setSavedCoachCode] = useState('');
@@ -297,13 +298,27 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
   useEffect(() => {
     if (!selectedClientId) {
       setClientNutritionTemplates([]);
+      setMissingProfileFields([]);
       return;
     }
-    void api<NutritionPlanTemplateSummary[]>(
+    setMissingProfileFields([]);
+    let cancelled = false;
+    void api<CoachClientNutritionTemplates>(
       `/api/coach/nutrition-templates?clientId=${encodeURIComponent(selectedClientId)}`
     )
-      .then(setClientNutritionTemplates)
-      .catch(() => setClientNutritionTemplates([]));
+      .then((data) => {
+        if (cancelled) return;
+        setClientNutritionTemplates(data.templates);
+        setMissingProfileFields(data.missingProfileFields);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setClientNutritionTemplates([]);
+        setMissingProfileFields([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedClientId]);
 
   useEffect(() => {
@@ -568,6 +583,7 @@ export function CoachPage({ coachUserId }: { coachUserId: string }) {
                 planStatus={planStatus}
                 engagement={engagement}
                 nutritionTemplates={clientNutritionTemplates}
+                missingProfileFields={missingProfileFields}
                 saving={saving}
                 sendingEmail={sendingEmail}
                 sendingSms={sendingSms}

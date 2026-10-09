@@ -376,6 +376,10 @@ export type NutritionPlanTemplateSummary = {
   createdAt: string;
   updatedAt: string;
 };
+export type CoachClientNutritionTemplates = {
+  templates: NutritionPlanTemplateSummary[];
+  missingProfileFields: string[];
+};
 export type NutritionPlanTemplate = NutritionPlanTemplateSummary & {
   createdById?: string | null;
   meals: NutritionTemplateMeal[];

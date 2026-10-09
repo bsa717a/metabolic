@@ -51,6 +51,7 @@ import {
   deleteTemplateMeal,
   deleteTemplateMealItem,
   getTemplateForActor,
+  listClientNutritionTemplatesForCoach,
   listTemplatesForActor,
   updateTemplate,
   updateTemplateMeal,
@@ -692,8 +693,9 @@ export async function coachRoutes(app: FastifyInstance) {
       } catch (error) {
         return reply.code(403).send({ error: error instanceof Error ? error.message : 'Forbidden' });
       }
+      return listClientNutritionTemplatesForCoach(request.appUser!, parsed.data.clientId);
     }
-    return listTemplatesForActor(request.appUser!, parsed.data.clientId);
+    return listTemplatesForActor(request.appUser!);
   });
   app.get('/api/coach/nutrition-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
     try {

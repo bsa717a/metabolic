@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import {
   APPLY_NUTRITION_PLAN_HINT,
   assignedNutritionPlan,
+  incompleteProfilePlanNote,
   NO_NUTRITION_PLAN_ASSIGNED,
   useNutritionPlanPicker
 } from '../../utils/nutritionPlanPicker';
@@ -19,6 +20,7 @@ export function FoodPlanEditor({
   clientId,
   planDate,
   nutritionTemplates,
+  missingProfileFields = [],
   planStatus,
   saving,
   manualOpen,
@@ -31,6 +33,7 @@ export function FoodPlanEditor({
   clientId: string;
   planDate: string;
   nutritionTemplates: NutritionPlanTemplateSummary[];
+  missingProfileFields?: string[];
   planStatus: CoachClientPlanStatus | null;
   saving: boolean;
   manualOpen: boolean;
@@ -197,12 +200,14 @@ export function FoodPlanEditor({
         <p className="text-sm text-app-text-muted">{APPLY_NUTRITION_PLAN_HINT}</p>
       </div>
 
-      {!nutritionTemplates.length && (
+      {missingProfileFields.length ? (
+        <p className="text-sm text-app-text-muted">{incompleteProfilePlanNote(missingProfileFields)}</p>
+      ) : !nutritionTemplates.length ? (
         <p className="text-sm text-app-text-muted">
           No plans match this client&apos;s current profile for a new assignment. If they already have a plan, it
           should appear above once synced. Otherwise update their profile or add a matching plan in admin.
         </p>
-      )}
+      ) : null}
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={setAsDefault} onChange={(event) => setSetAsDefault(event.target.checked)} />

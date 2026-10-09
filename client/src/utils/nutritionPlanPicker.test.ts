@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APPLY_NUTRITION_PLAN_HINT,
   assignedNutritionPlan,
+  incompleteProfilePlanNote,
   NO_NUTRITION_PLAN_ASSIGNED,
   nutritionPlanPickerOptions,
   nutritionPlanPickerValue
@@ -36,5 +37,16 @@ describe('nutrition plan picker', () => {
     expect(options.map((plan) => plan.id)).toEqual(['amy-plan', 'library']);
     expect(nutritionPlanPickerValue('amy-plan', '')).toBe('');
     expect(nutritionPlanPickerValue('amy-plan', 'library')).toBe('library');
+  });
+
+  it('names exactly the missing profile fields', () => {
+    expect(incompleteProfilePlanNote(['gender', 'height'])).toBe(
+      'Add gender and height to see plans matched to this client.'
+    );
+    expect(incompleteProfilePlanNote(['weight'])).toBe('Add weight to see plans matched to this client.');
+    expect(incompleteProfilePlanNote(['gender', 'height', 'weight'])).toBe(
+      'Add gender, height, and weight to see plans matched to this client.'
+    );
+    expect(incompleteProfilePlanNote([])).toBe('');
   });
 });

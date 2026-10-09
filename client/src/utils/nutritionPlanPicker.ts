@@ -10,6 +10,19 @@ export const NO_NUTRITION_PLAN_ASSIGNED = 'No plan is assigned.';
  */
 export const APPLY_NUTRITION_PLAN_HINT = "Applying replaces this day's planned meals.";
 
+/** One line under the coach Nutrition plan dropdown when matching is impossible. */
+export function incompleteProfilePlanNote(missingFields: string[]): string {
+  const fields = missingFields.map((field) => field.trim()).filter(Boolean);
+  if (!fields.length) return '';
+  const list =
+    fields.length === 1
+      ? fields[0]
+      : fields.length === 2
+        ? `${fields[0]} and ${fields[1]}`
+        : `${fields.slice(0, -1).join(', ')}, and ${fields[fields.length - 1]}`;
+  return `Add ${list} to see plans matched to this client.`;
+}
+
 export function assignedNutritionPlan(
   period: { templateId?: string | null; templateName?: string | null } | null
 ): { id: string; name: string } | null {
