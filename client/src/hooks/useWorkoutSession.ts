@@ -9,14 +9,16 @@ import {
   saveSession,
   saveSessionPrefs,
   sessionReducer,
+  shouldAutoCompleteTimedSet,
   startSession,
   type WorkoutSessionState
 } from '../utils/workoutSession';
-import { COUNTDOWN_TICK_MARKS_MS, countdownTick, restEndCue } from '../utils/sessionCues';
+import { COUNTDOWN_TICK_MARKS_MS, countdownTick, restEndCue, workEndCue } from '../utils/sessionCues';
 import { useNow } from './useNow';
 
 type CountdownTickSec = 5 | 3 | 2 | 1;
-const AUTO_START_AFTER_GO_MS = 800;
+/** GO flash before auto-starting the next set, or auto-completing a timed set. */
+export const AUTO_START_AFTER_GO_MS = 800;
 
 export type SessionEvent =
   | { type: 'session_started'; date: string }
@@ -199,10 +201,11 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     };
   }, [state?.phaseStartedAtMs]);
 
-  // 5 → 3-2-1 ticks (skip 4) + recorded GO clip. Prefer precise setTimeouts; also
-  // re-check from absolute remaining via `now` so a backgrounded tab still
-  // fires GO. Missed ticks are skipped (no catch-up beeps). Between-set
-  // auto-start waits a short GO beat so the flash is visible.
+  // 5 → 3-2-1 ticks (skip 4). Rest ends on the recorded Go clip; a work
+  // countdown ends on Stop. Prefer precise setTimeouts; also re-check from
+  // absolute remaining via `now` so a backgrounded tab still fires the end
+  // cue. Missed ticks are skipped (no catch-up beeps). The end cue stays up
+  // briefly so it can be seen before the next phase.
   useEffect(() => {
     if (!state || state.phase === 'summary') return;
     if (state.pausedRemainingMs != null) return;
@@ -213,6 +216,7 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
     const phaseKey = state.phaseStartedAtMs;
     const sound = state.settings.sound;
     const autoStartNextSet = state.phase === 'rest' && state.currentSet > 1;
+    const autoCompleteTimedSet = shouldAutoCompleteTimedSet(state);
     const timeouts: number[] = [];
 
     const fireTick = (sec: CountdownTickSec) => {
@@ -222,34 +226,50 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
       countdownTick(sound);
     };
 
-    const scheduleAutoStart = (delayMs: number) => {
-      if (!autoStartNextSet || autoStartTimeoutRef.current != null) return;
+    const scheduleAfterGo = (delayMs: number) => {
+      if (autoStartTimeoutRef.current != null) return;
+      if (autoStartNextSet) {
+        autoStartTimeoutRef.current = window.setTimeout(() => {
+          autoStartTimeoutRef.current = null;
+          setState((prev) => {
+            if (!prev || prev.phase !== 'rest') return prev;
+            if (prev.phaseStartedAtMs !== phaseKey) return prev;
+            if (prev.currentSet <= 1) return prev;
+            return sessionReducer(prev, { type: 'SKIP_REST', nowMs: Date.now() });
+          });
+        }, delayMs);
+        return;
+      }
+      // Work countdown: Stop has already played. Complete the set, which starts rest.
+      if (!autoCompleteTimedSet) return;
       autoStartTimeoutRef.current = window.setTimeout(() => {
         autoStartTimeoutRef.current = null;
         setState((prev) => {
-          if (!prev || prev.phase !== 'rest') return prev;
-          if (prev.phaseStartedAtMs !== phaseKey) return prev;
-          if (prev.currentSet <= 1) return prev;
-          return sessionReducer(prev, { type: 'SKIP_REST', nowMs: Date.now() });
+          if (!prev || prev.phaseStartedAtMs !== phaseKey) return prev;
+          if (!shouldAutoCompleteTimedSet(prev)) return prev;
+          return sessionReducer(prev, { type: 'COMPLETE_SET', nowMs: Date.now() });
         });
       }, delayMs);
     };
 
-    const fireGo = () => {
-      const key = `${phaseKey}:go`;
+    const workTimer = state.phase === 'exercise' && state.durationEndsAtMs != null;
+
+    const fireEnd = () => {
+      const key = `${phaseKey}:end`;
       const already = cueFiredRef.current.has(key);
       if (!already) {
         cueFiredRef.current.add(key);
-        restEndCue(sound);
+        if (workTimer) workEndCue(sound);
+        else restEndCue(sound);
       }
-      // Reschedule if the GO beat timeout was cleared (date switch / remount)
-      // while this rest is still showing "Starting next set…".
-      scheduleAutoStart(already ? 0 : AUTO_START_AFTER_GO_MS);
+      // Reschedule if the end-cue timeout was cleared (date switch / remount)
+      // while this rest is still showing "Starting next set…", or work is still at zero.
+      scheduleAfterGo(already ? 0 : AUTO_START_AFTER_GO_MS);
     };
 
     const remaining = remainingMs(state, now);
     if (remaining === 0) {
-      fireGo();
+      fireEnd();
       return;
     }
 
@@ -261,7 +281,7 @@ export function useWorkoutSession(date: string, onEvent?: (event: SessionEvent) 
         timeouts.push(window.setTimeout(() => fireTick(sec), delay));
       }
     }
-    timeouts.push(window.setTimeout(fireGo, Math.max(0, endsAtMs - scheduledAt)));
+    timeouts.push(window.setTimeout(fireEnd, Math.max(0, endsAtMs - scheduledAt)));
 
     return () => {
       for (const id of timeouts) window.clearTimeout(id);
