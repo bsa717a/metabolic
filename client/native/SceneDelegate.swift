@@ -90,6 +90,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         webView.scrollView.alwaysBounceVertical = false
         webView.scrollView.alwaysBounceHorizontal = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // The whole UI is this web view, so pinch or a stuck focus-zoom scales
+        // the tab bar and lets the page slide inside the native frame. Lock the
+        // scroll view at 1x. iOS system accessibility Zoom is separate and still
+        // works. The mobile website does not set user-scalable=no.
+        webView.scrollView.minimumZoomScale = 1
+        webView.scrollView.maximumZoomScale = 1
+        webView.scrollView.bouncesZoom = false
         webView.backgroundColor = chromeBackground
         webView.scrollView.backgroundColor = chromeBackground
         webView.isOpaque = false

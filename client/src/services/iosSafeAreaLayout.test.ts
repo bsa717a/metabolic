@@ -30,7 +30,26 @@ describe('iOS Capacitor safe-area layout', () => {
     expect(scene).toContain('webView.scrollView.bounces = false');
     expect(scene).toContain('webView.scrollView.alwaysBounceVertical = false');
     expect(scene).toContain('webView.scrollView.contentInsetAdjustmentBehavior = .never');
+    expect(scene).toContain('webView.scrollView.minimumZoomScale = 1');
+    expect(scene).toContain('webView.scrollView.maximumZoomScale = 1');
+    expect(scene).toContain('webView.scrollView.bouncesZoom = false');
     expect(scene).toContain('disableWebViewOverscroll()');
+  });
+
+  it('keeps website pinch zoom and stops sub-16px controls from focusing the page bigger', () => {
+    const html = readClient('index.html');
+    const viewport = html.match(/name="viewport" content="([^"]+)"/)?.[1] ?? '';
+    expect(viewport).toContain('width=device-width');
+    expect(viewport).toContain('initial-scale=1.0');
+    expect(viewport).toContain('viewport-fit=cover');
+    expect(viewport).not.toMatch(/user-scalable\s*=\s*no/);
+    expect(viewport).not.toMatch(/maximum-scale/);
+
+    const css = readClient('src/index.css');
+    expect(css).toContain('font-size: 16px');
+    expect(css).toContain('overflow-x: clip');
+    expect(css).not.toMatch(/user-scalable\s*=\s*no/);
+    expect(css).not.toMatch(/maximum-scale\s*=/);
   });
 
   it('pads the sticky header and tab bar with safe-area CSS variables', () => {

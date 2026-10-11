@@ -32,7 +32,7 @@ export function TopbarAnchorDrawer({
   anchorRef,
   ariaLabel,
   children,
-  panelClassName = 'w-[min(calc(100vw-1.5rem),22rem)] max-h-[min(70vh,32rem)]'
+  panelClassName = 'w-[min(calc(100%-1.5rem),22rem)] max-h-[min(70vh,32rem)]'
 }: TopbarAnchorDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
