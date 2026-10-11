@@ -35,9 +35,9 @@ npm run cap:sync:ios
 
 ## Prerequisites (Mac)
 
-- **macOS** with **Xcode 15+**
-- **CocoaPods**: `brew install cocoapods` or `gem install cocoapods`
-- **Node.js 18+**
+- **macOS** with **Xcode 26.0+** (Capacitor 8). The GitHub Actions workflow pins **Xcode 26.6**.
+- **CocoaPods**: only if `ios/App/Podfile` exists (`brew install cocoapods`). Capacitor 8 defaults to Swift Package Manager.
+- **Node.js 22+**
 - **Apple Developer Account** with access to Team `8FG8V9P49A`
 
 ---
@@ -117,6 +117,20 @@ plugins: {
 To use a custom splash image, edit `ios/App/App/Assets.xcassets/Splash.imageset/`.
 
 ---
+
+## TestFlight from GitHub Actions
+
+Manual archives on a Mac still work. To upload without that Mac, run **Actions → iOS TestFlight → Run workflow** (`.github/workflows/ios-testflight.yml`). Nothing runs until someone dispatches it.
+
+Derek adds these secrets himself. The workflow does not create or print them.
+
+| Secret | Format |
+| --- | --- |
+| `ASC_KEY_ID` | 10-character App Store Connect API Key ID (`2H9BZ26296` for the key that signed 1.0 (9)) |
+| `ASC_ISSUER_ID` | Issuer UUID (`ae4ecfe6-d76e-46b7-b521-bcce51cf8191`) |
+| `ASC_KEY_P8_BASE64` | Base64 of the AuthKey `.p8`, not the PEM pasted into the workflow. `base64 -i AuthKey_2H9BZ26296.p8` |
+
+Team ID is `8FG8V9P49A`. Signing is automatic. An empty build-number input queries App Store Connect and uses the next integer, at least 10. `MARKETING_VERSION` stays `1.0` unless the input changes it. Expect about 20 minutes on the `macos-26` runner. The workflow pins Xcode 26.6 because the 1.0 (9) archive is not in git and Capacitor 8 cannot build with the old "Xcode 15+" note.
 
 ## Building for TestFlight
 
