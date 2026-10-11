@@ -42,10 +42,13 @@ jobs:
         shell: bash
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-      ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
       TEAM_ID: 8FG8V9P49A
 
     steps:
+      # Job env cannot use the runner context. Later steps read this path from the environment.
+      - name: Remember the API key path
+        run: echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v4
 
