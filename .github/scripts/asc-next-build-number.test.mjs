@@ -26,6 +26,9 @@ test('TestFlight workflow is manual dispatch only and pins Xcode 26.6', () => {
   assert.match(workflow, /Xcode_26\.6\.app/);
   assert.match(workflow, /minimumZoomScale = 1/);
   assert.match(workflow, /if: always\(\)/);
+  assert.match(workflow, /^name: iOS TestFlight$/m);
+  assert.doesNotMatch(workflow, /\$\{\{\s*runner\./);
+  assert.match(workflow, /ASC_KEY_PATH=\$RUNNER_TEMP\/AuthKey\.p8/);
 });
 
 test('App Store Connect JWT is three segments and does not embed the PEM', () => {
