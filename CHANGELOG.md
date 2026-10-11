@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.38.12](https://github.com/bsa717a/metabolic/compare/v0.38.11...v0.38.12) (2026-10-11)
+
+
+### Bug Fixes
+
+* **ios:** stop the page from sticking zoomed in ([#356](https://github.com/bsa717a/metabolic/issues/356)) ([aa35f76](https://github.com/bsa717a/metabolic/commit/aa35f7662a3829b11d70113406e23e91a826dbd2))
+
 ## [0.38.11](https://github.com/bsa717a/metabolic/compare/v0.38.10...v0.38.11) (2026-10-09)
 
 
