@@ -3,9 +3,9 @@
 # Run this on a Mac with Xcode installed.
 #
 # Prerequisites:
-#   - macOS with Xcode 15+ installed
-#   - CocoaPods: brew install cocoapods (or gem install cocoapods)
-#   - Node.js 18+
+#   - macOS with Xcode 26.0+ installed (Capacitor 8; CI pins 26.6)
+#   - CocoaPods only if the project has a Podfile
+#   - Node.js 22+
 
 set -e
 

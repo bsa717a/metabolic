@@ -1,0 +1,315 @@
+# Upload Master Metabolic to TestFlight.
+#
+# Dispatch only. This file does not run on pull requests or pushes.
+# It does not create GitHub secrets and it does not change the committed
+# CURRENT_PROJECT_VERSION / MARKETING_VERSION. Those are set on the runner.
+#
+# Xcode pin: the 1.0 (9) archive Info.plist is not in git, so DTXcode is unknown.
+# client/IOS.md only said "Xcode 15+", which cannot build @capacitor/ios 8
+# (Capacitor 8 requires Xcode 26.0+). The iOS project was generated on a Mac
+# on or after 2026-09-08. GitHub's macos-26 image default since 2026-07-21 is
+# Xcode 26.6 at /Applications/Xcode_26.6.app. Xcode 27 is a separate
+# public-preview runner label and is not assumed for the App Review build.
+
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'CURRENT_PROJECT_VERSION. Empty = one higher than the latest App Store Connect build (minimum 10).'
+        required: false
+        type: string
+      marketing_version:
+        description: 'MARKETING_VERSION. Stays 1.0 unless you set this.'
+        required: false
+        default: '1.0'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+      TEAM_ID: 8FG8V9P49A
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.6
+        run: |
+          set -euo pipefail
+          XCODE_APP="/Applications/Xcode_26.6.app"
+          if [[ ! -d "$XCODE_APP" ]]; then
+            echo "::error::Expected $XCODE_APP. Capacitor 8 cannot use the Xcode 15 line documented in client/IOS.md."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: Require the committed iOS project
+        run: |
+          set -euo pipefail
+          if [[ ! -d client/ios/App/App.xcodeproj && ! -d client/ios/App/App.xcworkspace ]]; then
+            echo "::error::client/ios is not in this checkout. Commit the Mac Xcode project (without Pods, DerivedData, or build output) before dispatching."
+            exit 1
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Write the App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ASC_KEY_ID}" || -z "${ASC_ISSUER_ID}" || -z "${ASC_KEY_P8_BASE64}" ]]; then
+            echo "::error::Derek must add repository secrets ASC_KEY_ID, ASC_ISSUER_ID, and ASC_KEY_P8_BASE64. This workflow does not create them."
+            exit 1
+          fi
+          node --input-type=module << 'JS'
+          import { writeFileSync } from 'node:fs';
+          const raw = (process.env.ASC_KEY_P8_BASE64 || '').replace(/\s/g, '');
+          const decoded = Buffer.from(raw, 'base64');
+          const text = decoded.toString('utf8');
+          if (!text.includes('BEGIN PRIVATE KEY')) {
+            console.error('ASC_KEY_P8_BASE64 must be base64 of the AuthKey .p8, not the raw key pasted into YAML.');
+            process.exit(1);
+          }
+          writeFileSync(process.env.ASC_KEY_PATH, decoded, { mode: 0o600 });
+          JS
+
+      - name: Resolve marketing version and build number
+        env:
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+          INPUT_MARKETING_VERSION: ${{ inputs.marketing_version }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_APP_ID: "6810053439"
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_MARKETING_VERSION:-1.0}"
+          if [[ -z "$VERSION" ]]; then
+            VERSION="1.0"
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
+            echo "::error::marketing_version must look like 1.0"
+            exit 1
+          fi
+          export BUILD_NUMBER="${INPUT_BUILD_NUMBER}"
+          NEXT="$(node .github/scripts/asc-next-build-number.mjs)"
+          echo "IOS_BUILD_NUMBER=${NEXT}" >> "$GITHUB_ENV"
+          echo "IOS_MARKETING_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "CURRENT_PROJECT_VERSION=${NEXT} MARKETING_VERSION=${VERSION}"
+
+      - name: Write production web env for the bundled shell
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+          VITE_SMS_PHONE_NUMBER: ${{ secrets.VITE_SMS_PHONE_NUMBER }}
+          VITE_GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node --input-type=module << 'JS'
+          import { writeFileSync } from 'node:fs';
+          const required = [
+            'VITE_API_URL',
+            'VITE_FIREBASE_API_KEY',
+            'VITE_FIREBASE_AUTH_DOMAIN',
+            'VITE_FIREBASE_PROJECT_ID',
+            'VITE_FIREBASE_STORAGE_BUCKET',
+            'VITE_FIREBASE_MESSAGING_SENDER_ID',
+            'VITE_FIREBASE_APP_ID',
+            'VITE_FIREBASE_VAPID_KEY',
+            'VITE_SMS_PHONE_NUMBER',
+          ];
+          const missing = required.filter((key) => !process.env[key]);
+          if (missing.length) {
+            console.error('Missing existing deploy secrets for the iOS web bundle: ' + missing.join(', '));
+            process.exit(1);
+          }
+          const keys = [...required, 'VITE_GIT_SHA'];
+          const lines = keys.map((key) => {
+            const value = process.env[key] ?? '';
+            if (/[\r\n]/.test(value)) {
+              console.error(key + ' contains a newline');
+              process.exit(1);
+            }
+            return key + '=' + value;
+          });
+          writeFileSync('client/.env.production', lines.join('\n') + '\n', { mode: 0o600 });
+          JS
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: client/ios/App/Pods
+          key: pods-${{ hashFiles('client/ios/App/Podfile.lock') }}
+          restore-keys: pods-
+
+      - name: Cache Swift package checkouts
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ hashFiles('client/ios/**/Package.resolved') }}
+          restore-keys: spm-
+
+      - name: Install client dependencies
+        run: npm ci -w client --include-workspace-root --include=dev
+
+      - name: Sync the iOS shell
+        run: npm run cap:sync:ios --workspace client
+
+      - name: Confirm the #356 zoom lock is in the project CI will compile
+        run: |
+          set -euo pipefail
+          SCENE="client/ios/App/App/SceneDelegate.swift"
+          if [[ ! -f "$SCENE" ]]; then
+            echo "::error::Missing $SCENE after cap sync. native:patch should copy client/native/SceneDelegate.swift there."
+            exit 1
+          fi
+          for needle in 'minimumZoomScale = 1' 'maximumZoomScale = 1' 'bouncesZoom = false'; do
+            if ! grep -q "$needle" "$SCENE"; then
+              echo "::error::SceneDelegate is missing the #356 zoom lock ($needle)."
+              exit 1
+            fi
+          done
+
+      - name: Set the build number on this runner
+        run: |
+          set -euo pipefail
+          PLIST="client/ios/App/App/Info.plist"
+          set_plist() {
+            local key="$1"
+            local value="$2"
+            if /usr/libexec/PlistBuddy -c "Print :${key}" "$PLIST" >/dev/null 2>&1; then
+              /usr/libexec/PlistBuddy -c "Set :${key} ${value}" "$PLIST"
+            else
+              /usr/libexec/PlistBuddy -c "Add :${key} string ${value}" "$PLIST"
+            fi
+          }
+          set_plist CFBundleVersion "$IOS_BUILD_NUMBER"
+          set_plist CFBundleShortVersionString "$IOS_MARKETING_VERSION"
+
+      - name: Install CocoaPods when the Mac project uses them
+        run: |
+          set -euo pipefail
+          if [[ ! -f client/ios/App/Podfile ]]; then
+            echo "No Podfile; archive will use the Xcode project and Swift packages."
+            exit 0
+          fi
+          cd client/ios/App
+          if [[ -f Podfile.lock ]]; then
+            pod install --deployment
+          else
+            pod install
+          fi
+
+      - name: Archive
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p build-logs
+          if [[ -d client/ios/App/App.xcworkspace ]]; then
+            PROJECT_ARGS=(-workspace client/ios/App/App.xcworkspace)
+          else
+            PROJECT_ARGS=(-project client/ios/App/App.xcodeproj)
+          fi
+          xcodebuild archive \
+            "${PROJECT_ARGS[@]}" \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            MARKETING_VERSION="$IOS_MARKETING_VERSION" \
+            2>&1 | tee build-logs/xcodebuild-archive.log
+
+      - name: Export and upload to App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p build-logs
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>upload</string>
+            <key>teamID</key>
+            <string>8FG8V9P49A</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee build-logs/xcodebuild-export.log
+
+      - name: Upload archive logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcodebuild-logs
+          path: build-logs/*.log
+          if-no-files-found: ignore
+
+      - name: Delete the API key and web env
+        if: always()
+        run: |
+          rm -f "$ASC_KEY_PATH" client/.env.production
+          if [[ -f "$ASC_KEY_PATH" || -f client/.env.production ]]; then
+            echo "::error::Failed to delete the API key or client/.env.production"
+            exit 1
+          fi
