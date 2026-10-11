@@ -482,3 +482,45 @@ select {
 .nutrition-ui-lg .text-2xl {
   font-size: calc(1.5rem + 2pt);
 }
+
+/*
+  Keep the phone frame from growing a horizontal pan. `clip` does not create a
+  scroll container, so it does not fight the vertical scroller in the shell.
+  Wide week grids still scroll inside their own overflow-x box.
+*/
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  overflow-wrap: break-word;
+}
+
+.overflow-x-auto,
+.overflow-x-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
+/*
+  iOS Safari and WKWebView zoom the visual viewport when a focused input,
+  select, or textarea computes under 16px. That zoom sticks after blur and
+  across client-side route changes, so the shell looks bigger and slides in
+  the frame. This rule is unlayered so it beats Tailwind text-sm / text-xs.
+  It applies on phone widths and on coarse pointers (iPhone landscape).
+  Pinch zoom stays available on the mobile website. The viewport meta is not
+  locked.
+*/
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='button']):not([type='submit']):not([type='reset']):not([type='hidden']):not([type='image']),
+  select,
+  textarea {
+    font-size: 16px;
+    min-width: 0;
+    max-width: 100%;
+  }
+}

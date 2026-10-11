@@ -11,7 +11,7 @@ export function CitationLink({ citation }: { citation: NutritionCitation }) {
       href={citation.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-1 inline-block font-medium text-brand-green underline underline-offset-2 hover:opacity-80"
+      className="mt-1 block max-w-full break-words font-medium text-brand-green underline underline-offset-2 hover:opacity-80"
     >
       {citation.title}
     </a>

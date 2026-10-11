@@ -70,7 +70,7 @@ export function ProgramMetricTable({
         </div>
         {metrics.map((metric) => (
           <div key={metric.id} className={`${rowGridClass} border-t border-slate-100`}>
-            <div className={`whitespace-nowrap font-semibold ${compact ? 'py-2' : 'py-3'}`}>
+            <div className={`min-w-0 break-words font-semibold ${compact ? 'py-2' : 'py-3'}`}>
               {metric.metricType.replaceAll('_', ' ')}
             </div>
             <div className={compact ? 'py-2' : 'py-3'}>

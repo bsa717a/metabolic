@@ -12,6 +12,7 @@ import { FeedbackWidget } from '../feedback/FeedbackWidget';
 import { CoachChatFab } from '../virtualCoach/CoachChatFab';
 import { CoachWelcomeGate } from '../virtualCoach/CoachWelcomeGate';
 import { recordNavigation } from '../../services/diagnostics';
+import { bindIosViewportGuards, resetRouteViewport } from '../../utils/iosViewport';
 
 export function AppShell({
   user,
@@ -26,9 +27,11 @@ export function AppShell({
   const mainRef = useRef<HTMLElement>(null);
   const [coachIntroRequest, setCoachIntroRequest] = useState(0);
 
+  useEffect(() => bindIosViewportGuards(), []);
+
   useEffect(() => {
     recordNavigation(location.pathname);
-    mainRef.current?.scrollTo(0, 0);
+    resetRouteViewport(mainRef.current);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -59,7 +62,7 @@ export function AppShell({
         />
         <main
           ref={mainRef}
-          className="mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto overscroll-none p-4 sm:overflow-visible sm:p-6 lg:p-8"
+          className="mx-auto min-h-0 w-full min-w-0 max-w-7xl flex-1 overflow-x-clip overflow-y-auto overscroll-none p-4 sm:overflow-visible sm:p-6 lg:p-8"
         >
           <Outlet />
         </main>

@@ -66,7 +66,7 @@ export function ExercisePlanEditorView({
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-[12rem] flex-1 text-sm">
+          <label className="w-full min-w-0 max-w-full flex-1 text-sm sm:min-w-[12rem]">
             <span className="mb-1 block font-medium">Exercise plan</span>
             <select
               className="w-full rounded-xl border border-app-border bg-app-surface px-3 py-2"

@@ -122,7 +122,7 @@ export function TutorialCard({
   return (
     <div
       className={clsx(
-        'fixed z-[70] w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-brand-green/40 bg-app-surface p-5 shadow-xl',
+        'fixed z-[70] w-[min(360px,calc(100%-2rem))] rounded-2xl border border-brand-green/40 bg-app-surface p-5 shadow-xl',
         step.isFinale && 'tutorial-finale-card'
       )}
       style={{ top: position.top, left: position.left }}
