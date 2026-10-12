@@ -3,7 +3,7 @@
 # Run this on a Mac with Xcode installed.
 #
 # Prerequisites:
-#   - macOS with Xcode 26.0+ installed (Capacitor 8; CI pins 26.6)
+#   - macOS with Xcode 27.0 (27A266a), the build that archived 1.0 (9). CI uses the xcode-27 runner.
 #   - CocoaPods only if the project has a Podfile
 #   - Node.js 22+
 
