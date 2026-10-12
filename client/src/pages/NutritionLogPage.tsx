@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { TodayNutrition } from '../components/dashboard/TodayNutrition';
 import { api, todayKey } from '../services/api';
 import type { AppUser, Meal } from '../types';
+import { useNutritionMealsExpanded } from '../hooks/useNutritionMealsExpanded';
 import { useWakeLock } from '../hooks/useWakeLock';
 
 export function NutritionLogPage({
@@ -15,12 +16,10 @@ export function NutritionLogPage({
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [planExpanded, setPlanExpanded] = useState(mealsExpanded);
-  const [planSaveError, setPlanSaveError] = useState('');
-
-  useEffect(() => {
-    setPlanExpanded(mealsExpanded);
-  }, [mealsExpanded]);
+  const { planExpanded, planSaveError, changePlanExpanded } = useNutritionMealsExpanded(
+    mealsExpanded,
+    onMealsExpandedSaved
+  );
 
   const load = useCallback(async () => {
     const date = todayKey();
@@ -47,22 +46,6 @@ export function NutritionLogPage({
     window.addEventListener('nutrition-meals-updated', refresh);
     return () => window.removeEventListener('nutrition-meals-updated', refresh);
   }, [load]);
-
-  async function changePlanExpanded(next: boolean) {
-    const previous = planExpanded;
-    setPlanExpanded(next);
-    setPlanSaveError('');
-    try {
-      const result = await api<{ user: AppUser }>('/api/me/nutrition-meals-expanded', {
-        method: 'PUT',
-        body: JSON.stringify({ expanded: next })
-      });
-      onMealsExpandedSaved?.(result.user);
-    } catch (err) {
-      setPlanExpanded(previous);
-      setPlanSaveError(err instanceof Error ? err.message : 'Could not save that choice.');
-    }
-  }
 
   if (loading) return <p className="text-app-text-muted">Loading nutrition...</p>;
   if (error) {
