@@ -16,6 +16,7 @@ import { isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
 import { AUTO_START_DASHBOARD_TUTORIAL } from '../components/tutorial/tutorialPresenterTimeline';
 import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
+import { useNutritionMealsExpanded } from '../hooks/useNutritionMealsExpanded';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useDashboardLayout } from '../utils/dashboardLayoutPreference';
 import { CoachHomeDashboard } from '../components/dashboard/coachHome/CoachHomeDashboard';
@@ -115,6 +116,10 @@ export function DashboardPage({
   const [error, setError] = useState('');
   const [checklistDismissed, setChecklistDismissed] = useState(
     () => Boolean(user?.firstDayChecklistDismissedAt) || isFirstDayChecklistDismissedLocally(user?.id)
+  );
+  const { planExpanded, planSaveError, changePlanExpanded } = useNutritionMealsExpanded(
+    Boolean(user?.nutritionMealsExpanded),
+    onUserUpdated
   );
 
   const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
@@ -301,6 +306,10 @@ export function DashboardPage({
             meals={data.meals}
             allMeals={data.allMeals}
             onChange={() => loadDashboard({ silent: true })}
+            showPlanToggle
+            planExpanded={planExpanded}
+            onPlanExpandedChange={(next) => void changePlanExpanded(next)}
+            planSaveError={planSaveError}
           />
         </div>
         <div data-tour="today-exercise">

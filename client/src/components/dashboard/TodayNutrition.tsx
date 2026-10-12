@@ -180,7 +180,7 @@ export function TodayNutrition({
   /** Full day meal list for add-food parsing; dashboard `meals` may hide untouched planned slots. */
   allMeals?: Meal[];
   onChange: () => void | Promise<void>;
-  /** Nutrition page only. The choice is the account setting, not browser storage. */
+  /** Home and the nutrition page. The choice is the account setting, not browser storage. */
   showPlanToggle?: boolean;
   planExpanded?: boolean;
   onPlanExpandedChange?: (expanded: boolean) => void;
