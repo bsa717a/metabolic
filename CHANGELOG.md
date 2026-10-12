@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.40.0](https://github.com/bsa717a/metabolic/compare/v0.39.0...v0.40.0) (2026-10-12)
+
+
+### Features
+
+* **exercise:** adjust exercises on a manual plan day ([#326](https://github.com/bsa717a/metabolic/issues/326)) ([97059d9](https://github.com/bsa717a/metabolic/commit/97059d99993d144c8f962e278d9dc413650d3f88))
+* **exercise:** time each set when a duration is set ([#306](https://github.com/bsa717a/metabolic/issues/306)) ([ed756dc](https://github.com/bsa717a/metabolic/commit/ed756dcc4a8752cb2687e1232b5539b160b79767))
+
 ## [0.39.0](https://github.com/bsa717a/metabolic/compare/v0.38.12...v0.39.0) (2026-10-12)
 
 
