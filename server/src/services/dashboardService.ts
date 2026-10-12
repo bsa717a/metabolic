@@ -2,10 +2,11 @@ import { ProgramStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { ensureDailyLog } from './dailyLogService.js';
 import { sortScheduledExercises } from './exerciseService.js';
-import { parseDateParam, localTimeParts, userDayKey } from '../utils/dates.js';
+import { parseDateParam, localTimeParts, userDayKey, weekdayIndexFromDate } from '../utils/dates.js';
 import { resolveNextMeal } from '../utils/meals.js';
 import { n, round } from '../utils/numbers.js';
-import { getRoutineForUser, resolveTemplateIdForDate } from './exerciseRoutineService.js';
+import { routineWeekdayIsRest } from './exerciseRoutineDayEdits.js';
+import { getRoutineForUser } from './exerciseRoutineService.js';
 
 function hasNutritionActivity(meal: { status: string; plannedCalories: unknown; actualCalories: unknown; items: unknown[] }) {
   return meal.items.length > 0 || n(meal.plannedCalories) > 0 || n(meal.actualCalories) > 0 || meal.status !== 'PLANNED';
@@ -60,10 +61,12 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
   const exercises = sortScheduledExercises(rawExercises);
 
   const hasExerciseRoutine = Boolean(routine?.days?.length);
-  const todayTemplateId = hasExerciseRoutine
-    ? resolveTemplateIdForDate(routine!.days, today)
+  const todayDay = hasExerciseRoutine
+    ? routine!.days.find((day) => day.weekday === weekdayIndexFromDate(today))
     : undefined;
-  const isRestDay = hasExerciseRoutine && todayTemplateId === null;
+  const isRestDay = Boolean(
+    todayDay && routineWeekdayIsRest({ templateId: todayDay.templateId, extraCount: todayDay.extras.length })
+  );
 
   const weightMetric = program.metrics.find((metric) => metric.metricType === 'WEIGHT');
   const start = n(weightMetric?.startValue);

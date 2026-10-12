@@ -10,24 +10,37 @@ import {
   weekdayIndexFromDate
 } from '../utils/dates.js';
 import { getActiveProgram, snapshotExercisePlanForDates } from './exerciseService.js';
-import {
-  applyTemplateExercisesToDate,
-  type TemplateItemPrescriptionOverride
-} from './exerciseTemplateApply.js';
+import { type TemplateItemPrescriptionOverride } from './exerciseTemplateApply.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import { recalculateDailyLogTotals } from './totalsService.js';
 import { normalizeRepScheme } from '../utils/repSchemes.js';
 import { normalizeSpeedScheme } from '../utils/speedSchemes.js';
 import { serializeTemplateSummary } from './exerciseTemplateService.js';
 import { assertPlanUsable } from './exercisePlanService.js';
+import {
+  catalogDefaultsToPrescription,
+  composeRoutineDayExercises,
+  removalEmptiesRoutineDay,
+  routineDateKeepsManualEdits,
+  routineWeekdayIsRest,
+  type RoutineExtraSnapshot,
+  type RoutineTemplateItemSnapshot
+} from './exerciseRoutineDayEdits.js';
+
+const routineDayInclude = {
+  template: { include: { items: true } },
+  itemOverrides: true,
+  exclusions: true,
+  extras: {
+    orderBy: { sortOrder: 'asc' as const },
+    include: { exercise: { select: { id: true, name: true } } }
+  }
+} satisfies Prisma.ExerciseRoutineDayInclude;
 
 const routineInclude = {
   days: {
     orderBy: { weekday: 'asc' as const },
-    include: {
-      template: { include: { items: true } },
-      itemOverrides: true
-    }
+    include: routineDayInclude
   },
   exercisePlan: {
     select: { id: true, name: true }
@@ -68,6 +81,32 @@ function serializeItemOverride(item: {
   };
 }
 
+function serializeExtra(extra: {
+  id: string;
+  exerciseId: string;
+  sortOrder: number;
+  sets: number | null;
+  reps: string | null;
+  speed: string | null;
+  durationSeconds: number | null;
+  distance: unknown;
+  weight: unknown;
+  exercise: { id: string; name: string };
+}) {
+  return {
+    id: extra.id,
+    exerciseId: extra.exerciseId,
+    sortOrder: extra.sortOrder,
+    sets: extra.sets,
+    reps: extra.reps,
+    speed: extra.speed,
+    durationSeconds: extra.durationSeconds,
+    distance: extra.distance == null ? null : Number(extra.distance),
+    weight: extra.weight == null ? null : Number(extra.weight),
+    exercise: { id: extra.exercise.id, name: extra.exercise.name }
+  };
+}
+
 function serializeRoutineDay(day: {
   id: string;
   weekday: number;
@@ -84,6 +123,8 @@ function serializeRoutineDay(day: {
     items: unknown[];
   } | null;
   itemOverrides: Parameters<typeof serializeItemOverride>[0][];
+  exclusions: { templateItemId: string }[];
+  extras: Parameters<typeof serializeExtra>[0][];
 }) {
   return {
     id: day.id,
@@ -92,7 +133,9 @@ function serializeRoutineDay(day: {
     template: day.template
       ? serializeTemplateSummary({ ...day.template, items: day.template.items })
       : null,
-    itemOverrides: day.itemOverrides.map(serializeItemOverride)
+    itemOverrides: day.itemOverrides.map(serializeItemOverride),
+    excludedTemplateItemIds: day.exclusions.map((entry) => entry.templateItemId),
+    extras: day.extras.map(serializeExtra)
   };
 }
 
@@ -182,7 +225,59 @@ export function routineApplyForwardDates(fromDate: Date) {
   return dates;
 }
 
-async function loadOverridesForProgramWeekday(
+function templateItemsToSnapshots(
+  items: {
+    id: string;
+    exerciseId: string;
+    sortOrder: number;
+    sets: number | null;
+    reps: string | null;
+    speed: string | null;
+    durationSeconds: number | null;
+    distance: unknown;
+    weight: unknown;
+  }[]
+): RoutineTemplateItemSnapshot[] {
+  return items.map((item) => ({
+    id: item.id,
+    exerciseId: item.exerciseId,
+    sortOrder: item.sortOrder,
+    sets: item.sets,
+    reps: item.reps,
+    speed: item.speed,
+    durationSeconds: item.durationSeconds,
+    distance: item.distance == null ? null : Number(item.distance),
+    weight: item.weight == null ? null : Number(item.weight)
+  }));
+}
+
+function extrasToSnapshots(
+  extras: {
+    id: string;
+    exerciseId: string;
+    sortOrder: number;
+    sets: number | null;
+    reps: string | null;
+    speed: string | null;
+    durationSeconds: number | null;
+    distance: unknown;
+    weight: unknown;
+  }[]
+): RoutineExtraSnapshot[] {
+  return extras.map((extra) => ({
+    id: extra.id,
+    exerciseId: extra.exerciseId,
+    sortOrder: extra.sortOrder,
+    sets: extra.sets,
+    reps: extra.reps,
+    speed: extra.speed,
+    durationSeconds: extra.durationSeconds,
+    distance: extra.distance == null ? null : Number(extra.distance),
+    weight: extra.weight == null ? null : Number(extra.weight)
+  }));
+}
+
+async function loadWeekdayComposition(
   tx: Prisma.TransactionClient,
   programId: string,
   weekday: number
@@ -192,13 +287,16 @@ async function loadOverridesForProgramWeekday(
     select: {
       days: {
         where: { weekday },
-        select: { itemOverrides: true }
+        select: {
+          templateId: true,
+          itemOverrides: true,
+          exclusions: { select: { templateItemId: true } },
+          extras: true
+        }
       }
     }
   });
-  const day = routine?.days[0];
-  if (!day) return undefined;
-  return overridesToMap(day.itemOverrides);
+  return routine?.days[0] ?? null;
 }
 
 export async function materializeRoutineDay(
@@ -209,25 +307,51 @@ export async function materializeRoutineDay(
   templateId: string | null
 ) {
   const day = parseDateParam(date);
+  const weekday = weekdayIndexFromDate(day);
+  const composition = await loadWeekdayComposition(tx, programId, weekday);
+  const dayEdits = composition && composition.templateId === templateId ? composition : null;
 
   await tx.scheduledExercise.deleteMany({
     where: { userId, programId, scheduledDate: day }
   });
 
+  let templateItems: RoutineTemplateItemSnapshot[] = [];
   if (templateId) {
-    const weekday = weekdayIndexFromDate(day);
-    const overrides = await loadOverridesForProgramWeekday(tx, programId, weekday);
-    await applyTemplateExercisesToDate(tx, templateId, programId, userId, date, overrides);
-  } else {
-    const log = await tx.dailyLog.findUnique({
-      where: { userId_date: { userId, date: day } }
+    const template = await tx.exerciseTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      include: {
+        items: {
+          orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }]
+        }
+      }
     });
-    if (log) {
-      await tx.dailyLog.update({
-        where: { id: log.id },
-        data: { exercisesPlanned: 0 }
-      });
-    }
+    templateItems = templateItemsToSnapshots(template.items);
+  }
+
+  const composed = composeRoutineDayExercises({
+    templateItems,
+    excludedTemplateItemIds: dayEdits?.exclusions.map((entry) => entry.templateItemId) ?? [],
+    overridesByTemplateItemId: dayEdits ? overridesToMap(dayEdits.itemOverrides) : undefined,
+    extras: dayEdits ? extrasToSnapshots(dayEdits.extras) : []
+  });
+
+  if (composed.length) {
+    await tx.scheduledExercise.createMany({
+      data: composed.map((item) => ({
+        programId,
+        userId,
+        exerciseId: item.exerciseId,
+        scheduledDate: day,
+        sets: item.sets,
+        reps: item.reps,
+        speed: item.speed,
+        durationSeconds: item.durationSeconds,
+        distance: item.distance,
+        weight: item.weight,
+        status: ExerciseStatus.PLANNED,
+        sortOrder: item.sortOrder
+      }))
+    });
   }
 
   const log = await tx.dailyLog.findUnique({
@@ -237,6 +361,7 @@ export async function materializeRoutineDay(
     await tx.dailyLog.update({
       where: { id: log.id },
       data: {
+        exercisesPlanned: composed.length,
         exercisesInitializedAt: new Date(),
         exercisesManuallyEdited: false
       }
@@ -276,8 +401,6 @@ async function collectEligibleForwardDates(userId: string, fromDate: Date, weekd
       where: { userId_date: { userId, date: day } },
       select: { exercisesManuallyEdited: true }
     });
-    if (log?.exercisesManuallyEdited) continue;
-
     const loggedWork = await prisma.scheduledExercise.count({
       where: {
         userId,
@@ -285,7 +408,14 @@ async function collectEligibleForwardDates(userId: string, fromDate: Date, weekd
         status: { not: ExerciseStatus.PLANNED }
       }
     });
-    if (loggedWork > 0) continue;
+    if (
+      routineDateKeepsManualEdits({
+        exercisesManuallyEdited: log?.exercisesManuallyEdited,
+        loggedWorkCount: loggedWork
+      })
+    ) {
+      continue;
+    }
 
     eligibleDates.push(date);
   }
@@ -321,7 +451,7 @@ export async function applyRoutineForward(
 export async function upsertRoutine(
   userId: string,
   dayInputs: RoutineDayInput[],
-  options?: { applyForward?: boolean; exercisePlanId?: string | null }
+  options?: { applyForward?: boolean; exercisePlanId?: string | null; resetDayEdits?: boolean }
 ) {
   const program = await getActiveProgram(userId);
   if (!program) throw new Error('No active program found');
@@ -383,8 +513,10 @@ export async function upsertRoutine(
     for (const day of dayInputs) {
       const prior = existingByWeekday.get(day.weekday);
       if (prior) {
-        if (prior.templateId !== day.templateId) {
+        if (prior.templateId !== day.templateId || options?.resetDayEdits) {
           await tx.exerciseRoutineDayItem.deleteMany({ where: { routineDayId: prior.id } });
+          await tx.exerciseRoutineDayExclusion.deleteMany({ where: { routineDayId: prior.id } });
+          await tx.exerciseRoutineDayExtra.deleteMany({ where: { routineDayId: prior.id } });
         }
         await tx.exerciseRoutineDay.update({
           where: { id: prior.id },
@@ -469,18 +601,20 @@ async function loadAssignedRoutineDay(userId: string, weekday: number) {
     include: {
       days: {
         where: { weekday },
-        include: { itemOverrides: true }
+        include: {
+          itemOverrides: true,
+          exclusions: true,
+          extras: true
+        }
       }
     }
   });
   if (!routine) throw new Error('Weekly routine not found — save your routine first');
 
   const routineDay = routine.days[0];
-  if (!routineDay?.templateId) {
-    throw new Error('That weekday is a rest day');
-  }
+  if (!routineDay) throw new Error('That weekday is not on the routine yet');
 
-  return { program, routineDay };
+  return { program, routine, routineDay };
 }
 
 async function upsertDayItemOverride(
@@ -571,6 +705,7 @@ export async function upsertRoutineDayItemOverride(
 
   return {
     override: serializeItemOverride(override),
+    day: await reloadSerializedRoutineDay(program.id, weekday),
     appliedDays,
     undoSnapshot
   };
@@ -587,35 +722,185 @@ export async function applyRoutineDayItemOverrides(
 
   const { program, routineDay } = await loadAssignedRoutineDay(userId, weekday);
   const templateId = routineDay.templateId;
-  if (!templateId) {
+  if (!templateId && routineDay.extras.length === 0) {
     throw new Error('That weekday is a rest day');
   }
 
-  const templateItems = await prisma.exerciseTemplateItem.findMany({
-    where: { templateId }
-  });
+  const excluded = new Set(routineDay.exclusions.map((entry) => entry.templateItemId));
+  const templateItems = templateId
+    ? await prisma.exerciseTemplateItem.findMany({ where: { templateId } })
+    : [];
+  const visibleItems = templateItems.filter((item) => !excluded.has(item.id));
 
   const overrides = await prisma.$transaction(async (tx) => {
     const nextOverrides = [];
-    for (const templateItem of templateItems) {
+    for (const templateItem of visibleItems) {
       nextOverrides.push(await upsertDayItemOverride(routineDay, templateItem, patch, tx));
+    }
+    for (const extra of routineDay.extras) {
+      const next = mergedOverrideValues(overrideBaseFrom(extra), patch);
+      await tx.exerciseRoutineDayExtra.update({ where: { id: extra.id }, data: next });
     }
     return nextOverrides;
   });
 
   const { undoSnapshot, appliedDays } = await applyRoutineForwardForWeekday(userId, program.id, weekday);
+  const day = await reloadSerializedRoutineDay(program.id, weekday);
 
   return {
     overrides: overrides.map(serializeItemOverride),
+    day,
     appliedDays,
     undoSnapshot
+  };
+}
+
+async function reloadSerializedRoutineDay(programId: string, weekday: number) {
+  const routine = await prisma.exerciseRoutine.findUnique({
+    where: { programId },
+    include: routineInclude
+  });
+  const day = routine?.days.find((entry) => entry.weekday === weekday);
+  if (!day) throw new Error('That weekday is not on the routine yet');
+  return serializeRoutineDay(day);
+}
+
+async function clearRoutineDayEdits(routineDayId: string) {
+  await prisma.$transaction([
+    prisma.exerciseRoutineDayItem.deleteMany({ where: { routineDayId } }),
+    prisma.exerciseRoutineDayExclusion.deleteMany({ where: { routineDayId } }),
+    prisma.exerciseRoutineDayExtra.deleteMany({ where: { routineDayId } }),
+    prisma.exerciseRoutineDay.update({
+      where: { id: routineDayId },
+      data: { templateId: null }
+    })
+  ]);
+}
+
+export async function addRoutineDayExercise(userId: string, weekday: number, exerciseId: string) {
+  const { program, routineDay } = await loadAssignedRoutineDay(userId, weekday);
+  const exercise = await prisma.exercise.findUnique({ where: { id: exerciseId } });
+  if (!exercise) throw new Error('Exercise not found');
+
+  const excluded = new Set(routineDay.exclusions.map((entry) => entry.templateItemId));
+  const templateItems = routineDay.templateId
+    ? await prisma.exerciseTemplateItem.findMany({
+        where: { templateId: routineDay.templateId },
+        select: { id: true, exerciseId: true }
+      })
+    : [];
+  const alreadyVisible =
+    templateItems.some((item) => item.exerciseId === exerciseId && !excluded.has(item.id)) ||
+    routineDay.extras.some((extra) => extra.exerciseId === exerciseId);
+  if (alreadyVisible) throw new Error('That exercise is already on this day');
+
+  const maxSort = routineDay.extras.reduce((max, extra) => Math.max(max, extra.sortOrder), -1);
+  const prescription = catalogDefaultsToPrescription({
+    defaultSets: exercise.defaultSets,
+    defaultReps: exercise.defaultReps,
+    defaultDurationSeconds: exercise.defaultDurationSeconds,
+    defaultDistance: exercise.defaultDistance == null ? null : Number(exercise.defaultDistance)
+  });
+  await prisma.exerciseRoutineDayExtra.create({
+    data: {
+      routineDayId: routineDay.id,
+      exerciseId: exercise.id,
+      sortOrder: maxSort + 1,
+      ...prescription
+    }
+  });
+
+  const { undoSnapshot, appliedDays } = await applyRoutineForwardForWeekday(userId, program.id, weekday);
+  return {
+    day: await reloadSerializedRoutineDay(program.id, weekday),
+    appliedDays,
+    undoSnapshot,
+    becameRest: false
+  };
+}
+
+export async function updateRoutineDayExtra(
+  userId: string,
+  weekday: number,
+  extraId: string,
+  patch: RoutineDayItemOverrideInput
+) {
+  if (!Object.keys(patch).length) throw new Error('At least one field is required');
+
+  const { program, routineDay } = await loadAssignedRoutineDay(userId, weekday);
+  const extra = routineDay.extras.find((entry) => entry.id === extraId);
+  if (!extra) throw new Error('That exercise is not on this day');
+
+  const next = mergedOverrideValues(overrideBaseFrom(extra), patch);
+  await prisma.exerciseRoutineDayExtra.update({ where: { id: extra.id }, data: next });
+
+  const { undoSnapshot, appliedDays } = await applyRoutineForwardForWeekday(userId, program.id, weekday);
+  return {
+    day: await reloadSerializedRoutineDay(program.id, weekday),
+    appliedDays,
+    undoSnapshot
+  };
+}
+
+/** Hides or drops an exercise on this weekday only. Does not change the shared plan template. */
+export async function removeRoutineDayExercise(
+  userId: string,
+  weekday: number,
+  remove: { templateItemId: string } | { extraId: string }
+) {
+  const { program, routineDay } = await loadAssignedRoutineDay(userId, weekday);
+  const templateItems = routineDay.templateId
+    ? await prisma.exerciseTemplateItem.findMany({
+        where: { templateId: routineDay.templateId },
+        select: { id: true }
+      })
+    : [];
+
+  if ('templateItemId' in remove) {
+    if (!templateItems.some((item) => item.id === remove.templateItemId)) {
+      throw new Error("Exercise is not part of this weekday's workout");
+    }
+  } else if (!routineDay.extras.some((extra) => extra.id === remove.extraId)) {
+    throw new Error('That exercise is not on this day');
+  }
+
+  const becameRest = removalEmptiesRoutineDay({
+    templateItemIds: templateItems.map((item) => item.id),
+    excludedTemplateItemIds: routineDay.exclusions.map((entry) => entry.templateItemId),
+    extraIds: routineDay.extras.map((extra) => extra.id),
+    remove
+  });
+
+  if (becameRest) {
+    await clearRoutineDayEdits(routineDay.id);
+  } else if ('templateItemId' in remove) {
+    await prisma.exerciseRoutineDayExclusion.upsert({
+      where: {
+        routineDayId_templateItemId: {
+          routineDayId: routineDay.id,
+          templateItemId: remove.templateItemId
+        }
+      },
+      create: { routineDayId: routineDay.id, templateItemId: remove.templateItemId },
+      update: {}
+    });
+  } else {
+    await prisma.exerciseRoutineDayExtra.delete({ where: { id: remove.extraId } });
+  }
+
+  const { undoSnapshot, appliedDays } = await applyRoutineForwardForWeekday(userId, program.id, weekday);
+  return {
+    day: await reloadSerializedRoutineDay(program.id, weekday),
+    appliedDays,
+    undoSnapshot,
+    becameRest
   };
 }
 
 export async function getRoutineDaysForProgram(programId: string) {
   const routine = await prisma.exerciseRoutine.findUnique({
     where: { programId },
-    include: { days: true }
+    include: { days: { include: { extras: { select: { id: true } } } } }
   });
   return routine?.days ?? null;
 }
@@ -627,8 +912,10 @@ export async function isRoutineRestDay(userId: string, date: string) {
   const days = await getRoutineDaysForProgram(program.id);
   if (!days?.length) return false;
 
-  const templateId = resolveTemplateIdForDate(days, parseDateParam(date));
-  return templateId === null;
+  const weekday = weekdayIndexFromDate(parseDateParam(date));
+  const day = days.find((entry) => entry.weekday === weekday);
+  if (!day) return false;
+  return routineWeekdayIsRest({ templateId: day.templateId, extraCount: day.extras.length });
 }
 
 export async function markExercisesManuallyEdited(userId: string, date: string) {
