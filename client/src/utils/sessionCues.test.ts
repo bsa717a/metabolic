@@ -4,6 +4,7 @@ const hapticImpact = vi.fn();
 const nativePrime = vi.fn().mockResolvedValue(undefined);
 const nativePlayTick = vi.fn().mockResolvedValue(undefined);
 const nativePlayGo = vi.fn().mockResolvedValue(undefined);
+const nativePlayStop = vi.fn().mockResolvedValue(undefined);
 let native = false;
 
 vi.mock('@capacitor/core', () => ({
@@ -13,7 +14,8 @@ vi.mock('@capacitor/core', () => ({
   registerPlugin: () => ({
     prime: (...args: unknown[]) => nativePrime(...args),
     playTick: (...args: unknown[]) => nativePlayTick(...args),
-    playGo: (...args: unknown[]) => nativePlayGo(...args)
+    playGo: (...args: unknown[]) => nativePlayGo(...args),
+    playStop: (...args: unknown[]) => nativePlayStop(...args)
   })
 }));
 
@@ -30,10 +32,13 @@ vi.mock('@capacitor/haptics', () => ({
 
 type Listener = (event?: Event) => void;
 
+const oscFreqs: number[] = [];
+
 function makeOscillator() {
+  const frequency = { value: 0 };
   return {
     type: 'sine',
-    frequency: { value: 0 },
+    frequency,
     connect: vi.fn(),
     start: vi.fn(),
     stop: vi.fn()
@@ -58,7 +63,18 @@ class FakeAudioContext {
   resume = vi.fn(async () => {
     this.state = 'running';
   });
-  createOscillator = vi.fn(() => makeOscillator());
+  createOscillator = vi.fn(() => {
+    const osc = makeOscillator();
+    oscFreqs.push(osc.frequency.value);
+    const frequency = osc.frequency;
+    Object.defineProperty(frequency, 'value', {
+      get: () => 0,
+      set: (next: number) => {
+        oscFreqs.push(next);
+      }
+    });
+    return osc;
+  });
   createGain = vi.fn(() => makeGain());
   createBuffer = vi.fn(() => ({}));
   createBufferSource = vi.fn(() => ({
@@ -106,6 +122,8 @@ describe('sessionCues', () => {
     nativePrime.mockReset().mockResolvedValue(undefined);
     nativePlayTick.mockReset().mockResolvedValue(undefined);
     nativePlayGo.mockReset().mockResolvedValue(undefined);
+    nativePlayStop.mockReset().mockResolvedValue(undefined);
+    oscFreqs.length = 0;
     ctx = new FakeAudioContext();
     audioSession.type = 'auto';
     audioInstances.length = 0;
@@ -184,6 +202,9 @@ describe('sessionCues', () => {
     const goEl = audioInstances.find((el) => el.src.includes(GO_CLIP_URL) || el.src.includes('go.wav'));
     expect(goEl?.load).toHaveBeenCalled();
     expect(goEl?.play).not.toHaveBeenCalled();
+    const stopEl = audioInstances.find((el) => el.src.includes('stop.wav'));
+    expect(stopEl?.load).toHaveBeenCalled();
+    expect(stopEl?.play).not.toHaveBeenCalled();
   });
 
   it('resumes an existing AudioContext when the page becomes visible', async () => {
@@ -252,6 +273,47 @@ describe('sessionCues', () => {
     expect(ctx.createOscillator).not.toHaveBeenCalled();
     expect(playedGoClip()).toBe(false);
     expect(audioSession.type).toBe('auto');
+  });
+
+  it('plays stop.wav when a work countdown ends, and not the Go clip', async () => {
+    ctx.state = 'running';
+    const { workEndCue } = await import('./sessionCues');
+    workEndCue(true);
+    await vi.waitFor(() => expect(playSrcs.some((src) => src.includes('stop.wav'))).toBe(true));
+    expect(playedGoClip()).toBe(false);
+    expect(nativePlayGo).not.toHaveBeenCalled();
+    expect(vibrate).toHaveBeenCalledWith([160]);
+  });
+
+  it('plays the native Stop clip instead of Go when a work countdown ends', async () => {
+    native = true;
+    ctx.state = 'running';
+    const { workEndCue } = await import('./sessionCues');
+    workEndCue(true);
+    await vi.waitFor(() => expect(nativePlayStop).toHaveBeenCalled());
+    expect(nativePlayGo).not.toHaveBeenCalled();
+    expect(playedGoClip()).toBe(false);
+  });
+
+  it('falls back to a lower tone than Go when the Stop clip cannot play', async () => {
+    ctx.state = 'running';
+    play.mockRejectedValueOnce(new Error('clip blocked'));
+    const { workEndCue } = await import('./sessionCues');
+    workEndCue(true);
+    await vi.waitFor(() => expect(ctx.createOscillator).toHaveBeenCalled());
+    expect(playSrcs.some((src) => src.includes('stop.wav'))).toBe(true);
+    expect(playedGoClip()).toBe(false);
+    expect(oscFreqs).toContain(220);
+    expect(oscFreqs).not.toContain(1175);
+  });
+
+  it('does not play Stop when session sound is muted', async () => {
+    ctx.state = 'running';
+    const { workEndCue } = await import('./sessionCues');
+    workEndCue(false);
+    expect(play).not.toHaveBeenCalled();
+    expect(nativePlayStop).not.toHaveBeenCalled();
+    expect(ctx.createOscillator).not.toHaveBeenCalled();
   });
 
   it('plays go.wav only on the zero/start cue path, not on ticks', async () => {

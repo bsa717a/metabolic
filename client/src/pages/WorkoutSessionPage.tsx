@@ -34,7 +34,9 @@ export function WorkoutSessionPage() {
     state != null &&
     ((state.phase === 'rest' && state.restEndsAtMs != null) ||
       (state.phase === 'exercise' && state.durationEndsAtMs != null));
-  const cueGo = hasTimer && timerCueKind(timerRemaining, timerPaused) === 'go';
+  // Only rest flashes GO. A work countdown at zero says STOP and stays on the dark screen.
+  const cueGo =
+    state?.phase === 'rest' && hasTimer && timerCueKind(timerRemaining, timerPaused) === 'go';
 
   // Warn before leaving mid-workout (refresh / close).
   useEffect(() => {

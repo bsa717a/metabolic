@@ -1,10 +1,12 @@
 import { Minus, Pause, Play, Plus, SkipForward } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatPlan } from '../../../utils/exerciseFormat';
+import { formatDuration } from '../../../utils/duration';
 import { repsForSet, repSchemeParts } from '../../../utils/repSchemes';
 import {
   REST_STEP_SEC,
   hasSets,
+  hasWorkDuration,
   totalSets,
   type SessionExerciseMeta
 } from '../../../utils/workoutSession';
@@ -140,6 +142,7 @@ function NextSetCard({
   const total = totalSets(meta);
   const nextReps = repsForSet(meta.reps, currentSet);
   const descending = repSchemeParts(meta.reps).length > 1;
+  const durationLabel = hasWorkDuration(meta) ? formatDuration(meta.durationSeconds) : '';
 
   return (
     <div className="mx-auto w-full max-w-sm shrink-0 rounded-2xl bg-white/5 p-4">
@@ -156,12 +159,13 @@ function NextSetCard({
         <div className="mt-3">
           <SessionRepScheme reps={meta.reps} currentSet={currentSet} go={go} />
           <p className={clsx('mt-1 text-xs font-medium uppercase tracking-wide', go ? 'text-white/70' : 'text-white/45')}>
-            reps
+            reps{durationLabel ? ` · ${durationLabel}` : ''}
           </p>
         </div>
       ) : setBased && nextReps > 0 ? (
         <p className={clsx('mt-1 text-lg font-medium', go ? 'text-white/85' : 'text-white/70')}>
           {nextReps} reps
+          {durationLabel ? ` · ${durationLabel}` : ''}
           {meta.weight != null ? ` · ${meta.weight} lb` : ''}
         </p>
       ) : (
