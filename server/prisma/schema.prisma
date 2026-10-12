@@ -257,6 +257,7 @@ model User {
   firstDayChecklistDismissedAt DateTime?
   aiConsentAccepted Boolean @default(false)
   aiConsentDecidedAt DateTime?
+  nutritionMealsExpanded Boolean @default(false)
   selectedVirtualCoachId String?
   virtualCoachCheckInDay Int?
   plan PlanTier @default(STARTER)

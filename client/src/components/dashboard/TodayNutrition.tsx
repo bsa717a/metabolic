@@ -6,10 +6,13 @@ import { usePhotoPicker } from '../../hooks/usePhotoPicker';
 import { api, todayDateParam, todayKey } from '../../services/api';
 import { isWaterLogRequest } from '../../utils/waterLog';
 import { parseFoodEntry } from '../../utils/foodEntryParse';
+import { MealTypeIcon } from '../nutrition/MealTypeIcon';
 import { PlannedItemChecklist } from '../nutrition/PlannedItemChecklist';
 import { SourcesBesideTargets } from '../nutrition/SourcesLink';
 import { MealStatusMenu } from '../nutrition/MealStatusMenu';
+import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { displayPortionMacros } from '../../utils/portionDisplay';
 import { Drawer } from '../ui/Drawer';
 import { useAiConsent } from '../../context/AiConsentContext';
 import { AI_CONSENT_REQUIRED_MESSAGE } from '../../content/aiConsentCopy';
@@ -151,20 +154,44 @@ function formatPlannedTime(plannedTime?: string | null) {
     .replace(' PM', 'pm');
 }
 
+function formatDetailMacros(item: MealItem) {
+  const shown = displayPortionMacros({
+    quantity: Number(item.quantity),
+    unit: item.unit,
+    name: item.nameSnapshot,
+    calories: Number(item.calories),
+    protein: Number(item.protein),
+    carbs: Number(item.carbs),
+    fat: Number(item.fat)
+  });
+  return `${Math.round(shown.calories)} kcal · ${Math.round(shown.protein)}g protein · ${Math.round(shown.carbs)}g carbs · ${Math.round(shown.fat)}g fat`;
+}
+
 export function TodayNutrition({
   meals,
   allMeals,
-  onChange
+  onChange,
+  showPlanToggle = false,
+  planExpanded = false,
+  onPlanExpandedChange,
+  planSaveError = ''
 }: {
   meals: Meal[];
   /** Full day meal list for add-food parsing; dashboard `meals` may hide untouched planned slots. */
   allMeals?: Meal[];
   onChange: () => void | Promise<void>;
+  /** Nutrition page only. The choice is the account setting, not browser storage. */
+  showPlanToggle?: boolean;
+  planExpanded?: boolean;
+  onPlanExpandedChange?: (expanded: boolean) => void;
+  planSaveError?: string;
 }) {
   const mealsForParse = allMeals ?? meals;
   const { accepted, openReview } = useAiConsent();
   const [searchParams] = useSearchParams();
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
+  const [hiddenWhenExpanded, setHiddenWhenExpanded] = useState<Set<string>>(() => new Set());
+  const [detailsMealId, setDetailsMealId] = useState<string | null>(null);
   const openedFromQuery = useRef(false);
 
   useEffect(() => {
@@ -204,8 +231,31 @@ export function TodayNutrition({
     onError: setError
   });
 
+  function foodsOpen(mealId: string) {
+    if (showPlanToggle && planExpanded) return !hiddenWhenExpanded.has(mealId);
+    return expandedMealId === mealId;
+  }
+
   function toggleMeal(mealId: string) {
+    if (showPlanToggle && planExpanded) {
+      setHiddenWhenExpanded((current) => {
+        const next = new Set(current);
+        if (next.has(mealId)) next.delete(mealId);
+        else next.add(mealId);
+        return next;
+      });
+      setDetailsMealId((current) => (current === mealId ? null : current));
+      return;
+    }
     setExpandedMealId((current) => (current === mealId ? null : mealId));
+    setDetailsMealId((current) => (current === mealId ? null : current));
+  }
+
+  function toggleAllMeals() {
+    setHiddenWhenExpanded(new Set());
+    setExpandedMealId(null);
+    setDetailsMealId(null);
+    onPlanExpandedChange?.(!planExpanded);
   }
 
   function clearPhoto() {
@@ -471,24 +521,35 @@ export function TodayNutrition({
           <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Today&apos;s Nutrition</h2>
           <SourcesBesideTargets className="mt-1" />
         </div>
-        <Link
-          to="/nutrition/plan"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-app-border text-app-text-muted transition hover:border-brand-green/50 hover:text-brand-green"
-          aria-label="Edit nutrition"
-        >
-          <Pencil size={16} />
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          {showPlanToggle && (
+            <Button type="button" variant="secondary" className="px-3" onClick={toggleAllMeals}>
+              {planExpanded ? 'Collapse all' : 'Expand all'}
+            </Button>
+          )}
+          <Link
+            to="/nutrition/plan"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-app-border text-app-text-muted transition hover:border-brand-green/50 hover:text-brand-green"
+            aria-label="Edit nutrition"
+          >
+            <Pencil size={16} />
+          </Link>
+        </div>
       </div>
+      {planSaveError && <p className="mb-3 text-sm text-red-600">{planSaveError}</p>}
       {meals.length > 0 ? (
         <div className="space-y-3">
           {meals.map((meal) => {
-            const expanded = expandedMealId === meal.id;
+            const expanded = foodsOpen(meal.id);
             const plannedCount = (meal.items ?? []).filter((item) => item.type === 'PLANNED').length;
             const plannedTime = formatPlannedTime(meal.plannedTime);
+            const detailsOpen = detailsMealId === meal.id;
+            const plannedItems = (meal.items ?? []).filter((item) => item.type === 'PLANNED');
 
             return (
               <div key={meal.id} className="rounded-2xl bg-app-muted">
                 <div className="flex items-center gap-2 p-3">
+                  {showPlanToggle && <MealTypeIcon name={meal.name} />}
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
@@ -514,7 +575,46 @@ export function TodayNutrition({
                     <ChevronDown size={18} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
-                {expanded && <PlannedItemChecklist meal={meal} onChange={onChange} />}
+                {expanded && (
+                  <>
+                    <PlannedItemChecklist meal={meal} onChange={onChange} reading={showPlanToggle} />
+                    {showPlanToggle && (
+                      <div className="px-3 pb-3">
+                        <button
+                          type="button"
+                          className="text-sm font-semibold text-brand-green"
+                          aria-expanded={detailsOpen}
+                          onClick={() => setDetailsMealId((current) => (current === meal.id ? null : meal.id))}
+                        >
+                          {detailsOpen ? 'Hide macros, recipe, and prep' : 'Macros, recipe, and prep'}
+                        </button>
+                        {detailsOpen && (
+                          <div className="mt-3 space-y-3 border-t border-app-border pt-3">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Macros</p>
+                              <ul className="mt-2 space-y-2">
+                                {plannedItems.map((item) => (
+                                  <li key={item.id} className="text-sm text-app-text">
+                                    <span className="font-medium">{item.nameSnapshot}</span>
+                                    <span className="mt-0.5 block text-app-text-muted">{formatDetailMacros(item)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Recipe</p>
+                              <p className="mt-1 text-sm leading-6 text-app-text">No recipe on this meal.</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-app-text-muted">Prep</p>
+                              <p className="mt-1 text-sm leading-6 text-app-text">No prep note on this meal.</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             );
           })}

@@ -8,7 +8,7 @@ import { prisma } from '../src/db/prisma.js';
 import { applyStructureMealsToLog } from '../src/services/structureMealsApply.js';
 import { parseDateParam, userDayKey } from '../src/utils/dates.js';
 
-const SINGLE_EGG_NAME = 'Egg - Whole with Yoke Cooked';
+const SINGLE_EGG_NAME = 'Egg - Whole with Yolk Cooked';
 const OPTION_FOOD_ID = 'cmr2nz7ll001fru6cmulgrjzx'; // Breakfast Builder → Eggs line
 
 async function main() {
