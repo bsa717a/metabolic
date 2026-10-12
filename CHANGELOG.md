@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.39.0](https://github.com/bsa717a/metabolic/compare/v0.38.12...v0.39.0) (2026-10-12)
+
+
+### Features
+
+* **nutrition:** expand all meals on the nutrition page ([#361](https://github.com/bsa717a/metabolic/issues/361)) ([d80ddcd](https://github.com/bsa717a/metabolic/commit/d80ddcddf6a92e631b895143c3fe33e13342ac36))
+* **nutrition:** expand meals on the home card ([#363](https://github.com/bsa717a/metabolic/issues/363)) ([9e2bf8c](https://github.com/bsa717a/metabolic/commit/9e2bf8c404ea1304ca4b431ac36cf78f12851f33))
+
 ## [0.38.12](https://github.com/bsa717a/metabolic/compare/v0.38.11...v0.38.12) (2026-10-11)
 
 
