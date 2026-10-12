@@ -67,7 +67,7 @@ const FOODS: FoodSeed[] = [
   // breakfast proteins — 1 egg per serving so discrete scaling can land on 2/3/4 eggs
   // (do not use the catalog "Eggs" item; that serving is 2 eggs / 140 kcal)
   {
-    name: 'Egg - Whole with Yoke Cooked',
+    name: 'Egg - Whole with Yolk Cooked',
     servingSize: 1,
     servingUnit: 'egg',
     calories: 75,
@@ -208,7 +208,7 @@ const SETS: SetSeed[] = [
             name: 'Eggs',
             icon: '🥚',
             isDefault: true,
-            foods: [{ food: 'Egg - Whole with Yoke Cooked', baseServings: 2, discrete: true, maxServings: 2 }]
+            foods: [{ food: 'Egg - Whole with Yolk Cooked', baseServings: 2, discrete: true, maxServings: 2 }]
           },
           { name: 'Turkey sausage', icon: '🌭', foods: [{ food: 'Turkey sausage', baseServings: 2.3 }] },
           { name: 'Bacon', icon: '🥓', foods: [{ food: 'Bacon', baseServings: 4, discrete: true }] },

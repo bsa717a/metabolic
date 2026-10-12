@@ -25,6 +25,7 @@ export type AppUser = {
   firstDayChecklistDismissedAt?: string | null;
   aiConsentAccepted?: boolean;
   aiConsentDecidedAt?: string | null;
+  nutritionMealsExpanded?: boolean;
   selectedVirtualCoachId?: string | null;
   plan: PlanSlug;
   subscriptionStatus: SubscriptionStatusSlug;

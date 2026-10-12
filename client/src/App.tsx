@@ -396,7 +396,15 @@ export default function App() {
             <Route path="store" element={<StorePage user={appUser} />} />
             <Route index element={<DashboardPage user={appUser} onUserUpdated={setAppUser} />} />
             <Route path="program" element={<ProgramPage user={appUser} />} />
-            <Route path="nutrition" element={<NutritionLogPage />} />
+            <Route
+              path="nutrition"
+              element={
+                <NutritionLogPage
+                  mealsExpanded={Boolean(appUser?.nutritionMealsExpanded)}
+                  onMealsExpandedSaved={setAppUser}
+                />
+              }
+            />
             <Route path="nutrition/plan" element={<NutritionPage />} />
             <Route path="nutrition/sources" element={<NutritionSourcesPage />} />
             <Route path="exercise" element={<ExerciseAreaLayout />}>
