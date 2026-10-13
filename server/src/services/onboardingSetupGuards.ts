@@ -29,6 +29,20 @@ export function shouldPreserveImportedProgram(input: {
   );
 }
 
+/**
+ * Only an imported user with no coach may apply a code or open a coach request.
+ * A blank code, or any code while a coach is already linked, must not clear that coach.
+ */
+export function shouldApplyImportedCoachChoice(input: {
+  hasActiveCoachAssignment: boolean;
+  programCoachId: string | null;
+  coachCode?: string | null;
+  wantsCoach?: boolean;
+}) {
+  if (input.hasActiveCoachAssignment || input.programCoachId) return false;
+  return Boolean(input.coachCode?.trim()) || input.wantsCoach === true;
+}
+
 type ClientProfileSetupInput = {
   heightFeet?: number;
   heightInches?: number;

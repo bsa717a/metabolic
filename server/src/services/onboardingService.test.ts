@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   buildClientProfileData,
   heightFieldsFromProfile,
+  shouldApplyImportedCoachChoice,
   shouldPreserveImportedProgram
 } from './onboardingSetupGuards.js';
 
@@ -67,6 +68,59 @@ describe('shouldPreserveImportedProgram', () => {
         exerciseCount: 0,
         coachId: null,
         hasActiveCoachAssignment: false
+      }),
+      false
+    );
+  });
+});
+
+describe('shouldApplyImportedCoachChoice', () => {
+  it('applies a code or a request only when the imported user has no coach', () => {
+    assert.equal(
+      shouldApplyImportedCoachChoice({
+        hasActiveCoachAssignment: false,
+        programCoachId: null,
+        coachCode: 'DF',
+        wantsCoach: false
+      }),
+      true
+    );
+    assert.equal(
+      shouldApplyImportedCoachChoice({
+        hasActiveCoachAssignment: false,
+        programCoachId: null,
+        coachCode: '   ',
+        wantsCoach: true
+      }),
+      true
+    );
+  });
+
+  it('does not apply a code or a blank code when a coach is already linked', () => {
+    assert.equal(
+      shouldApplyImportedCoachChoice({
+        hasActiveCoachAssignment: true,
+        programCoachId: null,
+        coachCode: 'DF',
+        wantsCoach: true
+      }),
+      false
+    );
+    assert.equal(
+      shouldApplyImportedCoachChoice({
+        hasActiveCoachAssignment: false,
+        programCoachId: 'coach-1',
+        coachCode: '',
+        wantsCoach: true
+      }),
+      false
+    );
+    assert.equal(
+      shouldApplyImportedCoachChoice({
+        hasActiveCoachAssignment: false,
+        programCoachId: null,
+        coachCode: '   ',
+        wantsCoach: false
       }),
       false
     );

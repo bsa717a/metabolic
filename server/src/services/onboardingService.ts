@@ -16,6 +16,7 @@ import { loadActiveCoachAssignment } from './userSerialization.js';
 import {
   buildClientProfileData,
   heightFieldsFromProfile,
+  shouldApplyImportedCoachChoice,
   shouldPreserveImportedProgram
 } from './onboardingSetupGuards.js';
 
@@ -93,6 +94,14 @@ export async function getSetupDraft(userId: string) {
   const gender = normalizeGender(user?.gender);
   const weight = formatMetricValue(weightMetric?.currentValue);
   const height = heightFieldsFromProfile(profile?.heightInches, profile?.heightRaw);
+  let assignedCoachName = [assignment?.coach.firstName, assignment?.coach.lastName].filter(Boolean).join(' ');
+  if (!assignedCoachName && program?.coachId) {
+    const linkedCoach = await prisma.user.findUnique({
+      where: { id: program.coachId },
+      select: { firstName: true, lastName: true }
+    });
+    assignedCoachName = [linkedCoach?.firstName, linkedCoach?.lastName].filter(Boolean).join(' ');
+  }
 
   return {
     weight,
@@ -110,7 +119,8 @@ export async function getSetupDraft(userId: string) {
     activityLevel: profile?.activityLevel != null ? String(profile.activityLevel) : '',
     phone: user?.phone?.trim() ?? '',
     occupation: profile?.occupation?.trim() ?? '',
-    assignedCoachName: [assignment?.coach.firstName, assignment?.coach.lastName].filter(Boolean).join(' ')
+    assignedCoachName,
+    hasAssignedCoach: Boolean(assignment) || Boolean(program?.coachId)
   };
 }
 
@@ -347,13 +357,15 @@ async function updateConfirmedProgramMetrics(
 }
 
 /**
- * Imported programs already have a coach, meals, and workouts. Confirm profile
- * fields and the goal weight only — do not rebuild the plan or replace the coach.
+ * Imported programs keep their meals, workouts, history, and any coach already
+ * linked. Confirm profile fields and the goal weight in place. A code or a
+ * coach request is applied only when this user has no coach yet.
  */
 async function confirmImportedProgram(
   userId: string,
-  program: { id: string; metrics: ProgramMetric[] },
-  input: SetupInput
+  program: { id: string; coachId: string | null; metrics: ProgramMetric[] },
+  input: SetupInput,
+  hasActiveCoachAssignment: boolean
 ) {
   const profileUpdate: SetupProfileUpdate = {};
   assignSetupProfileFields(profileUpdate, input);
@@ -365,6 +377,24 @@ async function confirmImportedProgram(
     await upsertClientProfileFromSetup(userId, input, tx);
     await updateConfirmedProgramMetrics(tx, program, input);
   });
+
+  if (
+    shouldApplyImportedCoachChoice({
+      hasActiveCoachAssignment,
+      programCoachId: program.coachId,
+      coachCode: input.coachCode,
+      wantsCoach: input.wantsCoach
+    })
+  ) {
+    const { shouldNotifyCoachRequest } = await applyCoachSupport(
+      userId,
+      { coachCode: input.coachCode, wantsCoach: input.wantsCoach },
+      { programId: program.id }
+    );
+    if (shouldNotifyCoachRequest) {
+      await notifyCoachRequest(userId, { coachCode: input.coachCode });
+    }
+  }
 
   return prisma.program.findUniqueOrThrow({
     where: { id: program.id },
@@ -406,7 +436,7 @@ async function updateActiveProgramFromSetup(
       hasActiveCoachAssignment: Boolean(activeAssignment)
     })
   ) {
-    return confirmImportedProgram(userId, program, input);
+    return confirmImportedProgram(userId, program, input, Boolean(activeAssignment));
   }
 
   const coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
