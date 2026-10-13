@@ -9,19 +9,19 @@
  *
  * Dry-run by default:
  *   cd server && npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
- *     --email grobrien@gmail.com
+ *     --email user@example.com
  *
  *   npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
- *     --email iammorgancrawford@gmail.com --email joebieker@gmail.com
+ *     --email one@example.com --email two@example.com
  *
- *   LEGACY_DUMP_PATH=/Users/derekfowler/Downloads/astermet_app.sql \
+ *   LEGACY_DUMP_PATH=/path/to/astermet_app.sql \
  *   npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
- *     --email grobrien@gmail.com --apply
+ *     --email user@example.com --apply
  *
  * Auth only (creates the Firebase email/password from the legacy bcrypt hash
  * when that email does not already exist):
  *   npx tsx --env-file=.env scripts/migration/import-one-legacy-user.ts \
- *     --email grobrien@gmail.com --apply --auth-only
+ *     --email user@example.com --apply --auth-only
  */
 import {
   ExerciseStatus,
@@ -296,7 +296,11 @@ function lastNonNull(sessions: SessionMetrics[], pick: (m: SessionMetrics) => nu
   return null;
 }
 
-async function getOrCreateFood(name: string, item: { portion_name?: string; calories?: unknown; proteins?: unknown; carbs?: unknown; fats?: unknown }, idMap: IdMap): Promise<string | null> {
+async function getOrCreateFood(
+  name: string,
+  item: { portion_name?: string; calories?: string | number; proteins?: string | number; carbs?: string | number; fats?: string | number },
+  idMap: IdMap
+): Promise<string | null> {
   const key = name.trim();
   if (!key) return null;
   if (idMap.foods[key]) return idMap.foods[key];

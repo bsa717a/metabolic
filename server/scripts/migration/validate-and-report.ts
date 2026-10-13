@@ -7,7 +7,7 @@ import { isValidEmail, parseTable } from './mysqlDumpParser.js';
 const prisma = new PrismaClient();
 const REPORT_PATH = resolve(process.cwd(), '.tmp', 'migration-report.md');
 
-const SPOTCHECK_EMAIL = 'erickmchenry@gmail.com';
+const SPOTCHECK_EMAIL = (process.env.SPOTCHECK_EMAIL ?? '').trim().toLowerCase();
 
 function countValidUsers(): { clients: number; coaches: number; invalid: number; duplicate: number } {
   const rows = parseTable(DUMP_PATH, 'users').sort((a, b) => Number(a.id) - Number(b.id));
@@ -97,31 +97,35 @@ async function main(): Promise<void> {
       .then((rows) => rows.length)
   ]);
 
-  const spot = await prisma.user.findUnique({
-    where: { email: SPOTCHECK_EMAIL },
-    include: {
-      programs: { include: { metrics: true, metricSnapshots: true } },
-      progressSnapshots: true,
-      userAssignments: { include: { coach: true } },
-      clientProfile: true
-    }
-  });
+  const spot = SPOTCHECK_EMAIL
+    ? await prisma.user.findUnique({
+        where: { email: SPOTCHECK_EMAIL },
+        include: {
+          programs: { include: { metrics: true, metricSnapshots: true } },
+          progressSnapshots: true,
+          userAssignments: { include: { coach: true } },
+          clientProfile: true
+        }
+      })
+    : null;
 
   const row = (label: string, legacy: number | string, migrated: number | string) =>
     `| ${label} | ${legacy} | ${migrated} |`;
 
-  const spotLines = spot
-    ? [
-        `- User: ${spot.firstName} ${spot.lastName} (${spot.email}), role ${spot.role}, firebaseUid \`${spot.firebaseUid}\``,
-        `- Coach: ${spot.userAssignments[0]?.coach ? `${spot.userAssignments[0].coach.firstName} ${spot.userAssignments[0].coach.lastName}` : 'none'}`,
-        `- Programs: ${spot.programs.length}`,
-        `- Program metrics: ${spot.programs[0]?.metrics.length ?? 0}`,
-        `- Metric snapshots: ${spot.programs[0]?.metricSnapshots.length ?? 0}`,
-        `- Progress snapshots: ${spot.progressSnapshots.length}`,
-        `- Profile height: ${spot.clientProfile?.heightInches != null ? `${spot.clientProfile.heightInches} in (raw: ${spot.clientProfile.heightRaw ?? 'n/a'})` : 'none'}`,
-        `- Profile address: ${spot.clientProfile?.city || spot.clientProfile?.state ? `${spot.clientProfile?.city ?? ''} ${spot.clientProfile?.state ?? ''}`.trim() : 'none'}`
-      ]
-    : [`- Spot-check user ${SPOTCHECK_EMAIL} not found.`];
+  const spotLines = !SPOTCHECK_EMAIL
+    ? ['- Skipped. Set SPOTCHECK_EMAIL to include one account.']
+    : spot
+      ? [
+          `- User: ${spot.firstName} ${spot.lastName} (${spot.email}), role ${spot.role}, firebaseUid \`${spot.firebaseUid}\``,
+          `- Coach: ${spot.userAssignments[0]?.coach ? `${spot.userAssignments[0].coach.firstName} ${spot.userAssignments[0].coach.lastName}` : 'none'}`,
+          `- Programs: ${spot.programs.length}`,
+          `- Program metrics: ${spot.programs[0]?.metrics.length ?? 0}`,
+          `- Metric snapshots: ${spot.programs[0]?.metricSnapshots.length ?? 0}`,
+          `- Progress snapshots: ${spot.progressSnapshots.length}`,
+          `- Profile height: ${spot.clientProfile?.heightInches != null ? `${spot.clientProfile.heightInches} in (raw: ${spot.clientProfile.heightRaw ?? 'n/a'})` : 'none'}`,
+          `- Profile address: ${spot.clientProfile?.city || spot.clientProfile?.state ? `${spot.clientProfile?.city ?? ''} ${spot.clientProfile?.state ?? ''}`.trim() : 'none'}`
+        ]
+      : [`- Spot-check user ${SPOTCHECK_EMAIL} not found.`];
 
   const report = `# Legacy Data Migration Report
 
@@ -156,7 +160,7 @@ ${row('Profiles with conditions', '-', profilesWithConditions)}
 
 Skipped users: ${legacyUsers.invalid} invalid email, ${legacyUsers.duplicate} duplicate email.
 
-## Spot check: ${SPOTCHECK_EMAIL}
+## Spot check: ${SPOTCHECK_EMAIL || '(not set)'}
 
 ${spotLines.join('\n')}
 

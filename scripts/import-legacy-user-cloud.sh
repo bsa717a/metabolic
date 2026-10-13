@@ -4,8 +4,8 @@
 # Extra flags are forwarded (e.g. --force --auth-only).
 #
 #   scripts/import-legacy-user-cloud.sh \
-#     --email iammorgancrawford@gmail.com \
-#     --email joebieker@gmail.com \
+#     --email one@example.com \
+#     --email two@example.com \
 #     --apply
 set -euo pipefail
 
