@@ -134,8 +134,12 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
     }
   }
 
-  function handleBack() {
+  function handleLeave() {
     navigate(-1);
+  }
+
+  function handleChatBack() {
+    setPhase('pickCoach');
   }
 
   if (isLoading) {
@@ -165,7 +169,7 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
         <div className="mb-4">
           <button
             type="button"
-            onClick={handleBack}
+            onClick={handleLeave}
             className="flex items-center gap-1 text-sm text-app-text-muted transition hover:text-app-text"
           >
             <ArrowLeft size={16} />
@@ -200,7 +204,7 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
         <div className="mb-4">
           <button
             type="button"
-            onClick={handleBack}
+            onClick={handleLeave}
             className="flex items-center gap-1 text-sm text-app-text-muted transition hover:text-app-text"
           >
             <ArrowLeft size={16} />
@@ -227,7 +231,7 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
       <div className="absolute left-4 top-4">
         <button
           type="button"
-          onClick={handleBack}
+          onClick={handleChatBack}
           className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-app-text-muted transition hover:bg-app-muted hover:text-app-text"
         >
           <ArrowLeft size={16} />
@@ -252,7 +256,7 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
           onFormPatch={handleFormPatch}
           onSubmit={handleSubmit}
           submitting={submitting}
-          onDismiss={handleBack}
+          onDismiss={handleLeave}
         />
       </div>
 
