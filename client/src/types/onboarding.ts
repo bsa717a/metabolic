@@ -16,6 +16,7 @@ export type SetupDraft = {
   phone: string;
   occupation: string;
   assignedCoachName: string;
+  hasAssignedCoach: boolean;
 };
 
 export type SetupFormState = {
