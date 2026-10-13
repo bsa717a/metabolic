@@ -379,19 +379,21 @@ export default function App() {
         <Route
           path="/restart-onboarding"
           element={
-            authChecked && firebaseUser && emailVerified ? (
+            !authChecked || (firebaseUser && emailVerified && !onboardingChecked) ? (
+              <LoadingScreen />
+            ) : !firebaseUser ? (
+              <Navigate to="/login" replace />
+            ) : !emailVerified ? (
+              <Navigate to="/verify-email" replace />
+            ) : needsSetup ? (
+              <Navigate to="/setup" replace />
+            ) : (
               <RestartOnboardingPage
                 user={appUser}
                 onComplete={() => {
                   void refreshAppUser();
                 }}
               />
-            ) : authChecked && !firebaseUser ? (
-              <Navigate to="/login" replace />
-            ) : authChecked && !emailVerified ? (
-              <Navigate to="/verify-email" replace />
-            ) : (
-              <LoadingScreen />
             )
           }
         />

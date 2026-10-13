@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { api } from '../services/api';
 import { resolveTimezone } from '../utils/timezoneOptions';
-import { normalizeSetupGender, normalizeBirthDateKey } from '../utils/setupDraft';
 import { LoadingOnboardingState } from '../components/onboarding/LoadingOnboardingState';
 import { OnboardingErrorState } from '../components/onboarding/OnboardingErrorState';
 import { OnboardingCoachPicker } from '../components/onboarding/OnboardingCoachPicker';
 import { CoachOnboardingChat } from '../components/onboarding/CoachOnboardingChat';
 import { OnboardingShell } from '../components/onboarding/OnboardingShell';
 import { OnboardingStepHeader } from '../components/onboarding/OnboardingUi';
-import { submitSetupForm } from '../components/onboarding/setupForm';
+import { buildRestartOnboardingForm, submitSetupForm } from '../components/onboarding/setupForm';
 import { ThemeToggle } from '../components/layout/ThemeToggle';
 import { coachWelcomeGoalsFromForm } from '../components/virtualCoach/coachWelcomeMessage';
 import { setPendingCoachWelcome } from '../components/virtualCoach/coachWelcomePending';
@@ -22,39 +21,6 @@ type RestartOnboardingPageProps = {
   user: AppUser | null;
   onComplete: () => void;
 };
-
-function buildInitialForm(
-  user: AppUser | null,
-  draft: SetupDraft | null,
-  profile: UserAccountDetails | null
-): SetupFormState {
-  const genderValue = normalizeSetupGender(draft?.gender || profile?.gender || user?.gender) || '';
-  const birthDateValue =
-    normalizeBirthDateKey(draft?.birthDate || profile?.birthDate || user?.birthDate) || '';
-  const timezoneValue = resolveTimezone(
-    draft?.timezone || profile?.timezone || user?.timezone || ''
-  );
-
-  return {
-    weight: draft?.weight || '',
-    goalWeight: draft?.goalWeight || '',
-    bodyFat: draft?.bodyFat || '',
-    goalBodyFat: draft?.goalBodyFat || '',
-    heightFeet: profile?.heightFeet != null ? String(profile.heightFeet) : '',
-    heightInches: profile?.heightInches != null ? String(profile.heightInches) : '',
-    occupation: profile?.occupation || '',
-    activityLevel: profile?.activityLevel != null ? String(profile.activityLevel) : '',
-    coachCode: user?.coachCode || '',
-    wantsCoach: draft?.wantsCoach || false,
-    selectedVirtualCoachId: user?.selectedVirtualCoachId || '',
-    trackingOnly: false,
-    gender: genderValue as '' | 'm' | 'f',
-    birthDate: birthDateValue,
-    timezone: timezoneValue,
-    phone: profile?.phone || user?.phone || '',
-    foodAllergies: profile?.foodAllergies || ''
-  };
-}
 
 export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPageProps) {
   const navigate = useNavigate();
@@ -83,7 +49,7 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
         api<UserAccountDetails>(`/api/users/${user.id}/profile`)
       ]);
 
-      const initialForm = buildInitialForm(user, draft, profile);
+      const initialForm = buildRestartOnboardingForm(user, draft, profile);
       setForm(initialForm);
       formRef.current = initialForm;
 
@@ -134,11 +100,14 @@ export function RestartOnboardingPage({ user, onComplete }: RestartOnboardingPag
       const timezone = resolveTimezone(latest.timezone);
       const coachId = latest.selectedVirtualCoachId.trim() || undefined;
 
-      await submitSetupForm({
-        ...latest,
-        timezone: timezone || latest.timezone,
-        selectedVirtualCoachId: latest.selectedVirtualCoachId
-      });
+      await submitSetupForm(
+        {
+          ...latest,
+          timezone: timezone || latest.timezone,
+          selectedVirtualCoachId: latest.selectedVirtualCoachId
+        },
+        user?.assignedCoach ? { preserveAssignedCoach: true } : undefined
+      );
 
       if (coachId) {
         setPendingCoachWelcome({

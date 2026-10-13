@@ -208,3 +208,26 @@ export function applyDraftToForm(
     wantsCoach: draft.wantsCoach ?? form.wantsCoach
   };
 }
+
+/** Replay setup for someone who already has an account. Do not treat their own coach code as an invite. */
+export function buildRestartOnboardingForm(
+  user: {
+    gender?: string | null;
+    birthDate?: string | null;
+    timezone?: string | null;
+    phone?: string | null;
+    selectedVirtualCoachId?: string | null;
+    coachCode?: string | null;
+  } | null,
+  draft: Parameters<typeof applyDraftToForm>[1] | null,
+  profile: Parameters<typeof applyDraftToForm>[2]
+): SetupFormState {
+  const seeded = applyDraftToForm(createEmptySetupForm(), draft ?? {}, profile, user);
+  return {
+    ...seeded,
+    coachCode: '',
+    trackingOnly: false,
+    selectedVirtualCoachId: user?.selectedVirtualCoachId?.trim() || '',
+    textReminders: ''
+  };
+}
