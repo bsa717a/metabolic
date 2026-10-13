@@ -22,6 +22,7 @@ type MigrationConfirmationFlowProps = {
   onChange: (key: keyof SetupFormState, value: string | boolean) => void;
   onComplete: () => void;
   coachName?: string;
+  hasAssignedCoach: boolean;
   hasStoredTimezone: boolean;
 };
 
@@ -75,6 +76,7 @@ export function MigrationConfirmationFlow({
   onChange,
   onComplete,
   coachName = '',
+  hasAssignedCoach,
   hasStoredTimezone
 }: MigrationConfirmationFlowProps) {
   const navigate = useNavigate();
@@ -109,7 +111,7 @@ export function MigrationConfirmationFlow({
       await submitSetupForm(form, {
         requireGoalWeight: true,
         requireTimezone: true,
-        preserveAssignedCoach: true
+        preserveAssignedCoach: hasAssignedCoach
       });
       onComplete();
       navigate('/', { replace: true });
@@ -180,6 +182,35 @@ export function MigrationConfirmationFlow({
             <ConfirmRow label="Timezone" value={formatTimezoneLabel(form.timezone.trim())} />
           ) : null}
         </dl>
+
+        {hasAssignedCoach ? null : (
+          <div className={`${onboardingCardClass} mt-5`}>
+            <p className="text-sm font-semibold text-app-text">Coach support</p>
+            <p className="mt-1 text-sm text-app-text-muted">
+              Optional. A coach can personalize your plan whenever you&apos;re ready.
+            </p>
+            <label htmlFor="coach-code" className="mt-3 block text-sm font-medium text-app-text">
+              Coach initials or code
+            </label>
+            <input
+              id="coach-code"
+              className={`${onboardingInputClass} mt-2 uppercase`}
+              value={form.coachCode}
+              onChange={(event) => onChange('coachCode', event.target.value.toUpperCase())}
+              placeholder="DF"
+              maxLength={20}
+            />
+            <label className="mt-3 flex items-start gap-3 text-sm text-app-text">
+              <input
+                className="mt-1"
+                type="checkbox"
+                checked={form.wantsCoach}
+                onChange={(event) => onChange('wantsCoach', event.target.checked)}
+              />
+              <span>I&apos;d like to work with a real coach.</span>
+            </label>
+          </div>
+        )}
 
         <div className="mt-6 space-y-3">
           {error ? <p className="text-sm text-red-500">{error}</p> : null}

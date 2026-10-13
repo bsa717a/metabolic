@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { CopyPlus, LayoutTemplate, X } from 'lucide-react';
-import { api, formatDayAbbrev, formatDayNumber, isToday } from '../../services/api';
+import { api, dayTotalsDateLabel, formatDayLabel, getWeekDates, startOfWeek } from '../../services/api';
 import type { Meal, NutritionPlanTemplateSummary, PlanPeriodInfo } from '../../types';
+import { fetchCoachMealsForDates, type DayMeals } from '../../utils/planExportData';
 import { MealPlanner, type MealPlannerHandle } from '../nutrition/MealPlanner';
 import { PlanPeriodBanner } from '../nutrition/PlanPeriodBanner';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
@@ -76,14 +77,17 @@ function DayTotalsPanel({
   actual,
   layout,
   selectedDate,
+  todayDate,
   pinWhileScrolling = false
 }: {
   planned: MacroTotals;
   actual: MacroTotals;
   layout: 'horizontal' | 'vertical';
   selectedDate: string;
+  todayDate: string;
   pinWhileScrolling?: boolean;
 }) {
+  const dateLabel = dayTotalsDateLabel(selectedDate, todayDate);
   return (
     <div
       className={clsx(
@@ -93,7 +97,7 @@ function DayTotalsPanel({
       )}
     >
       <p className="font-semibold text-app-text">Day totals</p>
-      {!isToday(selectedDate) && <p className="text-sm text-app-text-muted">{selectedDate}</p>}
+      {dateLabel ? <p className="text-sm text-app-text-muted">{dateLabel}</p> : null}
       <div className={layout === 'vertical' ? 'mt-3 space-y-3' : 'mt-3 grid gap-3 sm:grid-cols-2'}>
         <MacroTotalsBlock label="Planned" totals={planned} variant="gold" layout={layout} />
         <MacroTotalsBlock label="Actual" totals={actual} variant="green" layout={layout} />
@@ -106,6 +110,7 @@ export function CoachDayNutritionEditor({
   open,
   clientId,
   planDate,
+  clientToday,
   nutritionTemplates,
   onClose,
   onRefresh
@@ -113,6 +118,7 @@ export function CoachDayNutritionEditor({
   open: boolean;
   clientId: string;
   planDate: string;
+  clientToday: string;
   nutritionTemplates: NutritionPlanTemplateSummary[];
   onClose: () => void;
   onRefresh: () => Promise<void>;
@@ -127,6 +133,9 @@ export function CoachDayNutritionEditor({
   const [setAsDefault, setSetAsDefault] = useState(true);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [selectedDate, setSelectedDate] = useState(planDate);
+  const [weekDays, setWeekDays] = useState<DayMeals[]>([]);
+  const weekStart = startOfWeek(selectedDate);
+  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const [planPeriodState, setPlanPeriodState] = useState<{ key: string; period: PlanPeriodInfo | null } | null>(null);
   const [editingPlan, setEditingPlan] = useState(false);
   const [savingDay, setSavingDay] = useState(false);
@@ -143,6 +152,10 @@ export function CoachDayNutritionEditor({
 
   const loadGeneration = useRef(0);
 
+  const reloadWeekDays = useCallback(async () => {
+    setWeekDays(await fetchCoachMealsForDates(clientId, weekDates));
+  }, [clientId, weekDates]);
+
   const reloadMeals = useCallback(async () => {
     const generation = ++loadGeneration.current;
     try {
@@ -150,11 +163,12 @@ export function CoachDayNutritionEditor({
       if (generation !== loadGeneration.current) return;
       setMeals(data);
       setLoadError(null);
+      void reloadWeekDays();
     } catch (error) {
       if (generation !== loadGeneration.current) return;
       setLoadError(error instanceof Error ? error.message : 'Could not load meals.');
     }
-  }, [clientId, selectedDate]);
+  }, [clientId, reloadWeekDays, selectedDate]);
 
   useEffect(() => {
     if (!open) setSelectedDate(planDate);
@@ -303,7 +317,7 @@ export function CoachDayNutritionEditor({
     }
   }
 
-  const dayLabel = `${formatDayAbbrev(selectedDate)} ${formatDayNumber(selectedDate)}`;
+  const dayLabel = formatDayLabel(selectedDate);
 
   async function handleClose() {
     if (!confirmDiscardIfDirty()) return;
@@ -401,7 +415,12 @@ export function CoachDayNutritionEditor({
           {planPeriod && (planPeriod.weekNumber != null || planPeriod.calorieTarget != null) ? (
             <PlanPeriodBanner planPeriod={planPeriod} viewedDate={selectedDate} />
           ) : null}
-          <WeekDateStrip selectedDate={selectedDate} onSelectDate={handleSelectDate} />
+          <WeekDateStrip
+            selectedDate={selectedDate}
+            onSelectDate={handleSelectDate}
+            todayDate={clientToday}
+            days={weekDays}
+          />
 
           {planPeriodLoaded ? (
             assignedPlan ? (
@@ -447,6 +466,7 @@ export function CoachDayNutritionEditor({
                     actual={actualTotals}
                     layout="horizontal"
                     selectedDate={selectedDate}
+                    todayDate={clientToday}
                   />
                 )}
               </div>
@@ -458,6 +478,7 @@ export function CoachDayNutritionEditor({
                     actual={actualTotals}
                     layout="vertical"
                     selectedDate={selectedDate}
+                    todayDate={clientToday}
                     pinWhileScrolling
                   />
                 ) : (
