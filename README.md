@@ -162,10 +162,11 @@ Derek adds these repository secrets separately (Team `8FG8V9P49A`, Cliffs Mama, 
 | `ASC_KEY_ID` | App Store Connect API Key ID, 10 characters. The key that signed 1.0 (9) is `2H9BZ26296`. |
 | `ASC_ISSUER_ID` | Issuer UUID. That key's issuer is `ae4ecfe6-d76e-46b7-b521-bcce51cf8191`. |
 | `ASC_KEY_P8_BASE64` | Base64 of the AuthKey `.p8` file, not the raw key pasted into YAML. On a Mac: `base64 -i AuthKey_2H9BZ26296.p8 \| pbcopy` |
+| `GOOGLE_SERVICE_INFO_PLIST_BASE64` | Base64 of the Mac file `client/ios/App/App/GoogleService-Info.plist`, not the raw XML. `base64 -i client/ios/App/App/GoogleService-Info.plist \| pbcopy` |
 
 Leave the build-number input empty to use one higher than the latest App Store Connect build, and never below 10. Marketing version stays `1.0` unless the input says otherwise. The web bundle reuses the existing production `VITE_*` deploy secrets.
 
-A run is about **20 minutes** on a `macos-26` runner (about 15 with warm caches, about 25 cold). Xcode is pinned to **26.6**. See `client/IOS.md`.
+A run is about **20 minutes** on the `xcode-27` runner (about 15 with warm caches, about 25 cold), plus any queue for that public-preview image. Xcode is pinned to **27.0 (27A266a)**, the toolchain that archived 1.0 (9). See `client/IOS.md`.
 
 ### TestFlight Upload (Mac)
 
