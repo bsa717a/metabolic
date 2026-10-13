@@ -237,6 +237,7 @@ final class CueAudioPlayer {
 
     private var tickPlayer: AVAudioPlayer?
     private var goPlayer: AVAudioPlayer?
+    private var stopPlayer: AVAudioPlayer?
 
     private init() {}
 
@@ -244,8 +245,10 @@ final class CueAudioPlayer {
         MixableAudioSession.configure()
         if tickPlayer == nil { tickPlayer = makeTickPlayer() }
         if goPlayer == nil { goPlayer = makeGoPlayer() }
+        if stopPlayer == nil { stopPlayer = makeStopPlayer() }
         tickPlayer?.prepareToPlay()
         goPlayer?.prepareToPlay()
+        stopPlayer?.prepareToPlay()
     }
 
     func playTick() throws {
@@ -270,6 +273,17 @@ final class CueAudioPlayer {
         if !player.play() { throw CueAudioError.goUnavailable }
     }
 
+    func playStop() throws {
+        MixableAudioSession.configure()
+        if stopPlayer == nil { stopPlayer = makeStopPlayer() }
+        guard let player = stopPlayer else {
+            throw CueAudioError.stopUnavailable
+        }
+        player.currentTime = 0
+        player.volume = 1
+        if !player.play() { throw CueAudioError.stopUnavailable }
+    }
+
     private func makeTickPlayer() -> AVAudioPlayer? {
         player(from: CueTone.tick.wavData())
     }
@@ -279,6 +293,13 @@ final class CueAudioPlayer {
             return player(from: url)
         }
         return player(from: CueTone.go.wavData())
+    }
+
+    private func makeStopPlayer() -> AVAudioPlayer? {
+        if let url = CueTone.stopClipURL() {
+            return player(from: url)
+        }
+        return player(from: CueTone.stop.wavData())
     }
 
     private func player(from data: Data) -> AVAudioPlayer? {
@@ -309,16 +330,18 @@ final class CueAudioPlayer {
 enum CueAudioError: LocalizedError {
     case tickUnavailable
     case goUnavailable
+    case stopUnavailable
 
     var errorDescription: String? {
         switch self {
         case .tickUnavailable: return "native tick unavailable"
         case .goUnavailable: return "native Go clip unavailable"
+        case .stopUnavailable: return "native Stop clip unavailable"
         }
     }
 }
 
-/// Same motif as `sessionCues.ts` (880 Hz tick / 1175 Hz Go fallback).
+/// Same motif as `sessionCues.ts` (880 Hz tick / 1175 Hz Go / 220 Hz Stop fallback).
 struct CueTone {
     var freq: Double
     var dur: Double
@@ -326,6 +349,7 @@ struct CueTone {
 
     static let tick = CueTone(freq: 880, dur: 0.15, gain: 1)
     static let go = CueTone(freq: 1175, dur: 0.22, gain: 1)
+    static let stop = CueTone(freq: 220, dur: 0.32, gain: 1)
 
     private static let partials: [(ratio: Double, mix: Double)] = [
         (1, 0.7), (2, 0.22), (3, 0.08)
@@ -337,6 +361,19 @@ struct CueTone {
             bundle.url(forResource: "go", withExtension: "wav", subdirectory: "public/audio"),
             bundle.url(forResource: "audio/go", withExtension: "wav", subdirectory: "public"),
             bundle.bundleURL.appendingPathComponent("public/audio/go.wav")
+        ]
+        return candidates.first { url in
+            guard let url else { return false }
+            return FileManager.default.fileExists(atPath: url.path)
+        } ?? nil
+    }
+
+    static func stopClipURL() -> URL? {
+        let bundle = Bundle.main
+        let candidates = [
+            bundle.url(forResource: "stop", withExtension: "wav", subdirectory: "public/audio"),
+            bundle.url(forResource: "audio/stop", withExtension: "wav", subdirectory: "public"),
+            bundle.bundleURL.appendingPathComponent("public/audio/stop.wav")
         ]
         return candidates.first { url in
             guard let url else { return false }
@@ -389,7 +426,8 @@ public class SessionCuesPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "prime", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "playTick", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "playGo", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "playGo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "playStop", returnType: CAPPluginReturnPromise)
     ]
 
     public override func load() {
@@ -419,6 +457,17 @@ public class SessionCuesPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             do {
                 try CueAudioPlayer.shared.playGo()
+                call.resolve()
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc func playStop(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            do {
+                try CueAudioPlayer.shared.playStop()
                 call.resolve()
             } catch {
                 call.reject(error.localizedDescription)
