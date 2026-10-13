@@ -11,7 +11,9 @@ describe('isIosDevice', () => {
 
 describe('isPushOptedOutOnThisDevice', () => {
   it('is false when the opt-out flag is not set', () => {
-    localStorage.removeItem('metabolic-push-opt-out');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('metabolic-push-opt-out');
+    }
     expect(isPushOptedOutOnThisDevice()).toBe(false);
   });
 });
