@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.41.0](https://github.com/bsa717a/metabolic/compare/v0.40.1...v0.41.0) (2026-10-13)
+
+
+### Features
+
+* add restart onboarding from profile menu ([#270](https://github.com/bsa717a/metabolic/issues/270)) ([5be2113](https://github.com/bsa717a/metabolic/commit/5be2113c8f88bd7cf22706f72a05eeabce42f626))
+* **migration:** import many legacy users in one run ([#305](https://github.com/bsa717a/metabolic/issues/305)) ([88663e8](https://github.com/bsa717a/metabolic/commit/88663e8011076ace864e1974cb33be7b028f2bd5))
+
 ## [0.40.1](https://github.com/bsa717a/metabolic/compare/v0.40.0...v0.40.1) (2026-10-13)
 
 
