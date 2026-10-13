@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { api } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '../../content/aiConsentCopy';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
+import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 
 type LookupItem = {
   source: 'existing' | 'ai';
@@ -64,11 +67,17 @@ function AiFoodLookupContent({
   const [loading, setLoading] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string>();
+  const { accepted, openReview } = useAiConsent();
 
   const aiItems = result?.items.filter((item) => item.source === 'ai' && item.lookup?.id && item.estimate) ?? [];
   const existingItems = result?.items.filter((item) => item.source === 'existing' && item.food) ?? [];
 
   async function lookup() {
+    if (!accepted) {
+      openReview();
+      setError(AI_CONSENT_REQUIRED_MESSAGE);
+      return;
+    }
     setLoading(true);
     setError(undefined);
     try {
@@ -112,6 +121,7 @@ function AiFoodLookupContent({
 
   return (
     <div className="space-y-4">
+      {!accepted ? <AiDisabledNotice onReview={openReview} /> : null}
       <textarea
         className="h-36 w-full rounded-2xl border border-slate-200 p-3"
         placeholder={'One food per line, e.g.\n6 oz grilled chicken\n1/2 cup whole corn\n1 cup almonds'}

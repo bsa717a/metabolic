@@ -45,17 +45,12 @@ test('accountAction refreshes an existing email and creates a new one', () => {
   assert.equal(accountAction(true), 'refresh');
 });
 
-test('current plan titles use the imported user name', () => {
-  assert.equal(
-    currentPlanTitle('Morgan Crawford', 'meals', '2026-08-26'),
-    'Morgan Crawford current meals (2026-08-26)'
-  );
-  assert.equal(
-    currentPlanTitle('Joe B', 'workouts', '2026-08-28'),
-    'Joe B current workouts (2026-08-28)'
-  );
+test('current plan titles omit the client name', () => {
+  assert.equal(currentPlanTitle('Morgan Crawford', 'meals', '2026-08-26'), 'Current meals (2026-08-26)');
+  assert.equal(currentPlanTitle('Joe B', 'workouts', '2026-08-28'), 'Current workouts (2026-08-28)');
   assert.equal(displayNameFromLegacy('Joe B', 'joebieker@gmail.com'), 'Joe B');
-  assert.equal(currentPlanTitle('Gary', 'meals', '2024-05-01'), 'Gary current meals (2024-05-01)');
+  assert.equal(currentPlanTitle('Gary', 'meals', '2024-05-01'), 'Current meals (2024-05-01)');
+  assert.equal(currentPlanTitle('Rachel George', 'meals', '2026-07-13'), 'Current meals (2026-07-13)');
 });
 
 test('sessions and programs are kept as stored, including old dates and gapped session numbers', () => {

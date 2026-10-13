@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import { isFuture } from '../../services/api';
 import { DayExerciseEditor } from '../../components/exercise/DayExerciseEditor';
+import { AutomaticExercise } from '../../components/exercise/automatic/AutomaticExercise';
 import { Button } from '../../components/ui/Button';
 import { hasStoredSessionForDate } from '../../utils/workoutSession';
 import { primeAudio } from '../../utils/sessionCues';
+import { exerciseWeekPlanHeading } from '../../utils/exerciseRoutineDisplay';
 import { useExerciseArea } from './exerciseAreaContext';
 
 export function TodayTab() {
@@ -16,8 +18,18 @@ export function TodayTab() {
     exercisesForSelectedDate: exercises,
     reloadWeek,
     removeExercise,
+    routine,
     actionError,
-    setActionError
+    setActionError,
+    exerciseMode,
+    exerciseAuto,
+    exerciseAutoSaving,
+    exerciseAutoError,
+    setExerciseAutoLocation,
+    setExerciseAutoLevel,
+    setExerciseAutoPlan,
+    answerExerciseCheckIn,
+    startAutomaticWorkout
   } = useExerciseArea();
   const navigate = useNavigate();
 
@@ -26,9 +38,31 @@ export function TodayTab() {
     [selectedDate, weekDays]
   );
 
+  const planName = exerciseWeekPlanHeading(routine);
   const plannedCount = exercises.filter((item) => item.status === 'PLANNED').length;
   const future = isFuture(selectedDate);
   const canStart = !future && plannedCount > 0;
+
+  if (exerciseMode === 'AUTOMATIC') {
+    return (
+      <AutomaticExercise
+        location={exerciseAuto?.location ?? 'GYM'}
+        level={exerciseAuto?.level ?? 'BEGINNER'}
+        track={exerciseAuto?.track ?? null}
+        showToday
+        busy={exerciseAutoSaving}
+        error={exerciseAutoError}
+        onLocation={setExerciseAutoLocation}
+        onLevel={setExerciseAutoLevel}
+        onPlan={setExerciseAutoPlan}
+        onCheckIn={answerExerciseCheckIn}
+        onStart={() => {
+          primeAudio();
+          startAutomaticWorkout();
+        }}
+      />
+    );
+  }
 
   return (
     <DayExerciseEditor
@@ -40,6 +74,13 @@ export function TodayTab() {
       onRemoveExercise={removeExercise}
       actionError={actionError}
       onClearActionError={() => setActionError(null)}
+      beforeChecklist={
+        planName ? (
+          <p className="text-sm text-app-text-muted">
+            Plan <span className="font-medium text-app-text">{planName}</span>
+          </p>
+        ) : null
+      }
       afterProgress={
         canStart ? (
           <Button

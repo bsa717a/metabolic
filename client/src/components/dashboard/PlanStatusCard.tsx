@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CalendarCheck, Sprout } from 'lucide-react';
-import { api } from '../../services/api';
-import type { PlanProposal, PlanStatus } from '../../types';
+import { api, EntitlementError } from '../../services/api';
+import type { AppUser, Meal, PlanProposal, PlanStatus } from '../../types';
+import {
+  offPlanHomeCopy,
+  todayHasPlannedFood,
+  userCanRequestWeeklyPlan,
+  weeklyPlanBillingPath
+} from '../../utils/homePlanStatus';
 
 function formatDate(dateKey: string) {
   return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -19,7 +25,14 @@ function dayOfWeekLine(status: PlanStatus) {
 }
 
 /** The one place that answers "am I on a plan?" — renders all three plan states. */
-export function PlanStatusCard() {
+export function PlanStatusCard({
+  user,
+  meals
+}: {
+  user?: Pick<AppUser, 'plan' | 'assignedCoach'> | null;
+  meals?: Meal[];
+}) {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<PlanStatus | null>(null);
   const [proposal, setProposal] = useState<PlanProposal | null>(null);
   const [adopting, setAdopting] = useState(false);
@@ -75,6 +88,10 @@ export function PlanStatusCard() {
     try {
       setProposal(await api<PlanProposal>('/api/plan-proposal'));
     } catch (err) {
+      if (err instanceof EntitlementError) {
+        navigate(weeklyPlanBillingPath());
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Could not check for a plan.');
     }
   }
@@ -123,6 +140,8 @@ export function PlanStatusCard() {
     );
   }
 
+  const copy = offPlanHomeCopy(status.state, todayHasPlannedFood(meals));
+
   return (
     <div className="max-w-md rounded-2xl border border-dashed border-app-border bg-app-surface px-5 py-4">
       {fetchError && (
@@ -136,22 +155,26 @@ export function PlanStatusCard() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Sprout size={22} className="shrink-0 text-app-text-muted" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-base font-bold text-app-text">You&apos;re tracking freely — no plan yet</p>
-          <p className="text-sm text-app-text-muted">
-            {status.state === 'coached_no_plan'
-              ? 'Your coach hasn’t assigned a plan. You can start a matched one now.'
-              : 'A weekly plan gives you built meals, portions sized to you, and a weekly check-in rhythm.'}
-          </p>
+          <p className="text-base font-bold text-app-text">{copy.title}</p>
+          <p className="text-sm text-app-text-muted">{copy.detail}</p>
         </div>
-        {!proposal && (
-          <button
-            type="button"
-            onClick={() => void showProposal()}
-            className="shrink-0 rounded-xl bg-brand-green px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-deep"
-          >
-            Get a weekly plan
-          </button>
-        )}
+        {!proposal &&
+          (userCanRequestWeeklyPlan(user) ? (
+            <button
+              type="button"
+              onClick={() => void showProposal()}
+              className="shrink-0 rounded-xl bg-brand-green px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-deep"
+            >
+              Get a weekly plan
+            </button>
+          ) : (
+            <Link
+              to={weeklyPlanBillingPath()}
+              className="shrink-0 rounded-xl bg-brand-green px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-deep"
+            >
+              Get a weekly plan
+            </Link>
+          ))}
       </div>
 
       {proposal && !proposal.eligible && (

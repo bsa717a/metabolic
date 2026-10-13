@@ -14,7 +14,9 @@ import { firstAndLastSnapshotPhotoSets, photoUrlForSlot } from '../../utils/prog
 import { detectBeforeAfterOverlays } from '../../utils/progressPhotoPoseDetection';
 import { api } from '../../services/api';
 import { getVirtualCoach } from '../../data/virtualCoaches';
+import { useAiConsent } from '../../context/AiConsentContext';
 import { useEntitlements } from '../../context/EntitlementsContext';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '../../content/aiConsentCopy';
 
 const PHOTO_SLOTS: Array<{ slot: ProgressPhotoSlot; label: string }> = [
   { slot: 'front', label: 'Front' },
@@ -236,6 +238,7 @@ export function BlueprintPhotoComparisonModal({
   const [analyzingPose, setAnalyzingPose] = useState<ProgressPhotoSlot | null>(null);
   const [analysisError, setAnalysisError] = useState('');
   const { canAccess } = useEntitlements();
+  const { accepted, openReview } = useAiConsent();
 
   const comparison = useMemo(
     () => firstAndLastSnapshotPhotoSets(snapshots, progressPhotos),
@@ -306,6 +309,12 @@ export function BlueprintPhotoComparisonModal({
 
   async function runCoachAnalysis() {
     if (!activePoseReady || analyzing || !canUseAi || !comparison) return;
+    if (!accepted) {
+      openReview();
+      setAnalysisError(AI_CONSENT_REQUIRED_MESSAGE);
+      setSheetOpen(true);
+      return;
+    }
 
     const pose = activeSlot;
     const cached = analysisByPose[pose];

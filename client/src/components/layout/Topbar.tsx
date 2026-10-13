@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { BookOpen, ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -56,10 +56,12 @@ function ProfileMenuItem({
 
 export function Topbar({
   user,
-  onOpenCoachIntro
+  onOpenCoachIntro,
+  onUserUpdated
 }: {
   user?: AppUser | null;
   onOpenCoachIntro?: () => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -137,7 +139,7 @@ export function Topbar({
       <header
         ref={headerRef}
         className={clsx(
-          'sticky top-0 z-20 border-b py-2 backdrop-blur transition-colors duration-200 sm:py-3',
+          'sticky top-0 z-20 border-b pb-2 pt-[calc(0.5rem+var(--safe-area-top))] backdrop-blur transition-colors duration-200 sm:pb-3 sm:pt-[calc(0.75rem+var(--safe-area-top))]',
           isDashboard
             ? 'border-app-border bg-app-surface/90'
             : 'cursor-pointer border-brand-green/25 bg-app-muted/95 hover:bg-brand-green/10 dark:hover:bg-brand-green/15'
@@ -187,9 +189,6 @@ export function Topbar({
               <p className="flex items-center gap-1.5 text-xs font-medium text-brand-green dark:text-brand-green-light">
                 <LayoutDashboard size={14} className="shrink-0" aria-hidden />
                 <span className="hidden sm:inline">Back to dashboard</span>
-              </p>
-              <p className="mt-0.5 hidden text-[10px] text-app-text-muted md:block">
-                Click anywhere on this bar
               </p>
             </div>
           )}
@@ -271,6 +270,14 @@ export function Topbar({
                     onClick={() => {
                       closeProfileMenu();
                       navigate('/support');
+                    }}
+                  />
+                  <ProfileMenuItem
+                    label="Sources & methodology"
+                    icon={BookOpen}
+                    onClick={() => {
+                      closeProfileMenu();
+                      navigate('/nutrition/sources');
                     }}
                   />
                   <ProfileMenuItem
@@ -401,7 +408,9 @@ export function Topbar({
           userId={user.id}
           title="Account details"
           mode="self"
+          user={user}
           onClose={() => setAccountDetailsOpen(false)}
+          onUserUpdated={onUserUpdated}
         />
       ) : null}
     </>

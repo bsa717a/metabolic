@@ -3,7 +3,8 @@ import { prisma } from '../db/prisma.js';
 import { parseDateParam, toDateKey } from '../utils/dates.js';
 import { defaultRepsToScheme, normalizeRepScheme } from '../utils/repSchemes.js';
 import { normalizeSpeedScheme } from '../utils/speedSchemes.js';
-import { ensureDailyLogByUserId } from './dailyLogService.js';
+import { ensureDailyLogByUserId, userTodayDate } from './dailyLogService.js';
+import { isInExerciseApplyWindow, materializeAction } from './exerciseMaterialize.js';
 import { recalculateDailyLogTotals } from './totalsService.js';
 
 export async function getActiveProgram(userId: string) {
@@ -55,7 +56,80 @@ export async function getScheduledExercises(userId: string, date: string) {
 export async function ensureExercisesForDate(userId: string, date: string) {
   const log = await ensureDailyLogByUserId(userId, date);
   if (!log) return null;
+  await materializeAssignedExercisesForDate(userId, date);
   return getScheduledExercises(userId, date);
+}
+
+/**
+ * Fill a day from the client's saved routine (or resolved default template) when
+ * the daily log already existed and exercise seeding never ran. Client and coach
+ * both call this, so they read the same plan.
+ */
+async function materializeAssignedExercisesForDate(userId: string, date: string) {
+  const day = parseDateParam(date);
+  const log = await prisma.dailyLog.findUnique({
+    where: { userId_date: { userId, date: day } },
+    select: {
+      id: true,
+      programId: true,
+      exercisesInitializedAt: true,
+      exercisesManuallyEdited: true
+    }
+  });
+  if (!log) return;
+
+  const scheduledCount = await prisma.scheduledExercise.count({
+    where: { userId, scheduledDate: day }
+  });
+
+  const { getRoutineDaysForProgram, applyRoutineToDateIfNeeded } = await import('./exerciseRoutineService.js');
+  const routineDays = await getRoutineDaysForProgram(log.programId);
+  const program = await prisma.program.findFirst({
+    where: { id: log.programId, status: ProgramStatus.ACTIVE },
+    select: { id: true, defaultNutritionTemplateId: true, defaultExerciseTemplateId: true }
+  });
+  if (!program) return;
+
+  const { resolvePlanForDate } = await import('./planResolution.js');
+  const resolved = await resolvePlanForDate(program, day);
+  const today = await userTodayDate(userId);
+  const action = materializeAction({
+    initialized: Boolean(log.exercisesInitializedAt),
+    manuallyEdited: log.exercisesManuallyEdited,
+    scheduledCount,
+    hasRoutine: Boolean(routineDays?.length),
+    hasResolvedTemplate: Boolean(resolved.exerciseTemplateId),
+    inApplyWindow: isInExerciseApplyWindow(day, today)
+  });
+  if (action === 'skip') return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "DailyLog" WHERE id = ${log.id} FOR UPDATE`;
+    const fresh = await tx.dailyLog.findUnique({
+      where: { id: log.id },
+      select: { exercisesInitializedAt: true, exercisesManuallyEdited: true }
+    });
+    if (!fresh || fresh.exercisesInitializedAt || fresh.exercisesManuallyEdited) return;
+
+    const existing = await tx.scheduledExercise.count({
+      where: { userId, scheduledDate: day }
+    });
+    if (existing > 0) return;
+
+    if (action === 'routine' && routineDays?.length) {
+      await applyRoutineToDateIfNeeded(tx, program.id, userId, date, routineDays);
+      return;
+    }
+
+    if (action === 'template' && resolved.exerciseTemplateId) {
+      const { applyTemplateExercisesToDate } = await import('./exerciseTemplateApply.js');
+      await applyTemplateExercisesToDate(tx, resolved.exerciseTemplateId, program.id, userId, date);
+      await tx.dailyLog.update({
+        where: { id: log.id },
+        data: { exercisesInitializedAt: new Date(), exercisesManuallyEdited: false }
+      });
+    }
+  });
 }
 
 const scheduleFields = {

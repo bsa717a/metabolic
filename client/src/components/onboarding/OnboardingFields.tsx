@@ -3,9 +3,14 @@ import { HelpCircle } from 'lucide-react';
 import { BirthDateInput } from '../ui/BirthDateInput';
 import { NumberInput } from '../ui/NumberInput';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
-import { detectedTimezone, timezoneOptions } from '../../utils/timezoneOptions';
+import { resolveTimezone, timezoneOptions } from '../../utils/timezoneOptions';
 import type { SetupFormState } from '../../types/onboarding';
 import { onboardingCardClass, onboardingFieldClass, onboardingInputClass } from './onboardingStyles';
+import {
+  BodyFatEstimateCards,
+  BodyFatEstimateSexGate,
+  type BodyFatEstimateSex
+} from './BodyFatEstimateCards';
 
 type FieldKey = keyof SetupFormState;
 
@@ -16,7 +21,8 @@ export function OnboardingWeightFields({
   showGoalWeight = true,
   showCurrentBodyFat = true,
   showGoalBodyFat = true,
-  showHeight = false
+  showHeight = false,
+  showGender = false
 }: {
   form: SetupFormState;
   onChange: (key: FieldKey, value: string | boolean) => void;
@@ -25,10 +31,23 @@ export function OnboardingWeightFields({
   showCurrentBodyFat?: boolean;
   showGoalBodyFat?: boolean;
   showHeight?: boolean;
+  showGender?: boolean;
 }) {
   const showWeightRow = showCurrentWeight || showGoalWeight;
   const showBodyFatRow = showCurrentBodyFat || showGoalBodyFat;
   const [showBodyFatHelp, setShowBodyFatHelp] = useState(false);
+  const [showVisualEstimate, setShowVisualEstimate] = useState(false);
+  const [manualSexOverride, setManualSexOverride] = useState<BodyFatEstimateSex | null>(null);
+
+  const derivedSex: BodyFatEstimateSex | null =
+    form.gender === 'm' ? 'male' : form.gender === 'f' ? 'female' : null;
+  const visualEstimateSex = manualSexOverride ?? derivedSex;
+
+  function handleVisualEstimateSelect(midpoint: number) {
+    onChange('bodyFat', String(midpoint));
+    setShowVisualEstimate(false);
+    setManualSexOverride(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -107,6 +126,27 @@ export function OnboardingWeightFields({
         </div>
       ) : null}
 
+      {showGender ? (
+        <div>
+          <label htmlFor="gender" className="mb-2 block text-sm font-medium text-app-text">
+            Gender
+          </label>
+          <select
+            id="gender"
+            className={onboardingInputClass}
+            value={form.gender}
+            onChange={(e) => onChange('gender', e.target.value)}
+          >
+            <option value="">Prefer not to say</option>
+            <option value="f">Female</option>
+            <option value="m">Male</option>
+          </select>
+          <p className="mt-1 text-xs text-app-text-muted">
+            Used for body composition calculations.
+          </p>
+        </div>
+      ) : null}
+
       {showBodyFatRow ? (
         <div className={showCurrentBodyFat && showGoalBodyFat ? 'grid gap-4 sm:grid-cols-2' : undefined}>
           {showCurrentBodyFat ? (
@@ -137,11 +177,51 @@ export function OnboardingWeightFields({
                 step={0.1}
               />
               {showBodyFatHelp ? (
-                <p className="mt-2 text-xs leading-relaxed text-app-text-muted">
-                  Not sure? Estimate it with a body-fat scale, skinfold calipers, or a waist- and
-                  neck-based body-fat calculator. It&apos;s optional — leave it blank for now and you
-                  can update it later.
-                </p>
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs leading-relaxed text-app-text-muted">
+                    Not sure? Estimate it with a body-fat scale, skinfold calipers, or a waist- and
+                    neck-based body-fat calculator. It&apos;s optional — leave it blank for now and you
+                    can update it later.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowVisualEstimate(true)}
+                    className="text-xs font-medium text-brand-green underline-offset-2 hover:underline"
+                  >
+                    Help me estimate visually
+                  </button>
+                </div>
+              ) : null}
+              {showVisualEstimate ? (
+                <div className="mt-3 rounded-xl border border-app-border bg-app-bg p-4">
+                  {visualEstimateSex ? (
+                    <div className="space-y-3">
+                      <BodyFatEstimateCards
+                        sex={visualEstimateSex}
+                        selectedMidpoint={form.bodyFat ? Number(form.bodyFat) : undefined}
+                        onSelect={handleVisualEstimateSelect}
+                      />
+                      <div className="flex justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setManualSexOverride(visualEstimateSex === 'male' ? 'female' : 'male')}
+                          className="text-xs text-app-text-muted underline-offset-2 hover:underline"
+                        >
+                          Switch to {visualEstimateSex === 'male' ? 'women' : 'men'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowVisualEstimate(false)}
+                          className="text-xs text-app-text-muted underline-offset-2 hover:underline"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <BodyFatEstimateSexGate onSelect={(sex) => setManualSexOverride(sex)} />
+                  )}
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -181,21 +261,41 @@ export function OnboardingPersonalFields({
   showCoach?: boolean;
 }) {
   const [showActivityHelp, setShowActivityHelp] = useState(false);
+  const [showTimezoneHelp, setShowTimezoneHelp] = useState(false);
+
+  const effectiveTimezone = form.timezone || resolveTimezone();
+
   return (
     <div className="space-y-4">
       {showTimezone ? (
         <div>
-          <label htmlFor="timezone" className="mb-2 block text-sm font-medium text-app-text">
-            Timezone
-          </label>
+          <div className="mb-2 flex items-center gap-1.5">
+            <label htmlFor="timezone" className="block text-sm font-medium text-app-text">
+              Your timezone
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowTimezoneHelp((open) => !open)}
+              className="text-app-text-muted transition hover:text-app-text"
+              aria-label="Why we need your timezone"
+              aria-expanded={showTimezoneHelp}
+            >
+              <HelpCircle size={15} aria-hidden />
+            </button>
+          </div>
+          {showTimezoneHelp ? (
+            <p className="mb-2 text-xs leading-relaxed text-app-text-muted">
+              We use your timezone to schedule meal reminders and daily check-ins at the right time
+              for you.
+            </p>
+          ) : null}
           <select
             id="timezone"
             className={onboardingInputClass}
-            value={form.timezone}
+            value={effectiveTimezone}
             onChange={(e) => onChange('timezone', e.target.value)}
           >
-            <option value="">Select timezone</option>
-            {timezoneOptions(form.timezone || detectedTimezone()).map((zone) => (
+            {timezoneOptions(effectiveTimezone).map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
               </option>
@@ -221,20 +321,7 @@ export function OnboardingPersonalFields({
 
       <div className={onboardingCardClass}>
         <p className="text-sm font-semibold text-app-text">Personal details</p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-start">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-app-text">Gender</span>
-            <select
-              id="gender"
-              className={onboardingFieldClass}
-              value={form.gender}
-              onChange={(e) => onChange('gender', e.target.value)}
-            >
-              <option value="">Prefer not to say yet</option>
-              <option value="f">Female</option>
-              <option value="m">Male</option>
-            </select>
-          </label>
+        <div className="mt-3">
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-app-text">Birth date</span>
             <BirthDateInput
@@ -246,7 +333,6 @@ export function OnboardingPersonalFields({
             />
           </label>
         </div>
-
       </div>
 
       <div className={onboardingCardClass}>

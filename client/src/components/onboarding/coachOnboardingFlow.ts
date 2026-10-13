@@ -1,9 +1,51 @@
 import type { VirtualCoach } from '../../data/virtualCoaches';
 import { ACTIVITY_LEVEL_OPTIONS } from '../../utils/activityLevel';
 import { hasValidCurrentWeight } from '../../utils/onboardingWeight';
-import { detectedTimezone } from '../../utils/timezoneOptions';
+import { detectedTimezone, resolveTimezone } from '../../utils/timezoneOptions';
 import { displayToIso } from '../ui/BirthDateInput';
 import type { SetupFormState } from '../../types/onboarding';
+
+export type OnboardingMainStep =
+  | 'welcome'
+  | 'trackingMode'
+  | 'weight'
+  | 'height'
+  | 'activity'
+  | 'bodyComposition'
+  | 'personalInfo'
+  | 'diet'
+  | 'planSummary'
+  | 'contact'
+  | 'coachConnection'
+  | 'confirm';
+
+const MAIN_STEPS_WITH_INVITE: OnboardingMainStep[] = [
+  'welcome',
+  'weight',
+  'height',
+  'activity',
+  'bodyComposition',
+  'personalInfo',
+  'diet',
+  'planSummary',
+  'contact',
+  'confirm'
+];
+
+const MAIN_STEPS_WITHOUT_INVITE: OnboardingMainStep[] = [
+  'welcome',
+  'trackingMode',
+  'weight',
+  'height',
+  'activity',
+  'bodyComposition',
+  'personalInfo',
+  'diet',
+  'planSummary',
+  'contact',
+  'coachConnection',
+  'confirm'
+];
 
 export type CoachOnboardingStage =
   | 'intro'
@@ -14,6 +56,8 @@ export type CoachOnboardingStage =
   | 'activity'
   | 'bodyFatAsk'
   | 'bodyFatKnowHow'
+  | 'bodyFatEstimateSex'
+  | 'bodyFatVisualEstimate'
   | 'bodyFatHow'
   | 'bodyFatCurrent'
   | 'bodyFatGoal'
@@ -25,6 +69,8 @@ export type CoachOnboardingStage =
   | 'smsAsk'
   | 'timezone'
   | 'phone'
+  | 'realCoachAsk'
+  | 'realCoachCode'
   | 'readyToSubmit';
 
 export type CoachOnboardingQuickReply = {
@@ -46,6 +92,71 @@ export type CoachOnboardingAdvance = {
   /** When true, caller should submit setup with the patched form. */
   submit?: boolean;
 };
+
+const STAGE_TO_MAIN_STEP: Record<CoachOnboardingStage, OnboardingMainStep> = {
+  intro: 'welcome',
+  trackingMode: 'trackingMode',
+  weight: 'weight',
+  goalWeight: 'weight',
+  height: 'height',
+  gender: 'height',
+  activity: 'activity',
+  bodyFatAsk: 'bodyComposition',
+  bodyFatKnowHow: 'bodyComposition',
+  bodyFatEstimateSex: 'bodyComposition',
+  bodyFatVisualEstimate: 'bodyComposition',
+  bodyFatHow: 'bodyComposition',
+  bodyFatCurrent: 'bodyComposition',
+  bodyFatGoal: 'bodyComposition',
+  birthDate: 'personalInfo',
+  allergiesAsk: 'diet',
+  allergiesDetail: 'diet',
+  planReveal: 'planSummary',
+  smsAsk: 'contact',
+  timezone: 'contact',
+  phone: 'contact',
+  realCoachAsk: 'coachConnection',
+  realCoachCode: 'coachConnection',
+  readyToSubmit: 'confirm'
+};
+
+export type OnboardingProgress = {
+  currentStep: number;
+  totalSteps: number;
+  mainStepLabel: string;
+};
+
+const MAIN_STEP_LABELS: Record<OnboardingMainStep, string> = {
+  welcome: 'Welcome',
+  trackingMode: 'Your Goals',
+  weight: 'Weight',
+  height: 'Height',
+  activity: 'Activity',
+  bodyComposition: 'Body Composition',
+  personalInfo: 'Personal Info',
+  diet: 'Diet',
+  planSummary: 'Your Plan',
+  contact: 'Contact',
+  coachConnection: 'Coach',
+  confirm: 'Confirm'
+};
+
+export function getOnboardingProgress(
+  stage: CoachOnboardingStage,
+  hasInviteCode: boolean
+): OnboardingProgress {
+  const mainSteps = hasInviteCode ? MAIN_STEPS_WITH_INVITE : MAIN_STEPS_WITHOUT_INVITE;
+  const currentMainStep = STAGE_TO_MAIN_STEP[stage];
+  const currentStepIndex = mainSteps.indexOf(currentMainStep);
+  const currentStep = currentStepIndex === -1 ? 1 : currentStepIndex + 1;
+  const totalSteps = mainSteps.length;
+
+  return {
+    currentStep,
+    totalSteps,
+    mainStepLabel: MAIN_STEP_LABELS[currentMainStep]
+  };
+}
 
 const BODY_FAT_HOW = [
   "Here's the easiest ways to get a number:",
@@ -277,7 +388,40 @@ function bodyFatHowTurn(): CoachOnboardingTurn {
   };
 }
 
-function bodyFatCurrentTurn(): CoachOnboardingTurn {
+function bodyFatEstimateSexTurn(): CoachOnboardingTurn {
+  return {
+    stage: 'bodyFatEstimateSex',
+    assistantMessage: `I can show you some reference images to help estimate your body fat. Body fat percentages differ by sex — which set should I show?`,
+    quickReplies: [
+      { label: 'Men', value: 'male' },
+      { label: 'Women', value: 'female' }
+    ]
+  };
+}
+
+function bodyFatVisualEstimateTurn(sex: 'male' | 'female'): CoachOnboardingTurn {
+  return {
+    stage: 'bodyFatVisualEstimate',
+    assistantMessage: `Here are some reference body types for ${sex === 'male' ? 'men' : 'women'}. Tap the one that looks closest to you — I'll use that % as a starting point. You can adjust it afterward.\n\n[VISUAL_ESTIMATE_CARDS:${sex}]`,
+    quickReplies: [
+      { label: 'I have a number', mobileLabel: 'Number', value: 'have_number' },
+      { label: 'How do I measure it?', mobileLabel: 'Measure', value: 'how_to_measure' },
+      { label: 'Skip for now', mobileLabel: 'Skip', value: 'skip' }
+    ]
+  };
+}
+
+function bodyFatCurrentTurn(prefilled?: number): CoachOnboardingTurn {
+  if (prefilled != null) {
+    return {
+      stage: 'bodyFatCurrent',
+      assistantMessage: `Based on the image you picked, I've set your estimate to ${prefilled}%. Does that look right? You can adjust it or just continue.`,
+      quickReplies: [
+        { label: `Use ${prefilled}%`, mobileLabel: `${prefilled}%`, value: String(prefilled) },
+        { label: 'Skip', value: 'skip' }
+      ]
+    };
+  }
   return {
     stage: 'bodyFatCurrent',
     assistantMessage: `What's your current body fat percentage? Just the number is fine — like 25 (no % needed).`,
@@ -384,10 +528,10 @@ function smsAskTurn(coach: VirtualCoach): CoachOnboardingTurn {
 }
 
 function timezoneTurn(currentTimezone: string): CoachOnboardingTurn {
-  const detected = currentTimezone.trim() || detectedTimezone() || 'America/Denver';
+  const detected = resolveTimezone(currentTimezone);
   return {
     stage: 'timezone',
-    assistantMessage: `Is your timezone ${detected}? If not, type the correct one (for example America/Denver).`,
+    assistantMessage: `I've got your timezone as ${detected} — this is used for meal reminders and scheduling. Is that right?`,
     quickReplies: [
       { label: `Yes — ${detected}`, mobileLabel: 'Yes', value: `yes:${detected}` },
       { label: "I'll type it", mobileLabel: 'Type', value: 'type' }
@@ -403,12 +547,60 @@ function phoneTurn(): CoachOnboardingTurn {
   };
 }
 
-function readyToSubmitTurn(trackingOnly: boolean): CoachOnboardingTurn {
+function realCoachAskTurn(): CoachOnboardingTurn {
+  return {
+    stage: 'realCoachAsk',
+    assistantMessage: `Do you also work with a real Metabolic coach? You can keep chatting with me either way.`,
+    quickReplies: [
+      { label: 'I have a coach code', mobileLabel: 'Code', value: 'code' },
+      { label: "I'd like a real coach", mobileLabel: 'Request', value: 'request' },
+      { label: 'No thanks', mobileLabel: 'No', value: 'skip' }
+    ]
+  };
+}
+
+function realCoachCodeTurn(): CoachOnboardingTurn {
+  return {
+    stage: 'realCoachCode',
+    assistantMessage: `What's their coach code or initials?`,
+    quickReplies: [{ label: 'Skip', value: 'skip' }]
+  };
+}
+
+function parseCoachCode(text: string): string | null {
+  const normalized = text.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (normalized.length < 2 || normalized.length > 20) return null;
+  return normalized;
+}
+
+function hasInviteCoachCode(form: SetupFormState) {
+  return Boolean(form.coachCode.trim());
+}
+
+function inviteCoachNote(form: SetupFormState): string | undefined {
+  if (!form.coachCode.trim()) return undefined;
+  return form.trackingOnly
+    ? `You're also connected to your real coach from the invite you used. Tracking just means I won't build a meal plan up front — they can still work with you.`
+    : `You're also connected to your real coach from the invite you used.`;
+}
+
+function nextAfterContact(form: SetupFormState): CoachOnboardingTurn {
+  if (hasInviteCoachCode(form)) {
+    return readyToSubmitTurn(form.trackingOnly, inviteCoachNote(form));
+  }
+  return realCoachAskTurn();
+}
+
+function readyToSubmitTurn(
+  trackingOnly: boolean,
+  realCoachNote?: string
+): CoachOnboardingTurn {
+  const planLine = trackingOnly
+    ? `All set — I'll finish setting up tracking for you now.`
+    : `All set — I'll create your starter plan now.`;
   return {
     stage: 'readyToSubmit',
-    assistantMessage: trackingOnly
-      ? `All set — I'll finish setting up tracking for you now.`
-      : `All set — I'll create your starter plan now.`,
+    assistantMessage: [planLine, realCoachNote].filter(Boolean).join('\n\n'),
     quickReplies: [
       {
         label: trackingOnly ? 'Start tracking' : 'Create my plan',
@@ -429,9 +621,21 @@ export function advanceCoachOnboarding(
 
   switch (stage) {
     case 'intro':
+      if (hasInviteCoachCode(form)) {
+        return {
+          formPatch: { trackingOnly: false },
+          next: weightTurn()
+        };
+      }
       return { next: trackingModeTurn() };
 
     case 'trackingMode': {
+      if (hasInviteCoachCode(form)) {
+        return {
+          formPatch: { trackingOnly: false },
+          next: weightTurn()
+        };
+      }
       const value = normalizeChoice(input);
       const wantsTrack =
         value === 'track' ||
@@ -497,7 +701,7 @@ export function advanceCoachOnboarding(
       }
       return {
         formPatch: { heightFeet: height.feet, heightInches: height.inches },
-        next: activityTurn()
+        next: genderTurn()
       };
     }
 
@@ -524,7 +728,7 @@ export function advanceCoachOnboarding(
       if (isNo(input)) {
         return {
           formPatch: { bodyFat: '', goalBodyFat: '' },
-          next: genderTurn()
+          next: birthDateTurn()
         };
       }
       return { error: 'Tap Yes or No.', next: bodyFatAskTurn() };
@@ -535,16 +739,56 @@ export function advanceCoachOnboarding(
         return { next: bodyFatCurrentTurn() };
       }
       if (isNo(input)) {
-        return { next: bodyFatHowTurn() };
+        const sex = form.gender === 'm' ? 'male' : form.gender === 'f' ? 'female' : null;
+        if (sex) {
+          return { next: bodyFatVisualEstimateTurn(sex) };
+        }
+        return { next: bodyFatEstimateSexTurn() };
       }
       return { error: 'Tap Yes or No.', next: bodyFatKnowHowTurn() };
+    }
+
+    case 'bodyFatEstimateSex': {
+      const value = normalizeChoice(input);
+      if (value === 'male' || value === 'men' || value === 'm') {
+        return { next: bodyFatVisualEstimateTurn('male') };
+      }
+      if (value === 'female' || value === 'women' || value === 'f') {
+        return { next: bodyFatVisualEstimateTurn('female') };
+      }
+      return { error: 'Pick Men or Women.', next: bodyFatEstimateSexTurn() };
+    }
+
+    case 'bodyFatVisualEstimate': {
+      const value = normalizeChoice(input);
+      if (isSkip(value) || value === 'skip') {
+        return {
+          formPatch: { bodyFat: '', goalBodyFat: '' },
+          next: birthDateTurn()
+        };
+      }
+      if (value === 'have_number' || value.includes('have a number')) {
+        return { next: bodyFatCurrentTurn() };
+      }
+      if (value === 'how_to_measure' || value.includes('measure') || value.includes('how do i')) {
+        return { next: bodyFatHowTurn() };
+      }
+      const visualBodyFat = parseBodyFat(input);
+      if (visualBodyFat != null) {
+        return {
+          formPatch: { bodyFat: String(visualBodyFat) },
+          next: bodyFatCurrentTurn(visualBodyFat)
+        };
+      }
+      const currentSex = form.gender === 'm' ? 'male' : form.gender === 'f' ? 'female' : 'male';
+      return { error: 'Tap one of the body type images, or skip.', next: bodyFatVisualEstimateTurn(currentSex) };
     }
 
     case 'bodyFatHow': {
       if (isSkip(input) || normalizeChoice(input) === 'skip') {
         return {
           formPatch: { bodyFat: '', goalBodyFat: '' },
-          next: genderTurn()
+          next: birthDateTurn()
         };
       }
       const howBodyFat = parseBodyFat(input);
@@ -568,7 +812,7 @@ export function advanceCoachOnboarding(
       if (isSkip(input)) {
         return {
           formPatch: { bodyFat: '', goalBodyFat: '' },
-          next: genderTurn()
+          next: birthDateTurn()
         };
       }
       const bodyFat = parseBodyFat(input);
@@ -588,7 +832,7 @@ export function advanceCoachOnboarding(
       if (isSkip(input)) {
         return {
           formPatch: { goalBodyFat: '' },
-          next: genderTurn('No problem — we can set a body fat goal later.')
+          next: birthDateTurn()
         };
       }
       const goalBodyFat = parseBodyFat(input);
@@ -601,20 +845,20 @@ export function advanceCoachOnboarding(
       }
       return {
         formPatch: { goalBodyFat: String(goalBodyFat) },
-        next: genderTurn(`Got it — goal body fat is ${goalBodyFat}%.`)
+        next: birthDateTurn()
       };
     }
 
     case 'gender': {
       const value = normalizeChoice(input);
       if (value === 'f' || value === 'female') {
-        return { formPatch: { gender: 'f' }, next: birthDateTurn() };
+        return { formPatch: { gender: 'f' }, next: activityTurn() };
       }
       if (value === 'm' || value === 'male') {
-        return { formPatch: { gender: 'm' }, next: birthDateTurn() };
+        return { formPatch: { gender: 'm' }, next: activityTurn() };
       }
       if (isSkip(input) || value.includes('prefer')) {
-        return { formPatch: { gender: '' }, next: birthDateTurn() };
+        return { formPatch: { gender: '' }, next: activityTurn() };
       }
       return { error: 'Pick one of the options.', next: genderTurn() };
     }
@@ -685,17 +929,18 @@ export function advanceCoachOnboarding(
 
     case 'smsAsk': {
       if (isYes(input)) {
-        const timezone = form.timezone.trim() || detectedTimezone();
+        const timezone = resolveTimezone(form.timezone);
         return {
           formPatch: { timezone },
           next: timezoneTurn(timezone)
         };
       }
       if (isNo(input)) {
-        const timezone = form.timezone.trim() || detectedTimezone();
+        const timezone = resolveTimezone(form.timezone);
+        const patched = { ...form, timezone, phone: '' };
         return {
           formPatch: { timezone, phone: '' },
-          next: readyToSubmitTurn(form.trackingOnly)
+          next: nextAfterContact(patched)
         };
       }
       return { error: 'Tap Yes or No.', next: smsAskTurn(coach) };
@@ -703,20 +948,21 @@ export function advanceCoachOnboarding(
 
     case 'timezone': {
       if (normalizeChoice(input) === 'type') {
+        const detected = detectedTimezone();
         return {
           next: {
             stage: 'timezone',
             assistantMessage: `Type your timezone (for example America/Chicago or America/Los_Angeles).`,
-            quickReplies: [{ label: `Use ${detectedTimezone() || 'detected'}`, mobileLabel: 'Detected', value: `yes:${detectedTimezone()}` }]
+            quickReplies: [{ label: `Use ${detected}`, mobileLabel: 'Detected', value: `yes:${detected}` }]
           }
         };
       }
       if (input.toLowerCase().startsWith('yes:')) {
-        const timezone = input.slice(4).trim() || detectedTimezone();
+        const timezone = resolveTimezone(input.slice(4));
         if (!isValidTimezone(timezone)) {
           return {
             error: 'That timezone looks invalid. Try America/Denver.',
-            next: timezoneTurn(form.timezone || detectedTimezone())
+            next: timezoneTurn(resolveTimezone(form.timezone))
           };
         }
         return {
@@ -732,15 +978,16 @@ export function advanceCoachOnboarding(
       }
       return {
         error: 'Confirm with the button or type a timezone like America/Denver.',
-        next: timezoneTurn(form.timezone || detectedTimezone())
+        next: timezoneTurn(resolveTimezone(form.timezone))
       };
     }
 
     case 'phone': {
       if (isSkip(input)) {
+        const patched = { ...form, phone: '' };
         return {
           formPatch: { phone: '' },
-          next: readyToSubmitTurn(form.trackingOnly)
+          next: nextAfterContact(patched)
         };
       }
       const digits = input.replace(/\D/g, '');
@@ -750,9 +997,75 @@ export function advanceCoachOnboarding(
           next: phoneTurn()
         };
       }
+      const patched = { ...form, phone: input.trim() };
       return {
         formPatch: { phone: input.trim() },
-        next: readyToSubmitTurn(form.trackingOnly)
+        next: nextAfterContact(patched)
+      };
+    }
+
+    case 'realCoachAsk': {
+      const value = normalizeChoice(input);
+      if (
+        isYes(input) ||
+        value === 'code' ||
+        value.includes('coach code') ||
+        value.includes('initials') ||
+        value.includes('work with a real')
+      ) {
+        return { next: realCoachCodeTurn() };
+      }
+      if (value === 'request' || value.includes('like a real') || value.includes('want a real')) {
+        return {
+          formPatch: { wantsCoach: true },
+          next: readyToSubmitTurn(
+            form.trackingOnly,
+            "I'll also put in a request for a real coach. You can keep chatting with me either way."
+          )
+        };
+      }
+      if (isSkip(input) || isNo(input) || value.includes('no thanks')) {
+        return {
+          formPatch: { wantsCoach: false },
+          next: readyToSubmitTurn(form.trackingOnly)
+        };
+      }
+      const typedCode = parseCoachCode(input);
+      if (typedCode) {
+        return {
+          formPatch: { coachCode: typedCode, wantsCoach: false },
+          next: readyToSubmitTurn(
+            form.trackingOnly,
+            `Got it — I'll use coach code ${typedCode} to connect you with a real coach.`
+          )
+        };
+      }
+      return {
+        error: 'Pick one of the options, or type a coach code.',
+        next: realCoachAskTurn()
+      };
+    }
+
+    case 'realCoachCode': {
+      if (isSkip(input)) {
+        return {
+          formPatch: { wantsCoach: false },
+          next: readyToSubmitTurn(form.trackingOnly)
+        };
+      }
+      const coachCode = parseCoachCode(input);
+      if (!coachCode) {
+        return {
+          error: 'Enter a short coach code or initials, or skip.',
+          next: realCoachCodeTurn()
+        };
+      }
+      return {
+        formPatch: { coachCode, wantsCoach: false },
+        next: readyToSubmitTurn(
+          form.trackingOnly,
+          `Got it — I'll use coach code ${coachCode} to connect you with a real coach.`
+        )
       };
     }
 

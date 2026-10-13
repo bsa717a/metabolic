@@ -66,7 +66,7 @@ const ACTIVITY_FILTER_OPTIONS: { value: CoachCalendarEventType; label: string }[
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 const filterSelectClassName =
-  'h-10 rounded-xl border border-app-border bg-app-surface px-3 text-sm leading-none';
+  'h-10 max-w-full min-w-0 rounded-xl border border-app-border bg-app-surface px-3 text-sm leading-none';
 
 function formatSelectedDay(date: string) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {

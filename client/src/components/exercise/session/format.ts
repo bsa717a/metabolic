@@ -4,7 +4,7 @@ export type TimerCueKind = 'idle' | 'countdown' | 'go';
 export function timerCueKind(remainingMs: number, paused: boolean): TimerCueKind {
   if (paused) return 'idle';
   if (remainingMs <= 0) return 'go';
-  if (remainingMs <= 3000) return 'countdown';
+  if (remainingMs <= 5000) return 'countdown';
   return 'idle';
 }
 

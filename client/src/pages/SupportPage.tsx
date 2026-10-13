@@ -218,9 +218,9 @@ export function SupportPage() {
           <div>
             <h2 className="text-sm font-semibold text-app-text">Account deletion</h2>
             <p className="mt-1">
-              To request deletion of your Metabolic account and associated data, submit this form and choose{' '}
-              <span className="font-medium text-app-text">“Privacy or account deletion.”</span> Our team will process
-              your request and confirm by email.
+              You can delete your Metabolic account from Account details in the profile menu. That removes your data
+              and sign-in immediately. If you cannot sign in, submit this form and choose{' '}
+              <span className="font-medium text-app-text">“Privacy or account deletion.”</span>
             </p>
           </div>
 

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- Male silhouettes - body fat percentage bands -->
+  
+  <!-- Male 8% - Very lean, athletic build -->
+  <symbol id="male-bf-8" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 32c-6 0-11 2-14 5-2 2-3 5-3 8v25c0 3 1 5 2 7l3 4v12l-14 50c-1 4 1 7 4 8 4 1 7-1 8-4l12-44h4l12 44c1 4 5 5 8 4 4-1 5-5 4-8l-14-50v-12l3-4c1-2 2-4 2-7V53c0-3-1-6-3-8-3-3-8-5-14-5z"/>
+  </symbol>
+  
+  <!-- Male 12% - Lean, visible definition -->
+  <symbol id="male-bf-12" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 32c-7 0-12 2-15 5-2 3-3 6-3 9v24c0 3 1 6 2 8l3 4v13l-13 49c-1 4 1 7 4 8 4 1 7-1 8-4l11-43h6l11 43c1 4 5 5 8 4 4-1 5-5 4-8l-13-49v-13l3-4c1-2 2-5 2-8V54c0-3-1-6-3-9-3-3-8-5-15-5z"/>
+  </symbol>
+  
+  <!-- Male 15% - Fit, some softness -->
+  <symbol id="male-bf-15" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 32c-8 0-13 2-16 6-2 3-4 6-4 10v23c0 4 1 6 3 8l3 5v14l-12 48c-1 4 1 7 4 8 4 1 7-1 8-4l10-42h8l10 42c1 4 5 5 8 4 4-1 5-5 4-8l-12-48v-14l3-5c2-2 3-4 3-8V56c0-4-2-7-4-10-3-4-8-6-16-6z"/>
+  </symbol>
+  
+  <!-- Male 20% - Average, softer midsection -->
+  <symbol id="male-bf-20" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 32c-9 0-14 3-17 6-3 3-4 7-4 11v22c0 4 1 7 3 9l2 5v15l-11 47c-1 4 1 7 4 8 4 1 7-1 8-4l9-41h12l9 41c1 4 5 5 8 4 4-1 5-5 4-8l-11-47v-15l2-5c2-2 3-5 3-9V57c0-4-1-8-4-11-3-3-8-6-17-6z"/>
+  </symbol>
+  
+  <!-- Male 25% - Above average, fuller midsection -->
+  <symbol id="male-bf-25" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 32c-10 0-15 3-18 7-3 4-5 8-5 12v21c0 5 2 8 3 10l2 5v16l-10 46c-1 4 1 7 4 8 4 1 7-1 8-4l8-40h16l8 40c1 4 5 5 8 4 4-1 5-5 4-8l-10-46v-16l2-5c1-2 3-5 3-10V59c0-4-2-8-5-12-3-4-8-7-18-7z"/>
+  </symbol>
+  
+  <!-- Male 30+% - Higher body fat, rounder midsection -->
+  <symbol id="male-bf-30" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 32c-11 0-16 3-19 8-3 4-5 9-5 13v20c0 5 2 9 4 11l2 5v17l-9 45c-1 4 1 7 4 8 4 1 7-1 8-4l7-39h18l7 39c1 4 5 5 8 4 4-1 5-5 4-8l-9-45v-17l2-5c2-2 4-6 4-11V61c0-4-2-9-5-13-3-5-8-8-21-8z"/>
+  </symbol>
+
+  <!-- Female silhouettes - body fat percentage bands -->
+  
+  <!-- Female 18% - Very lean, athletic build -->
+  <symbol id="female-bf-18" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm0 28c-6 0-10 2-13 5-2 2-3 5-3 8v10c0 3 2 6 4 8 1 1 2 3 2 5v6c-1 2-2 4-2 6v12l-15 52c-1 4 1 7 4 8 4 1 7-1 8-4l13-46h4l13 46c1 4 5 5 8 4 4-1 5-5 4-8l-15-52V96c0-2-1-4-2-6v-6c0-2 1-4 2-5 2-2 4-5 4-8V61c0-3-1-6-3-8-3-3-7-5-13-5z"/>
+  </symbol>
+  
+  <!-- Female 22% - Lean, athletic with feminine curves -->
+  <symbol id="female-bf-22" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm0 28c-7 0-11 2-14 5-2 3-3 5-3 9v9c0 3 2 6 4 8 1 2 2 4 2 6v6c-1 2-2 4-2 7v13l-14 51c-1 4 1 7 4 8 4 1 7-1 8-4l12-45h6l12 45c1 4 5 5 8 4 4-1 5-5 4-8l-14-51V77c0-3-1-5-2-7v-6c0-2 1-4 2-6 2-2 4-5 4-8V41c0-4-1-6-3-9-3-3-7-5-14-5z"/>
+  </symbol>
+  
+  <!-- Female 25% - Fit, healthy feminine shape -->
+  <symbol id="female-bf-25" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm0 28c-8 0-12 2-15 6-2 3-3 6-3 10v8c0 4 2 6 4 9 1 2 2 4 2 6v7c-1 2-2 5-2 7v14l-13 50c-1 4 1 7 4 8 4 1 7-1 8-4l11-44h8l11 44c1 4 5 5 8 4 4-1 5-5 4-8l-13-50V81c0-2-1-5-2-7v-7c0-2 1-4 2-6 2-3 4-5 4-9v-8c0-4-1-7-3-10-3-4-7-6-15-6z"/>
+  </symbol>
+  
+  <!-- Female 30% - Average, fuller feminine curves -->
+  <symbol id="female-bf-30" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm0 28c-9 0-13 3-16 6-3 3-4 7-4 11v7c0 4 2 7 4 9 2 2 2 5 2 7v7c-1 3-2 5-2 8v15l-12 49c-1 4 1 7 4 8 4 1 7-1 8-4l10-43h12l10 43c1 4 5 5 8 4 4-1 5-5 4-8l-12-49V84c0-3-1-5-2-8v-7c0-2 0-5 2-7 2-2 4-5 4-9v-7c0-4-1-8-4-11-3-3-7-6-16-6z"/>
+  </symbol>
+  
+  <!-- Female 35% - Above average, softer figure -->
+  <symbol id="female-bf-35" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm0 28c-10 0-14 3-17 7-3 4-4 8-4 12v6c0 5 2 8 4 10 2 2 2 5 2 7v8c-1 3-2 6-2 9v16l-11 48c-1 4 1 7 4 8 4 1 7-1 8-4l9-42h14l9 42c1 4 5 5 8 4 4-1 5-5 4-8l-11-48V87c0-3-1-6-2-9v-8c0-2 0-5 2-7 2-2 4-5 4-10v-6c0-4-1-8-4-12-3-4-7-7-17-7z"/>
+  </symbol>
+  
+  <!-- Female 40+% - Higher body fat, fuller figure -->
+  <symbol id="female-bf-40" viewBox="0 0 80 180">
+    <path fill="currentColor" d="M40 8a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm0 28c-11 0-15 3-18 8-3 4-5 9-5 13v5c0 5 2 9 4 11 2 2 3 5 3 8v8c-1 3-2 6-2 10v17l-10 47c-1 4 1 7 4 8 4 1 7-1 8-4l8-41h16l8 41c1 4 5 5 8 4 4-1 5-5 4-8l-10-47V91c0-4-1-7-2-10v-8c0-3 1-6 3-8 2-2 4-6 4-11v-5c0-4-2-9-5-13-3-5-7-8-18-8z"/>
+  </symbol>
+</svg>

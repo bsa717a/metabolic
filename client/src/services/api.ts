@@ -1,7 +1,13 @@
-import { getIdToken } from './auth';
+import { forceTokenRefresh, getIdToken } from './auth';
 import { recordFailedRequest } from './diagnostics';
+import { nativeAwareFetch } from './nativeHttp';
+import { assertAiConsentForPath } from './aiConsent';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+function isAuthError(status: number): boolean {
+  return status === 401;
+}
 
 export type EntitlementErrorPayload = {
   error: string;
@@ -21,22 +27,46 @@ export class EntitlementError extends Error {
   }
 }
 
+async function executeRequest(
+  path: string,
+  method: string,
+  body: BodyInit | undefined,
+  token: string | null,
+  options: RequestInit
+): Promise<Response> {
+  return nativeAwareFetch(`${API_URL}${path}`, {
+    ...options,
+    method,
+    body,
+    signal: options.signal ?? AbortSignal.timeout(15_000),
+    headers: {
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers
+    }
+  });
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = await getIdToken();
+  assertAiConsentForPath(path);
   const method = (options.method ?? 'GET').toUpperCase();
   const body = options.body ?? (['POST', 'PUT', 'PATCH'].includes(method) ? '{}' : undefined);
+
+  let token = await getIdToken();
   let response: Response;
+  let retried = false;
+
   try {
-    response = await fetch(`${API_URL}${path}`, {
-      ...options,
-      method,
-      body,
-      headers: {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers
+    response = await executeRequest(path, method, body, token, options);
+
+    if (isAuthError(response.status) && token && !retried) {
+      retried = true;
+      const freshToken = await forceTokenRefresh();
+      if (freshToken && freshToken !== token) {
+        token = freshToken;
+        response = await executeRequest(path, method, body, token, options);
       }
-    });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Network request failed';
     if (message === 'Load failed' || message === 'Failed to fetch') {
@@ -44,6 +74,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     }
     throw new Error(message);
   }
+
   if (!response.ok) {
     recordFailedRequest(method, path, response.status);
     const payload = await response.json().catch(() => null);
@@ -57,16 +88,35 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-/** Authenticated binary fetch (e.g. proxied progress photos for MediaPipe). */
-export async function apiBlob(path: string): Promise<Blob> {
-  const token = await getIdToken();
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, {
+async function executeBlobRequest(path: string, token: string | null): Promise<Response> {
+  return nativeAwareFetch(
+    `${API_URL}${path}`,
+    {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       }
-    });
+    },
+    { responseType: 'blob' }
+  );
+}
+
+/** Authenticated binary fetch (e.g. proxied progress photos for MediaPipe). */
+export async function apiBlob(path: string): Promise<Blob> {
+  let token = await getIdToken();
+  let response: Response;
+  let retried = false;
+
+  try {
+    response = await executeBlobRequest(path, token);
+
+    if (isAuthError(response.status) && token && !retried) {
+      retried = true;
+      const freshToken = await forceTokenRefresh();
+      if (freshToken && freshToken !== token) {
+        token = freshToken;
+        response = await executeBlobRequest(path, token);
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Network request failed';
     if (message === 'Load failed' || message === 'Failed to fetch') {

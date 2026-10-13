@@ -1,5 +1,6 @@
 import { MealItemType } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { userHasGrantedAiConsent } from './aiConsent.js';
 import { getAiProvider, MockAiProvider, type EnrichedShoppingListResult, type ShoppingListInputItem } from './aiService.js';
 import { parseValidatedDateRange, toDateKey } from '../utils/dates.js';
 import { consolidateShoppingListItems, formatGroceryDescription } from '../utils/groceryConversion.js';
@@ -147,7 +148,8 @@ export async function getGroceryShoppingList(
   userId: string,
   startDate: string,
   endDate: string,
-  storeName?: string | null
+  storeName?: string | null,
+  options?: { allowAi?: boolean }
 ): Promise<ShoppingListResult> {
   const trimmedStore = storeName?.trim() || null;
   const { startDate: resolvedStart, endDate: resolvedEnd, plannedDayCount, inputItems } = await aggregatePlannedItems(
@@ -172,7 +174,11 @@ export async function getGroceryShoppingList(
 
   let enriched;
   let enrichedFlag = true;
+  const allowAi = options?.allowAi !== false && (await userHasGrantedAiConsent(userId));
   try {
+    if (!allowAi) {
+      throw new Error('AI consent not granted');
+    }
     enriched = await getAiProvider().enrichShoppingList(inputItems, trimmedStore);
   } catch {
     enriched = await new MockAiProvider().enrichShoppingList(inputItems, trimmedStore);

@@ -1,8 +1,12 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Camera, X } from 'lucide-react';
+import { usePhotoPicker } from '../../hooks/usePhotoPicker';
 import { api } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '../../content/aiConsentCopy';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 import type { Food } from '../../types';
 import type { GamificationCelebration } from '../../types/gamification';
 
@@ -52,11 +56,16 @@ export function LogDifferentFoodModal({
   /** When set, accepts lookups as foods without attaching to a meal (e.g. admin meal builder). */
   onFoodAccepted?: (foods: Food[]) => void | Promise<void>;
 }) {
+  const { accepted, openReview } = useAiConsent();
   const [description, setDescription] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const { openPicker: openPhotoPicker, fileInput: photoFileInput } = usePhotoPicker({
+    disabled: loading,
+    onSelect: selectPhoto,
+    onError: setError
+  });
 
   function clearPhoto() {
     setPhoto((current) => {
@@ -107,6 +116,11 @@ export function LogDifferentFoodModal({
   async function logDifferentFood() {
     const input = description.trim();
     if (!input && !photo) return;
+    if (!accepted) {
+      openReview();
+      setError(AI_CONSENT_REQUIRED_MESSAGE);
+      return;
+    }
     if (!mealId && !onFoodAccepted) {
       setError('Select a meal first.');
       return;
@@ -239,23 +253,12 @@ export function LogDifferentFoodModal({
             title="Upload meal photo"
             aria-label="Upload meal photo"
             disabled={loading}
-            onClick={() => photoInputRef.current?.click()}
+            onClick={() => void openPhotoPicker()}
           >
             <Camera size={20} />
           </button>
         </div>
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          disabled={loading}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) selectPhoto(file);
-            event.target.value = '';
-          }}
-        />
+        {photoFileInput}
         {photo && (
           <div className="relative overflow-hidden rounded-xl border border-app-border">
             <img src={photo.previewUrl} alt="Meal preview" className="h-40 w-full object-cover" />
@@ -270,6 +273,7 @@ export function LogDifferentFoodModal({
             </button>
           </div>
         )}
+        {!accepted ? <AiDisabledNotice onReview={openReview} /> : null}
         <p className="text-xs text-app-text-muted">
           {onFoodAccepted
             ? 'AI will estimate the nutrition from your text or photo so you can add it to this meal step.'

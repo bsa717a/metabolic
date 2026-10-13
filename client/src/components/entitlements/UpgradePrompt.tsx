@@ -3,7 +3,9 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import type { PlanSlug } from '../../types';
+import { appleFallbackPrice } from '../../data/appleIap';
 import { getRequiredPlan, getUpgradePlan, planLabel, planPriceLabel, type FeatureKey } from '../../utils/entitlements';
+import { usesAppleIapCheckout } from '../../utils/nativePlatform';
 
 type UpgradePromptProps = {
   feature?: FeatureKey;
@@ -15,6 +17,7 @@ type UpgradePromptProps = {
 export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', className }: UpgradePromptProps) {
   const required = requiredPlan ?? (feature ? getRequiredPlan(feature) : 'self_guided');
   const upgrade = getUpgradePlan(currentPlan, required);
+  const price = usesAppleIapCheckout() ? appleFallbackPrice(upgrade) ?? planPriceLabel(upgrade) : planPriceLabel(upgrade);
 
   if (required === 'coach_led') {
     return (
@@ -36,7 +39,7 @@ export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', 
         Upgrade to {planLabel(upgrade)}
       </h3>
       <p className="mt-2 text-sm text-app-text-muted">
-        {planPriceLabel(upgrade) ? `${planLabel(upgrade)} is ${planPriceLabel(upgrade)}.` : ''} Unlock this feature
+        {price ? `${planLabel(upgrade)} is ${price}.` : ''} Unlock this feature
         and more with a higher plan.
       </p>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">

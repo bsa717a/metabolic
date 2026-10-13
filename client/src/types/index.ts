@@ -22,6 +22,10 @@ export type AppUser = {
   dashboardTutorialCompletedAt?: string | null;
   smsRemindersIntroCompletedAt?: string | null;
   coachWelcomeCompletedAt?: string | null;
+  firstDayChecklistDismissedAt?: string | null;
+  aiConsentAccepted?: boolean;
+  aiConsentDecidedAt?: string | null;
+  nutritionMealsExpanded?: boolean;
   selectedVirtualCoachId?: string | null;
   plan: PlanSlug;
   subscriptionStatus: SubscriptionStatusSlug;
@@ -29,7 +33,9 @@ export type AppUser = {
   subscriptionCurrentPeriodEnd?: string | null;
   gracePeriodEndsAt?: string | null;
   nextPlanAfterCoach?: PlanSlug | null;
+  coachCode?: string | null;
   assignedCoach?: UserSummary | null;
+  coachRequestedAt?: string | null;
   coachRelationshipStatus?: CoachRelationshipStatusSlug | null;
   storeEnabled?: boolean;
   feedbackEnabled?: boolean;
@@ -184,7 +190,7 @@ export type ReviewFood = AdminFood & {
   createdBy: Pick<AppUser, 'id' | 'firstName' | 'lastName' | 'email'> | null;
 };
 export type MealItem = { id: string; type: 'PLANNED' | 'ACTUAL'; linkedPlannedItemId?: string | null; foodId?: string | null; nameSnapshot: string; quantity: number; unit: string; calories: number; protein: number; carbs: number; fat: number };
-export type Meal = { id: string; mealNumber: number; name: string; plannedTime?: string; status: string; plannedCalories: number; plannedProtein: number; plannedCarbs: number; plannedFat: number; actualCalories: number; actualProtein: number; actualCarbs: number; actualFat: number; items: MealItem[] };
+export type Meal = { id: string; mealNumber: number; name: string; plannedTime?: string; status: string; plannedCalories: number; plannedProtein: number; plannedCarbs: number; plannedFat: number; actualCalories: number; actualProtein: number; actualCarbs: number; actualFat: number; clientNote?: string | null; items: MealItem[] };
 export type ShoppingListItem = { name: string; unit: string; quantity: number; occurrenceCount: number };
 export type GroceryListItem = {
   id: string;
@@ -371,6 +377,10 @@ export type NutritionPlanTemplateSummary = {
   createdAt: string;
   updatedAt: string;
 };
+export type CoachClientNutritionTemplates = {
+  templates: NutritionPlanTemplateSummary[];
+  missingProfileFields: string[];
+};
 export type NutritionPlanTemplate = NutritionPlanTemplateSummary & {
   createdById?: string | null;
   meals: NutritionTemplateMeal[];
@@ -432,12 +442,27 @@ export type ExerciseRoutineDayItemOverride = {
   weight?: number | null;
 };
 
+export type ExerciseRoutineDayExtra = {
+  id: string;
+  exerciseId: string;
+  sortOrder: number;
+  sets?: number | null;
+  reps?: string | null;
+  speed?: string | null;
+  durationSeconds?: number | null;
+  distance?: number | null;
+  weight?: number | null;
+  exercise: { id: string; name: string };
+};
+
 export type ExerciseRoutineDay = {
   id: string;
   weekday: number;
   templateId: string | null;
   template: ExercisePlanTemplateSummary | null;
   itemOverrides: ExerciseRoutineDayItemOverride[];
+  excludedTemplateItemIds?: string[];
+  extras?: ExerciseRoutineDayExtra[];
 };
 
 export type ExerciseRoutine = {
@@ -459,12 +484,17 @@ export type DashboardDailyLog = {
   exercisesCompleted: number;
   exercisesPlanned: number;
 };
+export type ExerciseRoutineStatus = {
+  hasRoutine: boolean;
+  isRestDay: boolean;
+};
 export type Dashboard = {
   program: Program | null;
   dailyLog: DashboardDailyLog | null;
   meals: Meal[];
   allMeals?: Meal[];
   exercises: Exercise[];
+  exerciseRoutineStatus?: ExerciseRoutineStatus;
   /** User's calendar day for this dashboard payload (YYYY-MM-DD). */
   date?: string;
   summary: {
@@ -516,6 +546,9 @@ export type CoachSession = {
   linkedSnapshotId: string | null;
   createdAt: string;
   updatedAt: string;
+  recapEmailSent?: boolean;
+  recapEmailTo?: string | null;
+  recapEmailError?: string | null;
 };
 export type ClientGroup = {
   id: string;
@@ -681,9 +714,12 @@ export type PlanPeriodInfo = {
   weekNumber: number | null;
   effectiveDate: string | null;
   endDate: string | null;
+  templateId?: string | null;
   templateName: string | null;
   calorieTarget: number | null;
   proteinTarget?: number | null;
+  reminders?: string | null;
+  sourcePlanDate?: string | null;
 };
 
 export type PlanStatus = {
@@ -739,6 +775,8 @@ export type UserNutritionTargets = {
 export type CoachClientPlanStatus = PlanStatus & {
   nutritionTemplateName: string | null;
   exerciseTemplateName: string | null;
+  /** Saved ExerciseRoutine plan, e.g. "5 Day Split (#5)". Distinct from a day workout. */
+  exercisePlanName?: string | null;
   targetSource: NutritionTargetSource | null;
   resolvedTargets: NutritionMacroTargets | null;
   overrideTargets: NutritionMacroTargets;

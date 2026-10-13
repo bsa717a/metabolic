@@ -7,6 +7,379 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.40.0](https://github.com/bsa717a/metabolic/compare/v0.39.0...v0.40.0) (2026-10-12)
+
+
+### Features
+
+* **exercise:** adjust exercises on a manual plan day ([#326](https://github.com/bsa717a/metabolic/issues/326)) ([97059d9](https://github.com/bsa717a/metabolic/commit/97059d99993d144c8f962e278d9dc413650d3f88))
+* **exercise:** time each set when a duration is set ([#306](https://github.com/bsa717a/metabolic/issues/306)) ([ed756dc](https://github.com/bsa717a/metabolic/commit/ed756dcc4a8752cb2687e1232b5539b160b79767))
+
+## [0.39.0](https://github.com/bsa717a/metabolic/compare/v0.38.12...v0.39.0) (2026-10-12)
+
+
+### Features
+
+* **nutrition:** expand all meals on the nutrition page ([#361](https://github.com/bsa717a/metabolic/issues/361)) ([d80ddcd](https://github.com/bsa717a/metabolic/commit/d80ddcddf6a92e631b895143c3fe33e13342ac36))
+* **nutrition:** expand meals on the home card ([#363](https://github.com/bsa717a/metabolic/issues/363)) ([9e2bf8c](https://github.com/bsa717a/metabolic/commit/9e2bf8c404ea1304ca4b431ac36cf78f12851f33))
+
+## [0.38.12](https://github.com/bsa717a/metabolic/compare/v0.38.11...v0.38.12) (2026-10-11)
+
+
+### Bug Fixes
+
+* **ios:** stop the page from sticking zoomed in ([#356](https://github.com/bsa717a/metabolic/issues/356)) ([aa35f76](https://github.com/bsa717a/metabolic/commit/aa35f7662a3829b11d70113406e23e91a826dbd2))
+
+## [0.38.11](https://github.com/bsa717a/metabolic/compare/v0.38.10...v0.38.11) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** cite sources for health calculations ([#354](https://github.com/bsa717a/metabolic/issues/354)) ([9d8d353](https://github.com/bsa717a/metabolic/commit/9d8d35346d326161b3f53144b231933fb5255c95))
+
+## [0.38.10](https://github.com/bsa717a/metabolic/compare/v0.38.9...v0.38.10) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** group food plans by body type ([#352](https://github.com/bsa717a/metabolic/issues/352)) ([67184b0](https://github.com/bsa717a/metabolic/commit/67184b0db63225da6b12075f1d0307e45906d1ae))
+
+## [0.38.9](https://github.com/bsa717a/metabolic/compare/v0.38.8...v0.38.9) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** list all plans when the profile is incomplete ([#350](https://github.com/bsa717a/metabolic/issues/350)) ([1cbef1c](https://github.com/bsa717a/metabolic/commit/1cbef1cbdef2198928c3b4374cbf7ebda4668897))
+
+## [0.38.8](https://github.com/bsa717a/metabolic/compare/v0.38.7...v0.38.8) (2026-10-08)
+
+
+### Bug Fixes
+
+* **nutrition:** choose a plan when none is assigned ([#346](https://github.com/bsa717a/metabolic/issues/346)) ([86daa12](https://github.com/bsa717a/metabolic/commit/86daa12c80a3de7f3c91d8e602aba6bc48860995))
+
+## [0.38.7](https://github.com/bsa717a/metabolic/compare/v0.38.6...v0.38.7) (2026-10-08)
+
+
+### Bug Fixes
+
+* **coach:** refresh the week after Apply plan ([#347](https://github.com/bsa717a/metabolic/issues/347)) ([11fd8eb](https://github.com/bsa717a/metabolic/commit/11fd8eb0f3220a36df108ef327a71f50109f13d4))
+
+## [0.38.6](https://github.com/bsa717a/metabolic/compare/v0.38.5...v0.38.6) (2026-10-08)
+
+
+### Bug Fixes
+
+* **coach:** match header to the assigned exercise plan ([#343](https://github.com/bsa717a/metabolic/issues/343)) ([cf83d1c](https://github.com/bsa717a/metabolic/commit/cf83d1c98fc58498b9552073d5289ca3e01a6060))
+
+## [0.38.5](https://github.com/bsa717a/metabolic/compare/v0.38.4...v0.38.5) (2026-10-08)
+
+
+### Bug Fixes
+
+* **exercise:** show Choose a plan when none is assigned ([#342](https://github.com/bsa717a/metabolic/issues/342)) ([5869143](https://github.com/bsa717a/metabolic/commit/58691430f2676dd67eca32587d39ed73e44ecd5b))
+
+## [0.38.4](https://github.com/bsa717a/metabolic/compare/v0.38.3...v0.38.4) (2026-10-08)
+
+
+### Bug Fixes
+
+* **nutrition:** show the current week on the plan title ([#338](https://github.com/bsa717a/metabolic/issues/338)) ([46c8206](https://github.com/bsa717a/metabolic/commit/46c820609c828f40b9900e15eef2464fc6caa250))
+
+## [0.38.3](https://github.com/bsa717a/metabolic/compare/v0.38.2...v0.38.3) (2026-10-08)
+
+
+### Bug Fixes
+
+* **exercise:** show the same plan on client and coach ([#332](https://github.com/bsa717a/metabolic/issues/332)) ([83da7f9](https://github.com/bsa717a/metabolic/commit/83da7f9b253c79d08830038b116a999f5bec113a))
+
+## [0.38.2](https://github.com/bsa717a/metabolic/compare/v0.38.1...v0.38.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **onboarding:** confirm imported setup without replacing the program ([#335](https://github.com/bsa717a/metabolic/issues/335)) ([97cb349](https://github.com/bsa717a/metabolic/commit/97cb349315b9d6e2339ad973c821843c6f3c9bab))
+* **topbar:** remove the click-anywhere hint from the back bar ([#334](https://github.com/bsa717a/metabolic/issues/334)) ([28951b2](https://github.com/bsa717a/metabolic/commit/28951b2c66ed82ffa2a8f3b6674c41ae5b4dd85e))
+
+## [0.38.1](https://github.com/bsa717a/metabolic/compare/v0.38.0...v0.38.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **home:** say when today has planned food and open billing for a weekly plan ([#330](https://github.com/bsa717a/metabolic/issues/330)) ([3c21254](https://github.com/bsa717a/metabolic/commit/3c212549149efe7d31070c7fff143ebe40071a61))
+* **nutrition:** share one type scale and button style ([#331](https://github.com/bsa717a/metabolic/issues/331)) ([92878c8](https://github.com/bsa717a/metabolic/commit/92878c88e70f601d2571657881ad0a7e1acae8c4))
+
+## [0.38.0](https://github.com/bsa717a/metabolic/compare/v0.37.0...v0.38.0) (2026-10-08)
+
+
+### Features
+
+* **nutrition:** let coaches edit a client meal note ([#327](https://github.com/bsa717a/metabolic/issues/327)) ([7e1b179](https://github.com/bsa717a/metabolic/commit/7e1b179576044a894497a983201bfb2e75813b46))
+
+## [0.37.0](https://github.com/bsa717a/metabolic/compare/v0.36.0...v0.37.0) (2026-10-08)
+
+
+### Features
+
+* **exercise:** choose an automatic plan for the selected level ([#324](https://github.com/bsa717a/metabolic/issues/324)) ([44ccbe7](https://github.com/bsa717a/metabolic/commit/44ccbe7da3b26c498e37bdaf3808a9c26e6b6222))
+
+## [0.36.0](https://github.com/bsa717a/metabolic/compare/v0.35.0...v0.36.0) (2026-10-07)
+
+
+### Features
+
+* **nutrition:** show client meal notes to coaches ([#317](https://github.com/bsa717a/metabolic/issues/317)) ([5271cc2](https://github.com/bsa717a/metabolic/commit/5271cc23e2436cdaf7a318c92b5096f64093c966))
+
+
+### Bug Fixes
+
+* **nutrition:** show client meal notes in the coach day editor ([#322](https://github.com/bsa717a/metabolic/issues/322)) ([6d8a581](https://github.com/bsa717a/metabolic/commit/6d8a581f19300a586c579ead4abb22868db80453))
+
+## [0.35.0](https://github.com/bsa717a/metabolic/compare/v0.34.0...v0.35.0) (2026-10-03)
+
+
+### Features
+
+* **exercise:** manual and automatic plan modes ([554b40c](https://github.com/bsa717a/metabolic/commit/554b40cfad6dbafbf0d7a39d1d4d3e994c3fe061))
+* **exercise:** manual and automatic plan modes ([a7b7418](https://github.com/bsa717a/metabolic/commit/a7b7418a04a93dc29b8f65589c5d43d399fbf6db))
+* **nutrition:** open print choices under the Print button ([0040813](https://github.com/bsa717a/metabolic/commit/0040813e5fd092d5c7287c86cda12f17f58265c1))
+* one-click print for nutrition + workout plans with horizontal/vertical option ([8208ee1](https://github.com/bsa717a/metabolic/commit/8208ee1dc313774b3345979bb34344a934465d75))
+* one-click print for nutrition and workout plans ([e0d42c6](https://github.com/bsa717a/metabolic/commit/e0d42c62df6b2ddb9b6e109c2fc84a5144bd1e2e))
+
+
+### Bug Fixes
+
+* **exercise:** keep automatic prescriptions and advance finished days ([2155285](https://github.com/bsa717a/metabolic/commit/2155285b56a7a6822e56d6c93c9cf5d5c6d2dc4b))
+* **exercise:** tighten automatic controls and wait for saved mode ([7135b85](https://github.com/bsa717a/metabolic/commit/7135b85482597289502f0596774926186e5a8020))
+* print template reminders, not plan-period system notes ([25e45fd](https://github.com/bsa717a/metabolic/commit/25e45fd496e1976fbd18fa76cee17cd19af220c6))
+
+## [0.34.0](https://github.com/bsa717a/metabolic/compare/v0.33.0...v0.34.0) (2026-10-02)
+
+
+### Features
+
+* client notes on each meal (Piper [#5](https://github.com/bsa717a/metabolic/issues/5)) ([#308](https://github.com/bsa717a/metabolic/issues/308)) ([4e23ded](https://github.com/bsa717a/metabolic/commit/4e23ded8772cda37efe54b61e8a6f89696aed31c))
+
+
+### Bug Fixes
+
+* **client:** unblock deploy build (test type error) ([#311](https://github.com/bsa717a/metabolic/issues/311)) ([7082a0a](https://github.com/bsa717a/metabolic/commit/7082a0a457df3319440684a2e955e218fef1729f))
+
+## [0.33.0](https://github.com/bsa717a/metabolic/compare/v0.32.1...v0.33.0) (2026-09-22)
+
+
+### Features
+
+* **ios:** Apple IAP for Self-Guided + Plus ([#304](https://github.com/bsa717a/metabolic/issues/304)) ([2e3469a](https://github.com/bsa717a/metabolic/commit/2e3469afbaab1b49da2fb41703001645c38ee147))
+
+
+### Bug Fixes
+
+* **ios:** keep Apple Music playing through workout cues ([#298](https://github.com/bsa717a/metabolic/issues/298)) ([bbbb918](https://github.com/bsa717a/metabolic/commit/bbbb9180fd3822d2787c767d8b45be5f6503e9b6))
+
+## [0.32.1](https://github.com/bsa717a/metabolic/compare/v0.32.0...v0.32.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **ios:** mix workout cues with Music, keep-awake, lock orientation ([#294](https://github.com/bsa717a/metabolic/issues/294)) ([b578f24](https://github.com/bsa717a/metabolic/commit/b578f249ca8529e2c49d331c2825dadea263ec2c))
+
+## [0.32.0](https://github.com/bsa717a/metabolic/compare/v0.31.2...v0.32.0) (2026-09-17)
+
+
+### Features
+
+* **ios:** App Store Review path A — AI consent and hide iOS plan purchase ([#293](https://github.com/bsa717a/metabolic/issues/293)) ([37d8aaa](https://github.com/bsa717a/metabolic/commit/37d8aaaf187dd4008b12f9053f45dc79a80a7e03))
+
+
+### Bug Fixes
+
+* **ios:** audible workout countdown cues and haptics ([#291](https://github.com/bsa717a/metabolic/issues/291)) ([8f740fb](https://github.com/bsa717a/metabolic/commit/8f740fb9a3db4c7d8f9d3dd9f3c0a033c5900f14))
+
+## [0.31.2](https://github.com/bsa717a/metabolic/compare/v0.31.1...v0.31.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ios:** stop WKWebView rubber-band and honor safe areas ([#289](https://github.com/bsa717a/metabolic/issues/289)) ([68545a2](https://github.com/bsa717a/metabolic/commit/68545a2a1bbc76f050fae3408665c1d55896307f))
+
+## [0.31.1](https://github.com/bsa717a/metabolic/compare/v0.31.0...v0.31.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **admin:** delete users when Firebase Auth is already gone ([#286](https://github.com/bsa717a/metabolic/issues/286)) ([b343814](https://github.com/bsa717a/metabolic/commit/b34381455b36022c813dee181ea4d70d18d7b285))
+* **ios:** stop Capacitor camera crash with native plugin ([#288](https://github.com/bsa717a/metabolic/issues/288)) ([8cc6d9f](https://github.com/bsa717a/metabolic/commit/8cc6d9fde0f25c3fdde39ea92d2c54d46a0a5f39))
+
+## [0.31.0](https://github.com/bsa717a/metabolic/compare/v0.30.0...v0.31.0) (2026-09-09)
+
+
+### Features
+
+* **ios:** add App Store native readiness for iOS ([#283](https://github.com/bsa717a/metabolic/issues/283)) ([3c165a4](https://github.com/bsa717a/metabolic/commit/3c165a4fcc049b9733b52017abab483a81159646))
+
+
+### Bug Fixes
+
+* sync package-lock for capacitor-firebase authentication ([#285](https://github.com/bsa717a/metabolic/issues/285)) ([b557847](https://github.com/bsa717a/metabolic/commit/b55784719e847337a00d50fd81ee88c6162409ae))
+
+## [0.30.0](https://github.com/bsa717a/metabolic/compare/v0.29.0...v0.30.0) (2026-09-09)
+
+
+### Features
+
+* **ios:** native Google and Apple sign-in for Capacitor ([f0da3df](https://github.com/bsa717a/metabolic/commit/f0da3dffda9cbb448ff415f3e345665c52a658a4))
+* **ios:** native Google and Apple sign-in for Capacitor ([93b722b](https://github.com/bsa717a/metabolic/commit/93b722bbcb5ae9004641d14041abbbec6d66a4b7))
+
+## [0.29.0](https://github.com/bsa717a/metabolic/compare/v0.28.0...v0.29.0) (2026-09-09)
+
+
+### Features
+
+* add public Privacy Policy page at /privacy ([#280](https://github.com/bsa717a/metabolic/issues/280)) ([86ee996](https://github.com/bsa717a/metabolic/commit/86ee996e1e8283839ed19446e4e70b33c92cfcc2))
+* **ios:** scaffold Capacitor for iOS TestFlight ([#278](https://github.com/bsa717a/metabolic/issues/278)) ([89f5f55](https://github.com/bsa717a/metabolic/commit/89f5f55b72b46bb00f5ab53f152695c68045341c))
+
+## [0.28.0](https://github.com/bsa717a/metabolic/compare/v0.27.0...v0.28.0) (2026-09-09)
+
+
+### Features
+
+* **auth:** add Sign in with Apple button and update auth landing UI ([1f91657](https://github.com/bsa717a/metabolic/commit/1f9165750411c658f35ec9e6a0b0063654aa2845))
+* **auth:** add Sign in with Apple button and update auth landing UI ([ce52ae5](https://github.com/bsa717a/metabolic/commit/ce52ae5f1d3bc69747c944d5c56bb26f40f6c4e2))
+* **auth:** wire Sign in with Apple through Firebase and backfill names ([7534f6d](https://github.com/bsa717a/metabolic/commit/7534f6ddead90840bf8a570dd7e41c71bfd8f8f8))
+
+
+### Bug Fixes
+
+* **onboarding:** preserve gender literal type in test fixture ([#272](https://github.com/bsa717a/metabolic/issues/272)) ([e24d827](https://github.com/bsa717a/metabolic/commit/e24d82705590972077bf549f98071178b985ba2c))
+
+## [0.27.0](https://github.com/bsa717a/metabolic/compare/v0.26.1...v0.27.0) (2026-09-08)
+
+
+### Features
+
+* **onboarding:** add body fat visual estimate aid ([f69c5d7](https://github.com/bsa717a/metabolic/commit/f69c5d7aff036f576707d1659160ac29a04b42df))
+
+
+### Bug Fixes
+
+* **nutrition:** rebalance meal-builder review to the calorie target ([dd9ed01](https://github.com/bsa717a/metabolic/commit/dd9ed012c5aa2af410e4ef855192f63c6b070e59))
+* **nutrition:** rebalance meal-builder review to the calorie target ([90a6f7d](https://github.com/bsa717a/metabolic/commit/90a6f7dadbf00359b21451ab6647b131587e8d05))
+* **onboarding:** keep body-fat estimate cards visible after a failed reply ([14d20c5](https://github.com/bsa717a/metabolic/commit/14d20c5c52f8b1a04baee23cb3a66c24e56cbe85))
+* **onboarding:** properly move gender before body composition in both paths ([ec03baf](https://github.com/bsa717a/metabolic/commit/ec03bafedc8000231ea75dcbfe070ace90a91268))
+
+## [0.26.1](https://github.com/bsa717a/metabolic/compare/v0.26.0...v0.26.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **auth:** harden Firebase token refresh for long sessions ([ec001a8](https://github.com/bsa717a/metabolic/commit/ec001a87a75459749deba5b289a173776104cf11))
+* **auth:** harden Firebase token refresh for long sessions ([94aede2](https://github.com/bsa717a/metabolic/commit/94aede243dcad94f28cb3ab2b784cce313c637ad))
+
+## [0.26.0](https://github.com/bsa717a/metabolic/compare/v0.25.0...v0.26.0) (2026-09-08)
+
+
+### Features
+
+* **onboarding:** add progress indicator to coach onboarding chat ([093b0ba](https://github.com/bsa717a/metabolic/commit/093b0ba44a0ba23295f11e3bc063f4e467763c7e))
+* **onboarding:** add progress indicator to coach onboarding chat ([fe92e1e](https://github.com/bsa717a/metabolic/commit/fe92e1eaae4c3d18eede8e55e6db6b6b116e5100))
+* **ui:** improve empty states with clear CTAs for meals, exercise, and weight ([c4163b2](https://github.com/bsa717a/metabolic/commit/c4163b285b7c71b985c57c2147f641b15cc11f4b))
+* **ui:** improve empty states with clear CTAs for meals, exercise, and weight ([18654c8](https://github.com/bsa717a/metabolic/commit/18654c878d099a83e768ac660b80aec2102061ff))
+
+
+### Bug Fixes
+
+* **ui:** send empty-state weight and blueprint CTAs to /program ([62e1ccc](https://github.com/bsa717a/metabolic/commit/62e1ccc49d1606d30c6c0328081df3d7146c156f))
+
+## [0.25.0](https://github.com/bsa717a/metabolic/compare/v0.24.0...v0.25.0) (2026-09-08)
+
+
+### Features
+
+* **email:** send welcome email on onboarding complete with retry queue ([03c7756](https://github.com/bsa717a/metabolic/commit/03c775699e9a94ddd872ba89f824df69d51794db))
+
+
+### Bug Fixes
+
+* **coach:** skip session recap emails for past visits ([d5d6fa6](https://github.com/bsa717a/metabolic/commit/d5d6fa6a1e58123b35d2f325d2af4fcfd59561e7))
+* **coach:** skip session recap emails for past visits ([3701cee](https://github.com/bsa717a/metabolic/commit/3701ceefa22d5b789b82e1ba6a0e820b0343b50c))
+* **email:** tick welcome queue and reclaim stuck jobs ([3ef9bf2](https://github.com/bsa717a/metabolic/commit/3ef9bf21c23884cfc18afee839b3670ba9c0e46f))
+
+## [0.24.0](https://github.com/bsa717a/metabolic/compare/v0.23.0...v0.24.0) (2026-09-08)
+
+
+### Features
+
+* **auth:** let users and admins delete accounts including Firebase ([fbb1e52](https://github.com/bsa717a/metabolic/commit/fbb1e521611f9b0690a76d9f6305fd8d844fb170))
+* **auth:** let users and admins delete accounts including Firebase ([60e791f](https://github.com/bsa717a/metabolic/commit/60e791ff87bf2dfdefcb440fc76f59af16b0de64))
+* **dashboard:** add first-day checklist after onboarding ([69850a1](https://github.com/bsa717a/metabolic/commit/69850a1d1e41da21deb158b4ed0117331fd2b80f))
+
+
+### Bug Fixes
+
+* **dashboard:** dismiss first-day checklist without waiting on save ([7c6d015](https://github.com/bsa717a/metabolic/commit/7c6d0151083dc703e057f91c1ed7c20cffb68d85))
+
+## [0.23.0](https://github.com/bsa717a/metabolic/compare/v0.22.0...v0.23.0) (2026-09-07)
+
+
+### Features
+
+* **coach:** notify coach when client links via invite ([#257](https://github.com/bsa717a/metabolic/issues/257)) ([b3acce9](https://github.com/bsa717a/metabolic/commit/b3acce933d50cd5435bae468b035ef30a4a24b0e))
+
+
+### Bug Fixes
+
+* **exercise:** let coaches load global weekly routine days ([516e521](https://github.com/bsa717a/metabolic/commit/516e5210ca55c3d0655337a9ea112dd99b61d32e))
+* **exercise:** let coaches load global weekly routine days ([58d5f4f](https://github.com/bsa717a/metabolic/commit/58d5f4fe9925da1bfa09081996c8d921af9e356d))
+
+## [0.22.0](https://github.com/bsa717a/metabolic/compare/v0.21.0...v0.22.0) (2026-09-07)
+
+
+### Features
+
+* **coach:** invite links with join confirmation ([a881e11](https://github.com/bsa717a/metabolic/commit/a881e1190551e3b2d8cb539ed82dfc0067afce86))
+
+
+### Bug Fixes
+
+* **coach:** connect invite clients after login and onboarding ([9624f03](https://github.com/bsa717a/metabolic/commit/9624f034859bae7513a8b8e51b2d1dfff3e5b26c))
+* **onboarding:** auto-detect timezone with clear copy ([c53797c](https://github.com/bsa717a/metabolic/commit/c53797c089c45f5d9e1366e6fef7f6d8cc046f9b))
+
+## [0.21.0](https://github.com/bsa717a/metabolic/compare/v0.20.0...v0.21.0) (2026-09-07)
+
+
+### Features
+
+* **auth:** branded verification emails and in-app verify ([73cdc3e](https://github.com/bsa717a/metabolic/commit/73cdc3e80ccfecd8b0ea3ddb67201e98f4265d5d))
+* **auth:** send branded verification mail and verify in-app ([c124cc3](https://github.com/bsa717a/metabolic/commit/c124cc351318f72b34e85f673a90ac386c206a1b))
+
+
+### Bug Fixes
+
+* **auth:** require Firebase email verification before app access ([7fb53bf](https://github.com/bsa717a/metabolic/commit/7fb53bf15265e8b5f10248e16b7261e4cd16778e))
+* **nutrition:** include quantity 1 on printed meal plans ([1dc7922](https://github.com/bsa717a/metabolic/commit/1dc79225e30360dab3087a421742fd0f5b65c63f))
+* **nutrition:** include quantity 1 on printed meal plans ([089615a](https://github.com/bsa717a/metabolic/commit/089615ae21c86dd750ee0f968abe722f342838be))
+
+## [0.20.0](https://github.com/bsa717a/metabolic/compare/v0.19.0...v0.20.0) (2026-09-05)
+
+
+### Features
+
+* **coach:** email a fun session recap when the coach saves ([be140ca](https://github.com/bsa717a/metabolic/commit/be140ca59f75bf8c370d0214507b82f10b583673))
+* **coach:** email a fun session recap when the coach saves ([6b83b70](https://github.com/bsa717a/metabolic/commit/6b83b70cd802fcddb9fa732e53a70765dec6a20e))
+* **email:** send outbound mail through Resend ([6728172](https://github.com/bsa717a/metabolic/commit/67281726e0b8a49b57641c0c8ac8526d35ad09d8))
+* **email:** send outbound mail through Resend ([6741c48](https://github.com/bsa717a/metabolic/commit/6741c48e4ce75504eaa52914e1a7b65959a5a887))
+
+## [0.19.0](https://github.com/bsa717a/metabolic/compare/v0.18.0...v0.19.0) (2026-09-03)
+
+
+### Features
+
+* **admin:** edit default meal structure on Targets ([d4c04f6](https://github.com/bsa717a/metabolic/commit/d4c04f6e9a3b529ee3cd6eb50b2186b955a461cb))
+* **admin:** edit default meal structure on Targets ([052f78e](https://github.com/bsa717a/metabolic/commit/052f78edff90a0dd51fc486d675a3aef34f78a29))
+* **onboarding:** restore real-coach selection and self-serve turn-off ([14beabd](https://github.com/bsa717a/metabolic/commit/14beabdfee4c6bb05d4d96ede30a6905c8e40a9f))
+* **onboarding:** restore real-coach selection and self-serve turn-off ([661be75](https://github.com/bsa717a/metabolic/commit/661be75913428f6715091c81c91102a976ffcfba))
+
 ## [0.18.0](https://github.com/bsa717a/metabolic/compare/v0.17.0...v0.18.0) (2026-09-03)
 
 

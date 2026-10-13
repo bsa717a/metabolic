@@ -67,17 +67,18 @@ echo -n https://metabolic-v1.web.app | gcloud secrets create CLIENT_URL --data-f
 echo -n YOUR_TWILIO_ACCOUNT_SID | gcloud secrets create TWILIO_ACCOUNT_SID --data-file=-
 echo -n YOUR_TWILIO_AUTH_TOKEN | gcloud secrets create TWILIO_AUTH_TOKEN --data-file=-
 echo -n YOUR_TWILIO_PHONE_NUMBER | gcloud secrets create TWILIO_PHONE_NUMBER --data-file=-
-echo -n YOUR_SENDGRID_API_KEY | gcloud secrets create SENDGRID_API_KEY --data-file=-
+echo -n YOUR_RESEND_API_KEY | gcloud secrets create RESEND_API_KEY --data-file=-
 echo -n DoNotReply@MasterMetabolic.com | gcloud secrets create SENDGRID_FROM_EMAIL --data-file=-
 echo -n 'Master Metabolic' | gcloud secrets create SENDGRID_FROM_NAME --data-file=-
 # Shared secret for the proactive SMS reminder scheduler
 echo -n "$(openssl rand -hex 32)" | gcloud secrets create CRON_SECRET --data-file=-
 ```
 
-SMS/MMS notes: set `TWILIO_PHONE_NUMBER` with the `sms:` prefix (e.g. `sms:+13853634403`) so the number sends and receives over SMS+MMS. The number must be MMS-enabled in the Twilio console for users to text meal photos (including photos sent from iMessage, which arrive as MMS). Point the Twilio messaging webhook to `https://<api-url>/api/sms/webhook`. Production deploy sets `SMS_AGENT_MODE=agent` (Gemini tool-calling); local dev defaults to `tree` in `server/.env.example`. Proactive reminders use a Cloud Scheduler job (`metabolic-sms-tick`, every 5 minutes) that calls `/api/internal/sms/tick`, gated by the `CRON_SECRET` header. **You must enable the Cloud Scheduler API** (`gcloud services enable cloudscheduler.googleapis.com`) before the job can run. Deploy tries to configure this in best-effort mode; if CI lacks scheduler permissions, run once as a project admin:
+SMS/MMS notes: set `TWILIO_PHONE_NUMBER` with the `sms:` prefix (e.g. `sms:+13853634403`) so the number sends and receives over SMS+MMS. The number must be MMS-enabled in the Twilio console for users to text meal photos (including photos sent from iMessage, which arrive as MMS). Point the Twilio messaging webhook to `https://<api-url>/api/sms/webhook`. Production deploy sets `SMS_AGENT_MODE=agent` (Gemini tool-calling); local dev defaults to `tree` in `server/.env.example`. Proactive reminders use a Cloud Scheduler job (`metabolic-sms-tick`, every 5 minutes) that calls `/api/internal/sms/tick`, gated by the `CRON_SECRET` header. Welcome and other queued transactional emails use `metabolic-email-tick` (every minute) calling `/api/internal/email/tick`. **You must enable the Cloud Scheduler API** (`gcloud services enable cloudscheduler.googleapis.com`) before the jobs can run. Deploy tries to configure this in best-effort mode; if CI lacks scheduler permissions, run once as a project admin:
 
 ```bash
 ./scripts/setup-sms-scheduler.sh
+./scripts/setup-email-scheduler.sh
 ```
 
 Grant the Cloud Run service account access after first deploy:
@@ -85,7 +86,7 @@ Grant the Cloud Run service account access after first deploy:
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe metabolic-v1 --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY OPENAI_API_KEY UNSUBSCRIBE_TOKEN_SECRET CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER SENDGRID_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME CRON_SECRET; do
+for s in DATABASE_URL FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_PROJECT_ID GEMINI_API_KEY OPENAI_API_KEY UNSUBSCRIBE_TOKEN_SECRET CLIENT_URL TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_PHONE_NUMBER RESEND_API_KEY SENDGRID_FROM_EMAIL SENDGRID_FROM_NAME CRON_SECRET; do
   gcloud secrets add-iam-policy-binding "$s" \
     --member="serviceAccount:${SA}" \
     --role="roles/secretmanager.secretAccessor"
@@ -95,7 +96,16 @@ gcloud projects add-iam-policy-binding metabolic-v1 \
   --role="roles/cloudsql.client"
 ```
 
-In Firebase Console: enable Email/Password (+ Google) auth; add `metabolic-v1.web.app` to Authorized domains.
+In Firebase Console: enable Email/Password, Google, and Apple auth; add `metabolic-v1.web.app` to Authorized domains.
+
+Sign in with Apple (web) also needs an Apple Developer setup, then those values in Firebase → Authentication → Sign-in method → Apple:
+
+1. In [Apple Developer](https://developer.apple.com/account) create an App ID with **Sign in with Apple**, then a Services ID (the OAuth client ID).
+2. On the Services ID, set the domain `metabolic-v1.firebaseapp.com` and return URL `https://metabolic-v1.firebaseapp.com/__/auth/handler`.
+3. Create a Sign in with Apple key (`.p8`). In Firebase, enable Apple and paste the Services ID, Team ID, Key ID, and private key.
+4. Keep `localhost` in Firebase authorized domains for local `npm run dev`.
+
+The login page uses a popup first and falls back to a full-page redirect if the browser blocks popups. Apple only sends the user's name on the first authorization; the app stores it on the Firebase profile and backfills `/api/me` if that request raced ahead.
 
 ### 2. Deploy app
 
@@ -119,3 +129,48 @@ export METABOLIC_DB_PASSWORD='your-cloud-sql-password'
 This replaces production app data with your local database (users, foods, programs, meals, etc.) while keeping Prisma migrations intact.
 
 No deployment is performed automatically by CI. The server listens on `PORT` and includes a Dockerfile for Cloud Run.
+
+## iOS App (Capacitor)
+
+The web app can be wrapped as a native iOS app using [Capacitor](https://capacitorjs.com/). See [`client/IOS.md`](client/IOS.md) for full documentation.
+
+### Quick Start (Mac required)
+
+```bash
+cd client
+./scripts/ios-setup.sh   # Installs deps, builds, adds iOS platform
+npx cap open ios         # Opens Xcode
+```
+
+### App Store Details
+
+| Field      | Value                     |
+| ---------- | ------------------------- |
+| App Name   | Master Metabolic          |
+| Bundle ID  | `com.mastermetabolic.app` |
+| Apple ID   | `6810053439`              |
+| Team       | Cliffs Mama, LLC (`8FG8V9P49A`) |
+
+### TestFlight from GitHub Actions
+
+Actions → **iOS TestFlight** → **Run workflow**. The workflow is `workflow_dispatch` only. It does not run on push or pull request, and it does not create secrets.
+
+Derek adds these repository secrets separately (Team `8FG8V9P49A`, Cliffs Mama, LLC):
+
+| Secret | Value |
+| --- | --- |
+| `ASC_KEY_ID` | App Store Connect API Key ID, 10 characters. The key that signed 1.0 (9) is `2H9BZ26296`. |
+| `ASC_ISSUER_ID` | Issuer UUID. That key's issuer is `ae4ecfe6-d76e-46b7-b521-bcce51cf8191`. |
+| `ASC_KEY_P8_BASE64` | Base64 of the AuthKey `.p8` file, not the raw key pasted into YAML. On a Mac: `base64 -i AuthKey_2H9BZ26296.p8 \| pbcopy` |
+
+Leave the build-number input empty to use one higher than the latest App Store Connect build, and never below 10. Marketing version stays `1.0` unless the input says otherwise. The web bundle reuses the existing production `VITE_*` deploy secrets.
+
+A run is about **20 minutes** on a `macos-26` runner (about 15 with warm caches, about 25 cold). Xcode is pinned to **26.6**. See `client/IOS.md`.
+
+### TestFlight Upload (Mac)
+
+1. In Xcode: **Product → Archive**
+2. **Distribute App → App Store Connect → Upload**
+3. In App Store Connect: add build to Internal Testing group
+
+The iOS app bundles the web build and uses native Google and Sign in with Apple. See `client/IOS.md`.

@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft } from 'lucide-react';
 import type { Meal } from '../../types';
 import { api } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
 import { Drawer } from '../ui/Drawer';
+import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 import type { MealRecommendationsPayload, RecommendedMeal } from '../../utils/mealCards';
+import { SourcesBesideTargets } from './SourcesLink';
 
 export function MealSuggestionsDrawer({
   open,
@@ -18,6 +21,7 @@ export function MealSuggestionsDrawer({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const { accepted, openReview } = useAiConsent();
   const [craving, setCraving] = useState('');
   const [recs, setRecs] = useState<MealRecommendationsPayload | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,13 +31,13 @@ export function MealSuggestionsDrawer({
   const requestId = useRef(0);
 
   useEffect(() => {
-    if (!open || !meal) return;
+    if (!open || !meal || !accepted) return;
     setCraving('');
     setRecs(null);
     setError(null);
     setChosen(null);
     void loadRecommendations('');
-  }, [open, date, meal?.id, meal?.mealNumber]);
+  }, [accepted, open, date, meal?.id, meal?.mealNumber]);
 
   async function loadRecommendations(cravingValue: string) {
     if (!meal) return;
@@ -97,7 +101,8 @@ export function MealSuggestionsDrawer({
         ) : undefined
       }
     >
-      {meal && (
+      {meal && !accepted ? <AiDisabledNotice onReview={openReview} /> : null}
+      {meal && accepted && (
         <div className="space-y-4">
           <p className="text-sm text-app-text-muted">
             Complete meal ideas for <span className="font-semibold text-app-text">{meal.name}</span>
@@ -109,6 +114,7 @@ export function MealSuggestionsDrawer({
             )}
             .
           </p>
+          <SourcesBesideTargets />
 
           {!chosen && (
             <input

@@ -1,6 +1,6 @@
 import { MealItemType, type Prisma } from '@prisma/client';
 import { n, round } from '../utils/numbers.js';
-import { scaleFactor, scaleOptionFood, type ScaledFoodLine } from './mealCardScaling.js';
+import { rebalanceLinesToTarget, scaleFactor, scaleOptionFood, type ScaledFoodLine } from './mealCardScaling.js';
 import { recalculateMealTotals } from './totalsService.js';
 
 /**
@@ -117,7 +117,7 @@ export function scaledLinesForPicks(cardSet: LoadedCardSet, targetCalories: numb
       }
     }
   }
-  return lines;
+  return rebalanceLinesToTarget(lines, targetCalories);
 }
 
 /** Scale line macros when the user edits a food quantity in the builder. */

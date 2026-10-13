@@ -65,7 +65,7 @@ CLIENT_URL=CLIENT_URL:latest,\
 TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,\
 TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,\
 TWILIO_PHONE_NUMBER=TWILIO_PHONE_NUMBER:latest,\
-SENDGRID_API_KEY=SENDGRID_API_KEY:latest,\
+RESEND_API_KEY=RESEND_API_KEY:latest,\
 SENDGRID_FROM_EMAIL=SENDGRID_FROM_EMAIL:latest,\
 SENDGRID_FROM_NAME=SENDGRID_FROM_NAME:latest,\
 CRON_SECRET=CRON_SECRET:latest" \
@@ -83,6 +83,9 @@ echo "==> Ensure Cloud Scheduler job for proactive SMS reminders (best-effort)"
 # CI often lacks permission to enable APIs or create scheduler jobs. Do not fail
 # deploy when scheduler setup fails; run ./scripts/setup-sms-scheduler.sh once as admin.
 API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-sms-scheduler.sh" || true
+
+echo "==> Ensure Cloud Scheduler job for transactional email queue (best-effort)"
+API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-email-scheduler.sh" || true
 
 echo "==> Set API_PUBLIC_URL + Twilio webhook validation (stable Cloud Run URL)"
 gcloud run services update "$SERVICE_NAME" \

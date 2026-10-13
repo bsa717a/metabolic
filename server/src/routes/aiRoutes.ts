@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireAiConsent } from '../auth/requireAiConsent.js';
 import { requireAnyFeature, requireFeature } from '../auth/requireFeature.js';
 import { acceptFoodLookup, acceptFoodLookups, lookupFood, lookupFoodFromImage } from '../services/foodLookupService.js';
 import { lookupFoodOptions } from '../services/foodSearchService.js';
@@ -30,7 +31,7 @@ function formatChatRouteError(error: unknown): string {
 }
 
 export async function aiRoutes(app: FastifyInstance) {
-  app.post('/api/ai/food-lookup/options', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/ai/food-lookup/options', { preHandler: [requireAuth, requireAiConsent] }, async (request, reply) => {
     try {
       const body = z.object({ query: z.string().min(2) }).parse(request.body);
       return await lookupFoodOptions(request.appUser!.id, body.query);
@@ -40,7 +41,7 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: message });
     }
   });
-  app.post('/api/ai/food-lookup', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/ai/food-lookup', { preHandler: [requireAuth, requireAiConsent] }, async (request, reply) => {
     try {
       const body = z.object({ inputText: z.string().min(2) }).parse(request.body);
       return await lookupFood(request.appUser!.id, body.inputText);
@@ -50,7 +51,7 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: message });
     }
   });
-  app.post('/api/ai/food-lookup/photo', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/ai/food-lookup/photo', { preHandler: [requireAuth, requireAiConsent] }, async (request, reply) => {
     try {
       const body = z
         .object({
@@ -74,7 +75,7 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: message });
     }
   });
-  app.post('/api/ai/food-lookup/accept-batch', { preHandler: requireAuth }, async (request) => {
+  app.post('/api/ai/food-lookup/accept-batch', { preHandler: [requireAuth, requireAiConsent] }, async (request) => {
     const body = z.object({
       lookupIds: z.array(z.string()).min(1),
       mealId: z.string().optional(),
@@ -82,7 +83,7 @@ export async function aiRoutes(app: FastifyInstance) {
     }).parse(request.body);
     return acceptFoodLookups(request.appUser!.id, body.lookupIds, body.mealId, body.type, request.appUser!);
   });
-  app.post('/api/ai/food-lookup/:lookupId/accept', { preHandler: requireAuth }, async (request) => {
+  app.post('/api/ai/food-lookup/:lookupId/accept', { preHandler: [requireAuth, requireAiConsent] }, async (request) => {
     const body = z.object({ mealId: z.string().optional(), type: z.enum(['PLANNED', 'ACTUAL']).optional() }).parse(request.body ?? {});
     return acceptFoodLookup(
       request.appUser!.id,
@@ -92,7 +93,7 @@ export async function aiRoutes(app: FastifyInstance) {
       request.appUser!
     );
   });
-  app.post('/api/ai/exercise-lookup', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/ai/exercise-lookup', { preHandler: [requireAuth, requireAiConsent] }, async (request, reply) => {
     try {
       const body = z.object({ inputText: z.string().min(2) }).parse(request.body);
       return await lookupExercise(request.appUser!.id, body.inputText);
@@ -101,18 +102,18 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: message });
     }
   });
-  app.post('/api/ai/exercise-lookup/:lookupId/accept', { preHandler: requireAuth }, async (request) =>
+  app.post('/api/ai/exercise-lookup/:lookupId/accept', { preHandler: [requireAuth, requireAiConsent] }, async (request) =>
     acceptExerciseLookup(request.appUser!.id, (request.params as { lookupId: string }).lookupId)
   );
   app.get(
     '/api/ai/coach-history',
-    { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] },
+    { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach'), requireAiConsent] },
     async (request) => {
       const messages = await loadCoachConversation(request.appUser!.id);
       return { messages };
     }
   );
-  app.post('/api/ai/chat', { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] }, async (request, reply) => {
+  app.post('/api/ai/chat', { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach'), requireAiConsent] }, async (request, reply) => {
     try {
       const body = z
         .object({
@@ -149,7 +150,7 @@ export async function aiRoutes(app: FastifyInstance) {
   });
   app.post(
     '/api/ai/progress-photo-analysis',
-    { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach')] },
+    { preHandler: [requireAuth, requireAnyFeature('limited_ai_coach', 'extended_ai_coach'), requireAiConsent] },
     async (request, reply) => {
       try {
         const body = z
@@ -176,7 +177,7 @@ export async function aiRoutes(app: FastifyInstance) {
   app.get('/api/ai/coach-voice/available', { preHandler: requireAuth }, async () => {
     return { available: isCoachVoiceConfigured() };
   });
-  app.post('/api/ai/coach-voice', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/ai/coach-voice', { preHandler: [requireAuth, requireAiConsent] }, async (request, reply) => {
     try {
       const body = z
         .object({ text: z.string().min(1).max(2000), coachId: z.string().min(1).max(40) })
@@ -191,7 +192,7 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: message });
     }
   });
-  app.post('/api/ai/meal-suggestions', { preHandler: [requireAuth, requireFeature('basic_recipe_help')] }, async (request, reply) => {
+  app.post('/api/ai/meal-suggestions', { preHandler: [requireAuth, requireFeature('basic_recipe_help'), requireAiConsent] }, async (request, reply) => {
     try {
       const body = mealSuggestionBody.parse(request.body);
       return await suggestMealOptions(request.appUser!.id, body.inputText);

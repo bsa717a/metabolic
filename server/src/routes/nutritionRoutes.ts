@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
+import { requireAiConsent } from '../auth/requireAiConsent.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { canAccessUser } from '../auth/requireRole.js';
 import { addBlankMeal, addMealItem, applyMealForward, clearMealPlannedFoods, copyDayFromPreviousDay, copyDayPlanForward, copyDayPlanToDates, copyMealFromPreviousDay, createMeal, deleteMealItem, getMealsForDate, markMealEatenAsPlanned, saveBuiltDayPlan, setPlannedItemLogged, swapMeals, updateMealItem } from '../services/nutritionService.js';
@@ -17,6 +18,7 @@ import { recommendMeals, saveMealRecommendation } from '../services/mealRecommen
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 import { normalizePlannedTimeStorage } from '../utils/meals.js';
 import { prisma } from '../db/prisma.js';
+import { registerMealNoteRoutes } from './mealNoteRoutes.js';
 
 const plannedTimeSchema = z
   .string()
@@ -85,6 +87,7 @@ async function mealItemOwnerForActor(actor: { id: string; role: Role }, itemId: 
 }
 
 export async function nutritionRoutes(app: FastifyInstance) {
+  registerMealNoteRoutes(app);
   app.get('/api/daily-logs/:date/meals', { preHandler: requireAuth }, async (request) => getMealsForDate(request.appUser!.id, (request.params as { date: string }).date));
   app.post('/api/daily-logs/:date/ensure', { preHandler: requireAuth }, async (request) => {
     const date = (request.params as { date: string }).date;
@@ -213,7 +216,7 @@ export async function nutritionRoutes(app: FastifyInstance) {
       throw error;
     }
   });
-  app.get('/api/daily-logs/:date/meal-recommendations', { preHandler: [requireAuth, requireFeature('meal_planning')] }, async (request, reply) => {
+  app.get('/api/daily-logs/:date/meal-recommendations', { preHandler: [requireAuth, requireFeature('meal_planning'), requireAiConsent] }, async (request, reply) => {
     const query = z
       .object({ mealNumber: z.coerce.number().int().min(1), craving: z.string().max(200).optional() })
       .parse(request.query);
@@ -368,7 +371,8 @@ export async function nutritionRoutes(app: FastifyInstance) {
         request.appUser!.id,
         query.data.startDate,
         query.data.endDate,
-        query.data.storeName ?? null
+        query.data.storeName ?? null,
+        { allowAi: request.appUser!.aiConsentAccepted }
       );
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to build shopping list' });
@@ -384,7 +388,9 @@ export async function nutritionRoutes(app: FastifyInstance) {
       .safeParse(request.query);
     if (!query.success) return reply.code(400).send({ error: 'startDate and endDate must be YYYY-MM-DD dates.' });
     try {
-      return await getMealPrepPlan(request.appUser!.id, query.data.startDate, query.data.endDate);
+      return await getMealPrepPlan(request.appUser!.id, query.data.startDate, query.data.endDate, {
+        allowAi: request.appUser!.aiConsentAccepted
+      });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to build meal prep plan' });
     }

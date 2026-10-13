@@ -15,7 +15,7 @@ const TABS = [
 ] as const;
 
 /** Reserved height of the mobile tab bar, including the home-indicator inset. */
-export const MOBILE_BOTTOM_NAV_RESERVE = 'calc(4rem + env(safe-area-inset-bottom))';
+export const MOBILE_BOTTOM_NAV_RESERVE = 'calc(4rem + var(--safe-area-bottom))';
 
 export function MobileBottomNav({ user }: { user?: AppUser | null }) {
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ export function MobileBottomNav({ user }: { user?: AppUser | null }) {
       className="z-30 flex shrink-0 border-t border-app-border bg-app-surface/95 backdrop-blur sm:hidden"
       aria-label="Primary"
     >
-      <ul className="grid w-full grid-cols-5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <ul className="grid w-full grid-cols-5 pb-[max(0.5rem,var(--safe-area-bottom))]">
         {TABS.map(({ to, label, icon: Icon, end }) => (
           <li key={to}>
             <NavLink

@@ -1,14 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TodayNutrition } from '../components/dashboard/TodayNutrition';
 import { api, todayKey } from '../services/api';
-import type { Meal } from '../types';
+import type { AppUser, Meal } from '../types';
+import { useNutritionMealsExpanded } from '../hooks/useNutritionMealsExpanded';
 import { useWakeLock } from '../hooks/useWakeLock';
 
-export function NutritionLogPage() {
+export function NutritionLogPage({
+  mealsExpanded = false,
+  onMealsExpandedSaved
+}: {
+  mealsExpanded?: boolean;
+  onMealsExpandedSaved?: (user: AppUser) => void;
+}) {
   useWakeLock(true);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { planExpanded, planSaveError, changePlanExpanded } = useNutritionMealsExpanded(
+    mealsExpanded,
+    onMealsExpandedSaved
+  );
 
   const load = useCallback(async () => {
     const date = todayKey();
@@ -41,5 +52,15 @@ export function NutritionLogPage() {
     return <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>;
   }
 
-  return <TodayNutrition meals={meals} allMeals={meals} onChange={() => void load()} />;
+  return (
+    <TodayNutrition
+      meals={meals}
+      allMeals={meals}
+      onChange={() => void load()}
+      showPlanToggle
+      planExpanded={planExpanded}
+      onPlanExpandedChange={(next) => void changePlanExpanded(next)}
+      planSaveError={planSaveError}
+    />
+  );
 }

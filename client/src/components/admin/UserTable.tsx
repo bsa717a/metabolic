@@ -154,6 +154,11 @@ export function UserTable() {
     setUsers((current) => current.map((user) => (user.id === updated.id ? { ...user, ...updated } : user)));
   }
 
+  function handleDeleted(userId: string) {
+    setUsers((current) => current.filter((user) => user.id !== userId));
+    setSelectedUserId(null);
+  }
+
   return (
     <>
       <Card>
@@ -287,6 +292,7 @@ export function UserTable() {
         coaches={coaches}
         onClose={() => setSelectedUserId(null)}
         onSaved={handleSaved}
+        onDeleted={handleDeleted}
       />
     </>
   );

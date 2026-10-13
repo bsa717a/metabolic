@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { VIRTUAL_COACH_IDS } from '../data/virtualCoachPersonas.js';
 import { getSetupDraft, setupFirstProgram, userNeedsSetup } from '../services/onboardingService.js';
+import { enqueueWelcomeEmail } from '../services/emailQueueService.js';
+import { isEmailConfigured } from '../services/emailService.js';
 
 const setupBody = z.object({
   programName: z.string().trim().min(1).max(120).optional(),
@@ -24,7 +26,9 @@ const setupBody = z.object({
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   timezone: z.string().trim().min(1).max(100).optional(),
   phone: z.string().trim().max(30).optional(),
-  foodAllergies: z.string().trim().max(5000).optional()
+  foodAllergies: z.string().trim().max(5000).optional(),
+  dietaryPreferences: z.string().trim().max(5000).optional(),
+  textReminders: z.boolean().optional()
 });
 
 export async function onboardingRoutes(app: FastifyInstance) {
@@ -44,7 +48,18 @@ export async function onboardingRoutes(app: FastifyInstance) {
     }
 
     try {
-      const program = await setupFirstProgram(request.appUser!.id, parsed.data);
+      const user = request.appUser!;
+      const { program, created } = await setupFirstProgram(user.id, parsed.data);
+
+      if (created && isEmailConfigured() && user.email) {
+        enqueueWelcomeEmail({
+          toAddress: user.email,
+          firstName: user.firstName
+        }).catch((err) => {
+          request.log.error({ err }, 'Failed to enqueue welcome email');
+        });
+      }
+
       return {
         program: {
           id: program.id,

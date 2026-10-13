@@ -4,11 +4,13 @@ import { canAccessUser } from '../auth/requireRole.js';
 import { parseDateParam, toDateKey, addUtcDays, userDayKey } from '../utils/dates.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { getPlanStatus } from './planStatusService.js';
+import { getPlanPeriodInfo } from './planAdvancement.js';
 import { resolvePlanForDate } from './planResolution.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import {
   copyExercisesToDates,
   createScheduledExercise,
+  ensureExercisesForDate,
   getScheduledExercises,
   reorderScheduledExercises,
   restoreExercisePlanSnapshot,
@@ -21,11 +23,13 @@ import { applyTemplateToDailyLog } from './nutritionTemplateService.js';
 import { getUserNutritionTargets, setUserNutritionTargets } from './nutritionTargetService.js';
 import { applyTemplateToDate } from './exerciseTemplateService.js';
 import { saveProgramMetricSnapshot } from './programService.js';
-import { sendResultsReadyEmail } from './emailService.js';
+import { sendCoachSessionRecapEmail } from './sessionRecapService.js';
 import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsReadyNotification.js';
 import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, resolveOutboundChannel } from './twilioOutboundService.js';
 import { normalizePhone } from '../utils/phone.js';
 import { env } from '../config/env.js';
+import { coachExerciseStatusName } from './coachExerciseStatus.js';
+import { exercisePlanNameFromRoutine } from './coachPlanHeader.js';
 
 export async function requireCoachClient(actor: { id: string; role: Role }, userId: string) {
   if (!(await canAccessUser(actor, userId))) {
@@ -257,6 +261,11 @@ export async function getCoachClientDashboard(actor: { id: string; role: Role },
   return getTodayDashboard(userId);
 }
 
+export async function getCoachClientPlanPeriod(actor: { id: string; role: Role }, userId: string, date: string) {
+  await requireCoachClient(actor, userId);
+  return getPlanPeriodInfo(userId, date);
+}
+
 export async function getCoachClientPlanStatus(actor: { id: string; role: Role }, userId: string) {
   await requireCoachClient(actor, userId);
   const [status, program, user] = await Promise.all([
@@ -274,11 +283,15 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
     resolvePlanForDate(program, parseDateParam(todayKey)),
     getUserNutritionTargets(userId)
   ]);
+  const savedRoutine = await prisma.exerciseRoutine.findUnique({
+    where: { programId: program.id },
+    select: { id: true, exercisePlan: { select: { name: true } } }
+  });
   const [nutritionTemplate, exerciseTemplate] = await Promise.all([
     resolved.nutritionTemplateId
       ? prisma.nutritionPlanTemplate.findUnique({ where: { id: resolved.nutritionTemplateId }, select: { name: true } })
       : null,
-    resolved.exerciseTemplateId
+    savedRoutine && resolved.exerciseTemplateId
       ? prisma.exerciseTemplate.findUnique({ where: { id: resolved.exerciseTemplateId }, select: { name: true } })
       : null
   ]);
@@ -286,7 +299,8 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
   return {
     ...status,
     nutritionTemplateName: nutritionTemplate?.name ?? null,
-    exerciseTemplateName: exerciseTemplate?.name ?? null,
+    exerciseTemplateName: coachExerciseStatusName(Boolean(savedRoutine), exerciseTemplate?.name ?? null),
+    exercisePlanName: exercisePlanNameFromRoutine(savedRoutine),
     // Resolved macros, provenance, and raw override so the food tab can prefill + label.
     targetSource: nutritionTargets.source,
     resolvedTargets: nutritionTargets.resolvedTargets,
@@ -348,9 +362,9 @@ export async function copyCoachClientDayToDates(
 
 export async function getCoachClientExercises(actor: { id: string; role: Role }, userId: string, date: string) {
   await requireCoachClient(actor, userId);
-  const log = await ensureDailyLogByUserId(userId, date);
-  if (!log) throw new Error('No active program found');
-  return getScheduledExercises(userId, date);
+  const exercises = await ensureExercisesForDate(userId, date);
+  if (!exercises) throw new Error('No active program found');
+  return exercises;
 }
 
 export async function createCoachClientScheduledExercise(
@@ -435,6 +449,16 @@ function utcStartOfToday() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
+function utcTodayRange() {
+  const today = utcStartOfToday();
+  return { today, todayEnd: addUtcDays(today, 1) };
+}
+
+function occurredTodayUtc(occurredAt: Date) {
+  const { today, todayEnd } = utcTodayRange();
+  return occurredAt >= today && occurredAt < todayEnd;
+}
+
 function buildSnapshotPayloadFromProgram(
   metrics: Array<{ metricType: string; currentValue: unknown; unit: string }>,
   existingSnapshot: { values: Array<{ metricType: string; currentValue: unknown; unit: string }> } | null
@@ -478,7 +502,7 @@ async function linkSessionToSnapshot(sessionId: string, snapshotId: string, note
 }
 
 export async function saveCoachSessionComplete(
-  actor: { id: string; role: Role },
+  actor: { id: string; role: Role; firstName: string; lastName: string },
   data: { userId: string; notes: string; sessionId?: string }
 ) {
   await requireCoachClient(actor, data.userId);
@@ -489,7 +513,7 @@ export async function saveCoachSessionComplete(
   });
   if (!program) throw new Error('No active program found for this client');
 
-  const today = utcStartOfToday();
+  const { today, todayEnd } = utcTodayRange();
   const existingSnapshot = await prisma.programMetricSnapshot.findUnique({
     where: { programId_date: { programId: program.id, date: today } },
     include: { values: true }
@@ -511,10 +535,9 @@ export async function saveCoachSessionComplete(
     }
 
     const session = await linkSessionToSnapshot(data.sessionId, snapshot.id, notes);
-    return serializeCoachSession(session);
+    return withSessionRecap(actor, data.userId, notes, session);
   }
 
-  const todayEnd = addUtcDays(today, 1);
   const todaySession = await prisma.coachSession.findFirst({
     where: {
       coachId: actor.id,
@@ -541,7 +564,31 @@ export async function saveCoachSessionComplete(
         });
       });
 
-  return serializeCoachSession(session);
+  return withSessionRecap(actor, data.userId, notes, session);
+}
+
+async function withSessionRecap(
+  actor: { id: string; firstName: string; lastName: string },
+  userId: string,
+  notes: string,
+  session: Parameters<typeof serializeCoachSession>[0]
+) {
+  if (!occurredTodayUtc(session.occurredAt)) {
+    return {
+      ...serializeCoachSession(session),
+      recapEmailSent: false,
+      recapEmailTo: null,
+      recapEmailError: null
+    };
+  }
+
+  const recap = await sendCoachSessionRecapEmail(actor, userId, notes);
+  return {
+    ...serializeCoachSession(session),
+    recapEmailSent: recap.sent,
+    recapEmailTo: recap.to ?? null,
+    recapEmailError: recap.error ?? null
+  };
 }
 
 async function requireLinkedCheckInForSession(
@@ -636,16 +683,27 @@ export async function sendCoachResultsReadyEmail(
   actor: { id: string; role: Role; firstName: string; lastName: string },
   userId: string
 ) {
-  const { client, coachName, links } = await getCoachResultsNotificationContext(actor, userId);
+  await requireCoachClient(actor, userId);
 
-  await sendResultsReadyEmail({
-    to: client.email,
-    clientFirstName: client.firstName,
-    coachName,
-    links
+  const { today, todayEnd } = utcTodayRange();
+  const todaySession = await prisma.coachSession.findFirst({
+    where: {
+      coachId: actor.id,
+      userId,
+      occurredAt: { gte: today, lt: todayEnd }
+    },
+    select: { notes: true }
   });
+  if (!todaySession) {
+    throw new Error("Save today's session notes before sending a recap email.");
+  }
 
-  return { sent: true, to: client.email };
+  const recap = await sendCoachSessionRecapEmail(actor, userId, todaySession.notes);
+  if (!recap.sent || !recap.to) {
+    throw new Error(recap.error ?? 'Email is not configured.');
+  }
+
+  return { sent: true, to: recap.to };
 }
 
 export async function sendCoachResultsReadySms(

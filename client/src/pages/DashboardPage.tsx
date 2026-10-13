@@ -16,10 +16,17 @@ import { isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
 import { AUTO_START_DASHBOARD_TUTORIAL } from '../components/tutorial/tutorialPresenterTimeline';
 import { SMS_PHONE_DISPLAY, SMS_PHONE_NUMBER } from '../config/sms';
+import { useNutritionMealsExpanded } from '../hooks/useNutritionMealsExpanded';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useDashboardLayout } from '../utils/dashboardLayoutPreference';
 import { CoachHomeDashboard } from '../components/dashboard/coachHome/CoachHomeDashboard';
 import { ClassicDashboardHint } from '../components/dashboard/ClassicDashboardHint';
+import { SourcesBesideTargets } from '../components/nutrition/SourcesLink';
+import {
+  FirstDayChecklist,
+  isFirstDayChecklistDismissedLocally,
+  persistFirstDayChecklistDismissedLocally
+} from '../components/dashboard/FirstDayChecklist';
 
 function MacroDonut({
   label,
@@ -78,6 +85,10 @@ function RemainingMacrosDisplay({
 }) {
   return (
     <div data-tour="macros-remaining">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-app-text">Today&apos;s targets</p>
+        <SourcesBesideTargets />
+      </div>
       <div className="grid grid-cols-4 gap-3">
         <MacroDonut label="Kcal" actual={calories.actual} target={calories.target} color="#eab308" />
         <MacroDonut label="Protein" actual={protein.actual} target={protein.target} unit="g" color="#22c55e" />
@@ -89,7 +100,13 @@ function RemainingMacrosDisplay({
 }
 
 
-export function DashboardPage({ user }: { user?: AppUser | null }) {
+export function DashboardPage({
+  user,
+  onUserUpdated
+}: {
+  user?: AppUser | null;
+  onUserUpdated?: (user: AppUser) => void;
+}) {
   const location = useLocation();
   const [dashboardLayout] = useDashboardLayout();
   const { startTour, hasAutoStarted, isActive } = useTutorial();
@@ -97,6 +114,13 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [checklistDismissed, setChecklistDismissed] = useState(
+    () => Boolean(user?.firstDayChecklistDismissedAt) || isFirstDayChecklistDismissedLocally(user?.id)
+  );
+  const { planExpanded, planSaveError, changePlanExpanded } = useNutritionMealsExpanded(
+    Boolean(user?.nutritionMealsExpanded),
+    onUserUpdated
+  );
 
   const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -196,8 +220,9 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
         <h1 className="text-xl font-bold">Dashboard could not load</h1>
         <p className="mt-2 text-sm">{error}</p>
         <p className="mt-4 text-sm text-red-700 dark:text-red-300">
-          Check that the backend is running and that Firebase Admin credentials are configured in{' '}
-          <code>server/.env</code>.
+          {error.includes('Could not reach the server')
+            ? 'Check your internet connection and try again. If this continues on the iPhone app, the API may not allow this app origin yet.'
+            : 'Check that the backend is running and that Firebase Admin credentials are configured in server/.env.'}
         </p>
       </div>
     );
@@ -219,12 +244,34 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
     );
   }
 
+  const showChecklist =
+    !checklistDismissed &&
+    !user?.firstDayChecklistDismissedAt &&
+    !isFirstDayChecklistDismissedLocally(user?.id) &&
+    Boolean(data?.program);
+
+  function handleChecklistDismiss(updatedUser?: AppUser) {
+    setChecklistDismissed(true);
+    persistFirstDayChecklistDismissedLocally(updatedUser?.id ?? user?.id);
+    if (updatedUser?.id) onUserUpdated?.(updatedUser);
+  }
+
   if (dashboardLayout === 'coachHome') {
-    return <CoachHomeDashboard user={user} data={data} />;
+    return (
+      <div className="space-y-5">
+        {showChecklist && (
+          <FirstDayChecklist user={user} data={data} onDismiss={handleChecklistDismiss} />
+        )}
+        <CoachHomeDashboard user={user} data={data} />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-8">
+      {showChecklist && (
+        <FirstDayChecklist user={user} data={data} onDismiss={handleChecklistDismiss} />
+      )}
       <ClassicDashboardHint />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div data-tour="welcome">
@@ -248,7 +295,7 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
             target: Number(data.dailyLog?.fatTarget ?? 0)
           }}
         />
-        <PlanStatusCard />
+        <PlanStatusCard user={user} meals={data.allMeals ?? data.meals} />
       </div>
 
       {isCoachRole(user?.role) && <UpcomingCheckInsCard />}
@@ -259,10 +306,18 @@ export function DashboardPage({ user }: { user?: AppUser | null }) {
             meals={data.meals}
             allMeals={data.allMeals}
             onChange={() => loadDashboard({ silent: true })}
+            showPlanToggle
+            planExpanded={planExpanded}
+            onPlanExpandedChange={(next) => void changePlanExpanded(next)}
+            planSaveError={planSaveError}
           />
         </div>
         <div data-tour="today-exercise">
-          <TodayExercise exercises={data.exercises} onChange={() => loadDashboard({ silent: true })} />
+          <TodayExercise
+            exercises={data.exercises}
+            routineStatus={data.exerciseRoutineStatus}
+            onChange={() => loadDashboard({ silent: true })}
+          />
         </div>
         <div data-tour="macro-progress">
           <MiniBlueprint program={data.program} />

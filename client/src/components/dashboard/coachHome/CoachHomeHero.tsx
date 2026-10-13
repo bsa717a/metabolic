@@ -7,6 +7,7 @@ import { pickCoachHomeGreeting } from '../../../utils/dashboardCopy';
 import { buildCoachHomeBubble } from '../../virtualCoach/coachChatGreeting';
 import { CoachChatModal } from '../../virtualCoach/CoachChatModal';
 import { COACH_CHAT_QUICK_REPLIES } from '../../virtualCoach/coachWelcomeMessage';
+import { useAiConsent } from '../../../context/AiConsentContext';
 
 const TAGLINE = 'Your metabolism. Your energy. Your results.';
 
@@ -18,6 +19,7 @@ export function CoachHomeHero({
   meals: Meal[];
 }) {
   const navigate = useNavigate();
+  const { accepted, openReview } = useAiConsent();
   const coach = getVirtualCoach(user?.selectedVirtualCoachId);
   const { greeting, name } = pickCoachHomeGreeting(user?.firstName);
   const [draft, setDraft] = useState('');
@@ -32,7 +34,12 @@ export function CoachHomeHero({
       navigate('/virtual-coach/choose');
       return;
     }
-    setSeed(text?.trim() || undefined);
+    const trimmed = text?.trim();
+    if (trimmed && !accepted) {
+      openReview();
+      return;
+    }
+    setSeed(trimmed || undefined);
     setSessionKey((key) => key + 1);
     setOpen(true);
     setDraft('');

@@ -1,3 +1,5 @@
+import { importedPlanTitle } from '../../src/utils/importedPlanTitle.ts';
+
 /**
  * Pure helpers for the one-or-many legacy user import.
  * Program rows in the old app store the training session id in `owner_id`
@@ -50,10 +52,14 @@ export function accountAction(emailAlreadyExists: boolean): 'create' | 'refresh'
   return emailAlreadyExists ? 'refresh' : 'create';
 }
 
+/**
+ * Imported plan title. `displayName` stays in the signature so
+ * `import-one-legacy-user.ts` on feature/import-many-legacy-users still compiles.
+ * The title itself no longer includes the client name.
+ */
 export function currentPlanTitle(displayName: string, kind: 'meals' | 'workouts', dateLabel: string): string {
-  const name = displayName.trim().replace(/\s+/g, ' ') || 'Legacy user';
-  const date = dateLabel.trim() || 'undated';
-  return `${name} current ${kind} (${date})`;
+  void displayName;
+  return importedPlanTitle(kind, dateLabel);
 }
 
 export function displayNameFromLegacy(name: string | null | undefined, email: string): string {

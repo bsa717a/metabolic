@@ -4,6 +4,7 @@ import { Topbar } from './Topbar';
 import { MOBILE_BOTTOM_NAV_RESERVE, MobileBottomNav } from './MobileBottomNav';
 import type { AppUser } from '../../types';
 import { EntitlementsProvider } from '../../context/EntitlementsContext';
+import { AiConsentProvider } from '../../context/AiConsentContext';
 import { TutorialProvider } from '../tutorial/TutorialContext';
 import { DashboardTutorial } from '../tutorial/DashboardTutorial';
 import { SmsRemindersIntroModal } from '../sms/SmsRemindersIntroModal';
@@ -11,21 +12,26 @@ import { FeedbackWidget } from '../feedback/FeedbackWidget';
 import { CoachChatFab } from '../virtualCoach/CoachChatFab';
 import { CoachWelcomeGate } from '../virtualCoach/CoachWelcomeGate';
 import { recordNavigation } from '../../services/diagnostics';
+import { bindIosViewportGuards, resetRouteViewport } from '../../utils/iosViewport';
 
 export function AppShell({
   user,
-  onTutorialComplete
+  onTutorialComplete,
+  onUserUpdated
 }: {
   user?: AppUser | null;
   onTutorialComplete?: (user: AppUser) => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const [coachIntroRequest, setCoachIntroRequest] = useState(0);
 
+  useEffect(() => bindIosViewportGuards(), []);
+
   useEffect(() => {
     recordNavigation(location.pathname);
-    mainRef.current?.scrollTo(0, 0);
+    resetRouteViewport(mainRef.current);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -47,11 +53,16 @@ export function AppShell({
   return (
     <EntitlementsProvider user={user ?? null}>
     <TutorialProvider user={user} onComplete={onTutorialComplete}>
+    <AiConsentProvider user={user} onUserUpdated={onUserUpdated ?? onTutorialComplete}>
       <div className="flex min-h-dvh flex-col bg-app-bg transition-colors duration-200 max-sm:h-dvh max-sm:overflow-hidden">
-        <Topbar user={user} onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)} />
+        <Topbar
+          user={user}
+          onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)}
+          onUserUpdated={onUserUpdated}
+        />
         <main
           ref={mainRef}
-          className="mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto p-4 sm:overflow-visible sm:p-6 lg:p-8"
+          className="mx-auto min-h-0 w-full min-w-0 max-w-7xl flex-1 overflow-x-clip overflow-y-auto overscroll-none p-4 sm:overflow-visible sm:p-6 lg:p-8"
         >
           <Outlet />
         </main>
@@ -66,6 +77,7 @@ export function AppShell({
         <CoachChatFab user={user} />
         <FeedbackWidget />
       </div>
+    </AiConsentProvider>
     </TutorialProvider>
     </EntitlementsProvider>
   );

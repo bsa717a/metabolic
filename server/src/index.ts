@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import { env } from './config/env.js';
+import { corsAllowedOrigins } from './utils/corsOrigins.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { dashboardRoutes } from './routes/dashboardRoutes.js';
 import { programRoutes } from './routes/programRoutes.js';
@@ -24,7 +25,10 @@ import { hydrationRoutes } from './routes/hydrationRoutes.js';
 import { internalRoutes } from './routes/internalRoutes.js';
 import { tutorialRoutes } from './routes/tutorialRoutes.js';
 import { virtualCoachRoutes } from './routes/virtualCoachRoutes.js';
+import { coachSupportRoutes } from './routes/coachSupportRoutes.js';
 import { billingRoutes } from './routes/billingRoutes.js';
+import { appleIapRoutes } from './routes/appleIapRoutes.js';
+import { appleIapWebhookRoutes } from './routes/appleIapWebhookRoutes.js';
 import { storeRoutes } from './routes/storeRoutes.js';
 import { storeAdminRoutes } from './routes/storeAdminRoutes.js';
 import { storeWebhookRoutes } from './routes/storeWebhookRoutes.js';
@@ -36,6 +40,7 @@ import {
 } from './routes/communicationAdminRoutes.js';
 import { unsubscribeRoutes } from './routes/unsubscribeRoutes.js';
 import { pushRoutes } from './routes/pushRoutes.js';
+import { publicRoutes } from './routes/publicRoutes.js';
 
 async function main() {
   const app = Fastify({
@@ -46,7 +51,7 @@ async function main() {
   });
 
   await app.register(cors, {
-    origin: env.CLIENT_URL,
+    origin: corsAllowedOrigins(env.CLIENT_URL),
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
@@ -81,7 +86,10 @@ async function main() {
   await app.register(hydrationRoutes);
   await app.register(tutorialRoutes);
   await app.register(virtualCoachRoutes);
+  await app.register(coachSupportRoutes);
   await app.register(billingRoutes);
+  await app.register(appleIapRoutes);
+  await app.register(appleIapWebhookRoutes);
   await app.register(storeRoutes);
   await app.register(storeAdminRoutes);
   await app.register(storeWebhookRoutes);
@@ -91,6 +99,7 @@ async function main() {
   await app.register(communicationAssetRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(pushRoutes);
+  await app.register(publicRoutes);
   await app.register(internalRoutes);
 
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

@@ -60,7 +60,7 @@ export function PlanActionsMenu({
         title="Plan actions"
         onClick={() => setOpen((value) => !value)}
       >
-        Actions
+        Plan actions
         <ChevronDown className={`ml-1 inline h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </Button>
       {open && (

@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import type { Meal } from '../../types';
 import { api, isFuture } from '../../services/api';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import {
   MealCardEditor,
@@ -15,6 +16,7 @@ import { MealMacroDetailsDrawer } from './MealMacroDetailsDrawer';
 import { MacroSummaryInline, type MacroTotals } from './MacroSummaryFooter';
 import { PlannedItemChecklist } from './PlannedItemChecklist';
 import { DeleteMealScopeModal } from './DeleteMealScopeModal';
+import { MealClientNote, MealClientNoteReadOnly } from './MealClientNote';
 
 function formatPlannedTime(plannedTime?: string | null) {
   if (!plannedTime) return null;
@@ -99,15 +101,17 @@ function ActionsDropdown({
 
   return (
     <div ref={ref} className="relative">
-      <button
+      <Button
         type="button"
+        variant="secondary"
         aria-label="Meal actions"
         aria-expanded={open}
-        className="inline-flex h-9 items-center gap-1 rounded-xl px-3 text-sm text-app-text-muted transition hover:bg-app-muted hover:text-app-text"
+        aria-haspopup="menu"
         onClick={() => setOpen((v) => !v)}
       >
-        Actions <ChevronDown size={14} />
-      </button>
+        Meal actions
+        <ChevronDown className="ml-1 inline h-4 w-4" />
+      </Button>
       {open && (
         <ul className="absolute right-0 z-50 mt-1 min-w-[200px] rounded-xl border border-app-border bg-app-surface py-1 shadow-lg">
           {items.map((item) => (
@@ -150,6 +154,7 @@ export const MealCard = forwardRef<
     onRequestCancelAll?: () => void;
     externalSaving?: boolean;
     onDraftTotalsChange?: (totals: MacroTotals) => void;
+    allowClientNote?: boolean;
   }
 >(function MealCard(
   {
@@ -170,7 +175,8 @@ export const MealCard = forwardRef<
     onRequestSaveAll,
     onRequestCancelAll,
     externalSaving,
-    onDraftTotalsChange
+    onDraftTotalsChange,
+    allowClientNote = false
   },
   ref
 ) {
@@ -246,6 +252,7 @@ export const MealCard = forwardRef<
   }
 
   const [editorKey, setEditorKey] = useState(0);
+  const readOnlyClientNote = !allowClientNote ? meal.clientNote?.trim() ?? '' : '';
 
   async function refreshAfterSaveFailure() {
     await onChange();
@@ -261,28 +268,31 @@ export const MealCard = forwardRef<
         )}
       >
       {isEditing ? (
-        <MealCardEditor
-          key={editorKey}
-          ref={ref}
-          meal={meal}
-          macroTargets={macroTargets}
-          dailyTargets={dailyTargets}
-          onSaved={() => {
-            onExitEditMode();
-            void onChange();
-          }}
-          onCancel={onExitEditMode}
-          onRefresh={refreshAfterSaveFailure}
-          onRequestRebalance={() => onAiSuggestions(meal)}
-          onRequestSaveAll={onRequestSaveAll}
-          onRequestCancelAll={onRequestCancelAll}
-          externalSaving={externalSaving}
-          onDraftTotalsChange={onDraftTotalsChange}
-        />
+        <>
+          {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
+          <MealCardEditor
+            key={editorKey}
+            ref={ref}
+            meal={meal}
+            macroTargets={macroTargets}
+            dailyTargets={dailyTargets}
+            onSaved={() => {
+              onExitEditMode();
+              void onChange();
+            }}
+            onCancel={onExitEditMode}
+            onRefresh={refreshAfterSaveFailure}
+            onRequestRebalance={() => onAiSuggestions(meal)}
+            onRequestSaveAll={onRequestSaveAll}
+            onRequestCancelAll={onRequestCancelAll}
+            externalSaving={externalSaving}
+            onDraftTotalsChange={onDraftTotalsChange}
+          />
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
+            <div className="w-full shrink-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:shrink">
               <p className="text-sm text-app-text-muted">Meal {meal.mealNumber}</p>
               <h3 className="text-lg font-bold">
                 {plannedTime ? `${meal.name} — ${plannedTime}` : meal.name}
@@ -290,21 +300,13 @@ export const MealCard = forwardRef<
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-1">
               {onBuildMeal && (
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-green px-3 text-sm font-semibold text-white transition hover:bg-brand-deep"
-                  onClick={onBuildMeal}
-                >
+                <Button type="button" variant="secondary" onClick={onBuildMeal}>
                   🃏 Build
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
-                onClick={() => onEnterEditMode(meal.id)}
-              >
+              <Button type="button" onClick={() => onEnterEditMode(meal.id)}>
                 Edit plan
-              </button>
+              </Button>
               <ActionsDropdown
                 future={future}
                 onLogActual={() => onLogActual(meal.id)}
@@ -326,6 +328,8 @@ export const MealCard = forwardRef<
               })()}
             </div>
           </div>
+
+          {readOnlyClientNote ? <MealClientNoteReadOnly note={readOnlyClientNote} position="start" /> : null}
 
           {toggleError && <p className="mt-2 text-sm text-red-600">{toggleError}</p>}
           {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
@@ -377,6 +381,7 @@ export const MealCard = forwardRef<
           </div>
         </>
       )}
+      {allowClientNote ? <MealClientNote meal={meal} onChange={onChange} /> : null}
       </Card>
 
       <MealMacroDetailsDrawer open={macroDetailsOpen} meal={meal} onClose={() => setMacroDetailsOpen(false)} />

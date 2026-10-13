@@ -3,18 +3,18 @@ import type { User } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
-import { isEmailConfigured, sendWelcomeEmail } from "../services/emailService.js";
+import { isEmailConfigured, sendEmailVerificationLink } from "../services/emailService.js";
 import { slugToPlan } from "../services/entitlements.js";
 import { isTwilioConfigured, sendOutboundMessage } from "../services/twilioOutboundService.js";
 
 /** Best-effort alerts when a new account is created. Never throws — failed/unconfigured
- *  alerts must not break signup. */
-async function notifyNewSignup(user: User) {
-  if (isEmailConfigured()) {
+ *  alerts must not break signup. Welcome email is sent later when onboarding completes. */
+async function notifyNewSignup(user: User, emailVerified: boolean) {
+  if (isEmailConfigured() && !emailVerified) {
     try {
-      await sendWelcomeEmail({ to: user.email, firstName: user.firstName });
+      await sendEmailVerificationLink({ email: user.email, firstName: user.firstName });
     } catch (error) {
-      console.error("Failed to send welcome email", error);
+      console.error("Failed to send verification email", error);
     }
   }
 
@@ -28,11 +28,21 @@ async function notifyNewSignup(user: User) {
   }
 }
 
-function splitName(firebaseUser: DecodedIdToken) {
+export function splitName(firebaseUser: { name?: string; email?: string }) {
   const [firstName = "Metabolic", ...lastNameParts] = (firebaseUser.name || firebaseUser.email?.split("@")[0] || "User")
     .trim()
     .split(/\s+/);
   return { firstName, lastName: lastNameParts.join(" ") || "User" };
+}
+
+export function shouldBackfillName(
+  user: { firstName: string; lastName: string; email: string },
+  firebaseUser: { name?: string; email?: string }
+) {
+  if (!firebaseUser.name?.trim()) return false;
+  const localPart = user.email.split("@")[0] || "";
+  const placeholderFirst = user.firstName === "Metabolic" || user.firstName === localPart;
+  return placeholderFirst && user.lastName === "User";
 }
 
 /** Placeholder UIDs from seed data or legacy imports — replaced on first Firebase sign-in. */
@@ -87,7 +97,16 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
   }
 
   const byUid = await prisma.user.findUnique({ where: { firebaseUid: firebaseUser.uid } });
-  if (byUid) return byUid;
+  if (byUid) {
+    if (shouldBackfillName(byUid, firebaseUser)) {
+      const { firstName, lastName } = splitName(firebaseUser);
+      return prisma.user.update({
+        where: { id: byUid.id },
+        data: { firstName, lastName }
+      });
+    }
+    return byUid;
+  }
 
   if (firebaseUser.email) {
     const byEmail = await prisma.user.findFirst({
@@ -118,7 +137,7 @@ export async function resolveAppUser(firebaseUser: DecodedIdToken): Promise<User
         ...(signupPlan ? { plan: signupPlan } : {})
       }
     });
-    void notifyNewSignup(createdUser);
+    void notifyNewSignup(createdUser, Boolean(firebaseUser.email_verified));
     return createdUser;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

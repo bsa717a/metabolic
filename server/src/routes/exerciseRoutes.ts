@@ -33,14 +33,25 @@ import {
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
 import {
+  addRoutineDayExercise,
   applyRoutineDayItemOverrides,
   getRoutineForUser,
+  removeRoutineDayExercise,
+  updateRoutineDayExtra,
   upsertRoutine,
   upsertRoutineDayItemOverride
 } from '../services/exerciseRoutineService.js';
 import { listExercisePlansForUser } from '../services/exercisePlanService.js';
+import {
+  answerExerciseAutoCheckIn,
+  ExerciseAutoError,
+  getExerciseAuto,
+  startExerciseAutoWorkout,
+  updateExerciseAuto
+} from '../services/exerciseAutoService.js';
 import { prisma } from '../db/prisma.js';
-import { ExerciseStatus, Visibility } from '@prisma/client';
+import { ExerciseAutoLevel, ExerciseAutoLocation, ExercisePageMode, ExerciseStatus, Visibility } from '@prisma/client';
+import { parseClientDayQuery, resolveRequestTimeZone, userDayKey } from '../utils/dates.js';
 
 const optionalNumber = z.union([z.number(), z.null()]).optional();
 const optionalString = z.union([z.string(), z.null()]).optional();
@@ -320,6 +331,58 @@ export async function exerciseRoutes(app: FastifyInstance) {
     listExercisePlansForUser(request.appUser!.id)
   );
 
+  function exerciseAutoToday(request: { query: unknown; appUser?: { timezone?: string | null } }) {
+    const { dateKey, timeZone } = parseClientDayQuery(request.query);
+    return dateKey ?? userDayKey(resolveRequestTimeZone(timeZone, request.appUser?.timezone));
+  }
+
+  function exerciseAutoError(error: unknown, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+    const status = error instanceof ExerciseAutoError ? error.status : 400;
+    const message = error instanceof Error ? error.message : 'Unable to update automatic exercise';
+    return reply.code(status).send({ error: message });
+  }
+
+  app.get('/api/exercise-auto', { preHandler: requireAuth }, async (request) =>
+    getExerciseAuto(request.appUser!.id, exerciseAutoToday(request))
+  );
+
+  app.patch('/api/exercise-auto', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        mode: z.nativeEnum(ExercisePageMode).optional(),
+        location: z.nativeEnum(ExerciseAutoLocation).optional(),
+        level: z.nativeEnum(ExerciseAutoLevel).optional(),
+        planId: z.string().trim().min(1).optional()
+      })
+      .parse(request.body);
+    try {
+      return await updateExerciseAuto(request.appUser!.id, exerciseAutoToday(request), body);
+    } catch (error) {
+      return exerciseAutoError(error, reply);
+    }
+  });
+
+  app.post('/api/exercise-auto/check-in', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        choice: z.enum(['move_up', 'repeat_block', 'repeat_week', 'keep_going'])
+      })
+      .parse(request.body);
+    try {
+      return await answerExerciseAutoCheckIn(request.appUser!.id, exerciseAutoToday(request), body.choice);
+    } catch (error) {
+      return exerciseAutoError(error, reply);
+    }
+  });
+
+  app.post('/api/exercise-auto/start', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      return await startExerciseAutoWorkout(request.appUser!.id, exerciseAutoToday(request));
+    } catch (error) {
+      return exerciseAutoError(error, reply);
+    }
+  });
+
   app.get('/api/exercise-routine', { preHandler: requireAuth }, async (request) =>
     getRoutineForUser(request.appUser!.id)
   );
@@ -336,13 +399,15 @@ export async function exerciseRoutes(app: FastifyInstance) {
           )
           .length(7),
         applyForward: z.boolean().optional(),
-        exercisePlanId: z.string().nullable().optional()
+        exercisePlanId: z.string().nullable().optional(),
+        resetDayEdits: z.boolean().optional()
       })
       .parse(request.body);
     try {
       return await upsertRoutine(request.appUser!.id, body.days, {
         applyForward: body.applyForward,
-        exercisePlanId: body.exercisePlanId
+        exercisePlanId: body.exercisePlanId,
+        resetDayEdits: body.resetDayEdits
       });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
@@ -361,6 +426,65 @@ export async function exerciseRoutes(app: FastifyInstance) {
         return reply
           .code(400)
           .send({ error: error instanceof Error ? error.message : 'Unable to update day prescription' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/exercise-routine/days/:weekday/exercises',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z.object({ weekday: z.coerce.number().int().min(0).max(6) }).parse(request.params);
+      const body = z.object({ exerciseId: z.string().trim().min(1) }).parse(request.body);
+      try {
+        return await addRoutineDayExercise(request.appUser!.id, params.weekday, body.exerciseId);
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/exercise-routine/days/:weekday/exercises/remove',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z.object({ weekday: z.coerce.number().int().min(0).max(6) }).parse(request.params);
+      const body = z
+        .object({
+          templateItemId: z.string().trim().min(1).optional(),
+          extraId: z.string().trim().min(1).optional()
+        })
+        .refine((value) => Boolean(value.templateItemId) !== Boolean(value.extraId), {
+          message: 'Provide a plan exercise or an added exercise'
+        })
+        .parse(request.body);
+      try {
+        return await removeRoutineDayExercise(
+          request.appUser!.id,
+          params.weekday,
+          body.templateItemId ? { templateItemId: body.templateItemId } : { extraId: body.extraId! }
+        );
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to remove exercise' });
+      }
+    }
+  );
+
+  app.patch(
+    '/api/exercise-routine/days/:weekday/extras/:extraId',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = z
+        .object({
+          weekday: z.coerce.number().int().min(0).max(6),
+          extraId: z.string().min(1)
+        })
+        .parse(request.params);
+      const body = templateExerciseItemUpdateBody.parse(request.body);
+      try {
+        return await updateRoutineDayExtra(request.appUser!.id, params.weekday, params.extraId, body);
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update exercise' });
       }
     }
   );

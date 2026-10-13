@@ -12,6 +12,10 @@ export type CardFood = {
   fat: number;
   free: boolean;
   rounded: boolean;
+  discrete?: boolean;
+  unitStep?: number;
+  minServings?: number | null;
+  maxServings?: number | null;
 };
 
 export type CardOption = {
@@ -220,6 +224,93 @@ export function foodQuantity(line: SelectedFoodLine, overrides: QuantityOverride
   return overrides[foodQuantityKey(line)] ?? overrides[line.foodId] ?? line.quantity;
 }
 
+function roundToStep(value: number, step: number) {
+  if (step <= 0) return Math.round(value * 100) / 100;
+  return Math.round(value / step) * step;
+}
+
+function isDiscreteLine(line: SelectedFoodLine) {
+  return Boolean(line.discrete) || (line.rounded && Number.isInteger(line.servings));
+}
+
+function quantityAfterFactor(line: SelectedFoodLine, qty: number, factor: number) {
+  if (qty <= 0 || line.quantity <= 0 || line.servings <= 0) return qty;
+  const qtyPerServing = line.quantity / line.servings;
+  const newServings = (qty / qtyPerServing) * factor;
+  if (isDiscreteLine(line)) {
+    const step = line.unitStep && line.unitStep > 0 ? line.unitStep : 1;
+    let snapped = Math.max(step, Math.round(newServings / step) * step);
+    if (line.minServings != null && snapped < line.minServings) snapped = line.minServings;
+    if (line.maxServings != null && snapped > line.maxServings) snapped = line.maxServings;
+    return Math.round(snapped * qtyPerServing * 100) / 100;
+  }
+  return Math.round(Math.max(0.25, roundToStep(newServings * qtyPerServing, 0.25)) * 100) / 100;
+}
+
+/**
+ * Resize the current plate so scalable foods hit the meal calorie target.
+ * Discrete items (eggs) snap to whole units; leftover error goes to continuous foods.
+ */
+export function rebalanceSelectionToTarget(
+  lines: SelectedFoodLine[],
+  targetCalories: number,
+  overrides: QuantityOverrides = {}
+): QuantityOverrides {
+  if (targetCalories <= 0 || !lines.length) return {};
+
+  const items = lines.map((line) => {
+    const qty = foodQuantity(line, overrides);
+    return { line, qty, scaled: scaledFood(line, qty) };
+  });
+  const freeCalories = items.filter((item) => item.line.free).reduce((sum, item) => sum + item.scaled.calories, 0);
+  const scalable = items.filter((item) => !item.line.free && item.scaled.calories > 0);
+  const scalableCalories = scalable.reduce((sum, item) => sum + item.scaled.calories, 0);
+  if (scalableCalories <= 0) return {};
+
+  const remaining = targetCalories - freeCalories;
+  const factor = remaining > 0 ? remaining / scalableCalories : 0;
+  const next: QuantityOverrides = {};
+  const qtyByKey = new Map<string, number>();
+  for (const item of items) {
+    if (item.line.free) continue;
+    const key = foodQuantityKey(item.line);
+    const qty = quantityAfterFactor(item.line, item.qty, factor);
+    qtyByKey.set(key, qty);
+    next[key] = qty;
+  }
+
+  let actual = freeCalories;
+  for (const item of items) {
+    if (item.line.free) continue;
+    actual += scaledFood(item.line, qtyByKey.get(foodQuantityKey(item.line))!).calories;
+  }
+  const error = targetCalories - actual;
+  const continuous = items.filter((item) => !item.line.free && !isDiscreteLine(item.line));
+  const continuousCalories = continuous.reduce(
+    (sum, item) => sum + scaledFood(item.line, qtyByKey.get(foodQuantityKey(item.line))!).calories,
+    0
+  );
+  if (Math.abs(error) >= 1 && continuousCalories > 0) {
+    const adjust = (continuousCalories + error) / continuousCalories;
+    if (adjust > 0) {
+      for (const item of continuous) {
+        const key = foodQuantityKey(item.line);
+        const qty = quantityAfterFactor(item.line, qtyByKey.get(key)!, adjust);
+        qtyByKey.set(key, qty);
+        next[key] = qty;
+      }
+    }
+  }
+
+  return next;
+}
+
+export function quantityInputStep(line: SelectedFoodLine) {
+  if (!isDiscreteLine(line) || line.servings <= 0 || line.quantity <= 0) return 0.25;
+  const step = line.unitStep && line.unitStep > 0 ? line.unitStep : 1;
+  return (line.quantity / line.servings) * step;
+}
+
 export function selectionTotals(cards: BuilderCard[], picks: BuilderPicks, quantityOverrides: QuantityOverrides = {}) {
   let calories = 0;
   let protein = 0;
@@ -269,6 +360,12 @@ export function foodsLabel(option: CardOption) {
   return option.foods
     .map((f) => `${f.quantity} ${f.unit}${f.rounded ? ' (rounded)' : ''}${f.free ? ' · free' : ''}`)
     .join(' + ');
+}
+
+/** Review-step header: options are scaled from the set's default combo, so stacked picks can miss the target. */
+export function mealBuilderReviewSubtitle(inBand: boolean, calorieDelta: number): string {
+  if (inBand) return 'This meal fits your target';
+  return calorieDelta > 0 ? 'This combo is over your target' : 'This combo is under your target';
 }
 
 /** POST body shape: single-select cards send a string, multi-select send arrays. */

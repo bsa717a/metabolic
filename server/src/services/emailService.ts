@@ -1,12 +1,21 @@
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
-import sgMail from '@sendgrid/mail';
+import { isEmailConfigured, sendEmail } from './emailTransport.js';
 import { env } from '../config/env.js';
+import { getFirebaseAdmin } from '../auth/firebaseAdmin.js';
+import { toAppAuthActionLink } from './authActionLink.js';
+import {
+  clearVerificationActionUrl,
+  peekVerificationActionUrl,
+  rememberVerificationActionUrl,
+  isTooManyVerificationAttempts,
+  isVerificationGenerateBlocked,
+  markVerificationGenerateBlocked
+} from './verificationLinkCache.js';
 import type { ResultsReadyLinks } from './resultsReadyNotification.js';
+import type { SessionRecapEmail } from './sessionRecapEmail.js';
 
-export function isEmailConfigured() {
-  return Boolean(env.SENDGRID_API_KEY && env.SENDGRID_FROM_EMAIL);
-}
+export { isEmailConfigured } from './emailTransport.js';
 
 function resolveEmailAsset(filename: string) {
   const candidates = [
@@ -20,7 +29,16 @@ function resolveEmailAsset(filename: string) {
   throw new Error(`Missing email asset: ${filename}`);
 }
 
-/** Welcome email for brand-new signups. Requires SendGrid to be configured. */
+async function sendOrThrow(label: string, send: () => Promise<void>) {
+  try {
+    await send();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown Resend error';
+    throw new Error(`${label}: ${detail.slice(0, 300)}`);
+  }
+}
+
+/** Welcome email for brand-new signups. Requires Resend to be configured. */
 export async function sendWelcomeEmail(options: { to: string; firstName?: string | null }) {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured.');
@@ -53,100 +71,188 @@ export async function sendWelcomeEmail(options: { to: string; firstName?: string
     '— Metabolic OS'
   ].join('\n');
 
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
-  try {
-    await sgMail.send({
+  await sendOrThrow('Could not send welcome email', () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
       subject: 'Welcome to Metabolic OS',
       text,
       html,
-      // SendGrid API expects content_id; @sendgrid/mail leaves camelCase contentId unconverted.
       attachments: [
         {
-          content: image.toString('base64'),
-          filename: 'welcome-dashboard.png',
-          type: 'image/png',
-          disposition: 'inline',
-          content_id: 'welcome-dashboard'
-        } as { content: string; filename: string; type: string; disposition: string; content_id: string }
+          name: 'welcome-dashboard.png',
+          contentType: 'image/png',
+          contentBytes: image.toString('base64'),
+          contentId: 'welcome-dashboard',
+          isInline: true
+        }
       ]
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send welcome email: ${detail.slice(0, 300)}`);
-  }
+    })
+  );
 }
 
-export type { ResultsReadyLinks };
+function appOrigin() {
+  return env.CLIENT_URL.replace(/\/$/, '');
+}
 
-export async function sendResultsReadyEmail(options: {
+function renderAuthActionEmail(replacements: {
+  heading: string;
+  preheader: string;
+  body: string;
+  buttonLabel: string;
+  actionUrl: string;
+  footerNote: string;
+}) {
+  let html = readFileSync(resolveEmailAsset('auth-action.html'), 'utf8');
+  for (const [key, value] of Object.entries(replacements)) {
+    html = html.replaceAll(`{{${key}}}`, escapeHtml(value));
+  }
+  return html;
+}
+
+async function sendAuthActionEmail(options: {
   to: string;
-  clientFirstName: string;
-  coachName: string;
-  links: ResultsReadyLinks;
+  subject: string;
+  heading: string;
+  preheader: string;
+  body: string;
+  buttonLabel: string;
+  actionUrl: string;
+  footerNote: string;
+  text: string;
 }) {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured.');
   }
-
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
-
-  const subject = 'Your results are ready';
-  const greeting = options.clientFirstName.trim() || 'there';
-  const coachLabel = options.coachName.trim() || 'Your coach';
-
-  const text = [
-    `Hi ${greeting},`,
-    '',
-    `${coachLabel} let you know your latest program results are ready to review.`,
-    '',
-    `Progress: ${options.links.progress}`,
-    `Nutrition: ${options.links.nutrition}`,
-    `Exercise: ${options.links.exercise}`,
-    '',
-    '— Master Metabolic'
-  ].join('\n');
-
-  const html = [
-    `<p>Hi ${escapeHtml(greeting)},</p>`,
-    `<p>${escapeHtml(coachLabel)} let you know your latest program results are ready to review.</p>`,
-    '<ul>',
-    `<li><a href="${escapeHtml(options.links.progress)}">View progress</a></li>`,
-    `<li><a href="${escapeHtml(options.links.nutrition)}">View nutrition</a></li>`,
-    `<li><a href="${escapeHtml(options.links.exercise)}">View exercise</a></li>`,
-    '</ul>',
-    '<p>— Master Metabolic</p>'
-  ].join('');
-
-  try {
-    await sgMail.send({
+  const html = renderAuthActionEmail({
+    heading: options.heading,
+    preheader: options.preheader,
+    body: options.body,
+    buttonLabel: options.buttonLabel,
+    actionUrl: options.actionUrl,
+    footerNote: options.footerNote
+  });
+  await sendOrThrow(`Could not send ${options.subject.toLowerCase()}`, () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
-      subject,
-      text,
+      subject: options.subject,
+      text: options.text,
       html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send email: ${detail.slice(0, 300)}`);
+    })
+  );
+}
+
+/** Builds a Metabolic OS verification URL from a Firebase oob code. Does not send mail. */
+export async function createEmailVerificationActionUrl(email: string, forceNew = false) {
+  if (forceNew) {
+    clearVerificationActionUrl(email);
+  } else {
+    const cached = peekVerificationActionUrl(email);
+    if (cached) return cached;
   }
+  if (isVerificationGenerateBlocked(email)) {
+    const cached = peekVerificationActionUrl(email);
+    if (cached) return cached;
+    const error = new Error('TOO_MANY_ATTEMPTS_TRY_LATER');
+    (error as Error & { code: string }).code = 'auth/too-many-requests';
+    throw error;
+  }
+  try {
+    const continueUrl = `${appOrigin()}/login`;
+    const firebaseLink = await getFirebaseAdmin().auth().generateEmailVerificationLink(email, {
+      url: continueUrl
+    });
+    const actionUrl = toAppAuthActionLink(firebaseLink, env.CLIENT_URL);
+    rememberVerificationActionUrl(email, actionUrl);
+    return actionUrl;
+  } catch (error) {
+    if (isTooManyVerificationAttempts(error)) {
+      markVerificationGenerateBlocked(email);
+    }
+    throw error;
+  }
+}
+
+/** Branded verification email whose button opens Metabolic OS, not Firebase's hosted page. */
+export async function sendEmailVerificationLink(options: {
+  email: string;
+  firstName?: string | null;
+  deliver?: boolean;
+  forceNew?: boolean;
+}): Promise<{ actionUrl: string; sent: boolean }> {
+  const actionUrl = await createEmailVerificationActionUrl(options.email, options.forceNew);
+  if (options.deliver === false || !isEmailConfigured()) {
+    return { actionUrl, sent: false };
+  }
+
+  const firstName = options.firstName?.trim();
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+
+  await sendAuthActionEmail({
+    to: options.email,
+    subject: 'Verify your Metabolic OS email',
+    heading: 'Verify your email',
+    preheader: 'Confirm your email to finish setting up Metabolic OS.',
+    body: `${greeting} Confirm this email address so we can reach you with your plan, coach messages, and account updates.`,
+    buttonLabel: 'Verify email →',
+    actionUrl,
+    footerNote: "You're receiving this because you created a Metabolic OS account.",
+    text: [
+      'Verify your Metabolic OS email',
+      '',
+      `${greeting} Confirm this email address so we can reach you with your plan, coach messages, and account updates.`,
+      '',
+      `Verify: ${actionUrl}`,
+      '',
+      '— Metabolic OS'
+    ].join('\n')
+  });
+  return { actionUrl, sent: true };
+}
+
+/** Branded password-reset email whose button opens Metabolic OS. */
+export async function sendPasswordResetLink(options: { email: string }) {
+  const continueUrl = `${appOrigin()}/login`;
+  const firebaseLink = await getFirebaseAdmin().auth().generatePasswordResetLink(options.email, {
+    url: continueUrl
+  });
+  const actionUrl = toAppAuthActionLink(firebaseLink, env.CLIENT_URL);
+
+  await sendAuthActionEmail({
+    to: options.email,
+    subject: 'Reset your Metabolic OS password',
+    heading: 'Choose a new password',
+    preheader: 'Set a new password for your Metabolic OS account.',
+    body: 'Use the button below to choose a new password. If you did not ask for this, you can ignore the email.',
+    buttonLabel: 'Reset password →',
+    actionUrl,
+    footerNote: "You're receiving this because a password reset was requested for this email.",
+    text: [
+      'Reset your Metabolic OS password',
+      '',
+      'Use this link to choose a new password. If you did not ask for this, you can ignore the email.',
+      '',
+      `Reset: ${actionUrl}`,
+      '',
+      '— Metabolic OS'
+    ].join('\n')
+  });
+}
+
+export type { ResultsReadyLinks };
+
+export async function sendSessionRecapEmail(options: { to: string } & SessionRecapEmail) {
+  if (!isEmailConfigured()) {
+    throw new Error('Email is not configured.');
+  }
+
+  await sendOrThrow('Could not send session recap email', () =>
+    sendEmail({
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html
+    })
+  );
 }
 
 export async function sendCoachRequestNotificationEmail(options: {
@@ -163,8 +269,6 @@ export async function sendCoachRequestNotificationEmail(options: {
   if (!isEmailConfigured()) {
     return;
   }
-
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
 
   const clientName = `${options.client.firstName} ${options.client.lastName}`.trim() || 'A new user';
   const subject = `Coach requested: ${clientName}`;
@@ -197,26 +301,14 @@ export async function sendCoachRequestNotificationEmail(options: {
     '<p>— Master Metabolic</p>'
   ].join('');
 
-  try {
-    await sgMail.send({
+  await sendOrThrow('Could not send coach request email', () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
       subject,
       text,
       html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send coach request email: ${detail.slice(0, 300)}`);
-  }
+    })
+  );
 }
 
 export async function sendStoreOrderNotificationEmail(options: {
@@ -231,8 +323,6 @@ export async function sendStoreOrderNotificationEmail(options: {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured.');
   }
-
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
 
   const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
   const subject = `New store order — ${dollars(options.totalCents)} from ${options.customerName || options.customerEmail}`;
@@ -268,50 +358,21 @@ export async function sendStoreOrderNotificationEmail(options: {
     '<p>— Master Metabolic</p>'
   ].join('');
 
-  try {
-    await sgMail.send({
+  await sendOrThrow('Could not send store order email', () =>
+    sendEmail({
       to: options.to,
-      from: {
-        email: env.SENDGRID_FROM_EMAIL,
-        name: env.SENDGRID_FROM_NAME
-      },
       subject,
       text,
       html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send store order email: ${detail.slice(0, 300)}`);
-  }
+    })
+  );
 }
 
 async function sendSimpleEmail(to: string, subject: string, lines: string[]) {
   if (!isEmailConfigured()) throw new Error('Email is not configured.');
-  sgMail.setApiKey(env.SENDGRID_API_KEY);
   const text = lines.join('\n');
   const html = lines.map((line) => (line ? `<p>${escapeHtml(line)}</p>` : '<br />')).join('');
-  try {
-    await sgMail.send({
-      to,
-      from: { email: env.SENDGRID_FROM_EMAIL, name: env.SENDGRID_FROM_NAME },
-      subject,
-      text,
-      html
-    });
-  } catch (error) {
-    const detail =
-      error && typeof error === 'object' && 'response' in error
-        ? JSON.stringify((error as { response?: { body?: unknown } }).response?.body ?? error)
-        : error instanceof Error
-          ? error.message
-          : 'Unknown SendGrid error';
-    throw new Error(`Could not send email: ${detail.slice(0, 300)}`);
-  }
+  await sendOrThrow('Could not send email', () => sendEmail({ to, subject, text, html }));
 }
 
 /** Immediate alert to the team for a blocking / error-heavy feedback report. */

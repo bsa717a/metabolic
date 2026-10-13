@@ -170,10 +170,18 @@ async function seedExercisesForDate(
 
   if (program.defaultExerciseTemplateId) {
     await applyDefaultTemplateToNewDayOutsideTx(program, userId, targetDate);
+    await markExercisesInitialized(userId, day);
     return;
   }
 
   await copyExercisesForDate(program.id, userId, targetDate);
+}
+
+async function markExercisesInitialized(userId: string, day: Date) {
+  await prisma.dailyLog.updateMany({
+    where: { userId, date: day, exercisesInitializedAt: null },
+    data: { exercisesInitializedAt: new Date() }
+  });
 }
 
 /** The plan week's frozen targets (formula era) win over template/fallback stamping. */

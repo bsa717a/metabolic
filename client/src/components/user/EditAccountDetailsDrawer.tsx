@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { UserAccountDetails } from '../../types';
+import type { AppUser, UserAccountDetails } from '../../types';
 import { api } from '../../services/api';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import { UserProfileFields } from './UserProfileFields';
 import { timezoneOptions } from '../../utils/timezoneOptions';
 import { buildProfilePayload, emptyProfileDraft, profileToDraft, type ProfileDraft } from './userProfileForm';
+import { logout } from '../../services/auth';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { PushNotificationsCard } from './PushNotificationsCard';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AI_CONSENT_RECIPIENT, AI_CONSENT_TITLE } from '../../content/aiConsentCopy';
 
 function labelClassName() {
   return 'mb-1 block text-sm font-medium text-slate-600 dark:text-app-text-muted';
@@ -33,15 +36,19 @@ export function EditAccountDetailsDrawer({
   userId,
   title,
   mode,
+  user,
   onClose,
-  onSaved
+  onSaved,
+  onUserUpdated
 }: {
   open: boolean;
   userId: string;
   title: string;
   mode: 'self' | 'coach';
+  user?: AppUser | null;
   onClose: () => void;
   onSaved?: (details: UserAccountDetails) => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   return (
     <EditAccountDetailsDrawerContent
@@ -49,8 +56,10 @@ export function EditAccountDetailsDrawer({
       userId={userId}
       title={title}
       mode={mode}
+      user={user}
       onClose={onClose}
       onSaved={onSaved}
+      onUserUpdated={onUserUpdated}
     />
   );
 }
@@ -60,18 +69,23 @@ function EditAccountDetailsDrawerContent({
   userId,
   title,
   mode,
+  user,
   onClose,
-  onSaved
+  onSaved,
+  onUserUpdated
 }: {
   open: boolean;
   userId: string;
   title: string;
   mode: 'self' | 'coach';
+  user?: AppUser | null;
   onClose: () => void;
   onSaved?: (details: UserAccountDetails) => void;
+  onUserUpdated?: (user: AppUser) => void;
 }) {
   const navigate = useNavigate();
   const { startTour } = useTutorial();
+  const { accepted: aiAccepted, openReview: openAiConsentReview, setAccepted: setAiAccepted } = useAiConsent();
   const [accountDraft, setAccountDraft] = useState<AccountDraft>({
     firstName: '',
     lastName: '',
@@ -86,13 +100,25 @@ function EditAccountDetailsDrawerContent({
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [coachSaving, setCoachSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [assignedCoach, setAssignedCoach] = useState(user?.assignedCoach ?? null);
+  const [coachRequestedAt, setCoachRequestedAt] = useState(user?.coachRequestedAt ?? null);
+  const [coachCode, setCoachCode] = useState('');
+  const [wantsCoach, setWantsCoach] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setLoaded(false);
     setError('');
+    setDeleteError('');
+    setAssignedCoach(user?.assignedCoach ?? null);
+    setCoachRequestedAt(user?.coachRequestedAt ?? null);
+    setCoachCode('');
+    setWantsCoach(Boolean(user?.coachRequestedAt) && !user?.assignedCoach);
     api<UserAccountDetails>(`/api/users/${userId}/profile`)
       .then((details) => {
         setAccountDraft({
@@ -112,7 +138,7 @@ function EditAccountDetailsDrawerContent({
         setError(err instanceof Error ? err.message : 'Unable to load account details');
       })
       .finally(() => setLoading(false));
-  }, [userId, open]);
+  }, [userId, open, user?.assignedCoach?.id, user?.coachRequestedAt]);
 
   function updateAccount<K extends keyof AccountDraft>(field: K, value: AccountDraft[K]) {
     setAccountDraft((current) => ({ ...current, [field]: value }));
@@ -120,6 +146,42 @@ function EditAccountDetailsDrawerContent({
 
   function updateProfile<K extends keyof ProfileDraft>(field: K, value: ProfileDraft[K]) {
     setProfileDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function applyCoachUser(next: AppUser) {
+    setAssignedCoach(next.assignedCoach ?? null);
+    setCoachRequestedAt(next.coachRequestedAt ?? null);
+    setCoachCode('');
+    setWantsCoach(Boolean(next.coachRequestedAt) && !next.assignedCoach);
+    onUserUpdated?.(next);
+  }
+
+  async function saveCoachSupport() {
+    const trimmedCode = coachCode.trim();
+    if (!trimmedCode && !wantsCoach) {
+      throw new Error('Enter a coach code or request a real coach.');
+    }
+    const next = await api<{ user: AppUser }>('/api/me/coach-support', {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...(trimmedCode ? { coachCode: trimmedCode } : {}),
+        ...(wantsCoach ? { wantsCoach: true } : {})
+      })
+    });
+    applyCoachUser(next.user);
+  }
+
+  async function turnOffCoach() {
+    setCoachSaving(true);
+    setError('');
+    try {
+      const next = await api<{ user: AppUser }>('/api/me/coach-support', { method: 'DELETE' });
+      applyCoachUser(next.user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to turn off coach support');
+    } finally {
+      setCoachSaving(false);
+    }
   }
 
   async function save() {
@@ -148,6 +210,9 @@ function EditAccountDetailsDrawerContent({
         method: 'PATCH',
         body: JSON.stringify(payload)
       });
+      if (mode === 'self' && !assignedCoach && (coachCode.trim() || wantsCoach)) {
+        await saveCoachSupport();
+      }
       onSaved?.(saved);
       onClose();
     } catch (err) {
@@ -157,7 +222,27 @@ function EditAccountDetailsDrawerContent({
     }
   }
 
+  async function deleteAccount() {
+    const typed = window.prompt(
+      'This permanently deletes your Metabolic account, logs, meals, and photos. Type DELETE to confirm.'
+    );
+    if ((typed ?? '').trim().toUpperCase() !== 'DELETE') return;
+
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api('/api/me', { method: 'DELETE' });
+      onClose();
+      await logout();
+    } catch (err) {
+      setDeleteError(err instanceof Error && err.message ? err.message : 'Unable to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const readOnlyAccount = mode === 'coach';
+  const busy = saving || coachSaving || deleting;
 
   return (
     <Drawer
@@ -169,10 +254,10 @@ function EditAccountDetailsDrawerContent({
       headerActions={
         loaded ? (
           <>
-            <Button disabled={saving} onClick={save}>
+            <Button disabled={busy} onClick={save}>
               {saving ? 'Saving…' : 'Save account details'}
             </Button>
-            <Button variant="secondary" disabled={saving} onClick={onClose}>
+            <Button variant="secondary" disabled={busy} onClick={onClose}>
               Cancel
             </Button>
           </>
@@ -254,6 +339,93 @@ function EditAccountDetailsDrawerContent({
           </span>
         </label>
 
+        {mode === 'self' ? (
+          <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
+            <div>
+              <p className="text-sm font-semibold text-app-text">Real coach</p>
+              <p className="mt-1 text-sm text-app-text-muted">
+                Optional. Your virtual coach stays available either way.
+              </p>
+            </div>
+
+            {assignedCoach ? (
+              <>
+                <p className="text-sm text-app-text">
+                  Assigned to{' '}
+                  <span className="font-medium">
+                    {`${assignedCoach.firstName} ${assignedCoach.lastName}`.trim() || assignedCoach.email}
+                  </span>
+                  .
+                </p>
+                <Button variant="secondary" disabled={busy} onClick={() => void turnOffCoach()}>
+                  {coachSaving ? 'Turning off…' : 'Turn off coach'}
+                </Button>
+              </>
+            ) : coachRequestedAt ? (
+              <>
+                <p className="text-sm text-app-text">Coach requested. We&apos;ll connect you when a coach is available.</p>
+                <label className="block">
+                  <span className={labelClassName()}>Coach initials or code</span>
+                  <input
+                    className={`${inputClassName()} uppercase`}
+                    value={coachCode}
+                    maxLength={20}
+                    placeholder="DF"
+                    onChange={(event) => setCoachCode(event.target.value.toUpperCase())}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    disabled={busy || !coachCode.trim()}
+                    onClick={() => {
+                      void (async () => {
+                        setCoachSaving(true);
+                        setError('');
+                        try {
+                          await saveCoachSupport();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Unable to update coach support');
+                        } finally {
+                          setCoachSaving(false);
+                        }
+                      })();
+                    }}
+                  >
+                    {coachSaving ? 'Saving…' : 'Save coach code'}
+                  </Button>
+                  <Button variant="secondary" disabled={busy} onClick={() => void turnOffCoach()}>
+                    {coachSaving ? 'Canceling…' : 'Cancel request'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="block">
+                  <span className={labelClassName()}>Coach initials or code</span>
+                  <input
+                    className={`${inputClassName()} uppercase`}
+                    value={coachCode}
+                    maxLength={20}
+                    placeholder="DF"
+                    onChange={(event) => setCoachCode(event.target.value.toUpperCase())}
+                  />
+                </label>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
+                    checked={wantsCoach}
+                    onChange={(event) => setWantsCoach(event.target.checked)}
+                  />
+                  <span className="text-sm text-slate-600 dark:text-app-text-muted">
+                    I&apos;d like to work with a real coach.
+                  </span>
+                </label>
+              </>
+            )}
+          </div>
+        ) : null}
+
         <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
           <p className="text-sm font-semibold text-app-text">Reminders</p>
           <label className="flex items-start gap-3">
@@ -282,6 +454,36 @@ function EditAccountDetailsDrawerContent({
         </div>
 
         {mode === 'self' && <PushNotificationsCard />}
+
+        {mode === 'self' ? (
+          <div className="space-y-3 rounded-xl border border-app-border bg-app-muted/40 p-4">
+            <p className="text-sm font-semibold text-app-text">{AI_CONSENT_TITLE}</p>
+            <p className="text-sm text-slate-600 dark:text-app-text-muted">
+              When on, chat messages and program / meal / exercise context may be sent to {AI_CONSENT_RECIPIENT} for
+              coaching replies and AI features. Turn off to keep AI disabled — we will not send that data.
+            </p>
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-500 focus:ring-blue-200 dark:border-app-border"
+                checked={aiAccepted}
+                onChange={(event) => {
+                  void setAiAccepted(event.target.checked);
+                }}
+              />
+              <span className="text-sm text-slate-600 dark:text-app-text-muted">
+                Allow AI features and sharing with Google Gemini
+              </span>
+            </label>
+            <button
+              type="button"
+              className="text-sm font-semibold text-brand-green transition hover:text-brand-green-light"
+              onClick={openAiConsentReview}
+            >
+              Review AI permission details
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <UserProfileFields draft={profileDraft} canEditClientNotes={canEditClientNotes} onChange={updateProfile} />
@@ -307,6 +509,25 @@ function EditAccountDetailsDrawerContent({
           >
             Replay dashboard tour
           </button>
+        </div>
+      )}
+
+      {mode === 'self' && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/60 dark:bg-red-950/30">
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">Delete account</p>
+          <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+            Permanently removes your account, logs, meals, photos, and sign-in. This cannot be undone.
+          </p>
+          {deleteError ? <p className="mt-2 text-sm font-medium text-red-800 dark:text-red-200">{deleteError}</p> : null}
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-3 border-red-300 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/60"
+            disabled={busy}
+            onClick={() => void deleteAccount()}
+          >
+            {deleting ? 'Deleting…' : 'Delete my account'}
+          </Button>
         </div>
       )}
 

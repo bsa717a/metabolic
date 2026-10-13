@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { todayKey } from '../services/api';
 import { useWorkoutSession } from '../hooks/useWorkoutSession';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useSessionOrientationLock } from '../hooks/useSessionOrientationLock';
 import { primeAudio } from '../utils/sessionCues';
 import { clearSession, currentMeta, sessionSummary } from '../utils/workoutSession';
 import { SessionProgressBar } from '../components/exercise/session/SessionProgressBar';
@@ -25,6 +26,7 @@ export function WorkoutSessionPage() {
 
   const active = Boolean(state) && state?.phase !== 'summary';
   useWakeLock(active);
+  useSessionOrientationLock(active);
 
   const timerRemaining = remaining ?? 0;
   const timerPaused = state?.pausedRemainingMs != null;
@@ -32,7 +34,9 @@ export function WorkoutSessionPage() {
     state != null &&
     ((state.phase === 'rest' && state.restEndsAtMs != null) ||
       (state.phase === 'exercise' && state.durationEndsAtMs != null));
-  const cueGo = hasTimer && timerCueKind(timerRemaining, timerPaused) === 'go';
+  // Only rest flashes GO. A work countdown at zero says STOP and stays on the dark screen.
+  const cueGo =
+    state?.phase === 'rest' && hasTimer && timerCueKind(timerRemaining, timerPaused) === 'go';
 
   // Warn before leaving mid-workout (refresh / close).
   useEffect(() => {

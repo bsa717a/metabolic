@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Minus, Scale } from 'lucide-react';
 import type { Program } from '../../types';
 import { Card } from '../ui/Card';
 
@@ -14,8 +14,6 @@ export function WeightTrendChart({
   program: Program | null;
   weightTrend: { date: string; weight: number }[];
 }) {
-  // Prefer the program's WEIGHT metric (authoritative current + program start) over the
-  // weightTrend array, which only holds the oldest 30 daily logs and can be stale/empty.
   const weightMetric = program?.metrics.find((metric) => metric.metricType === 'WEIGHT');
   const currentWeight = weightMetric
     ? Number(weightMetric.currentValue)
@@ -45,6 +43,28 @@ export function WeightTrendChart({
         ? 'No change'
         : `${formatWeight(Math.abs(delta))} lb ${delta < 0 ? 'lost' : 'gained'}`;
 
+  if (currentWeight === null) {
+    return (
+      <Card>
+        <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Current Weight</h2>
+        <div className="mt-4 flex flex-col items-center rounded-2xl border border-dashed border-app-border bg-app-muted/50 px-6 py-8 text-center">
+          <Scale className="mb-3 h-10 w-10 text-app-text-muted/60" aria-hidden />
+          <p className="font-semibold text-app-text">No weight logged yet</p>
+          <p className="mt-1 max-w-xs text-sm text-app-text-muted">
+            Track your weight to see progress over time.
+          </p>
+          <Link
+            to="/program"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+          >
+            <Scale size={14} />
+            Log weight
+          </Link>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Link
       to="/progress"
@@ -55,14 +75,8 @@ export function WeightTrendChart({
         <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Current Weight</h2>
         <div className="mt-4 space-y-3">
           <p className="text-4xl font-bold tabular-nums text-app-text">
-            {currentWeight !== null ? (
-              <>
-                {formatWeight(currentWeight)}
-                <span className="ml-1 text-lg font-medium text-app-text-muted">lb</span>
-              </>
-            ) : (
-              <span className="text-lg font-medium text-app-text-muted">No weight logged</span>
-            )}
+            {formatWeight(currentWeight)}
+            <span className="ml-1 text-lg font-medium text-app-text-muted">lb</span>
           </p>
           <div>
             <span

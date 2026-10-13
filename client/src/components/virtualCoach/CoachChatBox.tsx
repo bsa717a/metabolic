@@ -5,6 +5,8 @@ import type { VirtualCoach } from '../../data/virtualCoaches';
 import type { Dashboard, Meal } from '../../types';
 import type { MealCardsPayload } from '../../utils/mealCards';
 import { api, todayDateParam, todayKey } from '../../services/api';
+import { useAiConsent } from '../../context/AiConsentContext';
+import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 import { buildCoachChatOpeningMessage } from './coachChatGreeting';
 import {
   formatMealDetailForChat,
@@ -47,6 +49,7 @@ export function CoachChatBox({
   seedUserMessage?: string;
   className?: string;
 }) {
+  const { accepted, openReview } = useAiConsent();
   const [messages, setMessages] = useState<CoachChatMessage[]>(initialMessages);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -76,7 +79,9 @@ export function CoachChatBox({
       try {
         // Load the persisted conversation first so a refresh (or a thread started over SMS) picks up
         // right where it left off. Only fall back to a fresh greeting when there's no history yet.
-        const history = await api<{ messages: CoachChatMessage[] }>('/api/ai/coach-history').catch(() => null);
+        const history = accepted
+          ? await api<{ messages: CoachChatMessage[] }>('/api/ai/coach-history').catch(() => null)
+          : null;
         if (cancelled) return;
         if (history?.messages?.length) {
           setMessages(history.messages);
@@ -109,7 +114,7 @@ export function CoachChatBox({
     return () => {
       cancelled = true;
     };
-  }, [autoGreeting, initialMessages.length, userFirstName]);
+  }, [accepted, autoGreeting, initialMessages.length, userFirstName]);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' });
@@ -328,6 +333,11 @@ export function CoachChatBox({
   async function send(text: string, options?: { mealEditFocus?: MealEditSession | null }) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
+    if (!accepted) {
+      setError('AI features are off until you accept sharing data with Google Gemini.');
+      openReview();
+      return;
+    }
 
     if (!mealEditSessionRef.current && isReviewMealsRequest(trimmed)) {
       await startMealReviewFlow({
@@ -434,12 +444,12 @@ export function CoachChatBox({
 
   useEffect(() => {
     const seed = seedUserMessage?.trim();
-    if (!seed || greetingLoading || seededRef.current) return;
+    if (!seed || greetingLoading || seededRef.current || !accepted) return;
     seededRef.current = true;
     void send(seed);
     // Seed once after the opening greeting is ready.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedUserMessage, greetingLoading]);
+  }, [accepted, seedUserMessage, greetingLoading]);
 
   async function handleQuickReply(reply: CoachChatQuickReply) {
     if (loading) return;
@@ -668,7 +678,13 @@ export function CoachChatBox({
 
       {error && <p className="px-4 pt-2 text-xs text-red-600">{error}</p>}
 
-      {showQuickReplies ? (
+      {!accepted ? (
+        <div className="border-t border-app-border p-3">
+          <AiDisabledNotice onReview={openReview} className="border-brand-gold/30 bg-brand-gold/5 p-4" />
+        </div>
+      ) : null}
+
+      {accepted && showQuickReplies ? (
         <div className="flex flex-wrap gap-2 border-t border-app-border px-3 py-3">
           {displayedQuickReplies!.map((reply) => (
             <button
@@ -712,12 +728,12 @@ export function CoachChatBox({
               void send(input);
             }
           }}
-          disabled={loading || greetingLoading}
+          disabled={loading || greetingLoading || !accepted}
         />
         <button
           type="submit"
           aria-label="Send message"
-          disabled={loading || greetingLoading || !input.trim()}
+          disabled={loading || greetingLoading || !accepted || !input.trim()}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0b84fe] text-white transition hover:bg-[#0b84fe]/90 disabled:opacity-40"
         >
           <SendHorizontal size={18} aria-hidden />

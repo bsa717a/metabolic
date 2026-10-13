@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VirtualCoachId } from '../data/virtualCoaches';
 import { api } from '../services/api';
-import { getIdToken } from '../services/auth';
+import { assertAiConsentForPath } from '../services/aiConsent';
+import { forceTokenRefresh, getIdToken } from '../services/auth';
+import { nativeAwareFetch } from '../services/nativeHttp';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -237,16 +239,33 @@ export function useSpeech(coachId: VirtualCoachId) {
 
   const playNatural = useCallback(
     async (text: string): Promise<boolean> => {
+      const executeVoiceRequest = async (token: string | null): Promise<Response> => {
+        assertAiConsentForPath('/api/ai/coach-voice');
+        return nativeAwareFetch(
+          `${API_URL}/api/ai/coach-voice`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ text, coachId })
+          },
+          { responseType: 'blob' }
+        );
+      };
+
       try {
         const token = await getIdToken();
-        const response = await fetch(`${API_URL}/api/ai/coach-voice`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({ text, coachId })
-        });
+        let response = await executeVoiceRequest(token);
+
+        if (response.status === 401 && token) {
+          const freshToken = await forceTokenRefresh();
+          if (freshToken && freshToken !== token) {
+            response = await executeVoiceRequest(freshToken);
+          }
+        }
+
         if (!response.ok) return false;
         const blob = await response.blob();
         if (audioRef.current) audioRef.current.pause();

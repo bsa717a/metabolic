@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { KeepAwake } from '@capacitor-community/keep-awake';
 
 type WakeLockSentinelLike = {
   released?: boolean;
@@ -8,22 +10,55 @@ type WakeLockSentinelLike = {
 };
 type WakeLockNavigator = Navigator & { wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> } };
 
+function isNativePlatform(): boolean {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Keeps the screen awake while `active` (e.g. mid-workout or meal building).
- * Progressive enhancement — a silent no-op where the Wake Lock API is
- * unavailable. The lock is dropped by the browser on backgrounding, so we
- * re-request on focus. Some mobile browsers also require a user gesture, so
- * we retry on the next tap or keypress if the first request failed.
+ * Keeps the screen awake while `active` (Nutrition logging, mid-workout).
+ *
+ * Native iOS: `@capacitor-community/keep-awake` sets `isIdleTimerDisabled`.
+ * The Screen Wake Lock API is a no-op in WKWebView, which is why the phone
+ * still slept on those screens.
+ *
+ * Web: progressive Wake Lock API. The lock is dropped on backgrounding, so
+ * we re-request on focus. Some browsers also require a user gesture.
  */
 export function useWakeLock(active: boolean): void {
   useEffect(() => {
     if (!active) return;
+    let released = false;
+
+    if (isNativePlatform()) {
+      const requestNative = async () => {
+        if (released || document.visibilityState !== 'visible') return;
+        try {
+          await KeepAwake.keepAwake();
+        } catch {
+          // plugin missing in a web-only build
+        }
+      };
+      void requestNative();
+      const onVisible = () => {
+        if (document.visibilityState === 'visible' && !released) void requestNative();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => {
+        released = true;
+        document.removeEventListener('visibilitychange', onVisible);
+        void KeepAwake.allowSleep().catch(() => undefined);
+      };
+    }
+
     const nav = navigator as WakeLockNavigator;
     if (!nav.wakeLock) return;
 
     let sentinel: WakeLockSentinelLike | null = null;
     let onHeldRelease: (() => void) | null = null;
-    let released = false;
     let requestInFlight = false;
 
     const detach = (held: WakeLockSentinelLike | null) => {

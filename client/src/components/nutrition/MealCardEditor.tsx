@@ -667,7 +667,6 @@ export const MealCardEditor = forwardRef<
           </Button>
           <Button
             type="button"
-            className="bg-emerald-600 text-white hover:bg-emerald-700"
             onClick={() => handleSaveClick()}
             disabled={busy}
           >
@@ -699,7 +698,6 @@ export const MealCardEditor = forwardRef<
             </Button>
             <Button
               type="button"
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
               onClick={() => handleSaveClick({ thenRebalance: true })}
               disabled={busy}
             >

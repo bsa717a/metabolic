@@ -18,6 +18,8 @@ import { VIRTUAL_COACHES, getVirtualCoach, type VirtualCoach } from '../data/vir
 import { api } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { FeatureGate } from '../components/entitlements/FeatureGate';
+import { AiDisabledNotice } from '../components/privacy/AiDisabledNotice';
+import { useAiConsent } from '../context/AiConsentContext';
 import { CheckInRecap } from '../components/virtualCoach/CheckInRecap';
 import { CoachCheckInCall } from '../components/virtualCoach/CoachCheckInCall';
 import { CoachChatBox } from '../components/virtualCoach/CoachChatBox';
@@ -150,6 +152,7 @@ function CoachHelpSection({ coach }: { coach: VirtualCoach }) {
 }
 
 function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: AppUser | null }) {
+  const { accepted, openReview } = useAiConsent();
   const [state, setState] = useState<VirtualCoachCheckInState | null>(null);
   const [activeSession, setActiveSession] = useState<VirtualCoachCheckInSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -181,6 +184,11 @@ function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: App
   }, []);
 
   async function startCheckIn(resume = false) {
+    if (!accepted) {
+      openReview();
+      setError('AI features are off until you accept sharing data with Google Gemini.');
+      return;
+    }
     setStarting(true);
     setError(undefined);
     try {
@@ -294,10 +302,11 @@ function SelectedCoachLanding({ coach, user }: { coach: VirtualCoach; user?: App
             <div className="space-y-4">
               <FeatureGate feature="weekly_virtual_coach">
               <div className="space-y-2 text-center md:text-left">
-                {state?.isCheckInDay && !state.inProgressSession && (
+                {!accepted ? <AiDisabledNotice onReview={openReview} /> : null}
+                {accepted && state?.isCheckInDay && !state.inProgressSession && (
                   <p className="text-sm font-semibold text-brand-green">It&apos;s your check-in day.</p>
                 )}
-                <Button className="w-full py-3 text-base" disabled={starting} onClick={() => startCheckIn(Boolean(state?.inProgressSession))}>
+                <Button className="w-full py-3 text-base" disabled={starting || !accepted} onClick={() => startCheckIn(Boolean(state?.inProgressSession))}>
                   {state?.inProgressSession ? 'Resume your check-in' : 'Start your check-in'}
                 </Button>
                 {state?.inProgressSession ? (

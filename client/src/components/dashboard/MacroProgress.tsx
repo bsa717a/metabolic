@@ -1,5 +1,6 @@
 import { Card } from '../ui/Card';
 import type { Dashboard } from '../../types';
+import { SourcesBesideTargets } from '../nutrition/SourcesLink';
 
 export function MacroProgress({ dashboard }: { dashboard: Dashboard }) {
   const log = dashboard.dailyLog;
@@ -14,7 +15,10 @@ export function MacroProgress({ dashboard }: { dashboard: Dashboard }) {
 
   return (
     <Card>
-      <h2 className="mb-4 text-lg font-semibold text-brand-navy dark:text-brand-off-white">Macro Status</h2>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Macro Status</h2>
+        <SourcesBesideTargets />
+      </div>
       <div className="space-y-4">
         {rows.map(([label, actual, target]) => (
           <div key={label as string}>

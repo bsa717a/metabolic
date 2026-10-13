@@ -1,4 +1,4 @@
-import { getIdToken } from './auth';
+import { forceTokenRefresh, getIdToken } from './auth';
 import type { AdminExercise } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -18,6 +18,19 @@ export function validateExerciseVideoFile(file: File) {
   }
 }
 
+async function executeVideoUpload(exerciseId: string, file: File, token: string): Promise<Response> {
+  const formData = new FormData();
+  formData.append('video', file, file.name);
+
+  return fetch(`${API_URL}/api/admin/exercises/${exerciseId}/how-to-video`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+}
+
 export async function uploadExerciseHowToVideo(exerciseId: string, file: File) {
   validateExerciseVideoFile(file);
 
@@ -26,16 +39,14 @@ export async function uploadExerciseHowToVideo(exerciseId: string, file: File) {
     throw new Error('Sign in again to upload videos.');
   }
 
-  const formData = new FormData();
-  formData.append('video', file, file.name);
+  let response = await executeVideoUpload(exerciseId, file, token);
 
-  const response = await fetch(`${API_URL}/api/admin/exercises/${exerciseId}/how-to-video`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    body: formData
-  });
+  if (response.status === 401) {
+    const freshToken = await forceTokenRefresh();
+    if (freshToken && freshToken !== token) {
+      response = await executeVideoUpload(exerciseId, file, freshToken);
+    }
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);

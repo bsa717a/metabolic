@@ -1,10 +1,38 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Printer } from 'lucide-react';
+import { Dumbbell, Printer, Scale, TrendingUp, Utensils } from 'lucide-react';
 import { Bar, BarChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api, todayDateParam } from '../services/api';
 import type { Dashboard } from '../types';
 import { Card } from '../components/ui/Card';
+
+function EmptyChartState({
+  icon: Icon,
+  title,
+  description,
+  ctaLabel,
+  ctaTo
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  ctaLabel: string;
+  ctaTo: string;
+}) {
+  return (
+    <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-app-border bg-app-muted/30 px-6 text-center">
+      <Icon className="mb-3 h-10 w-10 text-app-text-muted/50" />
+      <p className="font-semibold text-app-text">{title}</p>
+      <p className="mt-1 max-w-xs text-sm text-app-text-muted">{description}</p>
+      <Link
+        to={ctaTo}
+        className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+      >
+        {ctaLabel}
+      </Link>
+    </div>
+  );
+}
 
 export function ProgressPage() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -16,6 +44,10 @@ export function ProgressPage() {
       .then(setData)
       .finally(() => setLoading(false));
   }, []);
+
+  const hasWeightData = (data?.weightTrend?.length ?? 0) > 0;
+  const hasMacroData = data?.dailyLog && (Number(data.dailyLog.calorieTarget) > 0 || Number(data.dailyLog.caloriesActual) > 0);
+  const hasExerciseData = data?.dailyLog && Number(data.dailyLog.exercisesPlanned) > 0;
 
   const macroData = data?.dailyLog
     ? [
@@ -55,47 +87,89 @@ export function ProgressPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <h2 className="mb-4 font-bold">Weight over time</h2>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <LineChart data={data?.weightTrend ?? []}>
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Line dataKey="weight" stroke="#0f172a" strokeWidth={3} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {hasWeightData ? (
+            <div className="h-64">
+              <ResponsiveContainer>
+                <LineChart data={data?.weightTrend ?? []}>
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line dataKey="weight" stroke="#0f172a" strokeWidth={3} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <EmptyChartState
+              icon={Scale}
+              title="No weight data yet"
+              description="Log your weight to see trends over time and track your progress."
+              ctaLabel="Log weight"
+              ctaTo="/program"
+            />
+          )}
         </Card>
         <Card>
           <h2 className="mb-4 font-bold">Planned vs actual</h2>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <BarChart data={macroData}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="planned" fill="#cbd5e1" />
-                <Bar dataKey="actual" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {hasMacroData ? (
+            <div className="h-64">
+              <ResponsiveContainer>
+                <BarChart data={macroData}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="planned" fill="#cbd5e1" />
+                  <Bar dataKey="actual" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <EmptyChartState
+              icon={Utensils}
+              title="No nutrition data yet"
+              description="Plan your meals or log what you eat to see how you're tracking."
+              ctaLabel="Plan meals"
+              ctaTo="/nutrition/plan"
+            />
+          )}
         </Card>
         <Card>
           <h2 className="font-bold">Exercise completion</h2>
-          <p className="mt-4 text-4xl font-bold">
-            {data?.dailyLog
-              ? Math.round((Number(data.dailyLog.exercisesCompleted) / Math.max(Number(data.dailyLog.exercisesPlanned), 1)) * 100)
-              : 0}
-            %
-          </p>
+          {hasExerciseData ? (
+            <p className="mt-4 text-4xl font-bold">
+              {Math.round((Number(data?.dailyLog?.exercisesCompleted ?? 0) / Math.max(Number(data?.dailyLog?.exercisesPlanned ?? 1), 1)) * 100)}
+              %
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-col items-center rounded-2xl border border-dashed border-app-border bg-app-muted/30 px-6 py-8 text-center">
+              <Dumbbell className="mb-3 h-10 w-10 text-app-text-muted/50" />
+              <p className="font-semibold text-app-text">No exercises planned</p>
+              <p className="mt-1 max-w-xs text-sm text-app-text-muted">
+                Set up your workout routine to track completion.
+              </p>
+              <Link
+                to="/exercise/manage"
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+              >
+                Set up routine
+              </Link>
+            </div>
+          )}
         </Card>
         <Card>
           <h2 className="font-bold">Start vs current vs goal</h2>
-          <p className="mt-4 text-slate-500">See Metabolic Blueprint for compact rings and metric table.</p>
-          <p className="mt-3 text-sm text-slate-500">
-            The export report also includes session snapshots, body composition logs, progress photos, and blood panel
-            results with reference-range status.
-          </p>
+          <div className="mt-4 flex flex-col items-center rounded-2xl border border-dashed border-app-border bg-app-muted/30 px-6 py-8 text-center">
+            <TrendingUp className="mb-3 h-10 w-10 text-app-text-muted/50" />
+            <p className="font-semibold text-app-text">View your blueprint</p>
+            <p className="mt-1 max-w-xs text-sm text-app-text-muted">
+              See Metabolic Blueprint for compact rings, metric table, and detailed goal tracking.
+            </p>
+            <Link
+              to="/program"
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+            >
+              View blueprint
+            </Link>
+          </div>
         </Card>
       </div>
     </div>
