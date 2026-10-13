@@ -4,12 +4,12 @@
 # It does not create GitHub secrets and it does not change the committed
 # CURRENT_PROJECT_VERSION / MARKETING_VERSION. Those are set on the runner.
 #
-# Xcode pin: the 1.0 (9) archive Info.plist is not in git, so DTXcode is unknown.
-# client/IOS.md only said "Xcode 15+", which cannot build @capacitor/ios 8
-# (Capacitor 8 requires Xcode 26.0+). The iOS project was generated on a Mac
-# on or after 2026-09-08. GitHub's macos-26 image default since 2026-07-21 is
-# Xcode 26.6 at /Applications/Xcode_26.6.app. Xcode 27 is a separate
-# public-preview runner label and is not assumed for the App Review build.
+# Xcode pin: 1.0 (9) was archived with Xcode 27.0 (27A266a), DTXcode 2700.
+# That build is the default on the public-preview `xcode-27` image
+# (/Applications/Xcode_27.app). The macos-26 image only has the 26.x line.
+# The project file's LastUpgradeCheck is still 0920; it was not migrated,
+# and this workflow does not change it. If the preview image drops 27A266a,
+# the select step fails instead of building with a newer beta.
 
 name: iOS TestFlight
 
@@ -35,13 +35,13 @@ concurrency:
 
 jobs:
   testflight:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     defaults:
       run:
         shell: bash
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
       TEAM_ID: 8FG8V9P49A
 
     steps:
@@ -52,17 +52,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 26.6
+      - name: Select Xcode 27.0 (27A266a)
         run: |
           set -euo pipefail
-          XCODE_APP="/Applications/Xcode_26.6.app"
+          XCODE_APP="/Applications/Xcode_27.app"
           if [[ ! -d "$XCODE_APP" ]]; then
-            echo "::error::Expected $XCODE_APP. Capacitor 8 cannot use the Xcode 15 line documented in client/IOS.md."
+            echo "::error::Expected $XCODE_APP (Xcode 27.0, build 27A266a). The macos-26 image does not include it. xcode-27 is a public-preview image."
             ls -d /Applications/Xcode*.app || true
             exit 1
           fi
           sudo xcode-select -s "$XCODE_APP"
-          xcodebuild -version
+          VERSION="$(xcodebuild -version)"
+          printf '%s\n' "$VERSION"
+          if ! printf '%s\n' "$VERSION" | grep -q "Xcode 27.0" || ! printf '%s\n' "$VERSION" | grep -q "27A266a"; then
+            echo "::error::1.0 (9) was built with Xcode 27.0 (27A266a). This runner has a different Xcode."
+            exit 1
+          fi
 
       - name: Require the committed iOS project
         run: |
@@ -204,6 +209,29 @@ jobs:
             fi
           done
 
+      - name: Write GoogleService-Info.plist
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GOOGLE_SERVICE_INFO_PLIST_BASE64}" ]]; then
+            echo "::error::Add repository secret GOOGLE_SERVICE_INFO_PLIST_BASE64 (base64 of the Mac file client/ios/App/App/GoogleService-Info.plist). This workflow does not create it."
+            exit 1
+          fi
+          node --input-type=module << 'JS'
+          import { writeFileSync } from 'node:fs';
+          const raw = (process.env.GOOGLE_SERVICE_INFO_PLIST_BASE64 || '').replace(/\s/g, '');
+          const decoded = Buffer.from(raw, 'base64');
+          const text = decoded.toString('utf8');
+          const binary = decoded.subarray(0, 6).toString('utf8') === 'bplist';
+          const xml = text.includes('<plist');
+          if (!text.includes('GOOGLE_APP_ID') || !(xml || binary)) {
+            console.error('GOOGLE_SERVICE_INFO_PLIST_BASE64 must be base64 of GoogleService-Info.plist, not the raw XML pasted into YAML.');
+            process.exit(1);
+          }
+          writeFileSync('client/ios/App/App/GoogleService-Info.plist', decoded, { mode: 0o600 });
+          JS
+
       - name: Set the build number on this runner
         run: |
           set -euo pipefail
@@ -311,8 +339,8 @@ jobs:
       - name: Delete the API key and web env
         if: always()
         run: |
-          rm -f "$ASC_KEY_PATH" client/.env.production
-          if [[ -f "$ASC_KEY_PATH" || -f client/.env.production ]]; then
-            echo "::error::Failed to delete the API key or client/.env.production"
+          rm -f "$ASC_KEY_PATH" client/.env.production client/ios/App/App/GoogleService-Info.plist
+          if [[ -f "$ASC_KEY_PATH" || -f client/.env.production || -f client/ios/App/App/GoogleService-Info.plist ]]; then
+            echo "::error::Failed to delete the API key, client/.env.production, or GoogleService-Info.plist"
             exit 1
           fi

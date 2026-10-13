@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.40.1](https://github.com/bsa717a/metabolic/compare/v0.40.0...v0.40.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **nutrition:** open the coach day editor on tomorrow ([#337](https://github.com/bsa717a/metabolic/issues/337)) ([01052d1](https://github.com/bsa717a/metabolic/commit/01052d10f498e0c263226a4a87e9c8b5a98cd25e))
+* **onboarding:** ask imported users without a coach for a code ([#340](https://github.com/bsa717a/metabolic/issues/340)) ([cbbb72e](https://github.com/bsa717a/metabolic/commit/cbbb72ea36189a13bc3492ca75c2449725b5235b))
+
 ## [0.40.0](https://github.com/bsa717a/metabolic/compare/v0.39.0...v0.40.0) (2026-10-12)
 
 

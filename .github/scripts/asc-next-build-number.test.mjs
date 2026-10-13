@@ -18,13 +18,16 @@ test('next build is one past the highest uploaded number, and at least 10', () =
   assert.equal(nextBuildNumber(['9', '1.0.9', 'build-9']), 10);
 });
 
-test('TestFlight workflow is manual dispatch only and pins Xcode 26.6', () => {
+test('TestFlight workflow is manual dispatch only and pins Xcode 27.0', () => {
   const workflow = readFileSync(new URL('../workflows/ios-testflight.yml', import.meta.url), 'utf8');
   const header = workflow.split(/^jobs:/m)[0];
   assert.match(header, /^on:\n {2}workflow_dispatch:/m);
   assert.doesNotMatch(header, /\n {2}(push|pull_request):/);
-  assert.match(workflow, /Xcode_26\.6\.app/);
+  assert.match(workflow, /runs-on: xcode-27/);
+  assert.match(workflow, /Xcode_27\.app/);
+  assert.match(workflow, /27A266a/);
   assert.match(workflow, /minimumZoomScale = 1/);
+  assert.match(workflow, /GOOGLE_SERVICE_INFO_PLIST_BASE64/);
   assert.match(workflow, /if: always\(\)/);
   assert.match(workflow, /^name: iOS TestFlight$/m);
   assert.doesNotMatch(workflow, /\$\{\{\s*runner\./);
