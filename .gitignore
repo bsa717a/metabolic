@@ -11,9 +11,12 @@ coverage
 *.log
 .tmp
 .firebase
-# Keep Cursor project rules in git; ignore the rest of .cursor (hooks, plans, local settings).
+# Keep Cursor project rules and the Bugbot repo config in git; ignore the rest of .cursor.
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/**
+!.cursor/config/
+.cursor/config/*
+!.cursor/config/bugbot.yaml
 backups/
 client/public/tutorial/presrenter.mp4

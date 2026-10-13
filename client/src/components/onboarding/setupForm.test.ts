@@ -265,7 +265,7 @@ describe('imported setup payload', () => {
     expect(form.activityLevel).toBe('3');
   });
 
-  it('does not send a coach code or blank food notes for an imported user', () => {
+  it('does not send a coach code when the imported user already has a coach', () => {
     const payload = buildSetupPayload(
       {
         ...createEmptySetupForm(),
@@ -292,6 +292,37 @@ describe('imported setup payload', () => {
     expect(payload.textReminders).toBe(true);
     expect(payload.heightFeet).toBe(5);
     expect(payload.heightInches).toBe(6);
+  });
+
+  it('sends a coach code and request when the imported user has no coach', () => {
+    const payload = buildSetupPayload(
+      {
+        ...createEmptySetupForm(),
+        weight: '189.4',
+        goalWeight: '170',
+        coachCode: 'DF',
+        wantsCoach: true,
+        timezone: 'America/Chicago'
+      },
+      { preserveAssignedCoach: false }
+    );
+
+    expect(payload.coachCode).toBe('DF');
+    expect(payload.wantsCoach).toBe(true);
+  });
+
+  it('does not send a blank coach code', () => {
+    const payload = buildSetupPayload({
+      ...createEmptySetupForm(),
+      weight: '189.4',
+      goalWeight: '170',
+      coachCode: '   ',
+      wantsCoach: false,
+      timezone: 'America/Chicago'
+    });
+
+    expect(payload.coachCode).toBeUndefined();
+    expect(payload.wantsCoach).toBeUndefined();
   });
 
   it('omits text reminders when the optional step is skipped', () => {
