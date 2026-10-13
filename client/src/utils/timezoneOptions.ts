@@ -36,3 +36,26 @@ export function timezoneOptions(current = '') {
   const detected = detectedTimezone();
   return Array.from(new Set([current, detected, ...COMMON_TIMEZONES].filter(Boolean)));
 }
+
+/**
+ * "America/Chicago" → "Central Time (Chicago)". The stored value stays the IANA id.
+ */
+export function formatTimezoneLabel(timeZone: string): string {
+  const zone = timeZone.trim();
+  if (!zone) return '';
+
+  let generic = zone;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      timeZoneName: 'longGeneric'
+    }).formatToParts(new Date());
+    generic = parts.find((part) => part.type === 'timeZoneName')?.value?.trim() || zone;
+  } catch {
+    return zone;
+  }
+
+  const city = zone.includes('/') ? (zone.split('/').pop() ?? '').replace(/_/g, ' ') : '';
+  if (!city || generic.toLowerCase().includes(city.toLowerCase())) return generic;
+  return `${generic} (${city})`;
+}

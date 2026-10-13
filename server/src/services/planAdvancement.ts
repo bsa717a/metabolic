@@ -144,6 +144,7 @@ export type PlanPeriodInfo = {
   weekNumber: number | null;
   effectiveDate: string | null;
   endDate: string | null;
+  templateId: string | null;
   templateName: string | null;
   calorieTarget: number | null;
   proteinTarget: number | null;
@@ -217,6 +218,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
       weekNumber: null,
       effectiveDate: null,
       endDate: null,
+      templateId: plan.nutritionTemplateId,
       templateName: template?.name ?? null,
       calorieTarget,
       proteinTarget,
@@ -236,6 +238,7 @@ export async function getPlanPeriodInfo(userId: string, date: string): Promise<P
     weekNumber: activeIndex + 1,
     effectiveDate: toDateKey(active.effectiveDate),
     endDate: next ? toDateKey(new Date(next.effectiveDate.getTime() - DAY_MS)) : null,
+    templateId: plan.nutritionTemplateId,
     templateName: template?.name ?? null,
     calorieTarget,
     proteinTarget,

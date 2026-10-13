@@ -12,7 +12,11 @@ export function exercisePlanApi(clientId?: string) {
       templateItem: (id: string) => `/api/exercise-template-items/${id}`,
       routineDayItems: (weekday: number) => `/api/exercise-routine/days/${weekday}/items`,
       routineDayItem: (weekday: number, templateItemId: string) =>
-        `/api/exercise-routine/days/${weekday}/items/${encodeURIComponent(templateItemId)}`
+        `/api/exercise-routine/days/${weekday}/items/${encodeURIComponent(templateItemId)}`,
+      addRoutineDayExercise: (weekday: number) => `/api/exercise-routine/days/${weekday}/exercises`,
+      removeRoutineDayExercise: (weekday: number) => `/api/exercise-routine/days/${weekday}/exercises/remove`,
+      routineDayExtra: (weekday: number, extraId: string) =>
+        `/api/exercise-routine/days/${weekday}/extras/${encodeURIComponent(extraId)}`
     };
   }
 
@@ -29,6 +33,10 @@ export function exercisePlanApi(clientId?: string) {
     templateItem: (id: string) => `${base}/exercise-template-items/${id}`,
     routineDayItems: (weekday: number) => `${base}/exercise-routine/days/${weekday}/items`,
     routineDayItem: (weekday: number, templateItemId: string) =>
-      `${base}/exercise-routine/days/${weekday}/items/${encodeURIComponent(templateItemId)}`
+      `${base}/exercise-routine/days/${weekday}/items/${encodeURIComponent(templateItemId)}`,
+    addRoutineDayExercise: (weekday: number) => `${base}/exercise-routine/days/${weekday}/exercises`,
+    removeRoutineDayExercise: (weekday: number) => `${base}/exercise-routine/days/${weekday}/exercises/remove`,
+    routineDayExtra: (weekday: number, extraId: string) =>
+      `${base}/exercise-routine/days/${weekday}/extras/${encodeURIComponent(extraId)}`
   };
 }

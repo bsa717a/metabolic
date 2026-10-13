@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { prisma } from '../db/prisma.js';
+import { nutritionMealsExpandedBody, setNutritionMealsExpanded } from '../services/nutritionMealsExpanded.js';
 import { serializeAppUser } from '../services/userSerialization.js';
 import { getUserDemographics, getUserProfile, updateUserDemographics, updateUserProfile } from '../services/userProfileService.js';
 import { deleteUserAccount } from '../services/userDeletionService.js';
@@ -100,6 +101,15 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/api/me', { preHandler: requireAuth }, async (request) => ({
     user: await serializeAppUser(request.appUser!)
   }));
+
+  app.put('/api/me/nutrition-meals-expanded', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = nutritionMealsExpandedBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'expanded must be true or false.' });
+    }
+    const user = await setNutritionMealsExpanded(request.appUser!.id, parsed.data.expanded);
+    return { user: await serializeAppUser(user) };
+  });
 
   app.put('/api/me/ai-consent', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = z.object({ accepted: z.boolean() }).safeParse(request.body);

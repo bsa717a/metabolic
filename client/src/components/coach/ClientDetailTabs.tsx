@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import { coachNutritionStartDate, dateKeyInTimeZone, todayKey } from '../../services/api';
-import type { CoachClient, CoachClientPlanStatus, Dashboard, ExercisePlanTemplateSummary, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
+import type { CoachClient, CoachClientPlanStatus, Dashboard, NutritionPlanTemplateSummary, ProgramMetricSnapshot } from '../../types';
 import type { GamificationDashboard } from '../../types/gamification';
 import type { CoachHydrationStats } from '../../types/hydration';
 import { clientInitials, clientName, formatNextSession } from '../../utils/coachClientUtils';
+import { formatCoachExerciseLine, formatPlanStatusLine } from '../../utils/coachPlanStatusLine';
 import { SendResultsMenu } from './SendResultsMenu';
 import { FoodPlanEditor } from './FoodPlanEditor';
+import { SourcesBesideTargets } from '../nutrition/SourcesLink';
 import { CoachWeeklyFoodReportModal } from './CoachWeeklyFoodReportModal';
 import { CoachWeeklyExerciseReportModal } from './CoachWeeklyExerciseReportModal';
 import { ExercisePlanEditor } from './ExercisePlanEditor';
@@ -42,28 +44,13 @@ function TabButton({
   );
 }
 
-function formatPlanStatusLine(planStatus: CoachClientPlanStatus | null) {
-  if (!planStatus) return null;
-  if (planStatus.state === 'on_plan') {
-    const parts = [
-      planStatus.nutritionTemplateName ?? 'Weekly plan',
-      planStatus.weekNumber != null ? `Week ${planStatus.weekNumber}` : null,
-      planStatus.planDayIndex != null ? `day ${planStatus.planDayIndex}` : null,
-      planStatus.calorieTarget != null ? `${planStatus.calorieTarget} kcal` : null
-    ].filter(Boolean);
-    return parts.join(' · ');
-  }
-  if (planStatus.state === 'coached_no_plan') return 'Tracking freely — no weekly plan assigned yet';
-  return 'Self-directed tracking';
-}
-
 export function ClientDetailTabs({
   client,
   dashboard,
   planStatus,
   engagement,
   nutritionTemplates,
-  exerciseTemplates,
+  missingProfileFields = [],
   saving,
   sendingEmail,
   sendingSms,
@@ -85,7 +72,7 @@ export function ClientDetailTabs({
   planStatus: CoachClientPlanStatus | null;
   engagement: CoachEngagement | null;
   nutritionTemplates: NutritionPlanTemplateSummary[];
-  exerciseTemplates: ExercisePlanTemplateSummary[];
+  missingProfileFields?: string[];
   saving: boolean;
   sendingEmail: boolean;
   sendingSms: boolean;
@@ -115,6 +102,8 @@ export function ClientDetailTabs({
   const pct = client.compliancePct;
   const hydrationToday = engagement?.hydration.todayActualOz ?? 0;
   const hydrationTarget = engagement?.hydration.todayTargetOz ?? 0;
+  const planStatusLine = formatPlanStatusLine(planStatus);
+  const exerciseLine = formatCoachExerciseLine(planStatus);
 
   return (
     <Card>
@@ -128,11 +117,11 @@ export function ClientDetailTabs({
             <p className="text-sm text-app-text-muted">
               {client.activeProgram?.name ?? 'No active program'} · {formatNextSession(client.nextCheckInAt)}
             </p>
-            {formatPlanStatusLine(planStatus) ? (
-              <p className="mt-1 text-sm text-app-text">{formatPlanStatusLine(planStatus)}</p>
+            {planStatusLine ? (
+              <p className="mt-1 text-sm text-app-text">{planStatusLine}</p>
             ) : null}
-            {planStatus?.exerciseTemplateName ? (
-              <p className="text-sm text-app-text-muted">Exercise: {planStatus.exerciseTemplateName}</p>
+            {exerciseLine ? (
+              <p className="text-sm text-app-text-muted">{exerciseLine}</p>
             ) : null}
           </div>
         </div>
@@ -169,6 +158,7 @@ export function ClientDetailTabs({
           </p>
         </div>
       </div>
+      <SourcesBesideTargets className="mt-3" />
 
       <div className="mt-6 flex flex-wrap items-end justify-between gap-3 border-b border-app-border">
         <div className="flex gap-4">
@@ -326,6 +316,7 @@ export function ClientDetailTabs({
             clientToday={clientToday}
             onPlanDateChange={setFoodPlanDate}
             nutritionTemplates={nutritionTemplates}
+            missingProfileFields={missingProfileFields}
             planStatus={planStatus}
             saving={saving}
             manualOpen={foodManualOpen}
@@ -341,13 +332,14 @@ export function ClientDetailTabs({
           <ExercisePlanEditor
             clientId={client.id}
             planDate={exercisePlanDate}
-            exerciseTemplates={exerciseTemplates}
             saving={saving}
             manualOpen={exerciseManualOpen}
             onManualOpenChange={setExerciseManualOpen}
             onSavingChange={onSavingChange}
             onError={onError}
             onRefresh={onRefresh}
+            onRefreshPlanStatus={onRefreshPlanStatus}
+            onPlanDateChange={setExercisePlanDate}
           />
         )}
 

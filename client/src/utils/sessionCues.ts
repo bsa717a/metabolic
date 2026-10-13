@@ -22,6 +22,7 @@ type SessionCuesNativePlugin = {
   prime(): Promise<void>;
   playTick(): Promise<void>;
   playGo(): Promise<void>;
+  playStop(): Promise<void>;
 };
 
 const SessionCuesNative = registerPlugin<SessionCuesNativePlugin>('SessionCues');
@@ -39,10 +40,14 @@ export const COUNTDOWN_TICK_MARKS_MS = [5000, 3000, 2000, 1000] as const;
 
 /** Pre-recorded natural "Go!" — native AVAudioPlayer on iOS; HTMLAudio on web. */
 export const GO_CLIP_URL = '/audio/go.wav';
+/** Pre-recorded "Stop" for the end of a work countdown. Not the Go clip. */
+export const STOP_CLIP_URL = '/audio/stop.wav';
 
 /** Near-max sine family (fundamental + harmonics). Not a square — avoids harsh clipping. */
 const TICK: Tone = { freq: 880, dur: 0.15, gain: 1 };
 const GO: Tone = { freq: 1175, dur: 0.22, gain: 1 };
+/** Lower and longer than the Go beep so a failed Stop clip is still a different sound. */
+const STOP: Tone = { freq: 220, dur: 0.32, gain: 1 };
 const HTML_VOLUME = 1;
 const WAV_PEAK = 32767;
 const PARTIALS = [
@@ -54,6 +59,7 @@ const PARTIALS = [
 let audioCtx: AudioContext | null = null;
 let htmlAudio: HTMLAudioElement | null = null;
 let goClip: HTMLAudioElement | null = null;
+let stopClip: HTMLAudioElement | null = null;
 let unlockPromise: Promise<void> | null = null;
 let foregroundResumeInstalled = false;
 
@@ -185,6 +191,10 @@ function isGoClipSrc(src: string): boolean {
   return src.includes('go.wav');
 }
 
+function isStopClipSrc(src: string): boolean {
+  return src.includes('stop.wav');
+}
+
 function getHtmlAudio(): HTMLAudioElement {
   if (!htmlAudio) {
     htmlAudio = new Audio();
@@ -199,6 +209,14 @@ function getGoClip(): HTMLAudioElement {
     configureHtmlAudio(goClip);
   }
   return goClip;
+}
+
+function getStopClip(): HTMLAudioElement {
+  if (!stopClip) {
+    stopClip = new Audio(STOP_CLIP_URL);
+    configureHtmlAudio(stopClip);
+  }
+  return stopClip;
 }
 
 /** Unlock HTMLAudio from a user gesture with silence — never the recorded Go clip. */
@@ -226,7 +244,7 @@ function primeSilentHtmlAudio(): void {
   }
 }
 
-/** Cache go.wav without playing it. Play is reserved for restEndCue / session-start. */
+/** Cache go.wav without playing it. Play is reserved for restEndCue. */
 function preloadGoClip(): void {
   try {
     const el = getGoClip();
@@ -236,6 +254,19 @@ function preloadGoClip(): void {
     el.load();
   } catch (error) {
     logCueFailure('preload Go clip failed', error);
+  }
+}
+
+/** Cache stop.wav without playing it. Play is reserved for the work-timer end. */
+function preloadStopClip(): void {
+  try {
+    const el = getStopClip();
+    if (!el.src || !isStopClipSrc(el.src)) el.src = STOP_CLIP_URL;
+    el.preload = 'auto';
+    el.setAttribute('playsinline', 'true');
+    el.load();
+  } catch (error) {
+    logCueFailure('preload Stop clip failed', error);
   }
 }
 
@@ -264,10 +295,11 @@ async function unlockAudio(): Promise<void> {
   }
 }
 
-async function playNativeCue(kind: 'tick' | 'go'): Promise<boolean> {
+async function playNativeCue(kind: 'tick' | 'go' | 'stop'): Promise<boolean> {
   if (!isNativePlatform()) return false;
   try {
     if (kind === 'tick') await SessionCuesNative.playTick();
+    else if (kind === 'stop') await SessionCuesNative.playStop();
     else await SessionCuesNative.playGo();
     return true;
   } catch (error) {
@@ -288,6 +320,7 @@ export function primeAudio(): void {
   setCueAudioSession();
   primeSilentHtmlAudio();
   preloadGoClip();
+  preloadStopClip();
   const ctx = getAudioContext();
   if (ctx?.state === 'suspended') {
     void ctx.resume().catch((error) => {
@@ -411,6 +444,31 @@ async function playGoSound(): Promise<void> {
   await playTone(GO);
 }
 
+async function playStopClip(): Promise<boolean> {
+  setCueAudioSession();
+  try {
+    const el = getStopClip();
+    if (!el.src || !isStopClipSrc(el.src)) el.src = STOP_CLIP_URL;
+    el.currentTime = 0;
+    configureHtmlAudio(el);
+    await el.play();
+    return true;
+  } catch (error) {
+    logCueFailure('Stop clip play failed', error);
+    return false;
+  }
+}
+
+async function playStopSound(): Promise<void> {
+  if (isNativePlatform()) {
+    const nativeOk = await playNativeCue('stop');
+    if (nativeOk) return;
+  }
+  const clipOk = await playStopClip();
+  if (clipOk) return;
+  await playTone(STOP);
+}
+
 async function playNativeHaptic(style: ImpactStyle): Promise<void> {
   if (!isNativePlatform()) return;
   try {
@@ -426,13 +484,25 @@ export function countdownTick(sound: boolean): void {
   void playNativeHaptic(ImpactStyle.Light);
 }
 
-/** Fire when a rest (or duration) timer elapses. Recorded "Go!" clip (sine fallback). */
+/** Fire when a rest timer elapses. Recorded "Go!" clip (bright sine fallback). Means start. */
 export function restEndCue(sound: boolean): void {
   if (sound) void playGoSound();
   void playNativeHaptic(ImpactStyle.Heavy);
   if (isNativePlatform()) return;
   try {
     navigator.vibrate?.([80, 40, 120]);
+  } catch (error) {
+    logCueFailure('navigator.vibrate failed', error);
+  }
+}
+
+/** Fire when a work countdown hits zero. Recorded "Stop" clip (low sine fallback). Not Go. */
+export function workEndCue(sound: boolean): void {
+  if (sound) void playStopSound();
+  void playNativeHaptic(ImpactStyle.Heavy);
+  if (isNativePlatform()) return;
+  try {
+    navigator.vibrate?.([160]);
   } catch (error) {
     logCueFailure('navigator.vibrate failed', error);
   }

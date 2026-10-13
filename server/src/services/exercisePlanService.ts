@@ -72,9 +72,21 @@ export async function listExercisePlansForAdmin() {
   return plans.map(serializePlan);
 }
 
+/**
+ * Who `GET /api/coach/exercise-plans` returns.
+ * A clientId scopes everyone, including super admins, to that client's visible
+ * plans (library plus plans that client created). It does not return every plan.
+ */
+export function coachExercisePlanScope(clientId: string | undefined, actorIsAdmin: boolean) {
+  if (clientId) return 'client' as const;
+  if (actorIsAdmin) return 'all' as const;
+  return 'own-and-library' as const;
+}
+
 export async function listExercisePlansForActor(actor: { id: string; role: Role }, clientId?: string) {
-  if (clientId) return listExercisePlansForUser(clientId);
-  if (isAdmin(actor)) return listExercisePlansForAdmin();
+  const scope = coachExercisePlanScope(clientId, isAdmin(actor));
+  if (scope === 'client' && clientId) return listExercisePlansForUser(clientId);
+  if (scope === 'all') return listExercisePlansForAdmin();
   const plans = await prisma.exercisePlan.findMany({
     where: {
       OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }]

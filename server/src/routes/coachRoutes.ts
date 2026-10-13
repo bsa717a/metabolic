@@ -20,6 +20,7 @@ import {
   deleteCoachClientGroup,
   deleteCoachCheckIn,
   getCoachClientDashboard,
+  getCoachClientPlanPeriod,
   getCoachClientPlanStatus,
   getCoachClientEngagement,
   getCoachClientExercises,
@@ -50,6 +51,7 @@ import {
   deleteTemplateMeal,
   deleteTemplateMealItem,
   getTemplateForActor,
+  listClientNutritionTemplatesForCoach,
   listTemplatesForActor,
   updateTemplate,
   updateTemplateMeal,
@@ -76,8 +78,11 @@ import {
   updateTemplateItem
 } from '../services/exerciseTemplateService.js';
 import {
+  addRoutineDayExercise,
   applyRoutineDayItemOverrides,
   getRoutineForUser,
+  removeRoutineDayExercise,
+  updateRoutineDayExtra,
   upsertRoutine,
   upsertRoutineDayItemOverride
 } from '../services/exerciseRoutineService.js';
@@ -109,7 +114,8 @@ const exerciseRoutineBody = z.object({
     )
     .length(7),
   applyForward: z.boolean().optional(),
-  exercisePlanId: z.string().nullable().optional()
+  exercisePlanId: z.string().nullable().optional(),
+  resetDayEdits: z.boolean().optional()
 });
 
 const exerciseTemplateCreateBody = z.object({
@@ -408,6 +414,19 @@ export async function coachRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get('/api/coach/users/:userId/daily-logs/:date/plan-period', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId, date } = request.params as { userId: string; date: string };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: 'Invalid date' });
+    }
+    try {
+      const info = await getCoachClientPlanPeriod(request.appUser!, userId, date);
+      return info ?? reply.code(404).send({ error: 'No active program' });
+    } catch (error) {
+      return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load plan' });
+    }
+  });
+
   app.get('/api/coach/users/:userId/daily-logs/:date/meals', { preHandler: coachOnly }, async (request, reply) => {
     const { userId, date } = request.params as { userId: string; date: string };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -678,8 +697,9 @@ export async function coachRoutes(app: FastifyInstance) {
       } catch (error) {
         return reply.code(403).send({ error: error instanceof Error ? error.message : 'Forbidden' });
       }
+      return listClientNutritionTemplatesForCoach(request.appUser!, parsed.data.clientId);
     }
-    return listTemplatesForActor(request.appUser!, parsed.data.clientId);
+    return listTemplatesForActor(request.appUser!);
   });
   app.get('/api/coach/nutrition-templates/:id', { preHandler: coachOnly }, async (request, reply) => {
     try {
@@ -909,7 +929,8 @@ export async function coachRoutes(app: FastifyInstance) {
       await requireCoachClient(request.appUser!, userId);
       return await upsertRoutine(userId, parsed.data.days, {
         applyForward: parsed.data.applyForward,
-        exercisePlanId: parsed.data.exercisePlanId
+        exercisePlanId: parsed.data.exercisePlanId,
+        resetDayEdits: parsed.data.resetDayEdits
       });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to save routine' });
@@ -974,6 +995,104 @@ export async function coachRoutes(app: FastifyInstance) {
         return reply
           .code(400)
           .send({ error: error instanceof Error ? error.message : 'Unable to update day prescription' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/coach/users/:userId/exercise-routine/days/:weekday/exercises',
+    { preHandler: coachOnly },
+    async (request, reply) => {
+      const params = z
+        .object({
+          userId: z.string().min(1),
+          weekday: z.coerce.number().int().min(0).max(6)
+        })
+        .safeParse(request.params);
+      if (!params.success) {
+        return reply.code(400).send({ error: params.error.issues[0]?.message ?? 'Invalid request' });
+      }
+      const body = z.object({ exerciseId: z.string().trim().min(1) }).safeParse(request.body);
+      if (!body.success) {
+        return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Invalid exercise' });
+      }
+      try {
+        await requireCoachClient(request.appUser!, params.data.userId);
+        return await addRoutineDayExercise(params.data.userId, params.data.weekday, body.data.exerciseId);
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to add exercise' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/coach/users/:userId/exercise-routine/days/:weekday/exercises/remove',
+    { preHandler: coachOnly },
+    async (request, reply) => {
+      const params = z
+        .object({
+          userId: z.string().min(1),
+          weekday: z.coerce.number().int().min(0).max(6)
+        })
+        .safeParse(request.params);
+      if (!params.success) {
+        return reply.code(400).send({ error: params.error.issues[0]?.message ?? 'Invalid request' });
+      }
+      const body = z
+        .object({
+          templateItemId: z.string().trim().min(1).optional(),
+          extraId: z.string().trim().min(1).optional()
+        })
+        .refine((value) => Boolean(value.templateItemId) !== Boolean(value.extraId), {
+          message: 'Provide a plan exercise or an added exercise'
+        })
+        .safeParse(request.body);
+      if (!body.success) {
+        return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Invalid exercise' });
+      }
+      try {
+        await requireCoachClient(request.appUser!, params.data.userId);
+        return await removeRoutineDayExercise(
+          params.data.userId,
+          params.data.weekday,
+          body.data.templateItemId
+            ? { templateItemId: body.data.templateItemId }
+            : { extraId: body.data.extraId! }
+        );
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to remove exercise' });
+      }
+    }
+  );
+
+  app.patch(
+    '/api/coach/users/:userId/exercise-routine/days/:weekday/extras/:extraId',
+    { preHandler: coachOnly },
+    async (request, reply) => {
+      const params = z
+        .object({
+          userId: z.string().min(1),
+          weekday: z.coerce.number().int().min(0).max(6),
+          extraId: z.string().min(1)
+        })
+        .safeParse(request.params);
+      if (!params.success) {
+        return reply.code(400).send({ error: params.error.issues[0]?.message ?? 'Invalid request' });
+      }
+      const parsed = templateExerciseItemUpdateBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid prescription' });
+      }
+      try {
+        await requireCoachClient(request.appUser!, params.data.userId);
+        return await updateRoutineDayExtra(
+          params.data.userId,
+          params.data.weekday,
+          params.data.extraId,
+          parsed.data
+        );
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to update exercise' });
       }
     }
   );

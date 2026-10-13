@@ -6,6 +6,7 @@ import { useAiConsent } from '../../context/AiConsentContext';
 import { Drawer } from '../ui/Drawer';
 import { AiDisabledNotice } from '../privacy/AiDisabledNotice';
 import type { MealRecommendationsPayload, RecommendedMeal } from '../../utils/mealCards';
+import { SourcesBesideTargets } from './SourcesLink';
 
 export function MealSuggestionsDrawer({
   open,
@@ -113,6 +114,7 @@ export function MealSuggestionsDrawer({
             )}
             .
           </p>
+          <SourcesBesideTargets />
 
           {!chosen && (
             <input

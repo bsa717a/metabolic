@@ -12,7 +12,9 @@ import {
   buildTemplateMatchWhere,
   getUserPlanMatchProfile,
   hasCompleteTemplateCriteria,
-  isCompletePlanMatchProfile
+  isCompletePlanMatchProfile,
+  missingPlanMatchFields,
+  requiresGlobalTemplateProfileMatch
 } from './nutritionTemplateMatch.js';
 import { recalculateDailyLogTotals } from './totalsService.js';
 
@@ -225,31 +227,79 @@ export async function listTemplatesFullForAdmin() {
   return templates.map(serializeTemplate);
 }
 
+/**
+ * Who `GET /api/coach/nutrition-templates` returns.
+ * A clientId scopes everyone, including super admins: library plans, the viewing
+ * coach's own templates, and templates already assigned to that client.
+ * Without a clientId, admins still see the full catalog (coach settings).
+ */
+export function coachNutritionTemplateScope(clientId: string | undefined, actorIsAdmin: boolean) {
+  if (clientId) return 'client' as const;
+  if (actorIsAdmin) return 'all' as const;
+  return 'own-and-library' as const;
+}
+
+/**
+ * Library (GLOBAL) plans and the viewing coach's own templates, plus plans already
+ * assigned to this client. Other clients' personal plans stay out unless assigned here.
+ * A complete profile keeps the match filter. An incomplete profile lists the whole
+ * visible catalog, because nothing can match yet.
+ */
+export function clientScopedNutritionTemplateWhere(input: {
+  actorId: string;
+  profileMatch: Prisma.NutritionPlanTemplateWhereInput | null;
+  profileIncomplete?: boolean;
+  assignedIds: string[];
+}): Prisma.NutritionPlanTemplateWhereInput | null {
+  const visibilityWhere: Prisma.NutritionPlanTemplateWhereInput = {
+    OR: [{ visibility: Visibility.GLOBAL }, { createdById: input.actorId }]
+  };
+  const matchFilters: Prisma.NutritionPlanTemplateWhereInput[] = [];
+  if (input.profileIncomplete) {
+    matchFilters.push(visibilityWhere);
+  } else if (input.profileMatch) {
+    matchFilters.push({ AND: [visibilityWhere, input.profileMatch] });
+  }
+  if (input.assignedIds.length) {
+    matchFilters.push({ id: { in: input.assignedIds } });
+  }
+  if (!matchFilters.length) return null;
+  return { OR: matchFilters };
+}
+
+export async function listClientNutritionTemplatesForCoach(
+  actor: { id: string; role: Role },
+  clientId: string
+) {
+  const [profile, assignedIds] = await Promise.all([
+    getUserPlanMatchProfile(clientId),
+    getClientAssignedNutritionTemplateIds(clientId)
+  ]);
+  const missingProfileFields = missingPlanMatchFields(profile);
+  const profileComplete = isCompletePlanMatchProfile(profile);
+  const where = clientScopedNutritionTemplateWhere({
+    actorId: actor.id,
+    profileMatch: profileComplete ? buildTemplateMatchWhere(profile) : null,
+    profileIncomplete: !profileComplete,
+    assignedIds
+  });
+  if (!where) return { templates: [], missingProfileFields };
+
+  const templates = await prisma.nutritionPlanTemplate.findMany({
+    where,
+    include: templateListInclude,
+    orderBy: { updatedAt: 'desc' }
+  });
+  return { templates: templates.map(serializeTemplateSummary), missingProfileFields };
+}
+
 export async function listTemplatesForActor(actor: { id: string; role: Role }, clientId?: string) {
-  if (isAdmin(actor)) return listTemplatesForAdmin();
+  const scope = coachNutritionTemplateScope(clientId, isAdmin(actor));
+  if (scope === 'all') return listTemplatesForAdmin();
 
-  if (clientId) {
-    const [matchWhere, assignedIds] = await Promise.all([
-      buildProfileMatchListWhere(clientId),
-      getClientAssignedNutritionTemplateIds(clientId)
-    ]);
-
-    const visibilityWhere = { OR: [{ visibility: Visibility.GLOBAL }, { createdById: actor.id }] };
-    const matchFilters: Prisma.NutritionPlanTemplateWhereInput[] = [];
-    if (matchWhere) {
-      matchFilters.push({ AND: [visibilityWhere, matchWhere] });
-    }
-    if (assignedIds.length) {
-      matchFilters.push({ id: { in: assignedIds } });
-    }
-    if (!matchFilters.length) return [];
-
-    const templates = await prisma.nutritionPlanTemplate.findMany({
-      where: { OR: matchFilters },
-      include: templateListInclude,
-      orderBy: { updatedAt: 'desc' }
-    });
-    return templates.map(serializeTemplateSummary);
+  if (scope === 'client' && clientId) {
+    const listed = await listClientNutritionTemplatesForCoach(actor, clientId);
+    return listed.templates;
   }
 
   const templates = await prisma.nutritionPlanTemplate.findMany({
@@ -513,8 +563,13 @@ export async function applyTemplateToDailyLog(
 
   // Biometric criteria gate GLOBAL (band) templates only. A coach-owned custom plan is
   // authorized by the coach's judgment — it has no criteria bands and needs none.
+  // When the profile cannot be matched, a coach may still apply a library plan.
+  // Self-serve applies, and applies against a complete profile, stay matched-only.
   if (template.visibility === Visibility.GLOBAL) {
-    await assertTemplateMatchesUser(templateId, userId);
+    const profile = await getUserPlanMatchProfile(userId);
+    if (requiresGlobalTemplateProfileMatch(Boolean(options?.actorId), profile)) {
+      await assertTemplateMatchesUser(templateId, userId);
+    }
   }
 
   // Scale the template to the client's resolved/override target so meal amounts and the

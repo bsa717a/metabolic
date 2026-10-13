@@ -12,6 +12,12 @@ import { notifyCoachRequest } from './coachRequestNotificationService.js';
 import { applyCoachSupport, findCoachByCode, normalizeCoachCode } from './coachSupportService.js';
 import { isVirtualCoachId } from '../data/virtualCoachPersonas.js';
 import { normalizePhone } from '../utils/phone.js';
+import { loadActiveCoachAssignment } from './userSerialization.js';
+import {
+  buildClientProfileData,
+  heightFieldsFromProfile,
+  shouldPreserveImportedProgram
+} from './onboardingSetupGuards.js';
 
 const DEFAULT_PROGRAM_NAME = 'Master Your Metabolic';
 
@@ -53,26 +59,40 @@ export function hasValidCurrentWeight(value: unknown) {
 }
 
 export async function getSetupDraft(userId: string) {
-  const [user, program] = await Promise.all([
+  const [user, program, profile, assignment] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
         gender: true,
         birthDate: true,
         timezone: true,
-        coachRequestedAt: true
+        coachRequestedAt: true,
+        phone: true
       }
     }),
     prisma.program.findFirst({
       where: { userId, status: ProgramStatus.ACTIVE },
       include: { metrics: true }
-    })
+    }),
+    prisma.clientProfile.findUnique({
+      where: { userId },
+      select: {
+        heightInches: true,
+        heightRaw: true,
+        foodConditions: true,
+        dietNotes: true,
+        activityLevel: true,
+        occupation: true
+      }
+    }),
+    loadActiveCoachAssignment(userId)
   ]);
 
   const weightMetric = program?.metrics.find((metric) => metric.metricType === 'WEIGHT');
   const bodyFatMetric = program?.metrics.find((metric) => metric.metricType === 'BODY_FAT');
   const gender = normalizeGender(user?.gender);
   const weight = formatMetricValue(weightMetric?.currentValue);
+  const height = heightFieldsFromProfile(profile?.heightInches, profile?.heightRaw);
 
   return {
     weight,
@@ -83,7 +103,14 @@ export async function getSetupDraft(userId: string) {
     birthDate: user?.birthDate ? toDateKey(user.birthDate) : '',
     timezone: user?.timezone?.trim() ?? '',
     wantsCoach: Boolean(user?.coachRequestedAt),
-    hasExistingWeight: hasValidCurrentWeight(weightMetric?.currentValue ?? weight)
+    hasExistingWeight: hasValidCurrentWeight(weightMetric?.currentValue ?? weight),
+    ...height,
+    foodAllergies: profile?.foodConditions?.trim() ?? '',
+    dietaryPreferences: profile?.dietNotes?.trim() ?? '',
+    activityLevel: profile?.activityLevel != null ? String(profile.activityLevel) : '',
+    phone: user?.phone?.trim() ?? '',
+    occupation: profile?.occupation?.trim() ?? '',
+    assignedCoachName: [assignment?.coach.firstName, assignment?.coach.lastName].filter(Boolean).join(' ')
   };
 }
 
@@ -150,6 +177,8 @@ type SetupInput = {
   timezone?: string;
   phone?: string;
   foodAllergies?: string;
+  dietaryPreferences?: string;
+  textReminders?: boolean;
   selectedVirtualCoachId?: string;
 };
 
@@ -166,31 +195,41 @@ function virtualCoachProfileFields(input: SetupInput) {
   return {};
 }
 
-function buildClientProfileData(input: SetupInput) {
-  const clientProfileData: {
-    heightInches?: number;
-    heightRaw?: string;
-    occupation?: string;
-    activityLevel?: number;
-    foodConditions?: string | null;
-  } = {};
-  if (input.heightFeet !== undefined || input.heightInches !== undefined) {
-    const feet = input.heightFeet ?? 0;
-    const inches = input.heightInches ?? 0;
-    clientProfileData.heightInches = feet * 12 + inches;
-    clientProfileData.heightRaw = `${feet}'${inches}"`;
+type SetupProfileUpdate = {
+  timezone?: string;
+  gender?: string | null;
+  birthDate?: Date | null;
+  phone?: string;
+  selectedVirtualCoachId?: string;
+  smsMealRemindersEnabled?: boolean;
+  smsEveningRecapEnabled?: boolean;
+  smsRemindersEnabled?: boolean;
+};
+
+function assignSetupProfileFields(profileUpdate: SetupProfileUpdate, input: SetupInput) {
+  if (input.timezone?.trim()) {
+    profileUpdate.timezone = input.timezone.trim();
   }
-  if (input.occupation?.trim()) {
-    clientProfileData.occupation = input.occupation.trim();
+  if (input.gender) {
+    profileUpdate.gender = normalizeGender(input.gender);
   }
-  if (input.activityLevel !== undefined) {
-    clientProfileData.activityLevel = input.activityLevel;
+  if (input.birthDate) {
+    profileUpdate.birthDate = parseDateParam(input.birthDate);
   }
-  if (input.foodAllergies !== undefined) {
-    const trimmed = input.foodAllergies.trim();
-    clientProfileData.foodConditions = trimmed || null;
+  const phone = normalizeSetupPhone(input.phone);
+  if (phone) {
+    profileUpdate.phone = phone;
   }
-  return clientProfileData;
+  Object.assign(profileUpdate, virtualCoachProfileFields(input));
+  if (input.textReminders === true) {
+    profileUpdate.smsMealRemindersEnabled = true;
+    profileUpdate.smsEveningRecapEnabled = true;
+    profileUpdate.smsRemindersEnabled = true;
+  } else if (input.textReminders === false) {
+    profileUpdate.smsMealRemindersEnabled = false;
+    profileUpdate.smsEveningRecapEnabled = false;
+    profileUpdate.smsRemindersEnabled = false;
+  }
 }
 
 async function upsertClientProfileFromSetup(
@@ -235,6 +274,104 @@ async function findGlobalExerciseTemplate() {
   });
 }
 
+async function updateConfirmedProgramMetrics(
+  tx: Prisma.TransactionClient,
+  program: { id: string; metrics: ProgramMetric[] },
+  input: SetupInput
+) {
+  const weightMetric = program.metrics.find((metric) => metric.metricType === 'WEIGHT');
+  if (weightMetric) {
+    await tx.programMetric.update({
+      where: { id: weightMetric.id },
+      data: { currentValue: input.weight, goalValue: input.goalWeight }
+    });
+  } else {
+    await tx.programMetric.create({
+      data: {
+        programId: program.id,
+        metricType: 'WEIGHT',
+        startValue: input.weight,
+        currentValue: input.weight,
+        goalValue: input.goalWeight,
+        unit: 'lbs'
+      }
+    });
+  }
+
+  const bodyFatMetric = program.metrics.find((metric) => metric.metricType === 'BODY_FAT');
+  let bodyFat = input.bodyFat;
+  let goalBodyFat = input.goalBodyFat;
+  if (bodyFatMetric) {
+    const data: { currentValue?: number; goalValue?: number } = {};
+    if (input.bodyFat !== undefined) data.currentValue = input.bodyFat;
+    if (input.goalBodyFat !== undefined) data.goalValue = input.goalBodyFat;
+    if (Object.keys(data).length) {
+      await tx.programMetric.update({ where: { id: bodyFatMetric.id }, data });
+    }
+    bodyFat = bodyFat ?? Number(bodyFatMetric.currentValue);
+    goalBodyFat = goalBodyFat ?? Number(bodyFatMetric.goalValue);
+  }
+
+  if (
+    bodyFat === undefined ||
+    goalBodyFat === undefined ||
+    !Number.isFinite(bodyFat) ||
+    !Number.isFinite(goalBodyFat) ||
+    bodyFat <= 0 ||
+    goalBodyFat <= 0
+  ) {
+    return;
+  }
+
+  const derived = [
+    {
+      metricType: 'LEAN_TISSUE_MASS' as const,
+      currentValue: leanTissueMassLbs(input.weight, bodyFat),
+      goalValue: leanTissueMassLbs(input.goalWeight, goalBodyFat)
+    },
+    {
+      metricType: 'FAT_MASS' as const,
+      currentValue: fatMassLbs(input.weight, bodyFat),
+      goalValue: fatMassLbs(input.goalWeight, goalBodyFat)
+    }
+  ];
+
+  for (const next of derived) {
+    const metric = program.metrics.find((item) => item.metricType === next.metricType);
+    if (!metric) continue;
+    await tx.programMetric.update({
+      where: { id: metric.id },
+      data: { currentValue: next.currentValue, goalValue: next.goalValue }
+    });
+  }
+}
+
+/**
+ * Imported programs already have a coach, meals, and workouts. Confirm profile
+ * fields and the goal weight only — do not rebuild the plan or replace the coach.
+ */
+async function confirmImportedProgram(
+  userId: string,
+  program: { id: string; metrics: ProgramMetric[] },
+  input: SetupInput
+) {
+  const profileUpdate: SetupProfileUpdate = {};
+  assignSetupProfileFields(profileUpdate, input);
+
+  await prisma.$transaction(async (tx) => {
+    if (Object.keys(profileUpdate).length) {
+      await tx.user.update({ where: { id: userId }, data: profileUpdate });
+    }
+    await upsertClientProfileFromSetup(userId, input, tx);
+    await updateConfirmedProgramMetrics(tx, program, input);
+  });
+
+  return prisma.program.findUniqueOrThrow({
+    where: { id: program.id },
+    include: { metrics: true }
+  });
+}
+
 async function updateActiveProgramFromSetup(
   userId: string,
   program: {
@@ -254,6 +391,22 @@ async function updateActiveProgramFromSetup(
     throw new Error(
       'We need your timezone to schedule meal reminders and check-ins at the right time. Please go back and select your timezone.'
     );
+  }
+
+  const [mealCount, exerciseCount, activeAssignment] = await Promise.all([
+    prisma.meal.count({ where: { dailyLog: { programId: program.id } } }),
+    prisma.scheduledExercise.count({ where: { programId: program.id } }),
+    loadActiveCoachAssignment(userId)
+  ]);
+  if (
+    shouldPreserveImportedProgram({
+      mealCount,
+      exerciseCount,
+      coachId: program.coachId,
+      hasActiveCoachAssignment: Boolean(activeAssignment)
+    })
+  ) {
+    return confirmImportedProgram(userId, program, input);
   }
 
   const coach = await findCoachByCode(normalizeCoachCode(input.coachCode));
@@ -305,22 +458,8 @@ async function updateActiveProgramFromSetup(
     };
   }
 
-  const profileUpdate: { timezone?: string; gender?: string | null; birthDate?: Date | null; phone?: string; selectedVirtualCoachId?: string } =
-    {};
-  if (input.timezone?.trim()) {
-    profileUpdate.timezone = input.timezone.trim();
-  }
-  if (input.gender) {
-    profileUpdate.gender = normalizeGender(input.gender);
-  }
-  if (input.birthDate) {
-    profileUpdate.birthDate = parseDateParam(input.birthDate);
-  }
-  const phone = normalizeSetupPhone(input.phone);
-  if (phone) {
-    profileUpdate.phone = phone;
-  }
-  Object.assign(profileUpdate, virtualCoachProfileFields(input));
+  const profileUpdate: SetupProfileUpdate = {};
+  assignSetupProfileFields(profileUpdate, input);
 
   await prisma.$transaction(async (tx) => {
     if (Object.keys(profileUpdate).length) {
@@ -438,7 +577,8 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
   });
 
   if (existingActiveProgram) {
-    return updateActiveProgramFromSetup(userId, existingActiveProgram, input);
+    const program = await updateActiveProgramFromSetup(userId, existingActiveProgram, input);
+    return { program, created: false as const };
   }
 
   const [template, coach, globalNutritionTemplate, globalExerciseTemplate, existingUser] = await Promise.all([
@@ -465,22 +605,8 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
   const targetEndDate = new Date(today.getTime() + 16 * 7 * 86400000);
 
   const program = await prisma.$transaction(async (tx) => {
-    const profileUpdate: { gender?: string | null; birthDate?: Date | null; timezone?: string; phone?: string; selectedVirtualCoachId?: string } =
-      {};
-    if (input.gender) {
-      profileUpdate.gender = normalizeGender(input.gender);
-    }
-    if (input.birthDate) {
-      profileUpdate.birthDate = parseDateParam(input.birthDate);
-    }
-    if (input.timezone?.trim()) {
-      profileUpdate.timezone = input.timezone.trim();
-    }
-    const phone = normalizeSetupPhone(input.phone);
-    if (phone) {
-      profileUpdate.phone = phone;
-    }
-    Object.assign(profileUpdate, virtualCoachProfileFields(input));
+    const profileUpdate: SetupProfileUpdate = {};
+    assignSetupProfileFields(profileUpdate, input);
     if (Object.keys(profileUpdate).length) {
       await tx.user.update({ where: { id: userId }, data: profileUpdate });
     }
@@ -552,5 +678,5 @@ export async function setupFirstProgram(userId: string, input: SetupInput) {
     await notifyCoachRequest(userId, { coachCode: input.coachCode });
   }
 
-  return programWithMetrics;
+  return { program: programWithMetrics, created: true as const };
 }

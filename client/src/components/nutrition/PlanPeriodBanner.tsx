@@ -1,25 +1,28 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { todayKey } from '../../services/api';
 import type { PlanPeriodInfo } from '../../types';
+import { planWeekTitle } from '../../utils/planPeriodTitle';
+import { SourcesBesideTargets } from './SourcesLink';
 
-function formatPlanDate(dateKey: string) {
-  return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-export function PlanPeriodBanner({ planPeriod }: { planPeriod: PlanPeriodInfo }) {
+export function PlanPeriodBanner({
+  planPeriod,
+  viewedDate
+}: {
+  planPeriod: PlanPeriodInfo;
+  /** Day the plan is showing. The title uses that calendar week ("Oct 5 – 11"). */
+  viewedDate?: string;
+}) {
   const [expanded, setExpanded] = useState(false);
-
-  const title = planPeriod.weekNumber != null ? `Week ${planPeriod.weekNumber} plan` : 'Your plan';
+  const week = planWeekTitle(planPeriod, viewedDate ?? todayKey());
 
   const details: string[] = [];
   if (planPeriod.calorieTarget != null) {
     details.push(`${planPeriod.calorieTarget.toLocaleString()} kcal/day`);
   }
-  if (planPeriod.weekNumber != null && planPeriod.effectiveDate) {
-    details.push(
-      `${formatPlanDate(planPeriod.effectiveDate)} – ${planPeriod.endDate ? formatPlanDate(planPeriod.endDate) : 'ongoing'}`
-    );
-  } else {
+  if (week.range) {
+    details.push(week.range);
+  } else if (week.awaitingCheckIn) {
     details.push('Week 1 starts at your first check-in');
   }
 
@@ -32,7 +35,7 @@ export function PlanPeriodBanner({ planPeriod }: { planPeriod: PlanPeriodInfo })
         aria-expanded={expanded}
       >
         <span className="flex min-w-0 flex-1 items-baseline gap-x-2 overflow-hidden">
-          <span className="shrink-0 font-bold text-app-text">{title}</span>
+          <span className="shrink-0 font-bold text-app-text">{week.title}</span>
           <span className="truncate text-sm text-app-text-muted">{details.join(' · ')}</span>
         </span>
         <ChevronDown
@@ -41,6 +44,7 @@ export function PlanPeriodBanner({ planPeriod }: { planPeriod: PlanPeriodInfo })
           aria-hidden
         />
       </button>
+      <SourcesBesideTargets className="mt-2" />
       {expanded && (
         <p className="mt-2 text-xs text-app-text-muted">
           A new week starts when you complete your weekly check-in — skip it and this plan continues.

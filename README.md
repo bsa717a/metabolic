@@ -151,7 +151,23 @@ npx cap open ios         # Opens Xcode
 | Apple ID   | `6810053439`              |
 | Team       | Cliffs Mama, LLC (`8FG8V9P49A`) |
 
-### TestFlight Upload
+### TestFlight from GitHub Actions
+
+Actions → **iOS TestFlight** → **Run workflow**. The workflow is `workflow_dispatch` only. It does not run on push or pull request, and it does not create secrets.
+
+Derek adds these repository secrets separately (Team `8FG8V9P49A`, Cliffs Mama, LLC):
+
+| Secret | Value |
+| --- | --- |
+| `ASC_KEY_ID` | App Store Connect API Key ID, 10 characters. The key that signed 1.0 (9) is `2H9BZ26296`. |
+| `ASC_ISSUER_ID` | Issuer UUID. That key's issuer is `ae4ecfe6-d76e-46b7-b521-bcce51cf8191`. |
+| `ASC_KEY_P8_BASE64` | Base64 of the AuthKey `.p8` file, not the raw key pasted into YAML. On a Mac: `base64 -i AuthKey_2H9BZ26296.p8 \| pbcopy` |
+
+Leave the build-number input empty to use one higher than the latest App Store Connect build, and never below 10. Marketing version stays `1.0` unless the input says otherwise. The web bundle reuses the existing production `VITE_*` deploy secrets.
+
+A run is about **20 minutes** on a `macos-26` runner (about 15 with warm caches, about 25 cold). Xcode is pinned to **26.6**. See `client/IOS.md`.
+
+### TestFlight Upload (Mac)
 
 1. In Xcode: **Product → Archive**
 2. **Distribute App → App Store Connect → Upload**

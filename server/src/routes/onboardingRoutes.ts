@@ -26,7 +26,9 @@ const setupBody = z.object({
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   timezone: z.string().trim().min(1).max(100).optional(),
   phone: z.string().trim().max(30).optional(),
-  foodAllergies: z.string().trim().max(5000).optional()
+  foodAllergies: z.string().trim().max(5000).optional(),
+  dietaryPreferences: z.string().trim().max(5000).optional(),
+  textReminders: z.boolean().optional()
 });
 
 export async function onboardingRoutes(app: FastifyInstance) {
@@ -47,9 +49,9 @@ export async function onboardingRoutes(app: FastifyInstance) {
 
     try {
       const user = request.appUser!;
-      const program = await setupFirstProgram(user.id, parsed.data);
+      const { program, created } = await setupFirstProgram(user.id, parsed.data);
 
-      if (isEmailConfigured() && user.email) {
+      if (created && isEmailConfigured() && user.email) {
         enqueueWelcomeEmail({
           toAddress: user.email,
           firstName: user.firstName

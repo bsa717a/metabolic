@@ -9,6 +9,8 @@ import type { SetupFormState } from '../../types/onboarding';
 type SubmitOptions = {
   requireGoalWeight?: boolean;
   requireTimezone?: boolean;
+  /** Imported users already have a coach. Never send a code that would replace them. */
+  preserveAssignedCoach?: boolean;
 };
 
 function parseOptionalBodyFat(value: string) {
@@ -45,7 +47,7 @@ export function validateSetupForm(form: SetupFormState, options: SubmitOptions =
   return null;
 }
 
-export function buildSetupPayload(form: SetupFormState) {
+export function buildSetupPayload(form: SetupFormState, options: SubmitOptions = {}) {
   const currentWeight = Number(form.weight);
   const resolvedGoalWeight = hasValidCurrentWeight(Number(form.goalWeight))
     ? Number(form.goalWeight)
@@ -56,6 +58,8 @@ export function buildSetupPayload(form: SetupFormState) {
   const heightInches = form.heightInches.trim() ? Number(form.heightInches) : undefined;
   const timezone = resolveTimezone(form.timezone);
 
+  const keepAssignedCoach = options.preserveAssignedCoach === true;
+
   return {
     weight: currentWeight,
     goalWeight: resolvedGoalWeight,
@@ -65,17 +69,25 @@ export function buildSetupPayload(form: SetupFormState) {
     ...(heightInches !== undefined && Number.isFinite(heightInches) ? { heightInches } : {}),
     ...(form.occupation.trim() ? { occupation: form.occupation.trim() } : {}),
     ...(form.activityLevel ? { activityLevel: Number(form.activityLevel) } : {}),
-    ...(form.coachCode.trim() ? { coachCode: form.coachCode.trim() } : {}),
-    ...(form.wantsCoach ? { wantsCoach: true } : {}),
+    ...(!keepAssignedCoach && form.coachCode.trim() ? { coachCode: form.coachCode.trim() } : {}),
+    ...(!keepAssignedCoach && form.wantsCoach ? { wantsCoach: true } : {}),
     ...(form.selectedVirtualCoachId
       ? { selectedVirtualCoachId: form.selectedVirtualCoachId as VirtualCoachId }
       : {}),
-    ...(form.trackingOnly && !form.coachCode.trim() ? { trackingOnly: true } : {}),
+    ...(!keepAssignedCoach && form.trackingOnly && !form.coachCode.trim() ? { trackingOnly: true } : {}),
     ...(form.gender ? { gender: form.gender } : {}),
     ...(form.birthDate ? { birthDate: form.birthDate } : {}),
     ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
-    // Only send when set — empty string would wipe allergies on migrated profiles.
+    // Only send when set — a blank field must not wipe imported food notes.
     ...(form.foodAllergies.trim() ? { foodAllergies: form.foodAllergies.trim() } : {}),
+    ...(form.dietaryPreferences.trim()
+      ? { dietaryPreferences: form.dietaryPreferences.trim() }
+      : {}),
+    ...(form.textReminders === 'yes'
+      ? { textReminders: true }
+      : form.textReminders === 'no'
+        ? { textReminders: false }
+        : {}),
     timezone
   };
 }
@@ -88,7 +100,7 @@ export async function submitSetupForm(form: SetupFormState, options: SubmitOptio
 
   await api('/api/onboarding/setup', {
     method: 'POST',
-    body: JSON.stringify(buildSetupPayload(form))
+    body: JSON.stringify(buildSetupPayload(form, options))
   });
 
   clearPendingCoachInvite();
@@ -113,7 +125,9 @@ export function createEmptySetupForm(): SetupFormState {
     birthDate: '',
     timezone: '',
     phone: '',
-    foodAllergies: ''
+    foodAllergies: '',
+    dietaryPreferences: '',
+    textReminders: ''
   };
 }
 
@@ -128,12 +142,25 @@ export function applyDraftToForm(
     birthDate: string;
     timezone: string;
     wantsCoach: boolean;
+    heightFeet: string;
+    heightInches: string;
+    foodAllergies: string;
+    dietaryPreferences: string;
+    activityLevel: string;
+    phone: string;
+    occupation: string;
   }>,
   profile?: {
     gender?: string | null;
     birthDate?: string | null;
     timezone?: string | null;
     phone?: string | null;
+    heightFeet?: number | null;
+    heightInches?: number | null;
+    foodAllergies?: string | null;
+    dietaryPreferences?: string | null;
+    activityLevel?: number | null;
+    occupation?: string | null;
   } | null,
   user?: {
     gender?: string | null;
@@ -147,7 +174,19 @@ export function applyDraftToForm(
   const timezoneValue = resolveTimezone(
     draft.timezone || profile?.timezone || user?.timezone || form.timezone
   );
-  const phoneValue = profile?.phone?.trim() || user?.phone?.trim() || form.phone;
+  const phoneValue = draft.phone?.trim() || profile?.phone?.trim() || user?.phone?.trim() || form.phone;
+  const heightFeet =
+    draft.heightFeet ||
+    (profile?.heightFeet != null ? String(profile.heightFeet) : '') ||
+    form.heightFeet;
+  const heightInches =
+    draft.heightInches ||
+    (profile?.heightInches != null ? String(profile.heightInches) : '') ||
+    form.heightInches;
+  const activityLevel =
+    draft.activityLevel ||
+    (profile?.activityLevel != null ? String(profile.activityLevel) : '') ||
+    form.activityLevel;
 
   return {
     ...form,
@@ -155,6 +194,13 @@ export function applyDraftToForm(
     goalWeight: draft.goalWeight || form.goalWeight,
     bodyFat: draft.bodyFat || form.bodyFat,
     goalBodyFat: draft.goalBodyFat || form.goalBodyFat,
+    heightFeet,
+    heightInches,
+    occupation: draft.occupation?.trim() || profile?.occupation?.trim() || form.occupation,
+    activityLevel,
+    foodAllergies: draft.foodAllergies?.trim() || profile?.foodAllergies?.trim() || form.foodAllergies,
+    dietaryPreferences:
+      draft.dietaryPreferences?.trim() || profile?.dietaryPreferences?.trim() || form.dietaryPreferences,
     gender: genderValue || form.gender,
     birthDate: birthDateValue || form.birthDate,
     timezone: timezoneValue,

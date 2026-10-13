@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
+import { BookOpen, ChevronDown, CreditCard, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Moon, Settings, ShoppingBag, Sparkles, Sun, Target, TrendingUp, UserRound, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/auth';
@@ -270,6 +270,14 @@ export function Topbar({
                     onClick={() => {
                       closeProfileMenu();
                       navigate('/support');
+                    }}
+                  />
+                  <ProfileMenuItem
+                    label="Sources & methodology"
+                    icon={BookOpen}
+                    onClick={() => {
+                      closeProfileMenu();
+                      navigate('/nutrition/sources');
                     }}
                   />
                   <ProfileMenuItem

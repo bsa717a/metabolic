@@ -333,7 +333,7 @@ export function NutritionPage() {
       </div>
 
       {(planPeriod?.weekNumber != null || planPeriod?.calorieTarget != null) && (
-        <PlanPeriodBanner planPeriod={planPeriod} />
+        <PlanPeriodBanner planPeriod={planPeriod} viewedDate={selectedDate} />
       )}
 
       <WeekDateStrip

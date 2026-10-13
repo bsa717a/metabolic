@@ -13,6 +13,7 @@ import {
   saveSessionPrefs,
   sessionReducer,
   sessionSummary,
+  shouldAutoCompleteTimedSet,
   startSession,
   type WorkoutSessionState
 } from './workoutSession';
@@ -58,6 +59,19 @@ describe('startSession', () => {
     const s = startSession('2026-07-20', [ex('c', 'PLANNED', { durationSeconds: 120 })], 1000);
     expect(s.durationEndsAtMs).toBe(1000 + 120 * 1000);
     expect(remainingMs(s, 1000)).toBe(120_000);
+    expect(shouldAutoCompleteTimedSet(s)).toBe(true);
+  });
+
+  it('arms a per-set countdown when sets and duration are both set', () => {
+    const s = startSession('2026-07-20', [ex('a', 'PLANNED', { sets: 3, durationSeconds: 30 })], 1000);
+    expect(s.durationEndsAtMs).toBe(1000 + 30_000);
+    expect(shouldAutoCompleteTimedSet(s)).toBe(true);
+  });
+
+  it('does not arm a work timer for rep-only sets', () => {
+    const s = startSession('d', [ex('a', 'PLANNED', { sets: 3, reps: '10' })], 1000);
+    expect(s.durationEndsAtMs).toBeNull();
+    expect(shouldAutoCompleteTimedSet(s)).toBe(false);
   });
 });
 
@@ -224,6 +238,73 @@ describe('actualsForExercise', () => {
     let s = startSession('d', [ex('a', 'PLANNED', { sets: 2, reps: '10', weight: 135 })], 1000);
     s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 2000 });
     expect(actualsForExercise(s, 'a')).toEqual({ actualSets: 1 });
+  });
+
+  it('sums elapsed time across timed sets and keeps entered reps', () => {
+    let s = startSession(
+      'd',
+      [ex('a', 'PLANNED', { sets: 3, reps: '10', durationSeconds: 30 })],
+      1000
+    );
+    // Set 1 finished 10s in (not the full 30s).
+    s = sessionReducer(s, { type: 'ADJUST_ACTUALS', patch: { reps: 8 }, nowMs: 1500 });
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 1000 + 10_000 });
+    expect(s.phase).toBe('rest');
+    expect(s.currentSet).toBe(2);
+    expect(s.perExercise.a.setsDone).toBe(1);
+    expect(s.perExercise.a.actualDurationSeconds).toBe(10);
+    expect(s.perExercise.a.actualReps).toBeUndefined();
+
+    s = sessionReducer(s, { type: 'SKIP_REST', nowMs: 20_000 });
+    expect(s.phase).toBe('exercise');
+    expect(s.durationEndsAtMs).toBe(20_000 + 30_000);
+    expect(shouldAutoCompleteTimedSet(s)).toBe(true);
+
+    // Set 2 runs the full cap.
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 20_000 + 30_000 });
+    expect(s.perExercise.a.actualDurationSeconds).toBe(40);
+    expect(s.currentSet).toBe(3);
+
+    s = sessionReducer(s, { type: 'SKIP_REST', nowMs: 60_000 });
+    s = sessionReducer(s, { type: 'ADJUST_ACTUALS', patch: { reps: 10 }, nowMs: 61_000 });
+    // Set 3 stopped 5s in.
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 60_000 + 5_000 });
+    expect(s.perExercise.a.outcome).toBe('done');
+    expect(s.perExercise.a.setsDone).toBe(3);
+    expect(actualsForExercise(s, 'a')).toEqual({
+      actualSets: 3,
+      actualReps: 10,
+      actualDurationSeconds: 45
+    });
+  });
+
+  it('keeps reps entered on an earlier set when later sets are not adjusted', () => {
+    let s = startSession(
+      'd',
+      [ex('a', 'PLANNED', { sets: 2, reps: '10', durationSeconds: 30 })],
+      1000
+    );
+    s = sessionReducer(s, { type: 'ADJUST_ACTUALS', patch: { reps: 11 }, nowMs: 1500 });
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 1000 + 5_000 });
+    expect(s.perExercise.a.actualReps).toBeUndefined();
+    expect(s.perExercise.a.enteredReps).toBe(11);
+    s = sessionReducer(s, { type: 'SKIP_REST', nowMs: 20_000 });
+    s = sessionReducer(s, { type: 'COMPLETE_SET', nowMs: 20_000 + 30_000 });
+    expect(actualsForExercise(s, 'a').actualReps).toBe(11);
+    expect(actualsForExercise(s, 'a').actualSets).toBe(2);
+    expect(actualsForExercise(s, 'a').actualDurationSeconds).toBe(35);
+  });
+
+  it('pauses and resumes a timed-set countdown without counting paused time', () => {
+    const s0 = startSession('d', [ex('a', 'PLANNED', { sets: 2, durationSeconds: 30 })], 1000);
+    const paused = sessionReducer(s0, { type: 'PAUSE', nowMs: 11_000 });
+    expect(paused.pausedRemainingMs).toBe(20_000);
+    expect(remainingMs(paused, 99_000)).toBe(20_000);
+    const resumed = sessionReducer(paused, { type: 'RESUME', nowMs: 50_000 });
+    expect(resumed.durationEndsAtMs).toBe(70_000);
+    const done = sessionReducer(resumed, { type: 'COMPLETE_SET', nowMs: 70_000 });
+    expect(done.perExercise.a.actualDurationSeconds).toBe(30);
+    expect(done.phase).toBe('rest');
   });
 });
 

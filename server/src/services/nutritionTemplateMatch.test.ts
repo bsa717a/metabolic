@@ -5,6 +5,8 @@ import {
   buildTemplateMatchWhere,
   hasCompleteTemplateCriteria,
   isCompletePlanMatchProfile,
+  missingPlanMatchFields,
+  requiresGlobalTemplateProfileMatch,
   templateMatchesProfile,
   templateSpecificityScore
 } from './nutritionTemplateMatch.js';
@@ -36,6 +38,23 @@ describe('nutritionTemplateMatch', () => {
       activityLevel: 2
     });
     assert.deepEqual(built, profile);
+  });
+
+  it('names exactly the fields a match still needs', () => {
+    assert.deepEqual(missingPlanMatchFields(profile), []);
+    assert.equal(isCompletePlanMatchProfile(profile), true);
+    assert.deepEqual(missingPlanMatchFields({ ...profile, gender: undefined, heightInches: undefined }), [
+      'gender',
+      'height'
+    ]);
+    assert.deepEqual(missingPlanMatchFields({}), ['gender', 'height', 'weight', 'activity level']);
+    assert.equal(isCompletePlanMatchProfile({ ...profile, weightLbs: 0 }), false);
+  });
+
+  it('lets a coach apply a library plan only while the profile cannot be matched', () => {
+    assert.equal(requiresGlobalTemplateProfileMatch(true, { gender: undefined }), false);
+    assert.equal(requiresGlobalTemplateProfileMatch(true, profile), true);
+    assert.equal(requiresGlobalTemplateProfileMatch(false, { gender: undefined }), true);
   });
 
   it('detects complete profiles and templates', () => {

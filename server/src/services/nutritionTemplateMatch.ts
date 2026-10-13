@@ -19,17 +19,28 @@ export type PlanMatchProfileInput = {
   activityLevel?: number | null;
 };
 
+/** Labels for the coach Food tab, in the order a coach fills them in. */
+export function missingPlanMatchFields(profile: Partial<PlanMatchProfile>): string[] {
+  const missing: string[] = [];
+  if (profile.gender !== 'm' && profile.gender !== 'f') missing.push('gender');
+  if (typeof profile.heightInches !== 'number' || profile.heightInches <= 0) missing.push('height');
+  if (typeof profile.weightLbs !== 'number' || profile.weightLbs <= 0) missing.push('weight');
+  if (typeof profile.activityLevel !== 'number' || profile.activityLevel < 1 || profile.activityLevel > 5) {
+    missing.push('activity level');
+  }
+  return missing;
+}
+
 export function isCompletePlanMatchProfile(profile: Partial<PlanMatchProfile>): profile is PlanMatchProfile {
-  return (
-    (profile.gender === 'm' || profile.gender === 'f') &&
-    typeof profile.heightInches === 'number' &&
-    profile.heightInches > 0 &&
-    typeof profile.weightLbs === 'number' &&
-    profile.weightLbs > 0 &&
-    typeof profile.activityLevel === 'number' &&
-    profile.activityLevel >= 1 &&
-    profile.activityLevel <= 5
-  );
+  return missingPlanMatchFields(profile).length === 0;
+}
+
+/**
+ * Library plans stay matched-only once the profile can be matched.
+ * A coach may still apply one when matching is impossible. Self-serve applies stay gated.
+ */
+export function requiresGlobalTemplateProfileMatch(coachApply: boolean, profile: Partial<PlanMatchProfile>) {
+  return isCompletePlanMatchProfile(profile) || !coachApply;
 }
 
 export function buildProfileFromInput(input: PlanMatchProfileInput): Partial<PlanMatchProfile> {

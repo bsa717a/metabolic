@@ -4,11 +4,13 @@ import { canAccessUser } from '../auth/requireRole.js';
 import { parseDateParam, toDateKey, addUtcDays, userDayKey } from '../utils/dates.js';
 import { getTodayDashboard } from './dashboardService.js';
 import { getPlanStatus } from './planStatusService.js';
+import { getPlanPeriodInfo } from './planAdvancement.js';
 import { resolvePlanForDate } from './planResolution.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
 import {
   copyExercisesToDates,
   createScheduledExercise,
+  ensureExercisesForDate,
   getScheduledExercises,
   reorderScheduledExercises,
   restoreExercisePlanSnapshot,
@@ -26,6 +28,8 @@ import { buildResultsReadyLinks, buildResultsReadySmsMessage } from './resultsRe
 import { sendOutboundMessage, validateOutboundRecipient, isTwilioSenderPhone, resolveOutboundChannel } from './twilioOutboundService.js';
 import { normalizePhone } from '../utils/phone.js';
 import { env } from '../config/env.js';
+import { coachExerciseStatusName } from './coachExerciseStatus.js';
+import { exercisePlanNameFromRoutine } from './coachPlanHeader.js';
 
 export async function requireCoachClient(actor: { id: string; role: Role }, userId: string) {
   if (!(await canAccessUser(actor, userId))) {
@@ -258,6 +262,11 @@ export async function getCoachClientDashboard(actor: { id: string; role: Role },
   return getTodayDashboard(userId);
 }
 
+export async function getCoachClientPlanPeriod(actor: { id: string; role: Role }, userId: string, date: string) {
+  await requireCoachClient(actor, userId);
+  return getPlanPeriodInfo(userId, date);
+}
+
 export async function getCoachClientPlanStatus(actor: { id: string; role: Role }, userId: string) {
   await requireCoachClient(actor, userId);
   const [status, program, user] = await Promise.all([
@@ -275,11 +284,15 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
     resolvePlanForDate(program, parseDateParam(todayKey)),
     getUserNutritionTargets(userId)
   ]);
+  const savedRoutine = await prisma.exerciseRoutine.findUnique({
+    where: { programId: program.id },
+    select: { id: true, exercisePlan: { select: { name: true } } }
+  });
   const [nutritionTemplate, exerciseTemplate] = await Promise.all([
     resolved.nutritionTemplateId
       ? prisma.nutritionPlanTemplate.findUnique({ where: { id: resolved.nutritionTemplateId }, select: { name: true } })
       : null,
-    resolved.exerciseTemplateId
+    savedRoutine && resolved.exerciseTemplateId
       ? prisma.exerciseTemplate.findUnique({ where: { id: resolved.exerciseTemplateId }, select: { name: true } })
       : null
   ]);
@@ -287,7 +300,8 @@ export async function getCoachClientPlanStatus(actor: { id: string; role: Role }
   return {
     ...status,
     nutritionTemplateName: nutritionTemplate?.name ?? null,
-    exerciseTemplateName: exerciseTemplate?.name ?? null,
+    exerciseTemplateName: coachExerciseStatusName(Boolean(savedRoutine), exerciseTemplate?.name ?? null),
+    exercisePlanName: exercisePlanNameFromRoutine(savedRoutine),
     // Resolved macros, provenance, and raw override so the food tab can prefill + label.
     targetSource: nutritionTargets.source,
     resolvedTargets: nutritionTargets.resolvedTargets,
@@ -349,9 +363,9 @@ export async function copyCoachClientDayToDates(
 
 export async function getCoachClientExercises(actor: { id: string; role: Role }, userId: string, date: string) {
   await requireCoachClient(actor, userId);
-  const log = await ensureDailyLogByUserId(userId, date);
-  if (!log) throw new Error('No active program found');
-  return getScheduledExercises(userId, date);
+  const exercises = await ensureExercisesForDate(userId, date);
+  if (!exercises) throw new Error('No active program found');
+  return exercises;
 }
 
 export async function createCoachClientScheduledExercise(

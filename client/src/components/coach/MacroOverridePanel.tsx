@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { NutritionMacroTargets, NutritionTargetSource } from '../../types';
 import { Button } from '../ui/Button';
 import { NumberInput } from '../ui/NumberInput';
+import { SourcesBesideTargets } from '../nutrition/SourcesLink';
 
 type MacroKey = keyof NutritionMacroTargets;
 
@@ -140,6 +141,7 @@ export function MacroOverridePanel({
         ) : null}
       </div>
       <p className="mt-1 text-xs text-app-text-muted">{description}</p>
+      <SourcesBesideTargets className="mt-2" />
 
       {profileIncomplete ? (
         <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">

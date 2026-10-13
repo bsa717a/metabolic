@@ -9,6 +9,7 @@ import { openHydrationDrawer } from '../../hydration/hydrationEvents';
 import { CoachHomeHero } from './CoachHomeHero';
 import { HabitCard } from './HabitCard';
 import { CoachHomeMissions } from './CoachHomeMissions';
+import { SourcesBesideTargets } from '../../nutrition/SourcesLink';
 
 export function CoachHomeDashboard({
   user,
@@ -63,10 +64,13 @@ export function CoachHomeDashboard({
             <p className="text-xs text-app-text-muted">Stay consistent. See results.</p>
           </div>
           {calorieTarget > 0 ? (
-            <p className="shrink-0 text-xs font-semibold tabular-nums text-app-text">
-              {caloriesLeft} kcal left
-            </p>
-          ) : null}
+            <div className="shrink-0 text-right">
+              <p className="text-xs font-semibold tabular-nums text-app-text">{caloriesLeft} kcal left</p>
+              <SourcesBesideTargets className="mt-1 justify-end" />
+            </div>
+          ) : (
+            <SourcesBesideTargets />
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <HabitCard

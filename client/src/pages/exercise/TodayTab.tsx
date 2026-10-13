@@ -7,6 +7,7 @@ import { AutomaticExercise } from '../../components/exercise/automatic/Automatic
 import { Button } from '../../components/ui/Button';
 import { hasStoredSessionForDate } from '../../utils/workoutSession';
 import { primeAudio } from '../../utils/sessionCues';
+import { exerciseWeekPlanHeading } from '../../utils/exerciseRoutineDisplay';
 import { useExerciseArea } from './exerciseAreaContext';
 
 export function TodayTab() {
@@ -17,6 +18,7 @@ export function TodayTab() {
     exercisesForSelectedDate: exercises,
     reloadWeek,
     removeExercise,
+    routine,
     actionError,
     setActionError,
     exerciseMode,
@@ -36,6 +38,7 @@ export function TodayTab() {
     [selectedDate, weekDays]
   );
 
+  const planName = exerciseWeekPlanHeading(routine);
   const plannedCount = exercises.filter((item) => item.status === 'PLANNED').length;
   const future = isFuture(selectedDate);
   const canStart = !future && plannedCount > 0;
@@ -71,6 +74,13 @@ export function TodayTab() {
       onRemoveExercise={removeExercise}
       actionError={actionError}
       onClearActionError={() => setActionError(null)}
+      beforeChecklist={
+        planName ? (
+          <p className="text-sm text-app-text-muted">
+            Plan <span className="font-medium text-app-text">{planName}</span>
+          </p>
+        ) : null
+      }
       afterProgress={
         canStart ? (
           <Button

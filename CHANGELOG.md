@@ -7,6 +7,100 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.40.0](https://github.com/bsa717a/metabolic/compare/v0.39.0...v0.40.0) (2026-10-12)
+
+
+### Features
+
+* **exercise:** adjust exercises on a manual plan day ([#326](https://github.com/bsa717a/metabolic/issues/326)) ([97059d9](https://github.com/bsa717a/metabolic/commit/97059d99993d144c8f962e278d9dc413650d3f88))
+* **exercise:** time each set when a duration is set ([#306](https://github.com/bsa717a/metabolic/issues/306)) ([ed756dc](https://github.com/bsa717a/metabolic/commit/ed756dcc4a8752cb2687e1232b5539b160b79767))
+
+## [0.39.0](https://github.com/bsa717a/metabolic/compare/v0.38.12...v0.39.0) (2026-10-12)
+
+
+### Features
+
+* **nutrition:** expand all meals on the nutrition page ([#361](https://github.com/bsa717a/metabolic/issues/361)) ([d80ddcd](https://github.com/bsa717a/metabolic/commit/d80ddcddf6a92e631b895143c3fe33e13342ac36))
+* **nutrition:** expand meals on the home card ([#363](https://github.com/bsa717a/metabolic/issues/363)) ([9e2bf8c](https://github.com/bsa717a/metabolic/commit/9e2bf8c404ea1304ca4b431ac36cf78f12851f33))
+
+## [0.38.12](https://github.com/bsa717a/metabolic/compare/v0.38.11...v0.38.12) (2026-10-11)
+
+
+### Bug Fixes
+
+* **ios:** stop the page from sticking zoomed in ([#356](https://github.com/bsa717a/metabolic/issues/356)) ([aa35f76](https://github.com/bsa717a/metabolic/commit/aa35f7662a3829b11d70113406e23e91a826dbd2))
+
+## [0.38.11](https://github.com/bsa717a/metabolic/compare/v0.38.10...v0.38.11) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** cite sources for health calculations ([#354](https://github.com/bsa717a/metabolic/issues/354)) ([9d8d353](https://github.com/bsa717a/metabolic/commit/9d8d35346d326161b3f53144b231933fb5255c95))
+
+## [0.38.10](https://github.com/bsa717a/metabolic/compare/v0.38.9...v0.38.10) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** group food plans by body type ([#352](https://github.com/bsa717a/metabolic/issues/352)) ([67184b0](https://github.com/bsa717a/metabolic/commit/67184b0db63225da6b12075f1d0307e45906d1ae))
+
+## [0.38.9](https://github.com/bsa717a/metabolic/compare/v0.38.8...v0.38.9) (2026-10-09)
+
+
+### Bug Fixes
+
+* **nutrition:** list all plans when the profile is incomplete ([#350](https://github.com/bsa717a/metabolic/issues/350)) ([1cbef1c](https://github.com/bsa717a/metabolic/commit/1cbef1cbdef2198928c3b4374cbf7ebda4668897))
+
+## [0.38.8](https://github.com/bsa717a/metabolic/compare/v0.38.7...v0.38.8) (2026-10-08)
+
+
+### Bug Fixes
+
+* **nutrition:** choose a plan when none is assigned ([#346](https://github.com/bsa717a/metabolic/issues/346)) ([86daa12](https://github.com/bsa717a/metabolic/commit/86daa12c80a3de7f3c91d8e602aba6bc48860995))
+
+## [0.38.7](https://github.com/bsa717a/metabolic/compare/v0.38.6...v0.38.7) (2026-10-08)
+
+
+### Bug Fixes
+
+* **coach:** refresh the week after Apply plan ([#347](https://github.com/bsa717a/metabolic/issues/347)) ([11fd8eb](https://github.com/bsa717a/metabolic/commit/11fd8eb0f3220a36df108ef327a71f50109f13d4))
+
+## [0.38.6](https://github.com/bsa717a/metabolic/compare/v0.38.5...v0.38.6) (2026-10-08)
+
+
+### Bug Fixes
+
+* **coach:** match header to the assigned exercise plan ([#343](https://github.com/bsa717a/metabolic/issues/343)) ([cf83d1c](https://github.com/bsa717a/metabolic/commit/cf83d1c98fc58498b9552073d5289ca3e01a6060))
+
+## [0.38.5](https://github.com/bsa717a/metabolic/compare/v0.38.4...v0.38.5) (2026-10-08)
+
+
+### Bug Fixes
+
+* **exercise:** show Choose a plan when none is assigned ([#342](https://github.com/bsa717a/metabolic/issues/342)) ([5869143](https://github.com/bsa717a/metabolic/commit/58691430f2676dd67eca32587d39ed73e44ecd5b))
+
+## [0.38.4](https://github.com/bsa717a/metabolic/compare/v0.38.3...v0.38.4) (2026-10-08)
+
+
+### Bug Fixes
+
+* **nutrition:** show the current week on the plan title ([#338](https://github.com/bsa717a/metabolic/issues/338)) ([46c8206](https://github.com/bsa717a/metabolic/commit/46c820609c828f40b9900e15eef2464fc6caa250))
+
+## [0.38.3](https://github.com/bsa717a/metabolic/compare/v0.38.2...v0.38.3) (2026-10-08)
+
+
+### Bug Fixes
+
+* **exercise:** show the same plan on client and coach ([#332](https://github.com/bsa717a/metabolic/issues/332)) ([83da7f9](https://github.com/bsa717a/metabolic/commit/83da7f9b253c79d08830038b116a999f5bec113a))
+
+## [0.38.2](https://github.com/bsa717a/metabolic/compare/v0.38.1...v0.38.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **onboarding:** confirm imported setup without replacing the program ([#335](https://github.com/bsa717a/metabolic/issues/335)) ([97cb349](https://github.com/bsa717a/metabolic/commit/97cb349315b9d6e2339ad973c821843c6f3c9bab))
+* **topbar:** remove the click-anywhere hint from the back bar ([#334](https://github.com/bsa717a/metabolic/issues/334)) ([28951b2](https://github.com/bsa717a/metabolic/commit/28951b2c66ed82ffa2a8f3b6674c41ae5b4dd85e))
+
 ## [0.38.1](https://github.com/bsa717a/metabolic/compare/v0.38.0...v0.38.1) (2026-10-08)
 
 
