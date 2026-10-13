@@ -35,7 +35,7 @@ npm run cap:sync:ios
 
 ## Prerequisites (Mac)
 
-- **macOS** with **Xcode 26.0+** (Capacitor 8). The GitHub Actions workflow pins **Xcode 26.6**.
+- **macOS** with **Xcode 27.0 (27A266a)** to match the 1.0 (9) archive. The GitHub Actions workflow uses the `xcode-27` runner and selects that build.
 - **CocoaPods**: only if `ios/App/Podfile` exists (`brew install cocoapods`). Capacitor 8 defaults to Swift Package Manager.
 - **Node.js 22+**
 - **Apple Developer Account** with access to Team `8FG8V9P49A`
@@ -129,8 +129,11 @@ Derek adds these secrets himself. The workflow does not create or print them.
 | `ASC_KEY_ID` | 10-character App Store Connect API Key ID (`2H9BZ26296` for the key that signed 1.0 (9)) |
 | `ASC_ISSUER_ID` | Issuer UUID (`ae4ecfe6-d76e-46b7-b521-bcce51cf8191`) |
 | `ASC_KEY_P8_BASE64` | Base64 of the AuthKey `.p8`, not the PEM pasted into the workflow. `base64 -i AuthKey_2H9BZ26296.p8` |
+| `GOOGLE_SERVICE_INFO_PLIST_BASE64` | Base64 of `client/ios/App/App/GoogleService-Info.plist` from the Mac, not the raw XML. `base64 -i client/ios/App/App/GoogleService-Info.plist` |
 
-Team ID is `8FG8V9P49A`. Signing is automatic. An empty build-number input queries App Store Connect and uses the next integer, at least 10. `MARKETING_VERSION` stays `1.0` unless the input changes it. Expect about 20 minutes on the `macos-26` runner. The workflow pins Xcode 26.6 because the 1.0 (9) archive is not in git and Capacitor 8 cannot build with the old "Xcode 15+" note.
+Team ID is `8FG8V9P49A`. Signing is automatic. An empty build-number input queries App Store Connect and uses the next integer, at least 10. `MARKETING_VERSION` stays `1.0` unless the input changes it. The committed project still says build 9; the workflow sets the next build on the runner only.
+
+The runner is `xcode-27` (public preview, arm64). It selects **Xcode 27.0 (27A266a)** at `/Applications/Xcode_27.app`, which is the build that archived 1.0 (9) (`DTXcode` 2700). The `macos-26` image does not include that Xcode. `LastUpgradeCheck` in the project is still `0920`; the workflow does not upgrade the project file. Expect about 20 minutes, plus preview-image queue time. `npm run cap:sync:ios` regenerates `capacitor.config.json`, `config.xml`, and `capacitor-cordova-ios-plugins`, and copies `client/native/SceneDelegate.swift` (the #356 zoom lock) over the committed SceneDelegate.
 
 ## Building for TestFlight
 

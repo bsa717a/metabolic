@@ -1,0 +1,5 @@
+# xcode-27 is a GitHub-hosted public-preview label. actionlint's built-in
+# list does not include it yet. It is not a self-hosted runner.
+self-hosted-runner:
+  labels:
+    - xcode-27
