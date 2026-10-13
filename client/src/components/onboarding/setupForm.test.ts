@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getVirtualCoach } from '../../data/virtualCoaches';
 import { advanceCoachOnboarding, getOnboardingProgress } from './coachOnboardingFlow';
-import { applyDraftToForm, buildSetupPayload, createEmptySetupForm } from './setupForm';
+import { applyDraftToForm, buildRestartOnboardingForm, buildSetupPayload, createEmptySetupForm } from './setupForm';
 import { goalWeightEntryError, goalWeightNeedsEntry } from '../../utils/onboardingWeight';
 
 const coach = getVirtualCoach('kali')!;
@@ -331,5 +331,51 @@ describe('imported setup payload', () => {
       textReminders: ''
     });
     expect(payload.textReminders).toBeUndefined();
+  });
+});
+
+describe('restart onboarding form', () => {
+  it('keeps the current plan details and does not treat the account coach code as an invite', () => {
+    const form = buildRestartOnboardingForm(
+      {
+        gender: 'f',
+        timezone: 'America/Denver',
+        phone: '3855550100',
+        selectedVirtualCoachId: 'kali',
+        coachCode: 'SELF'
+      },
+      {
+        weight: '180',
+        goalWeight: '165',
+        bodyFat: '28',
+        goalBodyFat: '22',
+        wantsCoach: true,
+        dietaryPreferences: 'High protein'
+      },
+      {
+        heightFeet: 5,
+        heightInches: 6,
+        occupation: 'Nurse',
+        activityLevel: 3,
+        foodAllergies: 'Peanuts'
+      }
+    );
+
+    expect(form.weight).toBe('180');
+    expect(form.goalWeight).toBe('165');
+    expect(form.bodyFat).toBe('28');
+    expect(form.goalBodyFat).toBe('22');
+    expect(form.heightFeet).toBe('5');
+    expect(form.heightInches).toBe('6');
+    expect(form.occupation).toBe('Nurse');
+    expect(form.activityLevel).toBe('3');
+    expect(form.foodAllergies).toBe('Peanuts');
+    expect(form.dietaryPreferences).toBe('High protein');
+    expect(form.selectedVirtualCoachId).toBe('kali');
+    expect(form.timezone).toBe('America/Denver');
+    expect(form.coachCode).toBe('');
+    expect(form.trackingOnly).toBe(false);
+    expect(form.textReminders).toBe('');
+    expect(form.wantsCoach).toBe(true);
   });
 });
