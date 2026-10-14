@@ -24,13 +24,15 @@ export function ClientMetricsPanel({
   snapshots,
   selectedSnapshotId,
   onSelectSnapshotId,
-  onRefresh
+  onRefresh,
+  timeZone
 }: {
   program: Program | null;
   snapshots: ProgramMetricSnapshot[];
   selectedSnapshotId: string | null;
   onSelectSnapshotId: (id: string | null) => void;
   onRefresh: () => Promise<void>;
+  timeZone?: string | null;
 }) {
   const [metricsDrawerOpen, setMetricsDrawerOpen] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
@@ -215,6 +217,9 @@ export function ClientMetricsPanel({
         metrics={bodyCompMetrics}
         snapshot={checkInSnapshot}
         photoSet={checkInPhotoSet}
+        snapshots={snapshots}
+        progressPhotos={progressPhotos}
+        timeZone={timeZone}
         onClose={closeCheckIn}
         onSaved={handleCheckInSaved}
       />

@@ -6,9 +6,11 @@ import {
   BODY_COMP_METRIC_TYPES,
   reconcileProgramBodyCompMetricsFromLatestSnapshot,
   setProgramMetricCurrentValue,
+  syncDailyLogFromCheckInValues,
   syncProgramMetricsFromSnapshotValues,
   syncTodayDailyLogBodyComp
 } from '../utils/programBodyCompSync.js';
+import { resolveCheckInDate } from '../utils/checkInDate.js';
 import { parseDateParam, userDayKey } from '../utils/dates.js';
 import { metricUpdatesForLegacyGoals, missingProgramMetrics } from '../utils/programMetrics.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
@@ -280,14 +282,19 @@ export async function listProgramMetricSnapshots(
 export async function saveProgramMetricSnapshot(
   user: { id: string; role: Role },
   programId: string,
-  values: SnapshotValueInput[]
+  values: SnapshotValueInput[],
+  options?: { date?: string }
 ) {
   const program = await getProgram(user, programId);
   if (!program) throw new Error('Program not found');
 
   const owner = await prisma.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
-  const date = parseDateParam(userDayKey(owner?.timezone ?? null));
-  const mergedValues = mergeBodyCompFromProgramMetrics(values, program.metrics);
+  const todayKey = userDayKey(owner?.timezone ?? null);
+  const dateKey = resolveCheckInDate(options?.date, todayKey);
+  const date = parseDateParam(dateKey);
+  const isToday = dateKey === todayKey;
+  // Today's check-in follows the live program metrics. A missed day keeps the values entered for that day.
+  const storedValues = isToday ? mergeBodyCompFromProgramMetrics(values, program.metrics) : values;
 
   return prisma.$transaction(async (tx) => {
     const snapshot = await tx.programMetricSnapshot.upsert({
@@ -296,7 +303,7 @@ export async function saveProgramMetricSnapshot(
       update: { updatedAt: new Date() }
     });
 
-    for (const value of mergedValues) {
+    for (const value of storedValues) {
       await tx.programMetricSnapshotValue.upsert({
         where: {
           snapshotId_metricType: {
@@ -322,12 +329,17 @@ export async function saveProgramMetricSnapshot(
       include: { values: true }
     });
     await syncProgramMetricsFromSnapshotValues(programId, date, result.values, tx);
-    await syncTodayDailyLogBodyComp(program.userId, programId, date, tx);
+    if (isToday) {
+      await syncTodayDailyLogBodyComp(program.userId, programId, date, tx);
+    } else {
+      await syncDailyLogFromCheckInValues(program.userId, programId, date, result.values, tx);
+    }
     return result;
   }).then(async (result) => {
-    const ownerTz = await prisma.user.findUnique({ where: { id: program.userId }, select: { timezone: true } });
-    await ensureDailyLogByUserId(program.userId, userDayKey(ownerTz?.timezone ?? null));
-    await syncTodayDailyLogBodyComp(program.userId, programId, date);
+    if (isToday) {
+      await ensureDailyLogByUserId(program.userId, todayKey);
+      await syncTodayDailyLogBodyComp(program.userId, programId, date);
+    }
     void runProgressionEvaluation(program.userId);
     return result;
   });

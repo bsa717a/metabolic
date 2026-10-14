@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronLeft } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft } from 'lucide-react';
 import type { ProgramMetric, ProgramMetricSnapshot, ProgressPhotoSet } from '../../types';
-import { api, parseDateKey, toDateKey } from '../../services/api';
+import { api, dateKeyInTimeZone, parseDateKey } from '../../services/api';
+import { checkInDateError } from '../../utils/checkInDate';
 import { isFirebaseStorageConfigured } from '../../services/firebase';
 import { uploadProgressPhoto, validateProgressPhotoFile, type ProgressPhotoSlot } from '../../services/progressPhotoStorage';
 import {
@@ -122,6 +123,9 @@ export function BlueprintCheckInModal({
   metrics,
   snapshot,
   photoSet,
+  snapshots = [],
+  progressPhotos = [],
+  timeZone,
   onClose,
   onSaved
 }: {
@@ -130,19 +134,19 @@ export function BlueprintCheckInModal({
   metrics: ProgramMetric[];
   snapshot?: ProgramMetricSnapshot | null;
   photoSet?: ProgressPhotoSet | null;
+  snapshots?: ProgramMetricSnapshot[];
+  progressPhotos?: ProgressPhotoSet[];
+  timeZone?: string | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
-  const sessionDate = snapshot?.date ?? toDateKey(new Date());
-  const isToday = sessionDate === toDateKey(new Date());
-  const metricSource = useMemo(
-    () => (snapshot && !isToday ? metricsWithSnapshotCurrent(metrics, snapshot) : metrics),
-    [metrics, snapshot, isToday]
-  );
-  const measurementSource = snapshot ?? null;
-  const openKey = open ? `${programId}:${sessionDate}:${snapshot?.id ?? 'new'}` : null;
+  const today = dateKeyInTimeZone(timeZone);
+  const openedDate = snapshot?.date ?? today;
+  const openKey = open ? `${programId}:${openedDate}:${snapshot?.id ?? 'new'}` : null;
 
   const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
+  const [sessionDate, setSessionDate] = useState(openedDate);
+  const [dateNote, setDateNote] = useState('');
   const [primaryDraft, setPrimaryDraft] = useState<MetricDraft[]>([]);
   const [otherDraft, setOtherDraft] = useState<MetricDraft[]>([]);
   const [measurements, setMeasurements] = useState<MeasurementDraft>(() => toMeasurementDraft(snapshot));
@@ -156,30 +160,58 @@ export function BlueprintCheckInModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const isToday = sessionDate === today;
+
+  function snapshotForDate(date: string) {
+    return snapshots.find((row) => row.date === date) ?? (snapshot?.date === date ? snapshot : null);
+  }
+
+  function photosForDate(date: string) {
+    return progressPhotos.find((row) => row.date === date) ?? (photoSet?.date === date ? photoSet : null);
+  }
+
+  function loadSession(
+    date: string,
+    existing: ProgramMetricSnapshot | null,
+    photosOnDate: ProgressPhotoSet | null,
+    announceExisting: boolean
+  ) {
+    const metricSource = existing ? metricsWithSnapshotCurrent(metrics, existing) : metrics;
+    setSessionDate(date);
+    setPrimaryDraft(toMetricDrafts(metricSource, PRIMARY_METRIC_TYPES));
+    setOtherDraft(toMetricDrafts(metricSource, OTHER_METRIC_TYPES));
+    setMeasurements(toMeasurementDraft(existing));
+    setPhotos({
+      front: emptyPhotoDraft(photosOnDate?.frontUrl ?? null),
+      side: emptyPhotoDraft(photosOnDate?.sideUrl ?? null),
+      back: emptyPhotoDraft(photosOnDate?.backUrl ?? null)
+    });
+    setPhotosExpanded(Boolean(photosOnDate?.frontUrl || photosOnDate?.sideUrl || photosOnDate?.backUrl));
+    setDateNote(announceExisting && existing ? 'This date already has a check-in. Saving updates it.' : '');
+    setError('');
+  }
+
   if (openKey !== prevOpenKey) {
     setPrevOpenKey(openKey);
     if (openKey) {
-      setPrimaryDraft(toMetricDrafts(metricSource, PRIMARY_METRIC_TYPES));
-      setOtherDraft(toMetricDrafts(metricSource, OTHER_METRIC_TYPES));
-      setMeasurements(toMeasurementDraft(measurementSource));
-      setPhotos({
-        front: emptyPhotoDraft(photoSet?.frontUrl ?? null),
-        side: emptyPhotoDraft(photoSet?.sideUrl ?? null),
-        back: emptyPhotoDraft(photoSet?.backUrl ?? null)
-      });
-      setPhotosExpanded(false);
-      setError('');
+      const existing = snapshot?.date === openedDate ? snapshot : snapshots.find((row) => row.date === openedDate) ?? null;
+      const photosOnDate =
+        photoSet?.date === openedDate ? photoSet : progressPhotos.find((row) => row.date === openedDate) ?? null;
+      loadSession(openedDate, existing, photosOnDate, false);
     }
   }
 
-  useEffect(() => {
-    if (!open || !photoSet) return;
-    setPhotos((current) => ({
-      front: current.front.file ? current.front : emptyPhotoDraft(photoSet.frontUrl ?? null),
-      side: current.side.file ? current.side : emptyPhotoDraft(photoSet.sideUrl ?? null),
-      back: current.back.file ? current.back : emptyPhotoDraft(photoSet.backUrl ?? null)
-    }));
-  }, [open, photoSet]);
+  function draftWithLoadedPhoto(draft: PhotoDraft, url: string | null | undefined) {
+    if (draft.file || draft.existingUrl || !url) return draft;
+    return emptyPhotoDraft(url);
+  }
+
+  const photosOnDate = photosForDate(sessionDate);
+  const photoDrafts: Record<ProgressPhotoSlot, PhotoDraft> = {
+    front: draftWithLoadedPhoto(photos.front, photosOnDate?.frontUrl),
+    side: draftWithLoadedPhoto(photos.side, photosOnDate?.sideUrl),
+    back: draftWithLoadedPhoto(photos.back, photosOnDate?.backUrl)
+  };
 
   useEffect(() => {
     return () => {
@@ -228,13 +260,13 @@ export function BlueprintCheckInModal({
     if (!isFirebaseStorageConfigured) return null;
 
     const urls: Record<ProgressPhotoSlot, string | null> = {
-      front: photos.front.existingUrl,
-      side: photos.side.existingUrl,
-      back: photos.back.existingUrl
+      front: photoDrafts.front.existingUrl,
+      side: photoDrafts.side.existingUrl,
+      back: photoDrafts.back.existingUrl
     };
 
     for (const { slot } of PHOTO_SLOTS) {
-      const photoDraft = photos[slot];
+      const photoDraft = photoDrafts[slot];
       if (photoDraft.file) {
         urls[slot] = await uploadProgressPhoto(programId, sessionDate, slot, photoDraft.file);
       }
@@ -242,16 +274,28 @@ export function BlueprintCheckInModal({
 
     if (!urls.front && !urls.side && !urls.back) return null;
 
+    const photosOnDate = photosForDate(sessionDate);
     return api<ProgressPhotoSet>(`/api/programs/${programId}/progress-photos`, {
       method: 'POST',
       body: JSON.stringify({
-        id: photoSet?.id,
+        id: photosOnDate?.id,
         date: sessionDate,
         frontUrl: urls.front,
         sideUrl: urls.side,
         backUrl: urls.back
       })
     });
+  }
+
+  function selectSessionDate(next: string) {
+    const message = checkInDateError(next, today);
+    if (message) {
+      setError(message);
+      return;
+    }
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    setObjectUrls([]);
+    loadSession(next, snapshotForDate(next), photosForDate(next), true);
   }
 
   async function save() {
@@ -280,6 +324,10 @@ export function BlueprintCheckInModal({
         };
       });
 
+      const dateError = checkInDateError(sessionDate, today);
+      if (dateError) throw new Error(dateError);
+
+      const activeSnapshot = snapshotForDate(sessionDate);
       if (isToday) {
         const metricPayload = allMetricDrafts.map((metric) => {
           const currentValue = Number(metric.currentValue);
@@ -300,8 +348,8 @@ export function BlueprintCheckInModal({
         });
 
         const todaySnapshotPayload = [...snapshotMetricPayload, ...measurementPayload];
-        if (snapshot) {
-          await api<ProgramMetricSnapshot>(`/api/programs/${programId}/metric-snapshots/${snapshot.id}`, {
+        if (activeSnapshot) {
+          await api<ProgramMetricSnapshot>(`/api/programs/${programId}/metric-snapshots/${activeSnapshot.id}`, {
             method: 'PATCH',
             body: JSON.stringify(todaySnapshotPayload)
           });
@@ -311,22 +359,14 @@ export function BlueprintCheckInModal({
             body: JSON.stringify(todaySnapshotPayload)
           });
         }
-      } else if (snapshot) {
-        const historicalMetricTypes = new Set(
-          snapshot.values
-            .filter((value) => !MEASUREMENT_METRIC_TYPES.includes(value.metricType as MeasurementMetricType))
-            .map((value) => value.metricType)
-        );
-        const historicalMetrics = snapshotMetricPayload.filter((metric) =>
-          historicalMetricTypes.has(metric.metricType)
-        );
-
-        await api<ProgramMetricSnapshot>(`/api/programs/${programId}/metric-snapshots/${snapshot.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify([...historicalMetrics, ...measurementPayload])
-        });
       } else {
-        throw new Error('Unable to save session snapshot.');
+        await api<ProgramMetricSnapshot>(`/api/programs/${programId}/metric-snapshots`, {
+          method: 'POST',
+          body: JSON.stringify({
+            date: sessionDate,
+            values: [...snapshotMetricPayload, ...measurementPayload]
+          })
+        });
       }
 
       await savePhotos();
@@ -362,10 +402,33 @@ export function BlueprintCheckInModal({
               Close
             </button>
           </div>
-          <h2 className="mt-3 text-base font-bold uppercase tracking-wide">
-            {isToday ? 'Check-in' : 'Session snapshot'}
-          </h2>
-          <p className="mt-1 text-xs font-semibold text-brand-green-light">{formatSessionDate(sessionDate)}</p>
+          <h2 className="mt-3 text-base font-bold uppercase tracking-wide">Check-in</h2>
+          <label className="relative mt-2 inline-flex cursor-pointer items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-brand-green-light">
+            <CalendarDays size={14} aria-hidden />
+            <span>{formatSessionDate(sessionDate)}</span>
+            <input
+              type="date"
+              max={today}
+              value={sessionDate}
+              aria-label="Check-in date"
+              className="absolute inset-0 cursor-pointer opacity-0"
+              onClick={(event) => {
+                const input = event.currentTarget;
+                if (typeof input.showPicker !== 'function') return;
+                try {
+                  input.showPicker();
+                } catch {
+                  // Some browsers only open the picker from the default click.
+                }
+              }}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (next) selectSessionDate(next);
+              }}
+            />
+          </label>
+          <p className="mt-1 text-[11px] text-white/70">Tap the date to log a missed check-in.</p>
+          {dateNote ? <p className="mt-1 text-[11px] text-white/80">{dateNote}</p> : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
@@ -417,7 +480,7 @@ export function BlueprintCheckInModal({
                     <ProgressPhotoUploadField
                       key={slot}
                       label={label}
-                      draft={photos[slot]}
+                      draft={photoDrafts[slot]}
                       disabled={saving}
                       previewClassName="h-96"
                       onSelect={(file) => selectPhoto(slot, file)}
@@ -443,7 +506,7 @@ export function BlueprintCheckInModal({
             onClick={() => void save()}
             className="w-full rounded-xl bg-brand-green px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? 'Saving…' : isToday ? 'Save check-in' : 'Save changes'}
+            {saving ? 'Saving…' : 'Save check-in'}
           </button>
         </div>
       </div>

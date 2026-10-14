@@ -350,6 +350,7 @@ export function ClientDetailTabs({
             selectedSnapshotId={selectedSnapshotId}
             onSelectSnapshotId={onSelectSnapshotId}
             onRefresh={onRefresh}
+            timeZone={client.timezone}
           />
         )}
 
