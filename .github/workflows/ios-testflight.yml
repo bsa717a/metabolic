@@ -155,14 +155,16 @@ jobs:
             'VITE_FIREBASE_MESSAGING_SENDER_ID',
             'VITE_FIREBASE_APP_ID',
             'VITE_FIREBASE_VAPID_KEY',
-            'VITE_SMS_PHONE_NUMBER',
           ];
+          if (!process.env.VITE_SMS_PHONE_NUMBER) {
+            console.log('::warning::VITE_SMS_PHONE_NUMBER is not set; writing it empty for the iOS web bundle.');
+          }
           const missing = required.filter((key) => !process.env[key]);
           if (missing.length) {
             console.error('Missing existing deploy secrets for the iOS web bundle: ' + missing.join(', '));
             process.exit(1);
           }
-          const keys = [...required, 'VITE_GIT_SHA'];
+          const keys = [...required, 'VITE_SMS_PHONE_NUMBER', 'VITE_GIT_SHA'];
           const lines = keys.map((key) => {
             const value = process.env[key] ?? '';
             if (/[\r\n]/.test(value)) {
