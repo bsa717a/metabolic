@@ -12,6 +12,46 @@ import { CoachWeekStatsModal } from './CoachWeekStats';
 
 type TranscriptEntry = { role: 'coach' | 'user'; content: string };
 
+function CheckInCoachMark({
+  coach,
+  speaking,
+  size
+}: {
+  coach: VirtualCoach;
+  speaking: boolean;
+  size: 'compact' | 'hero';
+}) {
+  const compact = size === 'compact';
+  return (
+    <div className={compact ? 'relative h-10 w-10 shrink-0' : 'relative mx-auto h-32 w-32'}>
+      {speaking && (
+        <span
+          className="absolute inset-0 animate-ping rounded-full opacity-30"
+          style={{ backgroundColor: coach.accent }}
+          aria-hidden
+        />
+      )}
+      {compact ? null : (
+        <span
+          className="absolute inset-1 rounded-full ring-4 ring-white/20"
+          style={{ boxShadow: speaking ? `0 0 0 6px ${coach.accent}55` : undefined }}
+          aria-hidden
+        />
+      )}
+      <img
+        src={coach.image}
+        alt={compact ? '' : coach.name}
+        className={
+          compact
+            ? 'relative h-10 w-10 rounded-full object-cover ring-2 ring-white/30'
+            : 'relative h-full w-full rounded-full object-cover'
+        }
+        style={{ objectPosition: '50% 18%' }}
+      />
+    </div>
+  );
+}
+
 export function CoachCheckInCall({
   coach,
   initialSession,
@@ -58,7 +98,14 @@ export function CoachCheckInCall({
   }));
 
   useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: 'smooth' });
+    const node = transcriptRef.current;
+    if (!node) return;
+    const pinToLatest = () => {
+      node.scrollTop = node.scrollHeight;
+    };
+    pinToLatest();
+    const frame = window.requestAnimationFrame(pinToLatest);
+    return () => window.cancelAnimationFrame(frame);
   }, [transcript.length, loading]);
 
   useEffect(() => {
@@ -148,36 +195,27 @@ export function CoachCheckInCall({
     );
   }
 
+  const statusLabel = speaking ? 'Speaking…' : listening ? 'Listening…' : 'Weekly check-in';
+
   return (
-    <div className="flex h-[42rem] max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-app-border bg-app-surface shadow-lg">
-      <div className="border-b border-app-border bg-brand-navy px-6 py-8 text-center dark:bg-brand-navy/90">
-        <div className="relative mx-auto h-32 w-32">
-          {speaking && (
-            <span
-              className="absolute inset-0 animate-ping rounded-full opacity-30"
-              style={{ backgroundColor: coach.accent }}
-              aria-hidden
-            />
-          )}
-          <span
-            className="absolute inset-1 rounded-full ring-4 ring-white/20"
-            style={{ boxShadow: speaking ? `0 0 0 6px ${coach.accent}55` : undefined }}
-            aria-hidden
-          />
-          <img
-            src={coach.image}
-            alt={coach.name}
-            className="relative h-full w-full rounded-full object-cover"
-            style={{ objectPosition: '50% 18%' }}
-          />
+    // 5.5rem keeps the phone card above the page padding, the tab bar, and the floating feedback button.
+    <div className="flex min-h-0 w-full flex-col overflow-hidden rounded-3xl border border-app-border bg-app-surface shadow-lg max-sm:h-[calc(100dvh-var(--app-topbar-height)-var(--app-mobile-home-bar-height)-5.5rem)] sm:h-[42rem] sm:max-h-[85vh]">
+      <div className="shrink-0 border-b border-app-border bg-brand-navy dark:bg-brand-navy/90 max-sm:px-3 max-sm:py-2 sm:px-6 sm:py-8 sm:text-center">
+        <div className="flex items-center gap-3 sm:hidden">
+          <CheckInCoachMark coach={coach} speaking={speaking} size="compact" />
+          <div className="min-w-0 text-left">
+            <p className="truncate text-sm font-semibold text-brand-off-white">{coach.name}</p>
+            <p className="truncate text-xs text-brand-off-white/70">{statusLabel}</p>
+          </div>
         </div>
-        <p className="mt-4 text-lg font-semibold text-brand-off-white">{coach.name}</p>
-        <p className="text-sm text-brand-off-white/70">
-          {speaking ? 'Speaking…' : listening ? 'Listening…' : 'Weekly check-in'}
-        </p>
+        <div className="hidden sm:block">
+          <CheckInCoachMark coach={coach} speaking={speaking} size="hero" />
+          <p className="mt-4 text-lg font-semibold text-brand-off-white">{coach.name}</p>
+          <p className="text-sm text-brand-off-white/70">{statusLabel}</p>
+        </div>
       </div>
 
-      <div ref={transcriptRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-5">
+      <div ref={transcriptRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:py-5">
         {transcript.map((entry, index) => (
           <div
             key={`${entry.role}-${index}`}
@@ -194,7 +232,7 @@ export function CoachCheckInCall({
       </div>
 
       {chips.length > 0 && (
-        <div className="flex flex-wrap gap-2 border-t border-app-border px-4 py-3">
+        <div className="flex shrink-0 flex-wrap gap-2 border-t border-app-border px-4 py-3">
           {chips.map((chip) => (
             <button
               key={chip}
@@ -217,7 +255,7 @@ export function CoachCheckInCall({
         </div>
       ) : null}
 
-      <div className="border-t border-app-border px-4 py-4">
+      <div className="shrink-0 border-t border-app-border px-4 py-3 sm:py-4">
         <form
           className="flex gap-2"
           onSubmit={(event) => {
@@ -295,7 +333,7 @@ export function CoachCheckInCall({
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <button
               type="button"
