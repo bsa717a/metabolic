@@ -54,7 +54,12 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
   const [meals, rawExercises, weightTrend, routine] = await Promise.all([
     prisma.meal.findMany({ where: { dailyLogId: dailyLog.id }, include: { items: true }, orderBy: { mealNumber: 'asc' } }),
     prisma.scheduledExercise.findMany({ where: { userId, scheduledDate: today }, include: { exercise: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
-    prisma.dailyLog.findMany({ where: { userId, weight: { not: null } }, orderBy: { date: 'asc' }, take: 30 }),
+    prisma.dailyLog.findMany({
+      where: { userId, weight: { not: null } },
+      orderBy: { date: 'desc' },
+      take: 30,
+      select: { date: true, weight: true }
+    }),
     getRoutineForUser(userId)
   ]);
   const nutritionMeals = mealsForNutritionDisplay(meals);
@@ -105,6 +110,9 @@ export async function getTodayDashboard(userId: string, dateKey?: string, timeZo
           exercisesLeft: exercises.filter((exercise) => exercise.status === 'PLANNED').length,
           goalProgress
         },
-    weightTrend: weightTrend.map((log) => ({ date: log.date.toISOString().slice(0, 10), weight: n(log.weight) }))
+    weightTrend: weightTrend
+      .slice()
+      .reverse()
+      .map((log) => ({ date: log.date.toISOString().slice(0, 10), weight: n(log.weight) }))
   };
 }

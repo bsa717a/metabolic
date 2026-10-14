@@ -22,7 +22,7 @@ function normalizeMetric(metric: ProgramMetric): ProgramMetric {
   };
 }
 
-export function ProgramPage(_props: { user?: AppUser | null }) {
+export function ProgramPage({ user }: { user?: AppUser | null }) {
   const [program, setProgram] = useState<Program | null>(null);
   const [metrics, setMetrics] = useState<ProgramMetric[]>([]);
   const [snapshots, setSnapshots] = useState<ProgramMetricSnapshot[]>([]);
@@ -287,6 +287,9 @@ export function ProgramPage(_props: { user?: AppUser | null }) {
         metrics={bodyCompMetrics}
         snapshot={checkInSnapshot}
         photoSet={checkInPhotoSet}
+        snapshots={snapshots}
+        progressPhotos={progressPhotos}
+        timeZone={user?.timezone}
         onClose={closeCheckIn}
         onSaved={handleCheckInSaved}
       />

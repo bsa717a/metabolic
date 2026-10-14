@@ -195,6 +195,88 @@ export async function syncTodayDailyLogBodyComp(
   });
 }
 
+function checkInBodyCompPatch(values: Array<{ metricType: string; currentValue: unknown }>) {
+  const read = (metricType: string) => values.find((value) => value.metricType === metricType);
+  const weight = read('WEIGHT');
+  const bodyFat = read('BODY_FAT');
+  const waist = read('WAIST');
+  return {
+    ...(weight ? { weight: n(weight.currentValue) } : {}),
+    ...(bodyFat ? { bodyFat: n(bodyFat.currentValue) } : {}),
+    ...(waist ? { waist: n(waist.currentValue) } : {})
+  };
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'P2002';
+}
+
+/**
+ * Store a check-in's weight, body fat, and waist on that calendar day so trends
+ * include it. Uses the submitted values, not the program's current metrics, and
+ * does not seed meals or exercises.
+ */
+export async function syncDailyLogFromCheckInValues(
+  userId: string,
+  programId: string,
+  day: Date,
+  values: Array<{ metricType: string; currentValue: unknown }>,
+  db: Db = prisma
+) {
+  const data = checkInBodyCompPatch(values);
+  if (!Object.keys(data).length) return;
+
+  const existing = await db.dailyLog.findUnique({
+    where: { userId_date: { userId, date: day } },
+    select: { id: true }
+  });
+  if (existing) {
+    await db.dailyLog.update({ where: { id: existing.id }, data });
+    return;
+  }
+
+  const [metrics, prior] = await Promise.all([
+    db.programMetric.findMany({
+      where: { programId, metricType: { in: ['CALORIES', 'PROTEIN'] } },
+      select: { metricType: true, currentValue: true }
+    }),
+    db.dailyLog.findFirst({
+      where: { userId, programId, date: { lt: day } },
+      orderBy: { date: 'desc' },
+      select: {
+        calorieTarget: true,
+        proteinTarget: true,
+        carbTarget: true,
+        fatTarget: true,
+        waterTargetOz: true
+      }
+    })
+  ]);
+  const metricValue = (metricType: string) => {
+    const row = metrics.find((metric) => metric.metricType === metricType);
+    return row ? n(row.currentValue) : null;
+  };
+
+  try {
+    await db.dailyLog.create({
+      data: {
+        programId,
+        userId,
+        date: day,
+        ...data,
+        calorieTarget: prior?.calorieTarget ?? metricValue('CALORIES') ?? 2200,
+        proteinTarget: prior?.proteinTarget ?? metricValue('PROTEIN') ?? 190,
+        carbTarget: prior?.carbTarget ?? 190,
+        fatTarget: prior?.fatTarget ?? 70,
+        waterTargetOz: prior?.waterTargetOz ?? 64
+      }
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    await db.dailyLog.updateMany({ where: { userId, date: day }, data });
+  }
+}
+
 async function applyDerivedBodyComp(
   programId: string,
   weight: number,

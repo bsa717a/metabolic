@@ -16,13 +16,24 @@ const metricUpdateBody = z.array(
     goalValue: z.number().finite()
   })
 );
-const snapshotBody = z.array(
+const snapshotValueSchema = z.object({
+  metricType: z.string().min(1),
+  currentValue: z.number().finite(),
+  unit: z.string().min(1)
+});
+const snapshotBody = z.array(snapshotValueSchema);
+const snapshotCreateBody = z.union([
+  snapshotBody,
   z.object({
-    metricType: z.string().min(1),
-    currentValue: z.number().finite(),
-    unit: z.string().min(1)
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    values: snapshotBody
   })
-);
+]);
+
+function snapshotCreateInput(data: z.infer<typeof snapshotCreateBody>) {
+  if (Array.isArray(data)) return { date: undefined, values: data };
+  return { date: data.date, values: data.values };
+}
 
 const measurementBody = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -102,12 +113,13 @@ export async function programRoutes(app: FastifyInstance) {
 
   app.post('/api/programs/:id/metric-snapshots', { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const parsed = snapshotBody.safeParse(request.body);
+    const parsed = snapshotCreateBody.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Invalid session snapshot values. Use valid numbers for each metric.' });
     }
     try {
-      const snapshot = await saveProgramMetricSnapshot(request.appUser!, id, parsed.data);
+      const input = snapshotCreateInput(parsed.data);
+      const snapshot = await saveProgramMetricSnapshot(request.appUser!, id, input.values, { date: input.date });
       return serializeSnapshot(snapshot);
     } catch (error) {
       request.log.error({ err: error }, 'Failed to save metric snapshot');
