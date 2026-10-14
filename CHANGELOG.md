@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.42.1](https://github.com/bsa717a/metabolic/compare/v0.42.0...v0.42.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **blueprint:** sync check-in day and missed-day values ([#370](https://github.com/bsa717a/metabolic/issues/370)) ([c364e3c](https://github.com/bsa717a/metabolic/commit/c364e3c7b38742c3cdbaa88d6e58841af93b3ac1))
+
 ## [0.42.0](https://github.com/bsa717a/metabolic/compare/v0.41.0...v0.42.0) (2026-10-14)
 
 
