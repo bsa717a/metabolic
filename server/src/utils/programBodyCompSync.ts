@@ -195,16 +195,21 @@ export async function syncTodayDailyLogBodyComp(
   });
 }
 
-function checkInBodyCompPatch(values: Array<{ metricType: string; currentValue: unknown }>) {
+/** Weight, body fat, and waist copied from a check-in. Omitted metrics are cleared. */
+export function checkInBodyCompPatch(values: Array<{ metricType: string; currentValue: unknown }>) {
   const read = (metricType: string) => values.find((value) => value.metricType === metricType);
   const weight = read('WEIGHT');
   const bodyFat = read('BODY_FAT');
   const waist = read('WAIST');
   return {
-    ...(weight ? { weight: n(weight.currentValue) } : {}),
-    ...(bodyFat ? { bodyFat: n(bodyFat.currentValue) } : {}),
-    ...(waist ? { waist: n(waist.currentValue) } : {})
+    weight: weight ? n(weight.currentValue) : null,
+    bodyFat: bodyFat ? n(bodyFat.currentValue) : null,
+    waist: waist ? n(waist.currentValue) : null
   };
+}
+
+function patchHasMeasurement(data: ReturnType<typeof checkInBodyCompPatch>) {
+  return data.weight != null || data.bodyFat != null || data.waist != null;
 }
 
 function isUniqueConstraintError(error: unknown) {
@@ -224,12 +229,12 @@ export async function syncDailyLogFromCheckInValues(
   db: Db = prisma
 ) {
   const data = checkInBodyCompPatch(values);
-  if (!Object.keys(data).length) return;
 
   const existing = await db.dailyLog.findUnique({
     where: { userId_date: { userId, date: day } },
     select: { id: true }
   });
+  if (!patchHasMeasurement(data) && !existing) return;
   if (existing) {
     await db.dailyLog.update({ where: { id: existing.id }, data });
     return;
