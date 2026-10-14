@@ -11,6 +11,7 @@ import {
   syncTodayDailyLogBodyComp
 } from '../utils/programBodyCompSync.js';
 import { resolveCheckInDate } from '../utils/checkInDate.js';
+import { omittedSnapshotMetricTypes } from '../utils/snapshotValues.js';
 import { parseDateParam, userDayKey } from '../utils/dates.js';
 import { metricUpdatesForLegacyGoals, missingProgramMetrics } from '../utils/programMetrics.js';
 import { ensureDailyLogByUserId } from './dailyLogService.js';
@@ -293,7 +294,7 @@ export async function saveProgramMetricSnapshot(
   const dateKey = resolveCheckInDate(options?.date, todayKey);
   const date = parseDateParam(dateKey);
   const isToday = dateKey === todayKey;
-  // Today's check-in follows the live program metrics. A missed day keeps the values entered for that day.
+  // Today's check-in follows the live program metrics. A missed day stores only the values entered for that day.
   const storedValues = isToday ? mergeBodyCompFromProgramMetrics(values, program.metrics) : values;
 
   return prisma.$transaction(async (tx) => {
@@ -322,6 +323,25 @@ export async function saveProgramMetricSnapshot(
           unit: value.unit
         }
       });
+    }
+
+    if (!isToday) {
+      const existingValues = await tx.programMetricSnapshotValue.findMany({
+        where: { snapshotId: snapshot.id },
+        select: { metricType: true }
+      });
+      const omitted = omittedSnapshotMetricTypes(
+        existingValues.map((row) => row.metricType),
+        storedValues.map((value) => value.metricType)
+      );
+      if (omitted.length) {
+        await tx.programMetricSnapshotValue.deleteMany({
+          where: {
+            snapshotId: snapshot.id,
+            metricType: { in: omitted as never[] }
+          }
+        });
+      }
     }
 
     const result = await tx.programMetricSnapshot.findUniqueOrThrow({

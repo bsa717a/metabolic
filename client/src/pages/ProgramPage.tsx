@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, CalendarCheck, Flag, Target } from 'lucide-react';
-import { api, toDateKey } from '../services/api';
+import { api } from '../services/api';
 import type { AppUser, Program, ProgramMetric } from '../types';
 import { BlueprintActionsMenu } from '../components/program/BlueprintActionsMenu';
 import { BlueprintCheckInModal } from '../components/program/BlueprintCheckInModal';
@@ -10,6 +10,7 @@ import { EditBlueprintStartDrawer } from '../components/program/EditBlueprintSta
 import { BlueprintMetricsPanel } from '../components/program/BlueprintMetricsPanel';
 import { ProgramMetricSnapshotHistory } from '../components/program/ProgramMetricSnapshotHistory';
 import type { ProgramMetricSnapshot, ProgressPhotoSet } from '../types';
+import { snapshotForOwnerToday } from '../utils/checkInDate';
 import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../utils/measurementUtils';
 import { formatSnapshotCurrentLabel } from '../utils/snapshotHistoryUtils';
 
@@ -116,7 +117,7 @@ export function ProgramPage({ user }: { user?: AppUser | null }) {
     [snapshots, selectedSnapshotId]
   );
 
-  const todaySnapshot = snapshots.find((snapshot) => snapshot.date === toDateKey(new Date()));
+  const todaySnapshot = snapshotForOwnerToday(snapshots, user?.timezone);
 
   const checkInPhotoSet = useMemo(() => {
     if (!checkInSnapshot) return null;

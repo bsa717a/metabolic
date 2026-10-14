@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BODY_COMP_METRIC_TYPES,
+  checkInBodyCompPatch,
   isLikelySyncedDailyLogEcho,
   shouldPreferProgramMetric,
   syncProgramMetricsFromSnapshotValues
@@ -52,6 +53,18 @@ describe('isLikelySyncedDailyLogEcho', () => {
       updatedAt: new Date('2026-07-06T08:00:00.000Z')
     };
     assert.equal(isLikelySyncedDailyLogEcho(log, metric), false);
+  });
+});
+
+describe('checkInBodyCompPatch', () => {
+  it('clears weight, body fat, and waist that a missed-day save omitted', () => {
+    assert.deepEqual(
+      checkInBodyCompPatch([
+        { metricType: 'WEIGHT', currentValue: 180 },
+        { metricType: 'HIPS', currentValue: 40 }
+      ]),
+      { weight: 180, bodyFat: null, waist: null }
+    );
   });
 });
 

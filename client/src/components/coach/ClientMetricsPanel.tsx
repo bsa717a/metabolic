@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, CalendarCheck, Pencil } from 'lucide-react';
-import { api, toDateKey } from '../../services/api';
+import { api } from '../../services/api';
 import type { Program, ProgramMetric, ProgramMetricSnapshot, ProgressPhotoSet } from '../../types';
+import { snapshotForOwnerToday } from '../../utils/checkInDate';
 import { bodyCompositionMetrics, buildSessionSnapshotPayload } from '../../utils/measurementUtils';
 import { formatSnapshotCurrentLabel, metricsWithSnapshotCurrent } from '../../utils/snapshotHistoryUtils';
 import { BlueprintCheckInModal } from '../program/BlueprintCheckInModal';
@@ -47,10 +48,7 @@ export function ClientMetricsPanel({
     [program?.metrics]
   );
 
-  const todaySnapshot = useMemo(
-    () => snapshots.find((snapshot) => snapshot.date === toDateKey(new Date())),
-    [snapshots]
-  );
+  const todaySnapshot = snapshotForOwnerToday(snapshots, timeZone);
 
   const selectedSnapshot = useMemo(
     () => snapshots.find((snapshot) => snapshot.id === selectedSnapshotId) ?? null,
