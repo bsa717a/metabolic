@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.42.0](https://github.com/bsa717a/metabolic/compare/v0.41.0...v0.42.0) (2026-10-14)
+
+
+### Features
+
+* **blueprint:** save a missed check-in on a past date ([#368](https://github.com/bsa717a/metabolic/issues/368)) ([86b84b9](https://github.com/bsa717a/metabolic/commit/86b84b95ac4c0ecae0779e256b7bc78f1c48be02))
+
 ## [0.41.0](https://github.com/bsa717a/metabolic/compare/v0.40.1...v0.41.0) (2026-10-13)
 
 
