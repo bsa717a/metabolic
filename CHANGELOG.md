@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.42.2](https://github.com/bsa717a/metabolic/compare/v0.42.1...v0.42.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* **virtual-coach:** compact the weekly check-in header on phones ([#372](https://github.com/bsa717a/metabolic/issues/372)) ([e67efc8](https://github.com/bsa717a/metabolic/commit/e67efc80f0479c5d1bbeb3da3272046b8cc45fa4))
+
 ## [0.42.1](https://github.com/bsa717a/metabolic/compare/v0.42.0...v0.42.1) (2026-10-14)
 
 
