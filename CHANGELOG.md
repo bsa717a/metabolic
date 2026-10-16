@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.42.3](https://github.com/bsa717a/metabolic/compare/v0.42.2...v0.42.3) (2026-10-16)
+
+
+### Bug Fixes
+
+* **nutrition:** correct imported meal names and list past check-ins ([#374](https://github.com/bsa717a/metabolic/issues/374)) ([c37fb52](https://github.com/bsa717a/metabolic/commit/c37fb52923fc913af0e530d06262eeab49a7b6e6))
+
 ## [0.42.2](https://github.com/bsa717a/metabolic/compare/v0.42.1...v0.42.2) (2026-10-14)
 
 
