@@ -8,7 +8,8 @@ import {
   legacyMealPlannedTime,
   mealNameForPlannedTime,
   renameImportedMeal,
-  templateClientIds
+  templateClientIds,
+  uniqueMealNamesForDay
 } from './legacyMealNames.ts';
 
 test('legacyMealName keeps a real name and the old label fields', () => {
@@ -56,8 +57,11 @@ test('legacyMealPlannedTime keeps a clock stored in the name when time is empty'
   assert.equal(legacyMealPlannedTime({ name: '12:30 p.m.' }), '12:30');
   assert.equal(legacyMealPlannedTime({ name: '7:00am' }), '07:00');
   assert.equal(legacyMealPlannedTime({ name: "5'4\"", time: '' }), null);
-  assert.equal(legacyMealPlannedTime({ name: '12:30 PM', time: '7:00am' }), '07:00');
+  assert.equal(legacyMealPlannedTime({ name: '12:30 PM', time: '11:30' }), '12:30');
+  assert.equal(legacyMealPlannedTime({ name: '11:30 am', time: '08:30' }), '11:30');
   assert.equal(legacyMealPlannedTime({ name: 'Breakfast', time: '13:30' }), '13:30');
+  assert.equal(legacyMealName({ mealnum: 2, name: '11:30 am', time: '08:30' }, 1), 'Lunch');
+  assert.equal(legacyMealName({ mealnum: 2, name: '9:30am', time: '11:30' }, 1), 'Breakfast');
 });
 
 test('renameImportedMeal names from the clock and moves an empty time', () => {
@@ -65,15 +69,43 @@ test('renameImportedMeal names from the clock and moves an empty time', () => {
   assert.equal(fallbackMealNameForNumber(5), 'Meal 5');
   assert.deepEqual(renameImportedMeal('5\'4"', 1, null), { name: 'Breakfast', plannedTime: null });
   assert.deepEqual(renameImportedMeal('5\'4"', 5, null), { name: 'Meal 5', plannedTime: null });
-  assert.deepEqual(renameImportedMeal('9:30am', 2, null), { name: 'Breakfast', plannedTime: '09:30' });
-  assert.deepEqual(renameImportedMeal('12:30 PM', 2, null), { name: 'Lunch', plannedTime: '12:30' });
+  assert.deepEqual(renameImportedMeal('9:30am', 2, '11:30'), { name: 'Breakfast', plannedTime: '09:30' });
+  assert.deepEqual(renameImportedMeal('11:30 am', 2, '08:30'), { name: 'Lunch', plannedTime: '11:30' });
+  assert.deepEqual(renameImportedMeal('12:30 PM', 2, '11:30'), { name: 'Lunch', plannedTime: '12:30' });
+  assert.deepEqual(renameImportedMeal('3pm', 3, '11:30'), { name: 'Snack', plannedTime: '15:00' });
+  assert.deepEqual(renameImportedMeal('3:30 pm', 3, '11:30'), { name: 'Snack', plannedTime: '15:30' });
   assert.deepEqual(renameImportedMeal('3 pm', 5, null), { name: 'Snack', plannedTime: '15:00' });
   assert.deepEqual(renameImportedMeal('6:30 PM', 6, null), { name: 'Dinner', plannedTime: '18:30' });
+  assert.deepEqual(renameImportedMeal('5\'4"', 1, '08:30'), { name: 'Breakfast', plannedTime: '08:30' });
+  assert.deepEqual(renameImportedMeal('5\'4"', 2, '11:30'), { name: 'Lunch', plannedTime: '11:30' });
+  assert.deepEqual(renameImportedMeal('5\'4"', 3, '14:30'), { name: 'Snack', plannedTime: '14:30' });
+  assert.deepEqual(renameImportedMeal('5\'4"', 4, '17:30'), { name: 'Dinner', plannedTime: '17:30' });
   assert.deepEqual(renameImportedMeal('5\'4"', 6, '15:00'), { name: 'Snack', plannedTime: '15:00' });
-  assert.deepEqual(renameImportedMeal('12:30 PM', 2, '13:00'), { name: 'Lunch', plannedTime: '13:00' });
   assert.equal(renameImportedMeal('Breakfast', 1, null), null);
   assert.equal(describeMealRename('12:30 PM', 'Lunch', '12:30'), '"12:30 PM" → Lunch, time → 12:30');
   assert.equal(describeMealRename('5\'4"', 'Breakfast', null), '"5\'4\\"" → Breakfast');
+});
+
+test('a day keeps one Dinner and names the later one Late snack', () => {
+  const renamed = ['7pm', '11pm'].map((name, index) => renameImportedMeal(name, index + 1, '17:30'));
+  assert.deepEqual(renamed, [
+    { name: 'Dinner', plannedTime: '19:00' },
+    { name: 'Dinner', plannedTime: '23:00' }
+  ]);
+  const day = uniqueMealNamesForDay([
+    { mealNumber: 1, name: 'Dinner', plannedTime: '19:00' },
+    { mealNumber: 2, name: 'Dinner', plannedTime: '23:00' }
+  ]);
+  assert.deepEqual(day.map((meal) => meal.name), ['Dinner', 'Late snack']);
+
+  const lunches = uniqueMealNamesForDay([
+    { mealNumber: 2, name: 'Lunch', plannedTime: '12:30' },
+    { mealNumber: 1, name: 'Lunch', plannedTime: '11:30' }
+  ]);
+  assert.deepEqual(
+    [...lunches].sort((a, b) => a.mealNumber - b.mealNumber).map((meal) => meal.name),
+    ['Lunch', 'Late lunch']
+  );
 });
 
 test('template meals belong to the client on the plan, not the coach who created them', () => {

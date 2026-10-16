@@ -15,7 +15,7 @@
  */
 import { prisma } from '../../src/db/prisma.js';
 import { toDateKey } from '../../src/utils/dates.js';
-import { describeMealRename, renameImportedMeal, templateClientIds } from './legacyMealNames.js';
+import { describeMealRename, renameImportedMeal, templateClientIds, uniqueMealNamesForDay } from './legacyMealNames.js';
 
 const apply = process.argv.includes('--apply');
 
@@ -34,6 +34,19 @@ type Change = {
   to: string;
   plannedTime: string | null;
   date: string | null;
+};
+
+type Slot = {
+  kind: 'template' | 'daily';
+  id: string;
+  owners: string[];
+  from: string;
+  to: string;
+  currentTime: string | null;
+  nextTime: string | null;
+  date: string | null;
+  mealNumber: number;
+  group: string;
 };
 
 function safeError(error: unknown): string {
@@ -85,6 +98,7 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
         name: true,
         mealNumber: true,
         plannedTime: true,
+        templateId: true,
         template: {
           select: {
             programs: { where: { userId: { in: userIds } }, select: { userId: true } },
@@ -109,44 +123,79 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
     })
   ]);
 
-  const changes: Change[] = [];
+  const slots: Slot[] = [];
 
   for (const meal of templateMeals) {
-    const next = renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
-    if (!next) continue;
     const currentTime = meal.plannedTime?.trim() || null;
+    const next = renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
     const owners = templateClientIds({
       programUserIds: meal.template.programs.map((program) => program.userId),
       planPeriodUserIds: meal.template.planPeriods.map((period) => period.program.userId),
       clientIds: userIdSet
     });
-    const movedTime = next.plannedTime && next.plannedTime !== currentTime ? next.plannedTime : null;
-    for (const owner of owners) {
-      changes.push({
-        kind: 'template',
-        id: meal.id,
-        userId: owner,
-        from: meal.name,
-        to: next.name,
-        plannedTime: movedTime,
-        date: null
-      });
-    }
+    slots.push({
+      kind: 'template',
+      id: meal.id,
+      owners,
+      from: meal.name,
+      to: next?.name ?? meal.name,
+      currentTime,
+      nextTime: next?.plannedTime ?? currentTime,
+      date: null,
+      mealNumber: meal.mealNumber,
+      group: `template:${meal.templateId}`
+    });
   }
 
   for (const meal of dailyMeals) {
-    const next = renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
-    if (!next) continue;
     const currentTime = meal.plannedTime?.trim() || null;
-    changes.push({
+    const next = renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
+    const date = toDateKey(meal.dailyLog.date);
+    slots.push({
       kind: 'daily',
       id: meal.id,
-      userId: meal.userId,
+      owners: [meal.userId],
       from: meal.name,
-      to: next.name,
-      plannedTime: next.plannedTime && next.plannedTime !== currentTime ? next.plannedTime : null,
-      date: toDateKey(meal.dailyLog.date)
+      to: next?.name ?? meal.name,
+      currentTime,
+      nextTime: next?.plannedTime ?? currentTime,
+      date,
+      mealNumber: meal.mealNumber,
+      group: `daily:${meal.userId}:${date}`
     });
+  }
+
+  const byGroup = new Map<string, Slot[]>();
+  for (const slot of slots) {
+    const list = byGroup.get(slot.group);
+    if (list) list.push(slot);
+    else byGroup.set(slot.group, [slot]);
+  }
+  for (const group of byGroup.values()) {
+    if (!group.some((slot) => slot.to !== slot.from || slot.nextTime !== slot.currentTime)) continue;
+    const unique = uniqueMealNamesForDay(
+      group.map((slot) => ({ mealNumber: slot.mealNumber, name: slot.to, plannedTime: slot.nextTime }))
+    );
+    group.forEach((slot, index) => {
+      slot.to = unique[index].name;
+    });
+  }
+
+  const changes: Change[] = [];
+  for (const slot of slots) {
+    const movedTime = slot.nextTime && slot.nextTime !== slot.currentTime ? slot.nextTime : null;
+    if (slot.to === slot.from && !movedTime) continue;
+    for (const owner of slot.owners) {
+      changes.push({
+        kind: slot.kind,
+        id: slot.id,
+        userId: owner,
+        from: slot.from,
+        to: slot.to,
+        plannedTime: movedTime,
+        date: slot.date
+      });
+    }
   }
 
   return changes;

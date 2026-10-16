@@ -13,7 +13,7 @@ import {
   parseWeight,
   toNumber
 } from './legacyPlanParse.js';
-import { legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
+import { legacyMealName, legacyMealPlannedTime, uniqueMealNamesForDay } from './legacyMealNames.js';
 
 const prisma = new PrismaClient();
 
@@ -255,6 +255,8 @@ async function materializeDay(
       items: itemData
     });
   });
+  const uniqueDailyMeals = uniqueMealNamesForDay(mealPayloads);
+  mealPayloads.splice(0, mealPayloads.length, ...uniqueDailyMeals);
 
   // Build planned scheduled exercises from the exercise plan.
   const circuits = plan.exercise ? parseCircuits(plan.exercise.row.circuits) : [];

@@ -62,7 +62,7 @@ import {
   toNumber,
   type LegacyCircuitItem
 } from './legacyPlanParse.js';
-import { legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
+import { legacyMealName, legacyMealPlannedTime, uniqueMealNamesForDay } from './legacyMealNames.js';
 import {
   accountAction,
   currentPlanTitle,
@@ -455,6 +455,8 @@ async function importCurrentNutritionTemplate(
       };
     })
     .filter((meal): meal is NonNullable<typeof meal> => Boolean(meal));
+  const uniquePayloads = uniqueMealNamesForDay(payloads);
+  payloads.splice(0, payloads.length, ...uniquePayloads);
 
   const totals = payloads.reduce(
     (acc, meal) => ({
@@ -968,6 +970,8 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
         items: { create: itemCreates }
       });
     }
+    const uniqueDailyMeals = uniqueMealNamesForDay(mealPayloads);
+    mealPayloads.splice(0, mealPayloads.length, ...uniqueDailyMeals);
 
     const circuits = plan.exercise ? parseCircuits(plan.exercise.circuits) : [];
     const scheduled = [];

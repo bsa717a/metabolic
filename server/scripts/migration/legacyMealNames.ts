@@ -5,9 +5,11 @@
  * clients it often holds a height (`5'4"`) or a clock time (`12:30 PM`).
  * Real labels, when the old row has them, live on meal_name / title / label
  * (or a slot word such as Breakfast on type/category). Otherwise keep `name`
- * when it is an actual label. A clock time names the meal by time of day
- * (morning Breakfast, midday Lunch, afternoon Snack, evening Dinner).
- * With no clock, fall back to Breakfast, Lunch, Snack, Dinner by meal order.
+ * when it is an actual label. A clock written in `name` decides the new
+ * label and replaces the time field. Morning (5:00–10:59) is Breakfast,
+ * midday (11:00–13:59) is Lunch, afternoon (14:00–16:59) is Snack, and
+ * every other hour is Dinner. A height has no clock: the existing time
+ * names the meal and is left alone. With neither, fall back by meal order.
  */
 import { parsePlannedTime } from './legacyPlanParse.js';
 
@@ -73,14 +75,13 @@ export function mealNameForPlannedTime(value: string | null | undefined): string
 
 /**
  * Planned time for a newly imported meal.
- * Prefer `time`. When that field is empty, a clock stored in `name`
- * (for example "12:30 PM") is still the schedule and must survive the
- * rename to Breakfast / Lunch / Snack / Dinner.
+ * A clock stored in `name` is the schedule and replaces `time`.
+ * Otherwise keep `time`.
  */
 export function legacyMealPlannedTime(meal: { name?: string | null; time?: string | null }): string | null {
-  const fromTime = parsePlannedTime(meal.time) ?? plannedTimeFromClockName(meal.time ?? '');
-  if (fromTime) return fromTime;
-  return plannedTimeFromClockName(meal.name ?? '');
+  const fromName = plannedTimeFromClockName(meal.name ?? '');
+  if (fromName) return fromName;
+  return parsePlannedTime(meal.time) ?? plannedTimeFromClockName(meal.time ?? '');
 }
 
 function slotLabel(value: string): string | null {
@@ -155,11 +156,55 @@ export function renameImportedMeal(
 ): { name: string; plannedTime: string | null } | null {
   if (!isImportedJunkMealName(name)) return null;
   const currentTime = plannedTime?.trim() || null;
-  const clock = currentTime ?? plannedTimeFromClockName(name);
-  const nextName = mealNameForPlannedTime(clock) ?? fallbackMealNameForNumber(mealNumber);
-  const nextTime = currentTime ?? plannedTimeFromClockName(name);
-  if (nextName === name.trim() && nextTime === currentTime) return null;
-  return { name: nextName, plannedTime: nextTime };
+  const fromName = plannedTimeFromClockName(name);
+  if (fromName) {
+    const nextName = mealNameForPlannedTime(fromName) ?? fallbackMealNameForNumber(mealNumber);
+    if (nextName === name.trim() && fromName === currentTime) return null;
+    return { name: nextName, plannedTime: fromName };
+  }
+  const nextName = mealNameForPlannedTime(currentTime) ?? fallbackMealNameForNumber(mealNumber);
+  if (nextName === name.trim()) return null;
+  return { name: nextName, plannedTime: currentTime };
+}
+
+export type DayMealLabel = {
+  mealNumber: number;
+  name: string;
+  plannedTime: string | null;
+};
+
+function timeSortKey(value: string | null): number {
+  const parsed = parsePlannedTime(value) ?? plannedTimeFromClockName(value ?? '');
+  if (!parsed) return 24 * 60 + 1;
+  const [hourText, minuteText] = parsed.split(':');
+  return Number(hourText) * 60 + Number(minuteText);
+}
+
+/** Later meal in a same-name pair. A second Dinner is Late snack. */
+function distinctLaterName(preferred: string, used: ReadonlySet<string>): string {
+  const base = preferred === 'Dinner' ? 'Late snack' : `Late ${preferred.charAt(0).toLowerCase()}${preferred.slice(1)}`;
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
+}
+
+/**
+ * One day cannot contain two meals with the same name.
+ * The earlier meal keeps the band name. The later one gets a distinct label.
+ */
+export function uniqueMealNamesForDay<T extends DayMealLabel>(meals: T[]): T[] {
+  const order = meals
+    .map((meal, index) => ({ meal, index }))
+    .sort((a, b) => timeSortKey(a.meal.plannedTime) - timeSortKey(b.meal.plannedTime) || a.meal.mealNumber - b.meal.mealNumber || a.index - b.index);
+  const used = new Set<string>();
+  const names = meals.map((meal) => meal.name);
+  for (const { meal, index } of order) {
+    const name = used.has(meal.name) ? distinctLaterName(meal.name, used) : meal.name;
+    used.add(name);
+    names[index] = name;
+  }
+  return meals.map((meal, index) => (names[index] === meal.name ? meal : { ...meal, name: names[index] }));
 }
 
 /** Clients who own the plan. The coach who created the template is not an owner. */
