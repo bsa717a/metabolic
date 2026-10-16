@@ -13,7 +13,7 @@ import {
   parseWeight,
   toNumber
 } from './legacyPlanParse.js';
-import { applyUniqueMealNames, isProperMealName, legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
+import { applyUniqueMealNames, legacyMealName, legacyMealNameLocked, legacyMealPlannedTime } from './legacyMealNames.js';
 
 const prisma = new PrismaClient();
 
@@ -245,7 +245,7 @@ async function materializeDay(
     dayProtein += mp;
     dayCarbs += mcarb;
     dayFat += mf;
-    dayNameLocked.push(isProperMealName(meal.name ?? ''));
+    dayNameLocked.push(legacyMealNameLocked(meal));
     mealPayloads.push({
       mealNumber: meal.mealnum ?? idx + 1,
       name: legacyMealName(meal, idx),

@@ -62,7 +62,7 @@ import {
   toNumber,
   type LegacyCircuitItem
 } from './legacyPlanParse.js';
-import { applyUniqueMealNames, isProperMealName, legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
+import { applyUniqueMealNames, legacyMealName, legacyMealNameLocked, legacyMealPlannedTime } from './legacyMealNames.js';
 import {
   accountAction,
   currentPlanTitle,
@@ -443,7 +443,7 @@ async function importCurrentNutritionTemplate(
           fat: toNumber(item.fats)
         };
       });
-      nameLocked.push(isProperMealName(meal.name ?? ''));
+      nameLocked.push(legacyMealNameLocked(meal));
       return {
         mealNumber: meal.mealnum ?? idx + 1,
         name: legacyMealName(meal, idx),
@@ -960,7 +960,7 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
       dayProtein += protein;
       dayCarbs += carbs;
       dayFat += fat;
-      dayNameLocked.push(isProperMealName(meal.name ?? ''));
+      dayNameLocked.push(legacyMealNameLocked(meal));
       mealPayloads.push({
         userId: user.id,
         mealNumber: meal.mealnum ?? idx + 1,

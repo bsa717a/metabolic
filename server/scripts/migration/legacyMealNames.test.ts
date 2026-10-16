@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  applyUniqueMealNames,
   describeMealRename,
   fallbackMealNameForNumber,
   isImportedJunkMealName,
   isProperMealName,
   legacyMealName,
+  legacyMealNameLocked,
   legacyMealPlannedTime,
   mealNameForPlannedTime,
   renameImportedMeal,
@@ -161,6 +163,27 @@ test('proper names stay, and a Meal N yields when it would repeat one', () => {
     { mealNumber: 6, name: 'Lunch', plannedTime: '12:30', locked: false }
   ]);
   assert.deepEqual(lunch.map((meal) => meal.name), ['Lunch', 'Late lunch']);
+});
+
+test('a real label next to a clock or height stays Breakfast', () => {
+  const labeled = { name: '12:30 PM', meal_name: 'Breakfast', time: '12:30' };
+  const titled = { name: "5'4\"", title: 'Breakfast', time: '08:30' };
+  const clockOnly = { name: '9:30am', time: '' };
+  assert.equal(legacyMealNameLocked(labeled), true);
+  assert.equal(legacyMealNameLocked(titled), true);
+  assert.equal(legacyMealNameLocked(clockOnly), false);
+  assert.equal(legacyMealNameLocked({ name: 'Meal 5', time: '08:30' }), false);
+  assert.equal(legacyMealNameLocked({ name: "5'4\"" }), false);
+
+  const day = applyUniqueMealNames(
+    [
+      { mealNumber: 1, name: legacyMealName(labeled, 0), plannedTime: legacyMealPlannedTime(labeled) },
+      { mealNumber: 2, name: legacyMealName(titled, 1), plannedTime: legacyMealPlannedTime(titled) },
+      { mealNumber: 3, name: legacyMealName(clockOnly, 2), plannedTime: legacyMealPlannedTime(clockOnly) }
+    ],
+    [legacyMealNameLocked(labeled), legacyMealNameLocked(titled), legacyMealNameLocked(clockOnly)]
+  );
+  assert.deepEqual(day.map((meal) => meal.name), ['Breakfast', 'Breakfast', 'Late breakfast']);
 });
 
 test('template meals belong to the client on the plan, not the coach who created them', () => {

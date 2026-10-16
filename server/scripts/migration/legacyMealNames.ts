@@ -167,6 +167,23 @@ export function legacyMealName(meal: LegacyMealNameSource, fallbackIndex: number
   return fallbackMealName(orderIndex(meal, fallbackIndex));
 }
 
+/**
+ * True when the label legacyMealName keeps comes from a real field
+ * (meal_name, title, a slot word, or a proper name), not from a clock,
+ * a height, or a Meal N placeholder.
+ */
+export function legacyMealNameLocked(meal: LegacyMealNameSource): boolean {
+  const record = meal as LegacyMealNameSource & Record<string, unknown>;
+  for (const key of LABEL_FIELDS) {
+    if (usableMealLabel(record[key])) return true;
+  }
+  for (const key of SLOT_FIELDS) {
+    if (typeof record[key] !== 'string') continue;
+    if (slotLabel(record[key] as string)) return true;
+  }
+  return Boolean(usableMealLabel(meal.name));
+}
+
 export function renameImportedMeal(
   name: string,
   mealNumber: number,
