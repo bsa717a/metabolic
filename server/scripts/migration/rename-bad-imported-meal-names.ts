@@ -15,7 +15,13 @@
  */
 import { prisma } from '../../src/db/prisma.js';
 import { toDateKey } from '../../src/utils/dates.js';
-import { describeMealRename, renameImportedMeal, templateClientIds, uniqueMealNamesForDay } from './legacyMealNames.js';
+import {
+  describeMealRename,
+  isProperMealName,
+  renameImportedMeal,
+  templateClientIds,
+  uniqueMealNamesForDay
+} from './legacyMealNames.js';
 
 const apply = process.argv.includes('--apply');
 
@@ -47,6 +53,7 @@ type Slot = {
   date: string | null;
   mealNumber: number;
   group: string;
+  locked: boolean;
 };
 
 function safeError(error: unknown): string {
@@ -127,7 +134,8 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
 
   for (const meal of templateMeals) {
     const currentTime = meal.plannedTime?.trim() || null;
-    const next = renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
+    const locked = isProperMealName(meal.name);
+    const next = locked ? null : renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
     const owners = templateClientIds({
       programUserIds: meal.template.programs.map((program) => program.userId),
       planPeriodUserIds: meal.template.planPeriods.map((period) => period.program.userId),
@@ -143,13 +151,15 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
       nextTime: next?.plannedTime ?? currentTime,
       date: null,
       mealNumber: meal.mealNumber,
-      group: `template:${meal.templateId}`
+      group: `template:${meal.templateId}`,
+      locked
     });
   }
 
   for (const meal of dailyMeals) {
     const currentTime = meal.plannedTime?.trim() || null;
-    const next = renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
+    const locked = isProperMealName(meal.name);
+    const next = locked ? null : renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
     const date = toDateKey(meal.dailyLog.date);
     slots.push({
       kind: 'daily',
@@ -161,7 +171,8 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
       nextTime: next?.plannedTime ?? currentTime,
       date,
       mealNumber: meal.mealNumber,
-      group: `daily:${meal.userId}:${date}`
+      group: `daily:${meal.userId}:${date}`,
+      locked
     });
   }
 
@@ -174,7 +185,12 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
   for (const group of byGroup.values()) {
     if (!group.some((slot) => slot.to !== slot.from || slot.nextTime !== slot.currentTime)) continue;
     const unique = uniqueMealNamesForDay(
-      group.map((slot) => ({ mealNumber: slot.mealNumber, name: slot.to, plannedTime: slot.nextTime }))
+      group.map((slot) => ({
+        mealNumber: slot.mealNumber,
+        name: slot.to,
+        plannedTime: slot.nextTime,
+        locked: slot.locked
+      }))
     );
     group.forEach((slot, index) => {
       slot.to = unique[index].name;

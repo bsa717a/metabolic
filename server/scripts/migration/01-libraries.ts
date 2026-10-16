@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { DUMP_PATH } from './config.js';
 import { loadIdMap, saveIdMap } from './idmap.js';
 import { num, numPositive, parseTable } from './mysqlDumpParser.js';
-import { legacyMealName, legacyMealPlannedTime, uniqueMealNamesForDay } from './legacyMealNames.js';
+import { applyUniqueMealNames, isProperMealName, legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
 
 const prisma = new PrismaClient();
 
@@ -145,8 +145,8 @@ async function migrateNutritionTemplates(): Promise<number> {
         carbTarget: Math.round(carbs),
         fatTarget: Math.round(fat),
         meals: {
-          create: uniqueMealNamesForDay(
-            meals
+          create: (() => {
+            const libraryMeals = meals
               .filter((meal) => cleanItems(meal).length > 0)
               .map((meal, mealIdx) => ({
                 mealNumber: meal.mealnum ?? mealIdx + 1,
@@ -163,8 +163,12 @@ async function migrateNutritionTemplates(): Promise<number> {
                     fat: Number(item.fats ?? 0)
                   }))
                 }
-              }))
-          )
+              }));
+            const locked = meals
+              .filter((meal) => cleanItems(meal).length > 0)
+              .map((meal) => isProperMealName(meal.name ?? ''));
+            return applyUniqueMealNames(libraryMeals, locked);
+          })()
         }
       }
     });

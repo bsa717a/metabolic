@@ -4,6 +4,7 @@ import {
   describeMealRename,
   fallbackMealNameForNumber,
   isImportedJunkMealName,
+  isProperMealName,
   legacyMealName,
   legacyMealPlannedTime,
   mealNameForPlannedTime,
@@ -29,6 +30,7 @@ test('legacyMealName uses the clock, then Breakfast, Lunch, Snack, Dinner by ord
   assert.equal(legacyMealName({ mealnum: 5, name: "5'4\"", time: '15:00' }, 4), 'Snack');
   assert.equal(legacyMealName({ mealnum: 4, name: '' }, 3), 'Dinner');
   assert.equal(legacyMealName({ mealnum: 5, name: '5 ft 4 in' }, 4), 'Meal 5');
+  assert.equal(legacyMealName({ mealnum: 5, name: 'Meal 5', time: '17:30' }, 4), 'Dinner');
   assert.equal(legacyMealName({ name: '12:30 p.m.' }, 1), 'Lunch');
 });
 
@@ -82,6 +84,11 @@ test('renameImportedMeal names from the clock and moves an empty time', () => {
   assert.deepEqual(renameImportedMeal('5\'4"', 4, '17:30'), { name: 'Dinner', plannedTime: '17:30' });
   assert.deepEqual(renameImportedMeal('5\'4"', 6, '15:00'), { name: 'Snack', plannedTime: '15:00' });
   assert.equal(renameImportedMeal('Breakfast', 1, null), null);
+  assert.equal(renameImportedMeal('Post workout', 1, '08:30'), null);
+  assert.deepEqual(renameImportedMeal('Meal 1', 1, '08:30'), { name: 'Breakfast', plannedTime: '08:30' });
+  assert.deepEqual(renameImportedMeal('Meal 5', 5, '17:30'), { name: 'Dinner', plannedTime: '17:30' });
+  assert.deepEqual(renameImportedMeal('Meal 3', 3, '14:30'), { name: 'Snack', plannedTime: '14:30' });
+  assert.equal(renameImportedMeal('Meal 5', 5, null), null);
   assert.equal(describeMealRename('12:30 PM', 'Lunch', '12:30'), '"12:30 PM" → Lunch, time → 12:30');
   assert.equal(describeMealRename('5\'4"', 'Breakfast', null), '"5\'4\\"" → Breakfast');
 });
@@ -106,6 +113,54 @@ test('a day keeps one Dinner and names the later one Late snack', () => {
     [...lunches].sort((a, b) => a.mealNumber - b.mealNumber).map((meal) => meal.name),
     ['Lunch', 'Late lunch']
   );
+});
+
+test('proper names stay, and a Meal N yields when it would repeat one', () => {
+  assert.equal(isProperMealName('Breakfast'), true);
+  assert.equal(isProperMealName('Post workout'), true);
+  assert.equal(isProperMealName('Meal 5'), false);
+  assert.equal(isProperMealName('5\'4"'), false);
+  assert.equal(isProperMealName('7pm'), false);
+
+  const breakfasts = uniqueMealNamesForDay(
+    [1, 2, 3, 4, 5].map((mealNumber) => ({
+      mealNumber,
+      name: 'Breakfast',
+      plannedTime: '08:30',
+      locked: true
+    }))
+  );
+  assert.deepEqual(breakfasts.map((meal) => meal.name), ['Breakfast', 'Breakfast', 'Breakfast', 'Breakfast', 'Breakfast']);
+
+  const withPlaceholder = uniqueMealNamesForDay([
+    ...[1, 2, 3, 4, 5].map((mealNumber) => ({
+      mealNumber,
+      name: 'Breakfast',
+      plannedTime: '08:30',
+      locked: true
+    })),
+    { mealNumber: 6, name: 'Breakfast', plannedTime: '09:00', locked: false }
+  ]);
+  assert.deepEqual(withPlaceholder.map((meal) => meal.name), [
+    'Breakfast',
+    'Breakfast',
+    'Breakfast',
+    'Breakfast',
+    'Breakfast',
+    'Late breakfast'
+  ]);
+
+  const dinner = uniqueMealNamesForDay([
+    { mealNumber: 5, name: 'Dinner', plannedTime: '17:30', locked: false },
+    { mealNumber: 1, name: 'Dinner', plannedTime: '19:00', locked: true }
+  ]);
+  assert.deepEqual(dinner.map((meal) => meal.name), ['Late snack', 'Dinner']);
+
+  const lunch = uniqueMealNamesForDay([
+    { mealNumber: 2, name: 'Lunch', plannedTime: '12:00', locked: true },
+    { mealNumber: 6, name: 'Lunch', plannedTime: '12:30', locked: false }
+  ]);
+  assert.deepEqual(lunch.map((meal) => meal.name), ['Lunch', 'Late lunch']);
 });
 
 test('template meals belong to the client on the plan, not the coach who created them', () => {

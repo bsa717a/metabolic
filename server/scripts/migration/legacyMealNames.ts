@@ -9,7 +9,10 @@
  * label and replaces the time field. Morning (5:00–10:59) is Breakfast,
  * midday (11:00–13:59) is Lunch, afternoon (14:00–16:59) is Snack, and
  * every other hour is Dinner. A height has no clock: the existing time
- * names the meal and is left alone. With neither, fall back by meal order.
+ * names the meal and is left alone. A "Meal N" placeholder is named from
+ * its existing time and does not overwrite that time. A proper name
+ * (anything that is not a height, a clock, or "Meal N") is never renamed.
+ * With neither a clock nor a time, fall back by meal order.
  */
 import { parsePlannedTime } from './legacyPlanParse.js';
 
@@ -48,6 +51,21 @@ export function isClockTimeName(value: string): boolean {
 export function isImportedJunkMealName(value: string): boolean {
   const trimmed = value.trim();
   return Boolean(trimmed) && (isHeightMealName(trimmed) || isClockTimeName(trimmed));
+}
+
+/** "Meal 1", "Meal 5", and so on. Not a label the client chose. */
+export function isMealPlaceholderName(value: string): boolean {
+  return /^Meal \d+$/.test(value.trim());
+}
+
+/**
+ * A name that must be left alone: Breakfast, Lunch, Snack, Dinner, or any
+ * other label that is not a height, a clock, or a "Meal N" placeholder.
+ */
+export function isProperMealName(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return !isImportedJunkMealName(trimmed) && !isMealPlaceholderName(trimmed);
 }
 
 export function plannedTimeFromClockName(value: string): string | null {
@@ -103,7 +121,7 @@ function slotLabel(value: string): string | null {
 function usableMealLabel(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim().replace(/\s+/g, ' ');
-  if (!trimmed || trimmed.length > 48 || isImportedJunkMealName(trimmed)) return null;
+  if (!trimmed || trimmed.length > 48 || isImportedJunkMealName(trimmed) || isMealPlaceholderName(trimmed)) return null;
   return trimmed;
 }
 
@@ -154,7 +172,7 @@ export function renameImportedMeal(
   mealNumber: number,
   plannedTime: string | null
 ): { name: string; plannedTime: string | null } | null {
-  if (!isImportedJunkMealName(name)) return null;
+  if (isProperMealName(name)) return null;
   const currentTime = plannedTime?.trim() || null;
   const fromName = plannedTimeFromClockName(name);
   if (fromName) {
@@ -162,6 +180,7 @@ export function renameImportedMeal(
     if (nextName === name.trim() && fromName === currentTime) return null;
     return { name: nextName, plannedTime: fromName };
   }
+  if (!isImportedJunkMealName(name) && !isMealPlaceholderName(name)) return null;
   const nextName = mealNameForPlannedTime(currentTime) ?? fallbackMealNameForNumber(mealNumber);
   if (nextName === name.trim()) return null;
   return { name: nextName, plannedTime: currentTime };
@@ -171,6 +190,8 @@ export type DayMealLabel = {
   mealNumber: number;
   name: string;
   plannedTime: string | null;
+  /** A proper name. It stays, and a meal being fixed yields instead. */
+  locked?: boolean;
 };
 
 function timeSortKey(value: string | null): number {
@@ -190,14 +211,20 @@ function distinctLaterName(preferred: string, used: ReadonlySet<string>): string
 }
 
 /**
- * One day cannot contain two meals with the same name.
- * The earlier meal keeps the band name. The later one gets a distinct label.
+ * Names being fixed on one day stay unique, without touching a proper name.
+ * Locked meals keep their labels and reserve them. An unlocked meal whose
+ * band name is already taken gets the distinct later label instead.
+ * Among unlocked meals, the earlier one keeps the band name.
  */
 export function uniqueMealNamesForDay<T extends DayMealLabel>(meals: T[]): T[] {
+  const used = new Set<string>();
+  for (const meal of meals) {
+    if (meal.locked) used.add(meal.name);
+  }
   const order = meals
     .map((meal, index) => ({ meal, index }))
+    .filter(({ meal }) => !meal.locked)
     .sort((a, b) => timeSortKey(a.meal.plannedTime) - timeSortKey(b.meal.plannedTime) || a.meal.mealNumber - b.meal.mealNumber || a.index - b.index);
-  const used = new Set<string>();
   const names = meals.map((meal) => meal.name);
   for (const { meal, index } of order) {
     const name = used.has(meal.name) ? distinctLaterName(meal.name, used) : meal.name;
@@ -205,6 +232,12 @@ export function uniqueMealNamesForDay<T extends DayMealLabel>(meals: T[]): T[] {
     names[index] = name;
   }
   return meals.map((meal, index) => (names[index] === meal.name ? meal : { ...meal, name: names[index] }));
+}
+
+/** Copy unique names back onto the original meals. `locked` is not stored on them. */
+export function applyUniqueMealNames<T extends DayMealLabel>(meals: T[], locked: readonly boolean[]): T[] {
+  const unique = uniqueMealNamesForDay(meals.map((meal, index) => ({ ...meal, locked: locked[index] ?? false })));
+  return meals.map((meal, index) => (unique[index].name === meal.name ? meal : { ...meal, name: unique[index].name }));
 }
 
 /** Clients who own the plan. The coach who created the template is not an owner. */

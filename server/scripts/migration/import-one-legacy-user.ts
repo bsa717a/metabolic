@@ -62,7 +62,7 @@ import {
   toNumber,
   type LegacyCircuitItem
 } from './legacyPlanParse.js';
-import { legacyMealName, legacyMealPlannedTime, uniqueMealNamesForDay } from './legacyMealNames.js';
+import { applyUniqueMealNames, isProperMealName, legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
 import {
   accountAction,
   currentPlanTitle,
@@ -419,6 +419,7 @@ async function importCurrentNutritionTemplate(
   displayName: string
 ) {
   const meals = parseMeals(latest.meals);
+  const nameLocked: boolean[] = [];
   const payloads = meals
     .map((meal, idx) => {
       const items = mealItems(meal);
@@ -442,6 +443,7 @@ async function importCurrentNutritionTemplate(
           fat: toNumber(item.fats)
         };
       });
+      nameLocked.push(isProperMealName(meal.name ?? ''));
       return {
         mealNumber: meal.mealnum ?? idx + 1,
         name: legacyMealName(meal, idx),
@@ -455,7 +457,7 @@ async function importCurrentNutritionTemplate(
       };
     })
     .filter((meal): meal is NonNullable<typeof meal> => Boolean(meal));
-  const uniquePayloads = uniqueMealNamesForDay(payloads);
+  const uniquePayloads = applyUniqueMealNames(payloads, nameLocked);
   payloads.splice(0, payloads.length, ...uniquePayloads);
 
   const totals = payloads.reduce(
@@ -922,6 +924,7 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
 
     const meals = plan.nutrition ? parseMeals(plan.nutrition.meals) : [];
     const mealPayloads = [];
+    const dayNameLocked: boolean[] = [];
     let dayCalories = 0;
     let dayProtein = 0;
     let dayCarbs = 0;
@@ -957,6 +960,7 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
       dayProtein += protein;
       dayCarbs += carbs;
       dayFat += fat;
+      dayNameLocked.push(isProperMealName(meal.name ?? ''));
       mealPayloads.push({
         userId: user.id,
         mealNumber: meal.mealnum ?? idx + 1,
@@ -970,7 +974,7 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
         items: { create: itemCreates }
       });
     }
-    const uniqueDailyMeals = uniqueMealNamesForDay(mealPayloads);
+    const uniqueDailyMeals = applyUniqueMealNames(mealPayloads, dayNameLocked);
     mealPayloads.splice(0, mealPayloads.length, ...uniqueDailyMeals);
 
     const circuits = plan.exercise ? parseCircuits(plan.exercise.circuits) : [];
