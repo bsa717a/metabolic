@@ -8,6 +8,7 @@ import { fetchCoachMealsForDates, type DayMeals } from '../../utils/planExportDa
 import { MealPlanner, type MealPlannerHandle } from '../nutrition/MealPlanner';
 import { PlanPeriodBanner } from '../nutrition/PlanPeriodBanner';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
+import { PastCheckIns } from '../nutrition/PastCheckIns';
 import { AddFoodsPanel } from '../nutrition/weekly/AddFoodsPanel';
 import { CopyDayForward } from '../nutrition/weekly/CopyDayForward';
 import { EditMealPlanDrawer } from '../nutrition/EditMealPlanDrawer';
@@ -421,6 +422,7 @@ export function CoachDayNutritionEditor({
             todayDate={clientToday}
             days={weekDays}
           />
+          <PastCheckIns selectedDate={selectedDate} onSelect={handleSelectDate} clientId={clientId} />
 
           {planPeriodLoaded ? (
             assignedPlan ? (

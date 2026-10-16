@@ -56,13 +56,13 @@ import {
   parseCircuits,
   parseIntLoose,
   parseMeals,
-  parsePlannedTime,
   parseQuantity,
   parseWaterOz,
   parseWeight,
   toNumber,
   type LegacyCircuitItem
 } from './legacyPlanParse.js';
+import { applyUniqueMealNames, legacyMealName, legacyMealNameLocked, legacyMealPlannedTime } from './legacyMealNames.js';
 import {
   accountAction,
   currentPlanTitle,
@@ -208,10 +208,6 @@ function parseReps(value: unknown): string | null {
   if (value == null) return null;
   const trimmed = String(value).trim();
   return trimmed || null;
-}
-
-function mealPlannedTime(meal: { name?: string; time?: string }): string | null {
-  return parsePlannedTime(meal.time) ?? parsePlannedTime(meal.name);
 }
 
 interface SessionMetrics {
@@ -423,6 +419,7 @@ async function importCurrentNutritionTemplate(
   displayName: string
 ) {
   const meals = parseMeals(latest.meals);
+  const nameLocked: boolean[] = [];
   const payloads = meals
     .map((meal, idx) => {
       const items = mealItems(meal);
@@ -446,10 +443,11 @@ async function importCurrentNutritionTemplate(
           fat: toNumber(item.fats)
         };
       });
+      nameLocked.push(legacyMealNameLocked(meal));
       return {
         mealNumber: meal.mealnum ?? idx + 1,
-        name: (meal.name ?? '').trim() || `Meal ${meal.mealnum ?? idx + 1}`,
-        plannedTime: mealPlannedTime(meal),
+        name: legacyMealName(meal, idx),
+        plannedTime: legacyMealPlannedTime(meal),
         calorieTarget: Math.round(calories),
         items: itemCreates,
         calories,
@@ -459,6 +457,8 @@ async function importCurrentNutritionTemplate(
       };
     })
     .filter((meal): meal is NonNullable<typeof meal> => Boolean(meal));
+  const uniquePayloads = applyUniqueMealNames(payloads, nameLocked);
+  payloads.splice(0, payloads.length, ...uniquePayloads);
 
   const totals = payloads.reduce(
     (acc, meal) => ({
@@ -734,7 +734,15 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
   }
   if (latestNutrition) {
     const meals = parseMeals(latestNutrition.meals);
-    console.log(`Latest meals ${latestNutrition.date}: ${meals.map((meal) => meal.name).join(', ')}`);
+    console.log(
+      `Latest meals ${latestNutrition.date}: ${meals
+        .map((meal, idx) => {
+          const resolved = legacyMealName(meal, idx);
+          const raw = (meal.name ?? '').trim();
+          return raw && raw !== resolved ? `${resolved} (was ${JSON.stringify(raw)})` : resolved;
+        })
+        .join(', ')}`
+    );
   }
   if (latestExercise) {
     const circuits = parseCircuits(latestExercise.circuits);
@@ -916,6 +924,7 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
 
     const meals = plan.nutrition ? parseMeals(plan.nutrition.meals) : [];
     const mealPayloads = [];
+    const dayNameLocked: boolean[] = [];
     let dayCalories = 0;
     let dayProtein = 0;
     let dayCarbs = 0;
@@ -951,11 +960,12 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
       dayProtein += protein;
       dayCarbs += carbs;
       dayFat += fat;
+      dayNameLocked.push(legacyMealNameLocked(meal));
       mealPayloads.push({
         userId: user.id,
         mealNumber: meal.mealnum ?? idx + 1,
-        name: (meal.name ?? '').trim() || `Meal ${meal.mealnum ?? idx + 1}`,
-        plannedTime: mealPlannedTime(meal),
+        name: legacyMealName(meal, idx),
+        plannedTime: legacyMealPlannedTime(meal),
         status: MealStatus.PLANNED,
         plannedCalories: calories,
         plannedProtein: protein,
@@ -964,6 +974,8 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
         items: { create: itemCreates }
       });
     }
+    const uniqueDailyMeals = applyUniqueMealNames(mealPayloads, dayNameLocked);
+    mealPayloads.splice(0, mealPayloads.length, ...uniqueDailyMeals);
 
     const circuits = plan.exercise ? parseCircuits(plan.exercise.circuits) : [];
     const scheduled = [];

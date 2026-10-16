@@ -8,12 +8,12 @@ import {
   parseCircuits,
   parseIntLoose,
   parseMeals,
-  parsePlannedTime,
   parseQuantity,
   parseWaterOz,
   parseWeight,
   toNumber
 } from './legacyPlanParse.js';
+import { applyUniqueMealNames, legacyMealName, legacyMealNameLocked, legacyMealPlannedTime } from './legacyMealNames.js';
 
 const prisma = new PrismaClient();
 
@@ -195,6 +195,7 @@ async function materializeDay(
     carbs: number;
     fat: number;
   };
+  const dayNameLocked: boolean[] = [];
   const mealPayloads: {
     mealNumber: number;
     name: string;
@@ -244,10 +245,11 @@ async function materializeDay(
     dayProtein += mp;
     dayCarbs += mcarb;
     dayFat += mf;
+    dayNameLocked.push(legacyMealNameLocked(meal));
     mealPayloads.push({
       mealNumber: meal.mealnum ?? idx + 1,
-      name: (meal.name ?? '').trim() || `Meal ${meal.mealnum ?? idx + 1}`,
-      plannedTime: parsePlannedTime(meal.time),
+      name: legacyMealName(meal, idx),
+      plannedTime: legacyMealPlannedTime(meal),
       plannedCalories: mc,
       plannedProtein: mp,
       plannedCarbs: mcarb,
@@ -255,6 +257,8 @@ async function materializeDay(
       items: itemData
     });
   });
+  const uniqueDailyMeals = applyUniqueMealNames(mealPayloads, dayNameLocked);
+  mealPayloads.splice(0, mealPayloads.length, ...uniqueDailyMeals);
 
   // Build planned scheduled exercises from the exercise plan.
   const circuits = plan.exercise ? parseCircuits(plan.exercise.row.circuits) : [];

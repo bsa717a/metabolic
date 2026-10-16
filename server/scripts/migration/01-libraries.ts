@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { DUMP_PATH } from './config.js';
 import { loadIdMap, saveIdMap } from './idmap.js';
 import { num, numPositive, parseTable } from './mysqlDumpParser.js';
+import { applyUniqueMealNames, legacyMealName, legacyMealNameLocked, legacyMealPlannedTime } from './legacyMealNames.js';
 
 const prisma = new PrismaClient();
 
@@ -144,24 +145,30 @@ async function migrateNutritionTemplates(): Promise<number> {
         carbTarget: Math.round(carbs),
         fatTarget: Math.round(fat),
         meals: {
-          create: meals
-            .filter((meal) => cleanItems(meal).length > 0)
-            .map((meal, mealIdx) => ({
-              mealNumber: meal.mealnum ?? mealIdx + 1,
-              name: (meal.name ?? '').trim() || `Meal ${meal.mealnum ?? mealIdx + 1}`,
-              plannedTime: (meal.time ?? '').trim() || null,
-              items: {
-                create: cleanItems(meal).map((item) => ({
-                  nameSnapshot: item.name,
-                  quantity: num(String(item.mulipiler ?? '1')) ?? 1,
-                  unit: (item.portion_name ?? 'serving').trim() || 'serving',
-                  calories: Number(item.calories ?? 0),
-                  protein: Number(item.proteins ?? 0),
-                  carbs: Number(item.carbs ?? 0),
-                  fat: Number(item.fats ?? 0)
-                }))
-              }
-            }))
+          create: (() => {
+            const libraryMeals = meals
+              .filter((meal) => cleanItems(meal).length > 0)
+              .map((meal, mealIdx) => ({
+                mealNumber: meal.mealnum ?? mealIdx + 1,
+                name: legacyMealName(meal, mealIdx),
+                plannedTime: legacyMealPlannedTime(meal),
+                items: {
+                  create: cleanItems(meal).map((item) => ({
+                    nameSnapshot: item.name,
+                    quantity: num(String(item.mulipiler ?? '1')) ?? 1,
+                    unit: (item.portion_name ?? 'serving').trim() || 'serving',
+                    calories: Number(item.calories ?? 0),
+                    protein: Number(item.proteins ?? 0),
+                    carbs: Number(item.carbs ?? 0),
+                    fat: Number(item.fats ?? 0)
+                  }))
+                }
+              }));
+            const locked = meals
+              .filter((meal) => cleanItems(meal).length > 0)
+              .map((meal) => legacyMealNameLocked(meal));
+            return applyUniqueMealNames(libraryMeals, locked);
+          })()
         }
       }
     });

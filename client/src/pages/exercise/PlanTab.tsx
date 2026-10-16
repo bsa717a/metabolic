@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { todayKey } from '../../services/api';
 import { AssignedExerciseWeek } from '../../components/exercise/AssignedExerciseWeek';
+import { PastCheckIns } from '../../components/nutrition/PastCheckIns';
 import { AutomaticExercise } from '../../components/exercise/automatic/AutomaticExercise';
 import { useExerciseArea } from './exerciseAreaContext';
 
@@ -45,13 +46,16 @@ export function PlanTab() {
   }
 
   return (
-    <AssignedExerciseWeek
-      routine={routine}
-      weekDates={weekDates}
-      days={weekDays}
-      selectedDate={selectedDate}
-      onSelectDay={openDay}
-      intro="Your week at a glance. Tap any day to open and edit it."
-    />
+    <div className="space-y-4">
+      <AssignedExerciseWeek
+        routine={routine}
+        weekDates={weekDates}
+        days={weekDays}
+        selectedDate={selectedDate}
+        onSelectDay={openDay}
+        intro="Your week at a glance. Tap any day to open and edit it."
+      />
+      <PastCheckIns selectedDate={selectedDate} onSelect={openDay} />
+    </div>
   );
 }
