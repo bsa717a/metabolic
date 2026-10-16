@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/requireAuth.js';
 import { requireFeature } from '../auth/requireFeature.js';
 import { activateProgram, getBlueprintProgram, getProgramForRead, listPrograms, listProgramMetricSnapshots, listProgressPhotoSets, saveProgramMetricSnapshot, updateProgramMetricSnapshot, updateProgramMetrics, upsertProgressPhotoSet, upsertSnapshotMeasurement } from '../services/programService.js';
+import { listPastCheckInDates } from '../services/checkInDates.js';
+import { userDayKey } from '../utils/dates.js';
 import { getActiveProgressSummaryForUser, getProgressSummary } from '../services/progressSummaryService.js';
 import { getFirebaseStorageBucket } from '../config/firebaseStorage.js';
 import { prisma } from '../db/prisma.js';
@@ -80,6 +82,17 @@ function serializeSnapshot(snapshot: {
 }
 
 export async function programRoutes(app: FastifyInstance) {
+  app.get('/api/check-in-dates', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      const user = request.appUser!;
+      const dates = await listPastCheckInDates(user.id, userDayKey(user.timezone));
+      return { dates };
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to list check-in dates');
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to list check-in dates' });
+    }
+  });
+
   app.get('/api/programs', { preHandler: requireAuth }, async (request) => listPrograms(request.appUser!));
 
   app.get('/api/programs/blueprint', { preHandler: requireAuth }, async (request) =>

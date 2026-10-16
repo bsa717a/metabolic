@@ -92,6 +92,8 @@ import {
   nutritionTemplateUpdateBody
 } from '../schemas/nutritionTemplateCriteria.js';
 import { prisma } from '../db/prisma.js';
+import { listPastCheckInDates } from '../services/checkInDates.js';
+import { userDayKey } from '../utils/dates.js';
 import { nutritionTemplateApplyErrorStatus } from '../utils/nutritionTemplateErrors.js';
 
 const coachOnly = [requireAuth, requireRole(['COACH', 'SUPER_ADMIN'])];
@@ -424,6 +426,18 @@ export async function coachRoutes(app: FastifyInstance) {
       return info ?? reply.code(404).send({ error: 'No active program' });
     } catch (error) {
       return reply.code(403).send({ error: error instanceof Error ? error.message : 'Unable to load plan' });
+    }
+  });
+
+  app.get('/api/coach/users/:userId/check-in-dates', { preHandler: coachOnly }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    try {
+      await requireCoachClient(request.appUser!, userId);
+      const client = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+      const dates = await listPastCheckInDates(userId, userDayKey(client?.timezone));
+      return { dates };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Unable to list check-in dates' });
     }
   });
 

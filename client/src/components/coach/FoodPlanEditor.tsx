@@ -7,6 +7,7 @@ import { EditMealPlanDrawer } from '../nutrition/EditMealPlanDrawer';
 import { MealPlanner } from '../nutrition/MealPlanner';
 import { PlanPeriodBanner } from '../nutrition/PlanPeriodBanner';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
+import { PastCheckIns } from '../nutrition/PastCheckIns';
 import { CoachDayNutritionEditor } from './CoachDayNutritionEditor';
 import { MacroOverridePanel } from './MacroOverridePanel';
 import { Button } from '../ui/Button';
@@ -164,6 +165,7 @@ export function FoodPlanEditor({
         todayDate={clientToday}
         days={weekDays}
       />
+      <PastCheckIns selectedDate={planDate} onSelect={onPlanDateChange} clientId={clientId} />
 
       {planPeriod && (planPeriod.weekNumber != null || planPeriod.calorieTarget != null) ? (
         <PlanPeriodBanner planPeriod={planPeriod} viewedDate={planDate} />

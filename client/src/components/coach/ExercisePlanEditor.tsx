@@ -14,6 +14,7 @@ import {
   weekdayAssignmentsFromPlanDays
 } from '../../utils/exerciseRoutineDisplay';
 import { AssignedExerciseWeek } from '../exercise/AssignedExerciseWeek';
+import { PastCheckIns } from '../nutrition/PastCheckIns';
 import { CoachDayExerciseEditor } from './CoachDayExerciseEditor';
 import { Button } from '../ui/Button';
 
@@ -30,7 +31,8 @@ export function ExercisePlanEditorView({
   onSetAsDefaultChange,
   saving,
   onApply,
-  onSelectDay
+  onSelectDay,
+  clientId
 }: {
   planDate: string;
   routine: ExerciseRoutine | null;
@@ -45,6 +47,7 @@ export function ExercisePlanEditorView({
   saving: boolean;
   onApply: () => void;
   onSelectDay: (date: string) => void;
+  clientId: string;
 }) {
   const options = exercisePlanPickerOptions(plans, assignedExercisePlan(routine));
 
@@ -63,6 +66,7 @@ export function ExercisePlanEditorView({
           emptyPlanLabel={NO_EXERCISE_PLAN_ASSIGNED}
         />
       )}
+      <PastCheckIns selectedDate={planDate} onSelect={onSelectDay} clientId={clientId} />
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-end gap-2">
@@ -228,6 +232,7 @@ export function ExercisePlanEditor({
         saving={saving}
         onApply={() => void applyPlan()}
         onSelectDay={onPlanDateChange}
+        clientId={clientId}
       />
 
       <CoachDayExerciseEditor

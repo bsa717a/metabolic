@@ -3,6 +3,7 @@ import { isToday } from '../../services/api';
 import type { ScheduledExercise } from '../../types';
 import type { DayExercises } from '../../utils/planExportData';
 import { WeekDateStrip } from '../nutrition/WeekDateStrip';
+import { PastCheckIns } from '../nutrition/PastCheckIns';
 import { ExerciseChecklist } from './ExerciseChecklist';
 import { AddExerciseDrawer } from './AddExerciseDrawer';
 import { EditExerciseDrawer } from './EditExerciseDrawer';
@@ -53,6 +54,7 @@ export function DayExerciseEditor({
   return (
     <div className="space-y-5">
       <WeekDateStrip selectedDate={selectedDate} onSelectDate={onSelectDate} exerciseDays={weekDays} />
+      <PastCheckIns selectedDate={selectedDate} onSelect={onSelectDate} clientId={coachClientId} />
 
       {beforeChecklist}
 

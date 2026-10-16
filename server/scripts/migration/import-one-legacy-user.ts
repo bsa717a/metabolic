@@ -63,6 +63,7 @@ import {
   toNumber,
   type LegacyCircuitItem
 } from './legacyPlanParse.js';
+import { legacyMealName } from './legacyMealNames.js';
 import {
   accountAction,
   currentPlanTitle,
@@ -448,7 +449,7 @@ async function importCurrentNutritionTemplate(
       });
       return {
         mealNumber: meal.mealnum ?? idx + 1,
-        name: (meal.name ?? '').trim() || `Meal ${meal.mealnum ?? idx + 1}`,
+        name: legacyMealName(meal, idx),
         plannedTime: mealPlannedTime(meal),
         calorieTarget: Math.round(calories),
         items: itemCreates,
@@ -734,7 +735,15 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
   }
   if (latestNutrition) {
     const meals = parseMeals(latestNutrition.meals);
-    console.log(`Latest meals ${latestNutrition.date}: ${meals.map((meal) => meal.name).join(', ')}`);
+    console.log(
+      `Latest meals ${latestNutrition.date}: ${meals
+        .map((meal, idx) => {
+          const resolved = legacyMealName(meal, idx);
+          const raw = (meal.name ?? '').trim();
+          return raw && raw !== resolved ? `${resolved} (was ${JSON.stringify(raw)})` : resolved;
+        })
+        .join(', ')}`
+    );
   }
   if (latestExercise) {
     const circuits = parseCircuits(latestExercise.circuits);
@@ -954,7 +963,7 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
       mealPayloads.push({
         userId: user.id,
         mealNumber: meal.mealnum ?? idx + 1,
-        name: (meal.name ?? '').trim() || `Meal ${meal.mealnum ?? idx + 1}`,
+        name: legacyMealName(meal, idx),
         plannedTime: mealPlannedTime(meal),
         status: MealStatus.PLANNED,
         plannedCalories: calories,

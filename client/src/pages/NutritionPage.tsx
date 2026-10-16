@@ -6,6 +6,7 @@ import type { Meal, PlanPeriodInfo } from '../types';
 import { Button } from '../components/ui/Button';
 import { MealPlanner } from '../components/nutrition/MealPlanner';
 import { WeekDateStrip } from '../components/nutrition/WeekDateStrip';
+import { PastCheckIns } from '../components/nutrition/PastCheckIns';
 import { AddFoodsPanel } from '../components/nutrition/weekly/AddFoodsPanel';
 import { EditMealPlanDrawer } from '../components/nutrition/EditMealPlanDrawer';
 import { AiFoodLookupDrawer } from '../components/nutrition/AiFoodLookupDrawer';
@@ -347,6 +348,8 @@ export function NutritionPage() {
           </Button>
         }
       />
+
+      <PastCheckIns selectedDate={selectedDate} onSelect={selectDate} />
 
       {printError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{printError}</div>}
       {loadError && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">{loadError}</div>}

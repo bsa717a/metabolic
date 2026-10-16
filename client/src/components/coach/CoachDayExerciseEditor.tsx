@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { api, getWeekDates, startOfWeek } from '../../services/api';
 import type { ExerciseRoutine } from '../../types';
 import { DayExerciseEditor } from '../exercise/DayExerciseEditor';
+import { PastCheckIns } from '../nutrition/PastCheckIns';
 import { RoutineEditorContent } from '../exercise/RoutineEditor';
 import { AssignedExerciseWeek } from '../exercise/AssignedExerciseWeek';
 import { PlanPrintMenu } from '../export/PlanPrintMenu';
@@ -267,6 +268,7 @@ export function CoachDayExerciseEditor({
                 selectedDate={selectedDate}
                 onSelectDay={openDay}
               />
+              <PastCheckIns selectedDate={selectedDate} onSelect={openDay} clientId={clientId} />
             </div>
           )}
 
