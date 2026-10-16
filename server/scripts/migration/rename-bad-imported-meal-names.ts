@@ -4,6 +4,8 @@
  * Dry-run by default. Nothing is written unless --apply is passed.
  * Covers mmv1 nutrition template meals and daily meals for migrated clients,
  * including days the app copied forward from an imported plan.
+ * Template meals are reported on the client whose program or plan period
+ * uses the template, not on the coach who created it.
  *
  *   cd server && npx tsx --env-file=.env scripts/migration/rename-bad-imported-meal-names.ts
  *   cd server && npx tsx --env-file=.env scripts/migration/rename-bad-imported-meal-names.ts --apply
@@ -13,7 +15,7 @@
  */
 import { prisma } from '../../src/db/prisma.js';
 import { toDateKey } from '../../src/utils/dates.js';
-import { renameImportedMeal } from './legacyMealNames.js';
+import { describeMealRename, renameImportedMeal, templateClientIds } from './legacyMealNames.js';
 
 const apply = process.argv.includes('--apply');
 
@@ -52,8 +54,8 @@ async function migratedClients(): Promise<ClientRow[]> {
       OR: [
         { dailyLogs: { some: { notes: { startsWith: 'legacy:' } } } },
         { progressSnapshots: { some: { notes: { startsWith: 'legacy:' } } } },
-        { nutritionPlanTemplatesCreated: { some: { description: { startsWith: 'mmv1:' } } } },
         { programs: { some: { defaultNutritionTemplate: { description: { startsWith: 'mmv1:' } } } } },
+        { programs: { some: { planPeriods: { some: { nutritionTemplate: { description: { startsWith: 'mmv1:' } } } } } } },
         { firebaseUid: { startsWith: 'legacy-' } }
       ]
     },
@@ -73,8 +75,8 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
         template: {
           description: { startsWith: 'mmv1:' },
           OR: [
-            { createdById: { in: userIds } },
-            { programs: { some: { userId: { in: userIds } } } }
+            { programs: { some: { userId: { in: userIds } } } },
+            { planPeriods: { some: { program: { userId: { in: userIds } } } } }
           ]
         }
       },
@@ -85,8 +87,11 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
         plannedTime: true,
         template: {
           select: {
-            createdById: true,
-            programs: { where: { userId: { in: userIds } }, select: { userId: true } }
+            programs: { where: { userId: { in: userIds } }, select: { userId: true } },
+            planPeriods: {
+              where: { program: { userId: { in: userIds } } },
+              select: { program: { select: { userId: true } } }
+            }
           }
         }
       }
@@ -110,20 +115,23 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
     const next = renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
     if (!next) continue;
     const currentTime = meal.plannedTime?.trim() || null;
-    const owner =
-      meal.template.createdById && userIdSet.has(meal.template.createdById)
-        ? meal.template.createdById
-        : meal.template.programs[0]?.userId;
-    if (!owner) continue;
-    changes.push({
-      kind: 'template',
-      id: meal.id,
-      userId: owner,
-      from: meal.name,
-      to: next.name,
-      plannedTime: next.plannedTime && next.plannedTime !== currentTime ? next.plannedTime : null,
-      date: null
+    const owners = templateClientIds({
+      programUserIds: meal.template.programs.map((program) => program.userId),
+      planPeriodUserIds: meal.template.planPeriods.map((period) => period.program.userId),
+      clientIds: userIdSet
     });
+    const movedTime = next.plannedTime && next.plannedTime !== currentTime ? next.plannedTime : null;
+    for (const owner of owners) {
+      changes.push({
+        kind: 'template',
+        id: meal.id,
+        userId: owner,
+        from: meal.name,
+        to: next.name,
+        plannedTime: movedTime,
+        date: null
+      });
+    }
   }
 
   for (const meal of dailyMeals) {
@@ -158,8 +166,8 @@ function printReport(clients: ClientRow[], changes: Change[]) {
   console.log(`Affected clients: ${affected.length}`);
   console.log('');
 
-  let templateMeals = 0;
   let dailyMeals = 0;
+  const templateMealIds = new Set<string>();
   const allDays = new Set<string>();
 
   for (const client of affected) {
@@ -167,13 +175,13 @@ function printReport(clients: ClientRow[], changes: Change[]) {
     const templates = rows.filter((row) => row.kind === 'template');
     const daily = rows.filter((row) => row.kind === 'daily');
     const days = new Set(daily.map((row) => row.date).filter((date): date is string => Boolean(date)));
-    templateMeals += templates.length;
+    for (const row of templates) templateMealIds.add(row.id);
     dailyMeals += daily.length;
     for (const day of days) allDays.add(`${client.id}:${day}`);
 
     const samples = new Map<string, number>();
     for (const row of rows) {
-      const key = `${JSON.stringify(row.from)} → ${row.to}`;
+      const key = describeMealRename(row.from, row.to, row.plannedTime);
       samples.set(key, (samples.get(key) ?? 0) + 1);
     }
     const sampleText = [...samples.entries()]
@@ -190,14 +198,21 @@ function printReport(clients: ClientRow[], changes: Change[]) {
   }
 
   console.log(
-    `Totals: clients ${affected.length}, template meals ${templateMeals}, daily meals ${dailyMeals}, days ${allDays.size}`
+    `Totals: clients ${affected.length}, template meals ${templateMealIds.size}, daily meals ${dailyMeals}, days ${allDays.size}`
   );
 }
 
 async function applyChanges(changes: Change[]) {
+  const seen = new Set<string>();
+  const unique = changes.filter((change) => {
+    const key = `${change.kind}:${change.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   const chunkSize = 40;
-  for (let index = 0; index < changes.length; index += chunkSize) {
-    const chunk = changes.slice(index, index + chunkSize);
+  for (let index = 0; index < unique.length; index += chunkSize) {
+    const chunk = unique.slice(index, index + chunkSize);
     await prisma.$transaction(
       chunk.map((change) => {
         const data = {
@@ -210,7 +225,7 @@ async function applyChanges(changes: Change[]) {
       })
     );
   }
-  console.log(`Wrote ${changes.length} meal names.`);
+  console.log(`Wrote ${unique.length} meal names.`);
 }
 
 async function main() {
