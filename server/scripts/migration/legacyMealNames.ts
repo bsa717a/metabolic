@@ -52,6 +52,18 @@ export function plannedTimeFromClockName(value: string): string | null {
   return parsePlannedTime(normalizeClockText(value));
 }
 
+/**
+ * Planned time for a newly imported meal.
+ * Prefer `time`. When that field is empty, a clock stored in `name`
+ * (for example "12:30 PM") is still the schedule and must survive the
+ * rename to Breakfast / Lunch / Snack / Dinner.
+ */
+export function legacyMealPlannedTime(meal: { name?: string | null; time?: string | null }): string | null {
+  const fromTime = parsePlannedTime(meal.time) ?? plannedTimeFromClockName(meal.time ?? '');
+  if (fromTime) return fromTime;
+  return plannedTimeFromClockName(meal.name ?? '');
+}
+
 function slotLabel(value: string): string | null {
   switch (value.trim().toLowerCase()) {
     case 'breakfast':

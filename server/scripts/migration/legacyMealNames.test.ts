@@ -4,6 +4,7 @@ import {
   fallbackMealNameForNumber,
   isImportedJunkMealName,
   legacyMealName,
+  legacyMealPlannedTime,
   renameImportedMeal
 } from './legacyMealNames.ts';
 
@@ -31,6 +32,16 @@ test('junk names are heights and clock times only', () => {
   assert.equal(isImportedJunkMealName('Breakfast'), false);
   assert.equal(isImportedJunkMealName('Post workout'), false);
   assert.equal(isImportedJunkMealName('64'), false);
+});
+
+test('legacyMealPlannedTime keeps a clock stored in the name when time is empty', () => {
+  assert.equal(legacyMealName({ mealnum: 2, name: '12:30 PM', time: '' }, 1), 'Lunch');
+  assert.equal(legacyMealPlannedTime({ name: '12:30 PM', time: '' }), '12:30');
+  assert.equal(legacyMealPlannedTime({ name: '12:30 p.m.' }), '12:30');
+  assert.equal(legacyMealPlannedTime({ name: '7:00am' }), '07:00');
+  assert.equal(legacyMealPlannedTime({ name: "5'4\"", time: '' }), null);
+  assert.equal(legacyMealPlannedTime({ name: '12:30 PM', time: '7:00am' }), '07:00');
+  assert.equal(legacyMealPlannedTime({ name: 'Breakfast', time: '13:30' }), '13:30');
 });
 
 test('renameImportedMeal uses meal number and keeps a clock time', () => {

@@ -8,13 +8,12 @@ import {
   parseCircuits,
   parseIntLoose,
   parseMeals,
-  parsePlannedTime,
   parseQuantity,
   parseWaterOz,
   parseWeight,
   toNumber
 } from './legacyPlanParse.js';
-import { legacyMealName } from './legacyMealNames.js';
+import { legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
 
 const prisma = new PrismaClient();
 
@@ -248,7 +247,7 @@ async function materializeDay(
     mealPayloads.push({
       mealNumber: meal.mealnum ?? idx + 1,
       name: legacyMealName(meal, idx),
-      plannedTime: parsePlannedTime(meal.time),
+      plannedTime: legacyMealPlannedTime(meal),
       plannedCalories: mc,
       plannedProtein: mp,
       plannedCarbs: mcarb,

@@ -56,14 +56,13 @@ import {
   parseCircuits,
   parseIntLoose,
   parseMeals,
-  parsePlannedTime,
   parseQuantity,
   parseWaterOz,
   parseWeight,
   toNumber,
   type LegacyCircuitItem
 } from './legacyPlanParse.js';
-import { legacyMealName } from './legacyMealNames.js';
+import { legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
 import {
   accountAction,
   currentPlanTitle,
@@ -209,10 +208,6 @@ function parseReps(value: unknown): string | null {
   if (value == null) return null;
   const trimmed = String(value).trim();
   return trimmed || null;
-}
-
-function mealPlannedTime(meal: { name?: string; time?: string }): string | null {
-  return parsePlannedTime(meal.time) ?? parsePlannedTime(meal.name);
 }
 
 interface SessionMetrics {
@@ -450,7 +445,7 @@ async function importCurrentNutritionTemplate(
       return {
         mealNumber: meal.mealnum ?? idx + 1,
         name: legacyMealName(meal, idx),
-        plannedTime: mealPlannedTime(meal),
+        plannedTime: legacyMealPlannedTime(meal),
         calorieTarget: Math.round(calories),
         items: itemCreates,
         calories,
@@ -964,7 +959,7 @@ async function importOne(email: string, args: ImportArgs, bundle: LegacyBundle, 
         userId: user.id,
         mealNumber: meal.mealnum ?? idx + 1,
         name: legacyMealName(meal, idx),
-        plannedTime: mealPlannedTime(meal),
+        plannedTime: legacyMealPlannedTime(meal),
         status: MealStatus.PLANNED,
         plannedCalories: calories,
         plannedProtein: protein,

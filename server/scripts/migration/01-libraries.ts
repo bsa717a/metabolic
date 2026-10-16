@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { DUMP_PATH } from './config.js';
 import { loadIdMap, saveIdMap } from './idmap.js';
 import { num, numPositive, parseTable } from './mysqlDumpParser.js';
-import { legacyMealName } from './legacyMealNames.js';
+import { legacyMealName, legacyMealPlannedTime } from './legacyMealNames.js';
 
 const prisma = new PrismaClient();
 
@@ -150,7 +150,7 @@ async function migrateNutritionTemplates(): Promise<number> {
             .map((meal, mealIdx) => ({
               mealNumber: meal.mealnum ?? mealIdx + 1,
               name: legacyMealName(meal, mealIdx),
-              plannedTime: (meal.time ?? '').trim() || null,
+              plannedTime: legacyMealPlannedTime(meal),
               items: {
                 create: cleanItems(meal).map((item) => ({
                   nameSnapshot: item.name,
