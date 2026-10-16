@@ -9,10 +9,14 @@ import {
   legacyMealName,
   legacyMealNameLocked,
   legacyMealPlannedTime,
+  isImportedMealRenameClient,
   mealNameForPlannedTime,
+  planImportedMealRenames,
   renameImportedMeal,
   templateClientIds,
-  uniqueMealNamesForDay
+  uniqueMealNamesForDay,
+  type ImportedMealRename,
+  type ImportedMealSlot
 } from './legacyMealNames.ts';
 
 test('legacyMealName keeps a real name and the old label fields', () => {
@@ -95,7 +99,7 @@ test('renameImportedMeal names from the clock and moves an empty time', () => {
   assert.equal(describeMealRename('5\'4"', 'Breakfast', null), '"5\'4\\"" → Breakfast');
 });
 
-test('a day keeps one Dinner and names the later one Late snack', () => {
+test('importer dedupe still splits a repeated band name on a new import', () => {
   const renamed = ['7pm', '11pm'].map((name, index) => renameImportedMeal(name, index + 1, '17:30'));
   assert.deepEqual(renamed, [
     { name: 'Dinner', plannedTime: '19:00' },
@@ -212,4 +216,149 @@ test('template meals belong to the client on the plan, not the coach who created
     }),
     []
   );
+});
+
+function slot(id: string, name: string, mealNumber: number, plannedTime: string | null): ImportedMealSlot {
+  return { id, name, mealNumber, plannedTime };
+}
+
+function assertCleanRenames(meals: ImportedMealSlot[], changes: ImportedMealRename[]) {
+  const byId = new Map(changes.map((change) => [change.id, change.to]));
+  const finals = meals.map((meal) => byId.get(meal.id) ?? meal.name);
+  for (const change of changes) {
+    assert.equal(/late/i.test(change.to), false, change.to);
+    assert.ok(['Breakfast', 'Lunch', 'Snack', 'Dinner'].includes(change.to), change.to);
+    const key = change.to.trim().toLowerCase();
+    assert.equal(
+      finals.filter((name) => name.trim().toLowerCase() === key).length,
+      1,
+      change.to
+    );
+  }
+}
+
+test('a day or plan with no height or clock is untouched', () => {
+  const meals = [
+    slot('a', 'Breakfast', 1, '08:30'),
+    slot('b', 'Meal 2', 2, '12:00'),
+    slot('c', 'Meal 3', 3, '17:30'),
+    slot('d', 'Post workout', 4, '15:00')
+  ];
+  assert.deepEqual(planImportedMealRenames(meals), []);
+});
+
+test('a day with a height or a clock renames Meal N from its time', () => {
+  const withHeight = [
+    slot('h', '5\'4"', 1, '08:30'),
+    slot('m', 'Meal 5', 5, '17:30')
+  ];
+  const heightChanges = planImportedMealRenames(withHeight);
+  assert.deepEqual(heightChanges, [
+    { id: 'h', from: '5\'4"', to: 'Breakfast', plannedTime: null },
+    { id: 'm', from: 'Meal 5', to: 'Dinner', plannedTime: null }
+  ]);
+  assertCleanRenames(withHeight, heightChanges);
+
+  const withClock = [
+    slot('c', '12:30 PM', 2, '11:30'),
+    slot('m', 'Meal 3', 3, '14:30')
+  ];
+  const clockChanges = planImportedMealRenames(withClock);
+  assert.deepEqual(clockChanges, [
+    { id: 'c', from: '12:30 PM', to: 'Lunch', plannedTime: '12:30' },
+    { id: 'm', from: 'Meal 3', to: 'Snack', plannedTime: null }
+  ]);
+  assertCleanRenames(withClock, clockChanges);
+
+  assert.deepEqual(planImportedMealRenames([slot('c', '9:30am', 2, '11:30')]), [
+    { id: 'c', from: '9:30am', to: 'Breakfast', plannedTime: '09:30' }
+  ]);
+  assert.deepEqual(planImportedMealRenames([slot('c', '3:30 pm', 3, '11:30')]), [
+    { id: 'c', from: '3:30 pm', to: 'Snack', plannedTime: '15:30' }
+  ]);
+  assert.deepEqual(planImportedMealRenames([slot('h', '5\'4"', 1, null)]), []);
+});
+
+test('04:30 stays a placeholder rather than Dinner', () => {
+  const meals = [
+    slot('h', '5\'4"', 1, '12:00'),
+    slot('m', 'Meal 2', 2, '04:30'),
+    slot('c', '4:30 AM', 3, '08:30')
+  ];
+  const changes = planImportedMealRenames(meals);
+  assert.deepEqual(changes, [{ id: 'h', from: '5\'4"', to: 'Lunch', plannedTime: null }]);
+  assertCleanRenames(meals, changes);
+  assert.equal(
+    changes.some((change) => change.to === 'Dinner' || /late/i.test(change.to)),
+    false
+  );
+  assert.deepEqual(planImportedMealRenames([slot('c', '04:30', 1, '04:30')]), []);
+  assert.deepEqual(planImportedMealRenames([slot('c', '12:00 AM', 1, null)]), []);
+  assert.deepEqual(planImportedMealRenames([slot('c', '17:00', 1, null)]), [
+    { id: 'c', from: '17:00', to: 'Dinner', plannedTime: '17:00' }
+  ]);
+  assert.deepEqual(planImportedMealRenames([slot('c', '11:59 PM', 1, null)]), [
+    { id: 'c', from: '11:59 PM', to: 'Dinner', plannedTime: '23:59' }
+  ]);
+});
+
+test('9:30am stays 9:30am when Breakfast is already on the day', () => {
+  const meals = [
+    slot('b', 'Breakfast', 1, '08:00'),
+    slot('c', '9:30am', 2, '11:30'),
+    slot('m', 'Meal 3', 3, '09:00')
+  ];
+  const changes = planImportedMealRenames(meals);
+  assert.deepEqual(changes, []);
+  assert.equal(changes.some((change) => /late/i.test(change.to)), false);
+});
+
+test('a repeated evening clock does not become Late snack or Late snack 2', () => {
+  const meals = [
+    slot('late', '11pm', 2, '17:30'),
+    slot('early', '7pm', 1, '17:30'),
+    slot('m', 'Meal 4', 4, '21:00'),
+    slot('third', '6:30 PM', 5, '17:30')
+  ];
+  const changes = planImportedMealRenames(meals);
+  assert.deepEqual(changes, [{ id: 'third', from: '6:30 PM', to: 'Dinner', plannedTime: '18:30' }]);
+  assertCleanRenames(meals, changes);
+  assert.equal(JSON.stringify(changes).includes('Late'), false);
+});
+
+test('a rename does not create a case-insensitive duplicate', () => {
+  const meals = [
+    slot('p', 'breakfast', 1, '08:00'),
+    slot('c', '9:30am', 2, '11:30'),
+    slot('s', 'SNACK', 3, '15:00'),
+    slot('m', 'Meal 4', 4, '15:30'),
+    slot('h', '5\'4"', 5, '12:30')
+  ];
+  const changes = planImportedMealRenames(meals);
+  assert.deepEqual(changes, [{ id: 'h', from: '5\'4"', to: 'Lunch', plannedTime: null }]);
+  assertCleanRenames(meals, changes);
+
+  const sameBand = [
+    slot('b', '3:30 pm', 2, '14:30'),
+    slot('a', '3pm', 1, '11:30')
+  ];
+  const bandChanges = planImportedMealRenames(sameBand);
+  assert.deepEqual(bandChanges, [{ id: 'a', from: '3pm', to: 'Snack', plannedTime: '15:00' }]);
+  assertCleanRenames(sameBand, bandChanges);
+});
+
+test('proper names stay, including repeated Breakfasts', () => {
+  const meals = [1, 2, 3, 4, 5].map((mealNumber) => slot(`b${mealNumber}`, 'Breakfast', mealNumber, '08:30'));
+  meals.push(slot('h', '5\'4"', 6, '12:00'));
+  meals.push(slot('p', 'Post workout', 7, '15:00'));
+  const changes = planImportedMealRenames(meals);
+  assert.deepEqual(changes, [{ id: 'h', from: '5\'4"', to: 'Lunch', plannedTime: null }]);
+  assertCleanRenames(meals, changes);
+});
+
+test('a coach or staff account is excluded from the imported meal rename', () => {
+  assert.equal(isImportedMealRenameClient('USER'), true);
+  for (const role of ['COACH', 'ADMIN', 'SUPER_ADMIN', 'VIEWER']) {
+    assert.equal(isImportedMealRenameClient(role), false, role);
+  }
 });

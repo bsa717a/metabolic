@@ -4,6 +4,11 @@
  * Dry-run by default. Nothing is written unless --apply is passed.
  * Covers mmv1 nutrition template meals and daily meals for migrated clients,
  * including days the app copied forward from an imported plan.
+ * Only a day or a plan that already contains a height or a clock is touched.
+ * On those, Meal N is named from the stored time and that time is not
+ * overwritten. A time outside 5:00–23:59 is left as stored. A rename that
+ * would repeat a name, ignoring case, or contradict the clock is skipped.
+ * Proper names stay. Coach and staff accounts are excluded.
  * Template meals are reported on the client whose program or plan period
  * uses the template, not on the coach who created it.
  *
@@ -17,10 +22,10 @@ import { prisma } from '../../src/db/prisma.js';
 import { toDateKey } from '../../src/utils/dates.js';
 import {
   describeMealRename,
-  isProperMealName,
-  renameImportedMeal,
-  templateClientIds,
-  uniqueMealNamesForDay
+  IMPORTED_MEAL_RENAME_ROLE,
+  isImportedMealRenameClient,
+  planImportedMealRenames,
+  templateClientIds
 } from './legacyMealNames.js';
 
 const apply = process.argv.includes('--apply');
@@ -42,18 +47,14 @@ type Change = {
   date: string | null;
 };
 
-type Slot = {
+type GroupMeal = {
   kind: 'template' | 'daily';
   id: string;
   owners: string[];
-  from: string;
-  to: string;
-  currentTime: string | null;
-  nextTime: string | null;
-  date: string | null;
+  name: string;
   mealNumber: number;
-  group: string;
-  locked: boolean;
+  plannedTime: string | null;
+  date: string | null;
 };
 
 function safeError(error: unknown): string {
@@ -69,8 +70,9 @@ function clientLabel(client: ClientRow): string {
 }
 
 async function migratedClients(): Promise<ClientRow[]> {
-  return prisma.user.findMany({
+  const rows = await prisma.user.findMany({
     where: {
+      role: IMPORTED_MEAL_RENAME_ROLE,
       OR: [
         { dailyLogs: { some: { notes: { startsWith: 'legacy:' } } } },
         { progressSnapshots: { some: { notes: { startsWith: 'legacy:' } } } },
@@ -79,9 +81,10 @@ async function migratedClients(): Promise<ClientRow[]> {
         { firebaseUid: { startsWith: 'legacy-' } }
       ]
     },
-    select: { id: true, email: true, firstName: true, lastName: true },
+    select: { id: true, email: true, firstName: true, lastName: true, role: true },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { email: 'asc' }]
   });
+  return rows.filter((row) => isImportedMealRenameClient(row.role));
 }
 
 async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
@@ -130,87 +133,61 @@ async function collectChanges(clients: ClientRow[]): Promise<Change[]> {
     })
   ]);
 
-  const slots: Slot[] = [];
+  const groups = new Map<string, GroupMeal[]>();
+  const add = (key: string, meal: GroupMeal) => {
+    const list = groups.get(key);
+    if (list) list.push(meal);
+    else groups.set(key, [meal]);
+  };
 
   for (const meal of templateMeals) {
-    const currentTime = meal.plannedTime?.trim() || null;
-    const locked = isProperMealName(meal.name);
-    const next = locked ? null : renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
     const owners = templateClientIds({
       programUserIds: meal.template.programs.map((program) => program.userId),
       planPeriodUserIds: meal.template.planPeriods.map((period) => period.program.userId),
       clientIds: userIdSet
     });
-    slots.push({
+    add(`template:${meal.templateId}`, {
       kind: 'template',
       id: meal.id,
       owners,
-      from: meal.name,
-      to: next?.name ?? meal.name,
-      currentTime,
-      nextTime: next?.plannedTime ?? currentTime,
-      date: null,
+      name: meal.name,
       mealNumber: meal.mealNumber,
-      group: `template:${meal.templateId}`,
-      locked
+      plannedTime: meal.plannedTime,
+      date: null
     });
   }
 
   for (const meal of dailyMeals) {
-    const currentTime = meal.plannedTime?.trim() || null;
-    const locked = isProperMealName(meal.name);
-    const next = locked ? null : renameImportedMeal(meal.name, meal.mealNumber, meal.plannedTime);
     const date = toDateKey(meal.dailyLog.date);
-    slots.push({
+    add(`daily:${meal.userId}:${date}`, {
       kind: 'daily',
       id: meal.id,
       owners: [meal.userId],
-      from: meal.name,
-      to: next?.name ?? meal.name,
-      currentTime,
-      nextTime: next?.plannedTime ?? currentTime,
-      date,
+      name: meal.name,
       mealNumber: meal.mealNumber,
-      group: `daily:${meal.userId}:${date}`,
-      locked
-    });
-  }
-
-  const byGroup = new Map<string, Slot[]>();
-  for (const slot of slots) {
-    const list = byGroup.get(slot.group);
-    if (list) list.push(slot);
-    else byGroup.set(slot.group, [slot]);
-  }
-  for (const group of byGroup.values()) {
-    if (!group.some((slot) => slot.to !== slot.from || slot.nextTime !== slot.currentTime)) continue;
-    const unique = uniqueMealNamesForDay(
-      group.map((slot) => ({
-        mealNumber: slot.mealNumber,
-        name: slot.to,
-        plannedTime: slot.nextTime,
-        locked: slot.locked
-      }))
-    );
-    group.forEach((slot, index) => {
-      slot.to = unique[index].name;
+      plannedTime: meal.plannedTime,
+      date
     });
   }
 
   const changes: Change[] = [];
-  for (const slot of slots) {
-    const movedTime = slot.nextTime && slot.nextTime !== slot.currentTime ? slot.nextTime : null;
-    if (slot.to === slot.from && !movedTime) continue;
-    for (const owner of slot.owners) {
-      changes.push({
-        kind: slot.kind,
-        id: slot.id,
-        userId: owner,
-        from: slot.from,
-        to: slot.to,
-        plannedTime: movedTime,
-        date: slot.date
-      });
+  for (const group of groups.values()) {
+    const renames = planImportedMealRenames(group);
+    const byId = new Map(group.map((meal) => [meal.id, meal]));
+    for (const rename of renames) {
+      const meal = byId.get(rename.id);
+      if (!meal) continue;
+      for (const owner of meal.owners) {
+        changes.push({
+          kind: meal.kind,
+          id: meal.id,
+          userId: owner,
+          from: rename.from,
+          to: rename.to,
+          plannedTime: rename.plannedTime,
+          date: meal.date
+        });
+      }
     }
   }
 

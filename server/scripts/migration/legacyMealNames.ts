@@ -7,12 +7,17 @@
  * (or a slot word such as Breakfast on type/category). Otherwise keep `name`
  * when it is an actual label. A clock written in `name` decides the new
  * label and replaces the time field. Morning (5:00–10:59) is Breakfast,
- * midday (11:00–13:59) is Lunch, afternoon (14:00–16:59) is Snack, and
- * every other hour is Dinner. A height has no clock: the existing time
- * names the meal and is left alone. A "Meal N" placeholder is named from
- * its existing time and does not overwrite that time. A proper name
- * (anything that is not a height, a clock, or "Meal N") is never renamed.
- * With neither a clock nor a time, fall back by meal order.
+ * midday (11:00–13:59) is Lunch, afternoon (14:00–16:59) is Snack. A new
+ * import treats every other hour as Dinner and falls back by meal order
+ * when there is neither a clock nor a time.
+ *
+ * The one-off rename script uses planImportedMealRenames. It rewrites a
+ * day or plan only when that day or plan already contains a height or a
+ * clock. On those, a Meal N placeholder is named from the stored time and
+ * that time is not overwritten. Dinner is only 17:00–23:59. A clock outside
+ * 5:00–23:59 has no band name. A rename that would repeat a name on that
+ * day or plan, ignoring case, is skipped, and so is a name that would
+ * contradict the clock. Proper names are never rewritten.
  */
 import { parsePlannedTime } from './legacyPlanParse.js';
 
@@ -74,12 +79,11 @@ export function plannedTimeFromClockName(value: string): string | null {
 }
 
 /**
- * Breakfast / Lunch / Snack / Dinner from a clock, not from meal position.
- * Morning is 5:00–10:59, midday 11:00–13:59, afternoon 14:00–16:59, and
- * every other hour is evening. 9:30am is Breakfast. 3:00pm is Snack.
- * A parsed time never comes back as Meal 5 or Meal 6.
+ * Band name for a clock the rename script can apply cleanly.
+ * 5:00–10:59 Breakfast, 11:00–13:59 Lunch, 14:00–16:59 Snack, 17:00–23:59 Dinner.
+ * Outside that window there is no clean name. 04:30 is not Dinner.
  */
-export function mealNameForPlannedTime(value: string | null | undefined): string | null {
+export function cleanMealBandName(value: string | null | undefined): string | null {
   const parsed = parsePlannedTime(value) ?? plannedTimeFromClockName(value ?? '');
   if (!parsed) return null;
   const [hourText, minuteText] = parsed.split(':');
@@ -88,7 +92,20 @@ export function mealNameForPlannedTime(value: string | null | undefined): string
   if (minutes >= 5 * 60 && minutes < 11 * 60) return 'Breakfast';
   if (minutes >= 11 * 60 && minutes < 14 * 60) return 'Lunch';
   if (minutes >= 14 * 60 && minutes < 17 * 60) return 'Snack';
-  return 'Dinner';
+  if (minutes >= 17 * 60 && minutes <= 23 * 60 + 59) return 'Dinner';
+  return null;
+}
+
+/**
+ * Breakfast / Lunch / Snack / Dinner from a clock, not from meal position.
+ * Morning is 5:00–10:59, midday 11:00–13:59, afternoon 14:00–16:59.
+ * A new import still treats every other parsed hour as Dinner.
+ * 9:30am is Breakfast. 3:00pm is Snack.
+ */
+export function mealNameForPlannedTime(value: string | null | undefined): string | null {
+  const parsed = parsePlannedTime(value) ?? plannedTimeFromClockName(value ?? '');
+  if (!parsed) return null;
+  return cleanMealBandName(parsed) ?? 'Dinner';
 }
 
 /**
@@ -203,13 +220,31 @@ export function renameImportedMeal(
   return { name: nextName, plannedTime: currentTime };
 }
 
-export type DayMealLabel = {
-  mealNumber: number;
+/** Clients only. Coach, admin, and viewer accounts are left alone. */
+export const IMPORTED_MEAL_RENAME_ROLE = 'USER' as const;
+
+export function isImportedMealRenameClient(role: string): boolean {
+  return role === IMPORTED_MEAL_RENAME_ROLE;
+}
+
+export type ImportedMealSlot = {
+  id: string;
   name: string;
+  mealNumber: number;
   plannedTime: string | null;
-  /** A proper name. It stays, and a meal being fixed yields instead. */
-  locked?: boolean;
 };
+
+export type ImportedMealRename = {
+  id: string;
+  from: string;
+  to: string;
+  /** Set only when a clean clock rename replaces the stored time. */
+  plannedTime: string | null;
+};
+
+function nameKey(value: string): string {
+  return value.trim().toLowerCase();
+}
 
 function timeSortKey(value: string | null): number {
   const parsed = parsePlannedTime(value) ?? plannedTimeFromClockName(value ?? '');
@@ -218,7 +253,81 @@ function timeSortKey(value: string | null): number {
   return Number(hourText) * 60 + Number(minuteText);
 }
 
-/** Later meal in a same-name pair. A second Dinner is Late snack. */
+function proposeCleanRename(meal: ImportedMealSlot): ImportedMealRename | null {
+  const clock = plannedTimeFromClockName(meal.name);
+  if (clock) {
+    const band = cleanMealBandName(clock);
+    if (!band) return null;
+    const current = parsePlannedTime(meal.plannedTime);
+    return {
+      id: meal.id,
+      from: meal.name,
+      to: band,
+      plannedTime: clock === current ? null : clock
+    };
+  }
+  if (!isHeightMealName(meal.name) && !isMealPlaceholderName(meal.name)) return null;
+  const band = cleanMealBandName(meal.plannedTime);
+  if (!band) return null;
+  return { id: meal.id, from: meal.name, to: band, plannedTime: null };
+}
+
+/**
+ * Renames for one day or one template plan.
+ * A group with no height and no clock is returned unchanged, including Meal N.
+ * Proper names stay and reserve their labels, ignoring case. The earlier
+ * meal being fixed keeps a free band name. Anything that would duplicate a
+ * name or contradict its clock stays as stored. No Late label is invented.
+ */
+export function planImportedMealRenames(meals: readonly ImportedMealSlot[]): ImportedMealRename[] {
+  if (!meals.some((meal) => isImportedJunkMealName(meal.name))) return [];
+
+  const used = new Set<string>();
+  for (const meal of meals) {
+    if (!isProperMealName(meal.name)) continue;
+    const key = nameKey(meal.name);
+    if (key) used.add(key);
+  }
+
+  const order = meals
+    .map((meal, index) => ({ meal, index }))
+    .filter(({ meal }) => !isProperMealName(meal.name))
+    .sort(
+      (a, b) =>
+        timeSortKey(plannedTimeFromClockName(a.meal.name) ?? a.meal.plannedTime) -
+          timeSortKey(plannedTimeFromClockName(b.meal.name) ?? b.meal.plannedTime) ||
+        a.meal.mealNumber - b.meal.mealNumber ||
+        a.index - b.index
+    );
+
+  const changes = new Map<number, ImportedMealRename>();
+  for (const { meal, index } of order) {
+    const proposal = proposeCleanRename(meal);
+    if (!proposal) continue;
+    const key = nameKey(proposal.to);
+    if (!key || used.has(key)) continue;
+    used.add(key);
+    changes.set(index, proposal);
+  }
+
+  return meals.flatMap((meal, index) => {
+    const change = changes.get(index);
+    return change ? [change] : [];
+  });
+}
+
+export type DayMealLabel = {
+  mealNumber: number;
+  name: string;
+  plannedTime: string | null;
+  /** A proper name. It stays, and a meal being fixed yields instead. */
+  locked?: boolean;
+};
+
+/**
+ * Importer-only label when a new import would repeat a band name.
+ * The rename script does not call this. It leaves the original name.
+ */
 function distinctLaterName(preferred: string, used: ReadonlySet<string>): string {
   const base = preferred === 'Dinner' ? 'Late snack' : `Late ${preferred.charAt(0).toLowerCase()}${preferred.slice(1)}`;
   if (!used.has(base)) return base;
