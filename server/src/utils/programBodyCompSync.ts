@@ -217,6 +217,72 @@ function isUniqueConstraintError(error: unknown) {
 }
 
 /**
+ * Write one weigh-in onto that calendar day's log.
+ * Updates weight only, so body fat, waist, meals, and targets already stored
+ * for the day stay put. A new log copies the previous day's targets; it does
+ * not run the nutrition formula.
+ */
+export async function syncDailyLogWeight(
+  userId: string,
+  programId: string,
+  day: Date,
+  weight: number,
+  db: Db = prisma
+) {
+  const storedWeight = Math.round(weight * 100) / 100;
+  const existing = await db.dailyLog.findUnique({
+    where: { userId_date: { userId, date: day } },
+    select: { id: true }
+  });
+  if (existing) {
+    await db.dailyLog.update({ where: { id: existing.id }, data: { weight: storedWeight } });
+    return;
+  }
+
+  const [metrics, prior] = await Promise.all([
+    db.programMetric.findMany({
+      where: { programId, metricType: { in: ['CALORIES', 'PROTEIN'] } },
+      select: { metricType: true, currentValue: true }
+    }),
+    db.dailyLog.findFirst({
+      where: { userId, programId, date: { lt: day } },
+      orderBy: { date: 'desc' },
+      select: {
+        calorieTarget: true,
+        proteinTarget: true,
+        carbTarget: true,
+        fatTarget: true,
+        waterTargetOz: true
+      }
+    })
+  ]);
+  const metricValue = (metricType: string) => {
+    const row = metrics.find((metric) => metric.metricType === metricType);
+    return row ? n(row.currentValue) : null;
+  };
+
+  const data = { weight: storedWeight };
+  try {
+    await db.dailyLog.create({
+      data: {
+        programId,
+        userId,
+        date: day,
+        ...data,
+        calorieTarget: prior?.calorieTarget ?? metricValue('CALORIES') ?? 2200,
+        proteinTarget: prior?.proteinTarget ?? metricValue('PROTEIN') ?? 190,
+        carbTarget: prior?.carbTarget ?? 190,
+        fatTarget: prior?.fatTarget ?? 70,
+        waterTargetOz: prior?.waterTargetOz ?? 64
+      }
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    await db.dailyLog.updateMany({ where: { userId, date: day }, data });
+  }
+}
+
+/**
  * Store a check-in's weight, body fat, and waist on that calendar day so trends
  * include it. Uses the submitted values, not the program's current metrics, and
  * does not seed meals or exercises.

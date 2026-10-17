@@ -85,9 +85,9 @@ export const DASHBOARD_TUTORIAL_STEPS: DashboardTutorialStep[] = [
   {
     id: 'macro-progress',
     target: '[data-tour="macro-progress"]',
-    quip: 'The big picture, in three rings.',
-    title: 'Your blueprint at a glance',
-    body: 'Start, current, and goal — weight and body fat in three tidy rings. Tap it to open the full Metabolic Blueprint. This is the long game; the needle moves in weeks, not hours.',
+    quip: 'The scale, without the scavenger hunt.',
+    title: 'Log your weight here',
+    body: 'Your latest weigh-in, the date, and a small history. Logging stays on this page. Full check-in — measurements and photos — is one tap away.',
     cta: 'Next →',
     placement: 'side'
   },
@@ -96,7 +96,7 @@ export const DASHBOARD_TUTORIAL_STEPS: DashboardTutorialStep[] = [
     target: '[data-tour="weight-trend"]',
     quip: 'The scale is a liar on Tuesdays.',
     title: 'Zoom out. Breathe.',
-    body: "Your current weight, plus how far you've moved since you started. Green arrow down = trending your way. Daily blips are drama queens; the direction tells the truth. (No panic-scrolling on the scale at 11pm. We've all been there.)",
+    body: 'Each point is a weigh-in you saved. Correcting the same day updates that point. An older date does not replace your latest weight. Daily blips are drama queens; the direction tells the truth.',
     cta: 'Next →',
     placement: 'side'
   },
