@@ -4,6 +4,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { Scale } from 'lucide-react';
 import { api, dateKeyInTimeZone, parseDateKey } from '../../services/api';
 import type { Program, ProgramMetricSnapshot } from '../../types';
+import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { LogWeightSheet } from './LogWeightSheet';
 import {
@@ -34,14 +35,26 @@ function formatAxisDate(date: string) {
   });
 }
 
+const chartTooltipStyle = {
+  backgroundColor: 'var(--app-surface)',
+  border: '1px solid var(--app-border)',
+  borderRadius: 12,
+  color: 'var(--app-text)',
+  boxShadow: 'none'
+};
+
 function WeightHistoryGraph({ points, unitLabel }: { points: WeightPoint[]; unitLabel: string }) {
   if (!points.length) {
     return (
       <div
         data-testid="weight-history-graph"
-        className="flex h-36 items-center justify-center rounded-2xl border border-dashed border-app-border bg-app-muted/40 px-4 text-center text-sm text-app-text-muted"
+        className="flex flex-col items-center rounded-2xl border border-dashed border-app-border bg-app-muted/50 px-6 py-8 text-center"
       >
-        Your weight history will show up here.
+        <Scale className="mb-3 h-10 w-10 text-app-text-muted/60" aria-hidden />
+        <p className="font-semibold text-app-text">No weight logged yet</p>
+        <p className="mt-1 max-w-xs text-sm text-app-text-muted">
+          Log a weigh-in to see your latest weight and history.
+        </p>
       </div>
     );
   }
@@ -52,46 +65,54 @@ function WeightHistoryGraph({ points, unitLabel }: { points: WeightPoint[]; unit
   const pad = Math.max((max - min) * 0.25, 0.5);
 
   return (
-    <div data-testid="weight-history-graph" className="h-36 w-full min-w-0" aria-label="Weight history">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <XAxis
-            dataKey="date"
-            tickFormatter={formatAxisDate}
-            tick={{ fontSize: 11, fill: 'var(--app-text-muted)' }}
-            interval="preserveStartEnd"
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            domain={[Math.floor(min - pad), Math.ceil(max + pad)]}
-            width={36}
-            tick={{ fontSize: 11, fill: 'var(--app-text-muted)' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(value: number) => String(Math.round(value))}
-          />
-          <Tooltip
-            formatter={(value) => [`${formatWeight(Number(value))} ${unitLabel}`, 'Weight']}
-            labelFormatter={(label) => formatWeightDate(String(label))}
-          />
-          <Line
-            type="monotone"
-            dataKey="weight"
-            stroke="var(--app-chart-line)"
-            strokeWidth={2}
-            dot={{ r: 3, fill: 'var(--app-chart-line)' }}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-      <ul className="sr-only">
-        {points.map((point) => (
-          <li key={point.date}>
-            {formatWeightDate(point.date)}: {formatWeight(point.weight)} {unitLabel}
-          </li>
-        ))}
-      </ul>
+    <div className="rounded-2xl bg-app-muted p-3">
+      <p className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-app-text-muted">History</p>
+      <div data-testid="weight-history-graph" className="h-36 w-full min-w-0" aria-label="Weight history">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <XAxis
+              dataKey="date"
+              tickFormatter={formatAxisDate}
+              tick={{ fontSize: 11, fill: 'var(--app-text-muted)' }}
+              interval="preserveStartEnd"
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              domain={[Math.floor(min - pad), Math.ceil(max + pad)]}
+              width={36}
+              tick={{ fontSize: 11, fill: 'var(--app-text-muted)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(value: number) => String(Math.round(value))}
+            />
+            <Tooltip
+              formatter={(value) => [`${formatWeight(Number(value))} ${unitLabel}`, 'Weight']}
+              labelFormatter={(label) => formatWeightDate(String(label))}
+              contentStyle={chartTooltipStyle}
+              labelStyle={{ color: 'var(--app-text-muted)' }}
+              itemStyle={{ color: 'var(--app-text)' }}
+              cursor={{ stroke: 'var(--app-border)' }}
+            />
+            <Line
+              type="monotone"
+              dataKey="weight"
+              stroke="var(--app-chart-line)"
+              strokeWidth={2}
+              dot={{ r: 3, fill: 'var(--app-chart-line)', stroke: 'var(--app-surface)', strokeWidth: 2 }}
+              activeDot={{ r: 4, fill: 'var(--app-chart-line)', stroke: 'var(--app-surface)' }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+        <ul className="sr-only">
+          {points.map((point) => (
+            <li key={point.date}>
+              {formatWeightDate(point.date)}: {formatWeight(point.weight)} {unitLabel}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -169,48 +190,42 @@ export function HomeWeightCard({
 
   return (
     <Card data-testid="weight-card">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Weight</h2>
-          {latest ? (
-            <>
-              <p className="mt-2 text-4xl font-bold tabular-nums text-app-text" data-testid="latest-weight">
-                {formatWeight(latest.weight)}
-                <span className="ml-1 text-lg font-medium text-app-text-muted">{unitLabel}</span>
-              </p>
-              <p className="mt-1 text-sm text-app-text-muted" data-testid="latest-weight-date">
-                {formatWeightDate(latest.date)}
-              </p>
-            </>
-          ) : (
-            <div className="mt-3">
-              <p className="font-semibold text-app-text">No weight logged yet</p>
-              <p className="mt-1 text-sm text-app-text-muted">Log a weigh-in to see your latest weight and history.</p>
-            </div>
-          )}
-        </div>
-        <button
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">Weight</h2>
+        <Button
           type="button"
           data-testid="log-weight-button"
-          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full bg-brand-navy px-4 py-2.5 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 sm:w-auto dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+          className="inline-flex w-full shrink-0 items-center justify-center gap-2 sm:w-auto"
           onClick={() => openSheet(today)}
         >
           <Scale size={16} aria-hidden />
           Log weight
-        </button>
+        </Button>
       </div>
+
+      {latest ? (
+        <div className="mb-4">
+          <p className="text-4xl font-bold tabular-nums text-app-text" data-testid="latest-weight">
+            {formatWeight(latest.weight)}
+            <span className="ml-1 text-lg font-medium text-app-text-muted">{unitLabel}</span>
+          </p>
+          <p className="mt-1 text-sm text-app-text-muted" data-testid="latest-weight-date">
+            {formatWeightDate(latest.date)}
+          </p>
+        </div>
+      ) : null}
 
       {confirmation ? (
         <p
           role="status"
           data-testid="weight-confirmation"
-          className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-brand-green/10 px-3 py-2 text-sm text-app-text"
+          className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-brand-green/20 bg-brand-green/10 px-3 py-2 text-sm text-app-text"
         >
           <span>{confirmation}</span>
           {editDate ? (
             <button
               type="button"
-              className="font-semibold text-brand-green underline-offset-2 hover:underline"
+              className="font-semibold text-brand-green transition hover:text-brand-green-light"
               onClick={() => openSheet(editDate)}
             >
               Edit
@@ -220,24 +235,26 @@ export function HomeWeightCard({
       ) : null}
 
       {loadError ? (
-        <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
           {loadError} You can still log a weigh-in.
         </p>
       ) : null}
 
-      <div className="mt-4" data-tour="weight-trend">
+      <div data-tour="weight-trend">
         {loading && !points.length ? (
-          <p className="flex h-36 items-center justify-center text-sm text-app-text-muted">Loading weight history…</p>
+          <p className="flex h-36 items-center justify-center rounded-2xl bg-app-muted text-sm text-app-text-muted">
+            Loading weight history…
+          </p>
         ) : (
           <WeightHistoryGraph points={points} unitLabel={unitLabel} />
         )}
       </div>
 
-      <p className="mt-4 text-sm text-app-text-muted">
+      <p className="mt-4 border-t border-app-border pt-4 text-sm text-app-text-muted">
         <Link
           to="/program"
           data-testid="full-check-in-link"
-          className="font-semibold text-brand-green underline-offset-2 hover:underline"
+          className="font-semibold text-brand-green transition hover:text-brand-green-light"
         >
           Full check-in
         </Link>{' '}

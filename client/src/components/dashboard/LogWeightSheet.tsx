@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, parseDateKey } from '../../services/api';
 import type { ProgramMetricSnapshot } from '../../types';
+import { Button } from '../ui/Button';
 import { NumberInput } from '../ui/NumberInput';
 import {
   entryOnDate,
@@ -122,7 +123,7 @@ export function LogWeightSheet({
     <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="presentation">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-950/40"
+        className="absolute inset-0 bg-slate-950/30"
         aria-label="Close log weight"
         disabled={saving}
         onClick={onClose}
@@ -132,18 +133,18 @@ export function LogWeightSheet({
         aria-modal="true"
         aria-labelledby={titleId}
         data-testid="log-weight-sheet"
-        className="relative flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-app-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6"
+        className="relative flex max-h-[92vh] w-full flex-col overflow-y-auto rounded-t-2xl bg-app-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-app-text shadow-2xl sm:max-w-md sm:rounded-2xl"
       >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 id={titleId} className="text-lg font-semibold text-brand-navy dark:text-brand-off-white">
+        <div className="mb-6 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id={titleId} className="text-xl font-bold text-app-text">
               Log weight
             </h2>
             <p className="mt-1 text-sm text-app-text-muted">Weight, unit, and date. Nothing else is changed.</p>
           </div>
           <button
             type="button"
-            className="rounded-full px-3 py-1.5 text-sm font-semibold text-app-text-muted hover:bg-app-muted"
+            className="shrink-0 text-app-text-muted transition hover:text-app-text"
             onClick={onClose}
             disabled={saving}
           >
@@ -171,7 +172,7 @@ export function LogWeightSheet({
               inputMode="decimal"
               placeholder="Enter weight"
               aria-label="Weight"
-              className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2.5 text-base text-app-text outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/30"
+              className="w-full rounded-xl border border-app-border bg-app-bg px-3.5 py-2.5 text-sm text-app-text placeholder:text-app-text-muted focus:border-brand-green focus:outline-none"
             />
           </label>
 
@@ -181,7 +182,7 @@ export function LogWeightSheet({
               <select
                 value={unit}
                 aria-label="Weight unit"
-                className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2.5 text-base text-app-text outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/30"
+                className="w-full rounded-xl border border-app-border bg-app-bg px-3.5 py-2.5 text-sm text-app-text placeholder:text-app-text-muted focus:border-brand-green focus:outline-none"
                 onChange={(event) => changeUnit(event.target.value === 'kg' ? 'kg' : 'lbs')}
               >
                 <option value="lbs">lb</option>
@@ -195,7 +196,7 @@ export function LogWeightSheet({
                 max={today}
                 value={date}
                 aria-label="Weigh-in date"
-                className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2.5 text-base text-app-text outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/30"
+                className="w-full rounded-xl border border-app-border bg-app-bg px-3.5 py-2.5 text-sm text-app-text placeholder:text-app-text-muted focus:border-brand-green focus:outline-none"
                 onChange={(event) => {
                   if (event.target.value) changeDate(event.target.value);
                 }}
@@ -204,7 +205,7 @@ export function LogWeightSheet({
           </div>
 
           {existing ? (
-            <p className="rounded-2xl bg-brand-green/10 px-3 py-2 text-sm text-app-text">
+            <p className="rounded-2xl border border-brand-green/20 bg-brand-green/10 p-4 text-sm text-app-text">
               {formatWeightDate(date)} already has {formatWeight(existing.weight)} {weightUnitLabel(preferredUnit)}.
               Saving updates that weigh-in. Other measurements and photos from this date stay as they are.
             </p>
@@ -227,14 +228,14 @@ export function LogWeightSheet({
             </p>
           ) : null}
 
-          <button
+          <Button
             type="submit"
             data-testid="weight-save-button"
             disabled={saving || !historyReady}
-            className="inline-flex w-full items-center justify-center rounded-full bg-brand-navy px-4 py-3 text-sm font-semibold text-brand-off-white transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-green dark:text-brand-navy dark:hover:bg-brand-green-light"
+            className="w-full py-3"
           >
             {historyReady ? weightSaveLabel(existing != null, saving) : 'Loading…'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>,
