@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.43.0](https://github.com/bsa717a/metabolic/compare/v0.42.3...v0.43.0) (2026-10-17)
+
+
+### Features
+
+* **home:** add a weight card for logging weigh-ins ([#376](https://github.com/bsa717a/metabolic/issues/376)) ([bac359f](https://github.com/bsa717a/metabolic/commit/bac359fdf612f8244e44de32d7daea84f785e6d0))
+
 ## [0.42.3](https://github.com/bsa717a/metabolic/compare/v0.42.2...v0.42.3) (2026-10-16)
 
 
