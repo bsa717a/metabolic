@@ -7,6 +7,7 @@ import {
   reconcileProgramBodyCompMetricsFromLatestSnapshot,
   setProgramMetricCurrentValue,
   syncDailyLogFromCheckInValues,
+  syncDailyLogWeight,
   syncProgramMetricsFromSnapshotValues,
   syncTodayDailyLogBodyComp
 } from '../utils/programBodyCompSync.js';
@@ -587,10 +588,18 @@ export async function upsertSnapshotMeasurement(
         await setProgramMetricCurrentValue(programId, input.metricType as never, input.currentValue, tx);
       }
     }
-    await syncTodayDailyLogBodyComp(program.userId, programId, day, tx);
+    if (input.metricType === 'WEIGHT') {
+      // Store the entered weight on this calendar day. A later snapshot keeps the
+      // program's current weight (syncProgramMetricsFromSnapshotValues). Do not
+      // copy that newer current weight onto an older day, and do not resolve
+      // nutrition targets — that refresh belongs to PATCH /metrics.
+      await syncDailyLogWeight(program.userId, programId, day, input.currentValue, tx);
+    } else {
+      await syncTodayDailyLogBodyComp(program.userId, programId, day, tx);
+    }
     return result;
   }).then(async (result) => {
-    if (isBodyCompMetricType(input.metricType)) {
+    if (input.metricType !== 'WEIGHT' && isBodyCompMetricType(input.metricType)) {
       await ensureDailyLogByUserId(program.userId, input.date);
       await syncTodayDailyLogBodyComp(program.userId, programId, day);
     }

@@ -9,8 +9,7 @@ import { PlanStatusCard } from '../components/dashboard/PlanStatusCard';
 import type { AppUser, Dashboard } from '../types';
 import { TodayNutrition } from '../components/dashboard/TodayNutrition';
 import { TodayExercise } from '../components/dashboard/TodayExercise';
-import { MiniBlueprint } from '../components/dashboard/MiniBlueprint';
-import { WeightTrendChart } from '../components/dashboard/WeightTrendChart';
+import { HomeWeightCard } from '../components/dashboard/HomeWeightCard';
 import { UpcomingCheckInsCard } from '../components/dashboard/UpcomingCheckInsCard';
 import { isCoachRole } from '../utils/roles';
 import { useTutorial } from '../components/tutorial/TutorialContext';
@@ -319,11 +318,12 @@ export function DashboardPage({
             onChange={() => loadDashboard({ silent: true })}
           />
         </div>
-        <div data-tour="macro-progress">
-          <MiniBlueprint program={data.program} />
-        </div>
-        <div data-tour="weight-trend">
-          <WeightTrendChart program={data.program} weightTrend={data.weightTrend} />
+        <div className="lg:col-span-2" data-tour="macro-progress">
+          <HomeWeightCard
+            program={data.program}
+            timeZone={user?.timezone}
+            onRecorded={() => loadDashboard({ silent: true })}
+          />
         </div>
       </section>
 
