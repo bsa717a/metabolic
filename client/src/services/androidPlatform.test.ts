@@ -48,15 +48,23 @@ describe('Android Capacitor platform', () => {
     }
   });
 
-  it('declares verified App Links for the production join URL', () => {
+  it('declares verified App Links for the same join hosts as iOS', () => {
     const manifest = readClient('android/app/src/main/AndroidManifest.xml');
     expect(manifest).toContain('android:autoVerify="true"');
     expect(manifest).toContain('android:scheme="https"');
-    expect(manifest).toContain('android:host="metaos.mastermetabolic.com"');
-    expect(manifest).toContain('android:pathPrefix="/join"');
+    expect(manifest.match(/android:pathPrefix="\/join"/g)).toHaveLength(2);
+    const hosts = [...manifest.matchAll(/android:host="([^"]+)"/g)].map((match) => match[1]);
+    expect(hosts).toEqual(['metaos.mastermetabolic.com', 'metabolic-v1.web.app']);
     const config = readClient('capacitor.config.ts');
     expect(config).toContain("androidScheme: 'https'");
     expect(config).toContain("contentInset: 'never'");
+    expect(config).toContain('applinks:metaos.mastermetabolic.com');
+    expect(config).toContain('applinks:metabolic-v1.web.app');
+    const instrumented = readClient(
+      'android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java'
+    );
+    expect(instrumented).toContain('assertEquals("com.mastermetabolic.app", appContext.getPackageName());');
+    expect(instrumented).not.toContain('com.getcapacitor.app');
   });
 
   it('publishes a placeholder asset link and ignores signing secrets', () => {
