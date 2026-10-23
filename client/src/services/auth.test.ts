@@ -37,16 +37,31 @@ vi.mock('@capacitor-firebase/authentication', () => ({
   }
 }));
 
-vi.mock('./firebase', () => ({
-  auth: {
-    currentUser: {
-      getIdToken: (...args: unknown[]) => mockGetIdToken(...args),
-      reload: vi.fn(),
-      emailVerified: true,
-      email: 'test@example.com'
-    }
+vi.mock('./firebase', () => {
+  const holder = globalThis as {
+    __metabolicAuth?: {
+      currentUser: {
+        uid: string;
+        getIdToken: (...args: unknown[]) => unknown;
+        reload: ReturnType<typeof vi.fn>;
+        emailVerified: boolean;
+        email: string;
+      } | null;
+    };
+  };
+  if (!holder.__metabolicAuth) {
+    holder.__metabolicAuth = {
+      currentUser: {
+        uid: 'signed-in-user',
+        getIdToken: (...args: unknown[]) => mockGetIdToken(...args),
+        reload: vi.fn(),
+        emailVerified: true,
+        email: 'test@example.com'
+      }
+    };
   }
-}));
+  return { auth: holder.__metabolicAuth };
+});
 
 vi.mock('../utils/signupDashboardFirstSession', () => ({
   clearSignupDashboardFirstSession: vi.fn()
@@ -295,6 +310,67 @@ describe('OAuth redirect error storage', () => {
     await logout();
 
     expect(sessionStorage.getItem(OAUTH_REDIRECT_ERROR_KEY)).toBeNull();
+  });
+
+  it('clears pending native handoffs after the signed-in user logs out', async () => {
+    const firebase = await import('./firebase');
+    const authState = firebase.auth as { currentUser: { uid?: string } | null };
+    const previous = authState.currentUser;
+    const { signOut } = await import('firebase/auth');
+    localStorage.setItem('metabolic.pendingGoogleAuth', '{"idToken":"old-google"}');
+    localStorage.setItem('metabolic.pendingAppleAuth', '{"idToken":"old-apple"}');
+    const clearPending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearPending });
+    vi.mocked(signOut).mockImplementation(async () => {
+      authState.currentUser = null;
+    });
+
+    try {
+      const { logout } = await import('./auth');
+      await logout();
+    } finally {
+      authState.currentUser = previous;
+    }
+
+    expect(localStorage.getItem('metabolic.pendingGoogleAuth')).toBeNull();
+    expect(localStorage.getItem('metabolic.pendingAppleAuth')).toBeNull();
+    expect(clearPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a pending handoff when logout leaves the user signed in', async () => {
+    const { signOut } = await import('firebase/auth');
+    localStorage.setItem('metabolic.pendingGoogleAuth', '{"idToken":"still-theirs"}');
+    const clearPending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearPending });
+    vi.mocked(signOut).mockResolvedValue(undefined);
+
+    const { logout } = await import('./auth');
+    await logout();
+
+    expect(localStorage.getItem('metabolic.pendingGoogleAuth')).toBe('{"idToken":"still-theirs"}');
+    expect(clearPending).not.toHaveBeenCalled();
+  });
+
+  it('does not clear a pending handoff when nobody is signed in', async () => {
+    const firebase = await import('./firebase');
+    const authState = firebase.auth as { currentUser: { uid?: string } | null };
+    const previous = authState.currentUser;
+    const { signOut } = await import('firebase/auth');
+    localStorage.setItem('metabolic.pendingAppleAuth', '{"nonce":"in-progress"}');
+    const clearPending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearPending });
+    authState.currentUser = null;
+
+    try {
+      const { logout } = await import('./auth');
+      await logout();
+    } finally {
+      authState.currentUser = previous;
+    }
+
+    expect(localStorage.getItem('metabolic.pendingAppleAuth')).toBe('{"nonce":"in-progress"}');
+    expect(signOut).not.toHaveBeenCalled();
+    expect(clearPending).not.toHaveBeenCalled();
   });
 
   it('clears a stored redirect error after a successful OAuth popup', async () => {

@@ -327,6 +327,21 @@ describe('nativeAuth', () => {
     expect(signInWithCredential).not.toHaveBeenCalled();
   });
 
+  it('clears both pending handoffs and asks Android to drop the saved preferences', async () => {
+    memory.set('metabolic.pendingGoogleAuth', '{"idToken":"old-google"}');
+    memory.set('metabolic.pendingAppleAuth', '{"idToken":"old-apple"}');
+    const clearPending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearPending });
+    const { clearPendingNativeAuthHandoff } = await import('./nativeAuth');
+
+    clearPendingNativeAuthHandoff();
+
+    expect(memory.has('metabolic.pendingGoogleAuth')).toBe(false);
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearPending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
   it('times out Android Apple sign-in when neither the plugin nor the handoff settles', async () => {
     vi.useFakeTimers();
     try {

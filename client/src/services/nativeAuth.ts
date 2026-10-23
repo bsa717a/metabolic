@@ -317,6 +317,29 @@ function pendingAppleNonceFor(idToken: string): string | null {
   return stored.nonce;
 }
 
+type PendingAuthBridge = {
+  clearPending?: () => void;
+};
+
+/**
+ * Drop Google and Apple handoff copies after a signed-in user logs out.
+ * SharedPreferences stay until this runs, and the next resume would inject them.
+ */
+export function clearPendingNativeAuthHandoff(): void {
+  try {
+    localStorage.removeItem(PENDING_GOOGLE_AUTH_KEY);
+    localStorage.removeItem(PENDING_APPLE_AUTH_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+  const bridge = (globalThis as { MetabolicNativeAuth?: PendingAuthBridge }).MetabolicNativeAuth;
+  try {
+    bridge?.clearPending?.();
+  } catch {
+    // The bridge exists only in the Android WebView.
+  }
+}
+
 function clearPendingAppleAuth() {
   try {
     localStorage.removeItem(PENDING_APPLE_AUTH_KEY);

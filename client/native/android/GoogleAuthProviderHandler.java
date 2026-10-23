@@ -366,12 +366,26 @@ public class GoogleAuthProviderHandler {
                 return;
             }
             String escaped = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "");
-            String js =
-                "try { window.localStorage.setItem('metabolic.pendingGoogleAuth', '" +
-                escaped +
-                "'); window.dispatchEvent(new Event('metabolic-pending-google-auth')); } catch (e) {}";
             // Leave the preference in place. MainActivity injects again on resume
             // and when the page finishes on the app origin, then clears it.
+            // Skip the write when logout or a newer sign-in already replaced this payload.
+            String js =
+                "(function () {" +
+                " try {" +
+                " var expected = '" +
+                escaped +
+                "';" +
+                " var bridge = window.MetabolicNativeAuth;" +
+                " if (bridge && bridge.pendingGoogle() !== expected) return false;" +
+                " window.localStorage.setItem('metabolic.pendingGoogleAuth', expected);" +
+                " if (bridge && bridge.pendingGoogle() !== expected) {" +
+                " window.localStorage.removeItem('metabolic.pendingGoogleAuth');" +
+                " return false;" +
+                " }" +
+                " window.dispatchEvent(new Event('metabolic-pending-google-auth'));" +
+                " return true;" +
+                " } catch (e) { return false; }" +
+                "})()";
             webView.evaluateJavascript(js, null);
         });
     }

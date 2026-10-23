@@ -162,11 +162,20 @@ public class AppleAuthProviderHandler {
                 " if (window.location.origin !== '" +
                 APP_ORIGIN +
                 "') return false;" +
+                " var expected = '" +
+                escaped +
+                "';" +
+                " var bridge = window.MetabolicNativeAuth;" +
+                " if (bridge && bridge.pendingApple() !== expected) return false;" +
                 " window.localStorage.setItem('" +
                 PENDING_APPLE_KEY +
-                "', '" +
-                escaped +
+                "', expected);" +
+                " if (bridge && bridge.pendingApple() !== expected) {" +
+                " window.localStorage.removeItem('" +
+                PENDING_APPLE_KEY +
                 "');" +
+                " return false;" +
+                " }" +
                 " window.dispatchEvent(new Event('metabolic-pending-apple-auth'));" +
                 " return true;" +
                 " } catch (e) { return false; }" +
@@ -175,7 +184,11 @@ public class AppleAuthProviderHandler {
                 if (!"true".equals(result)) {
                     return;
                 }
-                clearSavedNonce(plugin.getPlugin().getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE));
+                SharedPreferences prefs = plugin.getPlugin().getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                if (!json.equals(prefs.getString(PENDING_APPLE_KEY, null))) {
+                    return;
+                }
+                clearSavedNonce(prefs);
             });
         });
     }

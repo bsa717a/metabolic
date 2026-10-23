@@ -146,6 +146,10 @@ describe('Android Capacitor platform', () => {
     expect(pageLoaded).toContain('injectPendingGoogleAuth()');
     expect(pageLoaded).toContain('injectPendingAppleAuth()');
     expect(activity).toContain('if (!"true".equals(result))');
+    expect(activity).toContain('clearPending');
+    expect(activity).toContain('json.equals(prefs.getString(key, null))');
+    expect(activity).toContain('pendingGoogle');
+    expect(activity).toContain('pendingApple');
     expect(activity).not.toContain('evaluateJavascript(js, result ->\n            getSharedPreferences');
     expect(activity).not.toContain('SessionCues');
     expect(activity).not.toContain('BillingClient');

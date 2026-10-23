@@ -354,11 +354,16 @@ export async function resetPassword(email: string) {
   await postAuthJson('/api/auth/send-password-reset', { email: email.trim() });
 }
 
-export function logout() {
+export async function logout() {
   clearSignupDashboardFirstSession();
   clearOAuthRedirectError();
-  if (!auth) return Promise.resolve();
-  return signOut(auth);
+  if (!auth?.currentUser) return;
+  await signOut(auth);
+  // A failed sign-out leaves the same user signed in. Their unconsumed
+  // handoff must stay. A different current user may already own a new token.
+  if (auth.currentUser) return;
+  const { clearPendingNativeAuthHandoff } = await import('./nativeAuth');
+  clearPendingNativeAuthHandoff();
 }
 
 export function listenForAuth(callback: (user: User | null) => void) {
