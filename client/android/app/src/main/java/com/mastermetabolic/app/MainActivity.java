@@ -183,6 +183,15 @@ public class MainActivity extends BridgeActivity {
          * Remove only that handoff. A newer payload stays for the next injection.
          */
         @JavascriptInterface
+        public void clearApplePending() {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .remove(PENDING_APPLE_KEY)
+                .remove(PENDING_APPLE_NONCE_KEY)
+                .apply();
+        }
+
+        @JavascriptInterface
         public void clearAppleHandoff(String idToken, String nonce) {
             SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
             String json = prefs.getString(PENDING_APPLE_KEY, null);

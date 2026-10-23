@@ -308,7 +308,15 @@ function waitForPendingAppleAuth(
  */
 export async function consumePendingNativeAppleAuth(auth: Auth): Promise<UserCredential | null> {
   if (Capacitor.getPlatform() !== 'android') return null;
+  if (auth.currentUser) {
+    discardPendingAppleHandoff();
+    return null;
+  }
   const result = await FirebaseAuthentication.getPendingAuthResult();
+  if (auth.currentUser) {
+    discardPendingAppleHandoff();
+    return null;
+  }
   const stored = readPendingAppleAuth();
   const idToken = result.credential?.idToken || stored?.idToken || null;
   if (!idToken) return null;
@@ -340,12 +348,28 @@ function pendingAppleNonceFor(idToken: string): string | null {
 type PendingAuthBridge = {
   clearPending?: () => void;
   clearAppleHandoff?: (idToken: string, nonce: string) => void;
+  clearApplePending?: () => void;
 };
 
 /**
  * Drop Google and Apple handoff copies after a signed-in user logs out.
  * SharedPreferences stay until this runs, and the next resume would inject them.
  */
+/** Drop a leftover Apple handoff so it cannot replace someone who is already signed in. */
+export function discardPendingAppleHandoff(): void {
+  try {
+    localStorage.removeItem(PENDING_APPLE_AUTH_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+  const bridge = (globalThis as { MetabolicNativeAuth?: PendingAuthBridge }).MetabolicNativeAuth;
+  try {
+    bridge?.clearApplePending?.();
+  } catch {
+    // The bridge exists only in the Android WebView.
+  }
+}
+
 export function clearPendingNativeAuthHandoff(): void {
   try {
     localStorage.removeItem(PENDING_GOOGLE_AUTH_KEY);

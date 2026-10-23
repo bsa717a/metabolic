@@ -162,6 +162,53 @@ describe('nativeAuth', () => {
     expect(getPendingAuthResult).not.toHaveBeenCalled();
   });
 
+  it('drops a pending Apple handoff when a Firebase user is already signed in', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-stale', nonce: 'nonce-stale' })
+    );
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-stale', nonce: 'nonce-stale' }
+    });
+    const clearApplePending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearApplePending });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({ currentUser: { uid: 'already' } } as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+    expect(getPendingAuthResult).not.toHaveBeenCalled();
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearApplePending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('drops an Apple handoff that arrives after a Firebase user signs in', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-stale', nonce: 'nonce-stale' })
+    );
+    const authState = { currentUser: null as { uid: string } | null };
+    getPendingAuthResult.mockImplementation(async () => {
+      authState.currentUser = { uid: 'restored' };
+      return { credential: { idToken: 'apple-stale', nonce: 'nonce-stale' } };
+    });
+    const clearApplePending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearApplePending });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth(authState as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearApplePending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
   it('exchanges a pending Android Apple result with the saved nonce', async () => {
     getPlatform.mockReturnValue('android');
     getPendingAuthResult.mockResolvedValue({
