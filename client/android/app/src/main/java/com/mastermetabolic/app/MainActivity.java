@@ -19,12 +19,13 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // OAuth often resumes before the WebView is on the app origin. Page
-        // load retries the Google handoff without waiting for another resume.
+        // load retries both handoffs without waiting for another resume.
         bridgeBuilder.addWebViewListener(
             new WebViewListener() {
                 @Override
                 public void onPageLoaded(WebView webView) {
                     injectPendingGoogleAuth();
+                    injectPendingAppleAuth();
                 }
             }
         );
@@ -89,6 +90,8 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         String escaped = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "");
+        // Same gate as Google: clear the preference only after localStorage is set
+        // on the app origin. A false or null result keeps the Apple JSON.
         String js =
             "(function () {" +
             " try {" +

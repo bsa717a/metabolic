@@ -142,7 +142,9 @@ describe('Android Capacitor platform', () => {
     expect(activity).toContain('metabolic.pendingAppleNonce');
     expect(activity).toContain("window.location.origin !== 'https://metaos.mastermetabolic.com'");
     expect(activity).toContain('addWebViewListener');
-    expect(activity).toContain('onPageLoaded');
+    const pageLoaded = activity.slice(activity.indexOf('void onPageLoaded'), activity.indexOf('super.onCreate'));
+    expect(pageLoaded).toContain('injectPendingGoogleAuth()');
+    expect(pageLoaded).toContain('injectPendingAppleAuth()');
     expect(activity).toContain('if (!"true".equals(result))');
     expect(activity).not.toContain('evaluateJavascript(js, result ->\n            getSharedPreferences');
     expect(activity).not.toContain('SessionCues');
