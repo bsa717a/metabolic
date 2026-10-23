@@ -32,12 +32,26 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         String escaped = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "");
+        // Return true only after the token is stored on the app origin. iOS
+        // SceneDelegate clears UserDefaults only when evaluateJavaScript reports
+        // error == nil. A false or null result leaves the preference so the next
+        // onResume can try again.
         String js =
-            "try { window.localStorage.setItem('metabolic.pendingGoogleAuth', '" +
+            "(function () {" +
+            " try {" +
+            " if (window.location.origin !== 'https://metaos.mastermetabolic.com') return false;" +
+            " window.localStorage.setItem('metabolic.pendingGoogleAuth', '" +
             escaped +
-            "'); window.dispatchEvent(new Event('metabolic-pending-google-auth')); } catch (e) {}";
-        webView.evaluateJavascript(js, result ->
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(PENDING_GOOGLE_KEY).apply()
-        );
+            "');" +
+            " window.dispatchEvent(new Event('metabolic-pending-google-auth'));" +
+            " return true;" +
+            " } catch (e) { return false; }" +
+            "})()";
+        webView.evaluateJavascript(js, result -> {
+            if (!"true".equals(result)) {
+                return;
+            }
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(PENDING_GOOGLE_KEY).apply();
+        });
     }
 }

@@ -130,6 +130,9 @@ describe('Android Capacitor platform', () => {
     const activity = readClient('android/app/src/main/java/com/mastermetabolic/app/MainActivity.java');
     expect(activity).toContain('metabolic.pendingGoogleAuth');
     expect(activity).toContain('metabolic-pending-google-auth');
+    expect(activity).toContain("window.location.origin !== 'https://metaos.mastermetabolic.com'");
+    expect(activity).toContain('if (!"true".equals(result))');
+    expect(activity).not.toContain('evaluateJavascript(js, result ->\n            getSharedPreferences');
     expect(activity).not.toContain('SessionCues');
     expect(activity).not.toContain('BillingClient');
 
