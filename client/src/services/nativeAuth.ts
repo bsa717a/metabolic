@@ -325,6 +325,27 @@ function clearPendingAppleAuth() {
   }
 }
 
+/**
+ * Drop the handoff that `signInWithCredential` just rejected. A different
+ * id token, or a nonce that this attempt did not use, stays for a later consume.
+ */
+function clearFailedAppleHandoff(idToken: string, rawNonce: string | null | undefined) {
+  try {
+    const stored = readPendingAppleAuth();
+    if (!stored) return;
+    const storedToken = stored.idToken || null;
+    const storedNonce = stored.nonce || null;
+    const usedNonce = rawNonce || null;
+    const consumedThisAttempt = storedToken
+      ? storedToken === idToken
+      : Boolean(storedNonce && usedNonce && storedNonce === usedNonce);
+    if (!consumedThisAttempt) return;
+    localStorage.removeItem(PENDING_APPLE_AUTH_KEY);
+  } catch {
+    // Ignore storage failures. The native preference is cleared only after injection.
+  }
+}
+
 function exchangeNativeAppleCredential(
   auth: Auth,
   idToken: string,
@@ -346,6 +367,7 @@ function exchangeNativeAppleCredential(
     })
     .catch((error: unknown) => {
       appleExchanges.delete(idToken);
+      clearFailedAppleHandoff(idToken, rawNonce);
       throw error;
     });
   appleExchanges.set(idToken, pending);

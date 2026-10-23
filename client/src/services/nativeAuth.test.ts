@@ -201,6 +201,64 @@ describe('nativeAuth', () => {
     expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
   });
 
+  it('clears a failed Android Apple handoff so a later launch does not replay it', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-dead', nonce: 'nonce-dead' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+
+    signInWithCredential.mockClear();
+    const retry = await consumePendingNativeAppleAuth({} as never);
+    expect(retry).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('keeps an Apple handoff that the failed exchange did not consume', async () => {
+    getPlatform.mockReturnValue('android');
+    const fresh = JSON.stringify({ idToken: 'apple-fresh', nonce: 'nonce-fresh' });
+    memory.set('metabolic.pendingAppleAuth', fresh);
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-dead', nonce: 'nonce-dead' }
+    });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.get('metabolic.pendingAppleAuth')).toBe(fresh);
+  });
+
+  it('clears a stored Apple nonce after that nonce was used in a failed exchange', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set('metabolic.pendingAppleAuth', JSON.stringify({ nonce: 'nonce-used' }));
+    getPendingAuthResult.mockResolvedValue({ credential: { idToken: 'apple-dead' } });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+  });
+
+  it('keeps a stored Apple nonce that the failed exchange did not use', async () => {
+    getPlatform.mockReturnValue('android');
+    const unused = JSON.stringify({ nonce: 'nonce-unused' });
+    memory.set('metabolic.pendingAppleAuth', unused);
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-dead', nonce: 'nonce-dead' }
+    });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.get('metabolic.pendingAppleAuth')).toBe(unused);
+  });
+
   it('exchanges a stored Apple handoff when Firebase has no pending result', async () => {
     getPlatform.mockReturnValue('android');
     memory.set(
