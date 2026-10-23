@@ -1,8 +1,10 @@
 package com.mastermetabolic.app;
 
+import android.os.Bundle;
 import android.webkit.WebView;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.WebViewListener;
 
 /**
  * Injects Google tokens saved by the patched Android auth handler.
@@ -13,6 +15,21 @@ public class MainActivity extends BridgeActivity {
     static final String PENDING_GOOGLE_KEY = "metabolic.pendingGoogleAuth";
     static final String PENDING_APPLE_KEY = "metabolic.pendingAppleAuth";
     static final String PENDING_APPLE_NONCE_KEY = "metabolic.pendingAppleNonce";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        // OAuth often resumes before the WebView is on the app origin. Page
+        // load retries the Google handoff without waiting for another resume.
+        bridgeBuilder.addWebViewListener(
+            new WebViewListener() {
+                @Override
+                public void onPageLoaded(WebView webView) {
+                    injectPendingGoogleAuth();
+                }
+            }
+        );
+        super.onCreate(savedInstanceState);
+    }
 
     @Override
     public void onResume() {
@@ -37,8 +54,8 @@ public class MainActivity extends BridgeActivity {
         String escaped = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "");
         // Return true only after the token is stored on the app origin. iOS
         // SceneDelegate clears UserDefaults only when evaluateJavaScript reports
-        // error == nil. A false or null result leaves the preference so the next
-        // onResume can try again.
+        // error == nil. A false or null result leaves the preference so onResume
+        // or the next page load can try again. Do not drop a token that was not stored.
         String js =
             "(function () {" +
             " try {" +

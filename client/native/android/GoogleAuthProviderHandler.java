@@ -371,7 +371,7 @@ public class GoogleAuthProviderHandler {
                 escaped +
                 "'); window.dispatchEvent(new Event('metabolic-pending-google-auth')); } catch (e) {}";
             // Leave the preference in place. MainActivity injects again on resume
-            // and clears it, matching the iOS SceneDelegate handoff.
+            // and when the page finishes on the app origin, then clears it.
             webView.evaluateJavascript(js, null);
         });
     }
