@@ -4,12 +4,12 @@
  * Web/Safari: declare a `transient` audio session (Safari 16.4+) and unlock
  * only via Web Audio so cues duck/mix instead of pausing Spotify / Apple Music.
  *
- * Capacitor iOS: play ticks + Go through the `SessionCues` native plugin
- * (`AVAudioPlayer` in the app process, `.playback` + `.mixWithOthers`).
- * WKWebView HTMLAudio / Web Audio run in another process and take exclusive
- * playback — that is why mixWithOthers in SceneDelegate still paused Music
- * when cues fired from the web view. Do not create an AudioContext or play
- * HTMLAudio on native unless the plugin is missing (old shell fallback).
+ * Capacitor iOS and Android: play ticks, Go, and Stop through the `SessionCues`
+ * native plugin in the app process so cues mix under the user's music.
+ * iOS uses `AVAudioPlayer` (`.playback` + `.mixWithOthers`). Android uses
+ * `AudioTrack` and does not request audio focus. Web-view media takes
+ * exclusive playback and pauses Music — that is why cues must not use
+ * HTMLAudio or Web Audio on native unless the plugin is missing (old shell).
  *
  * Do **not** set `navigator.audioSession` to `playback` on native. WebKit's
  * JS session type drops `.mixWithOthers`.

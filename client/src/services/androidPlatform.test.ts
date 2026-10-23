@@ -172,7 +172,9 @@ describe('Android Capacitor platform', () => {
     expect(clearApple).toContain('storedToken.equals(token)');
     expect(clearApple).not.toContain('PENDING_GOOGLE_KEY');
     expect(activity).not.toContain('evaluateJavascript(js, result ->\n            getSharedPreferences');
-    expect(activity).not.toContain('SessionCues');
+    const onCreate = activity.slice(activity.indexOf('void onCreate'), activity.indexOf('void onResume'));
+    expect(onCreate.indexOf('registerPlugin(SessionCuesPlugin.class)')).toBeGreaterThan(-1);
+    expect(onCreate.indexOf('registerPlugin(SessionCuesPlugin.class)')).toBeLessThan(onCreate.indexOf('super.onCreate'));
     expect(activity).not.toContain('BillingClient');
 
     const gradle = readClient('android/app/build.gradle');

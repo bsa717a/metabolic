@@ -1,6 +1,6 @@
 # Android App – Firebase Auth (Google and Apple)
 
-This slice wires Google and Apple sign-in on the Capacitor Android shell so they finish in the same Firebase JS session as iOS and web. It does not add SessionCues, Play Billing, or a Play workflow.
+This slice wires Google and Apple sign-in on the Capacitor Android shell so they finish in the same Firebase JS session as iOS and web. Workout session cues are a native plugin, described under Session cues. This document does not add Play Billing or a Play workflow.
 
 The web bundle already calls `loginWithGoogle` / `loginWithApple`. On Android those calls use `@capacitor-firebase/authentication` with `skipNativeAuth: true`, then `signInWithCredential` in the JS SDK. Google requests an ID token for the Firebase **web** client (`default_web_client_id`). Apple uses Firebase `OAuthProvider` (there is no iOS-style `ASAuthorizationController` on Android), returns the Apple ID token and raw nonce, and signs the native Firebase user out so the WebView session is the one the app reads.
 
@@ -90,3 +90,11 @@ Sign-in to verify, once the unknown rows above are filled:
 | Missing `google-services.json` | Gradle skips the Google services plugin. Google and Apple sign-in cannot run. |
 
 Email and password stay on the Firebase JS SDK. This document does not change that, and it does not change the iOS handlers.
+
+## Session cues
+
+Android plays the workout tick, Go, and Stop in the app process through the `SessionCues` Capacitor plugin. iOS does the same with `AVAudioPlayer`. The web layer already calls that plugin on every native platform, so Android did not need a separate JavaScript path.
+
+`AudioTrack` uses the media stream and does not request audio focus. A cue mixes under Spotify or another music app instead of pausing it. That is the v1 port of iOS `.playback` + `.mixWithOthers` without asking other apps to lower their volume. The recorded clips in `android/app/src/main/res/raw` are the same files as `public/audio`. If a clip is missing, the plugin synthesizes the iOS sine motif (880 Hz tick, 1175 Hz Go, 220 Hz Stop).
+
+Hiding the mute control was the fallback if that mix could not be done faithfully. The iOS feature is four plugin methods and a short PCM player, so the port is what ships. The mute control stays on Android because the cues are real. Play Billing is still not part of this work.

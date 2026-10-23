@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
 
 android {
     namespace = "com.mastermetabolic.app"
@@ -43,6 +44,12 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')
