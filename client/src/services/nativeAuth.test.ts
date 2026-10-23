@@ -50,6 +50,7 @@ vi.mock('firebase/auth', () => {
 
 describe('nativeAuth', () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
     memory.clear();
     getPlatform.mockReturnValue('ios');
@@ -181,6 +182,39 @@ describe('nativeAuth', () => {
 
     expect(result).toBeNull();
     expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('uses the stored Apple nonce when a pending Android result has only an ID token', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-id-token', nonce: 'nonce-stored' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: { idToken: 'apple-id-token' } });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a3' } });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-id-token', rawNonce: 'nonce-stored' });
+    expect(result?.user.uid).toBe('a3');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+  });
+
+  it('exchanges a stored Apple handoff when Firebase has no pending result', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-stored', nonce: 'nonce-stored' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a4' } });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-stored', rawNonce: 'nonce-stored' });
+    expect(result?.user.uid).toBe('a4');
   });
 
   it('requires the Android Apple nonce before exchanging', async () => {

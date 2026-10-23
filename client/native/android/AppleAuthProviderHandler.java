@@ -7,12 +7,15 @@ package io.capawesome.capacitorjs.plugins.firebase.authentication.handlers;
 // contract: keep the raw nonce, return the Apple ID token to the JS SDK, and
 // sign the native user back out so the WebView session matches iOS.
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
+import android.webkit.WebView;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PluginCall;
+import androidx.annotation.Nullable;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.AuthResult;
@@ -39,6 +42,8 @@ public class AppleAuthProviderHandler {
 
     static final String PREFS = "metabolic.nativeAuth";
     static final String PENDING_NONCE_KEY = "metabolic.pendingAppleNonce";
+    static final String PENDING_APPLE_KEY = "metabolic.pendingAppleAuth";
+    private static final String APP_ORIGIN = "https://metaos.mastermetabolic.com";
 
     private final FirebaseAuthentication pluginImplementation;
     private String currentNonce;
@@ -100,7 +105,79 @@ public class AppleAuthProviderHandler {
     }
 
     static void clearSavedNonce(SharedPreferences prefs) {
-        prefs.edit().remove(PENDING_NONCE_KEY).apply();
+        prefs.edit().remove(PENDING_NONCE_KEY).remove(PENDING_APPLE_KEY).apply();
+    }
+
+    /**
+     * Keep the raw nonce until the WebView stores it on the app origin.
+     * Clearing here, as soon as native OAuth succeeds, drops the only copy
+     * before getPendingAuthResult can run after a reload.
+     */
+    static void publishPendingAppleAuth(
+        FirebaseAuthentication plugin,
+        @Nullable String idToken,
+        @Nullable String nonce
+    ) {
+        if (plugin == null || nonce == null || nonce.isEmpty()) {
+            return;
+        }
+        try {
+            JSONObject payload = new JSONObject();
+            if (idToken != null && !idToken.isEmpty()) {
+                payload.put("idToken", idToken);
+            }
+            payload.put("nonce", nonce);
+            String json = payload.toString();
+            plugin
+                .getPlugin()
+                .getContext()
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(PENDING_NONCE_KEY, nonce)
+                .putString(PENDING_APPLE_KEY, json)
+                .apply();
+            injectPendingAppleJson(plugin, json);
+        } catch (JSONException exception) {
+            Log.e(FirebaseAuthenticationPlugin.TAG, "publishPendingAppleAuth failed.", exception);
+        }
+    }
+
+    private static void injectPendingAppleJson(FirebaseAuthentication plugin, String json) {
+        Activity activity = plugin.getPlugin().getActivity();
+        if (activity == null) {
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            if (plugin.getPlugin().getBridge() == null) {
+                return;
+            }
+            WebView webView = plugin.getPlugin().getBridge().getWebView();
+            if (webView == null) {
+                return;
+            }
+            String escaped = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "");
+            String js =
+                "(function () {" +
+                " try {" +
+                " if (window.location.origin !== '" +
+                APP_ORIGIN +
+                "') return false;" +
+                " window.localStorage.setItem('" +
+                PENDING_APPLE_KEY +
+                "', '" +
+                escaped +
+                "');" +
+                " window.dispatchEvent(new Event('metabolic-pending-apple-auth'));" +
+                " return true;" +
+                " } catch (e) { return false; }" +
+                "})()";
+            webView.evaluateJavascript(js, result -> {
+                if (!"true".equals(result)) {
+                    return;
+                }
+                clearSavedNonce(plugin.getPlugin().getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE));
+            });
+        });
     }
 
     private void clearNonce() {
@@ -116,7 +193,7 @@ public class AppleAuthProviderHandler {
         String nonce = readNonce();
         String idToken = idTokenFrom(authResult);
         AuthCredential credential = authResult.getCredential();
-        clearNonce();
+        publishPendingAppleAuth(pluginImplementation, idToken, nonce);
         if (skipNativeAuth(call)) {
             pluginImplementation.getFirebaseAuthInstance().signOut();
             pluginImplementation.handleSuccessfulSignIn(

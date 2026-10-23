@@ -60,13 +60,12 @@ public class OAuthProviderHandler {
             .getContext()
             .getSharedPreferences(AppleAuthProviderHandler.PREFS, Context.MODE_PRIVATE)
             .getString(AppleAuthProviderHandler.PENDING_NONCE_KEY, null);
-        AppleAuthProviderHandler.clearSavedNonce(
-            pluginImplementation.getPlugin().getContext().getSharedPreferences(AppleAuthProviderHandler.PREFS, Context.MODE_PRIVATE)
-        );
         String idToken = null;
         if (credential instanceof OAuthCredential) {
             idToken = ((OAuthCredential) credential).getIdToken();
         }
+        // Leave the nonce in preferences until the WebView injection succeeds.
+        AppleAuthProviderHandler.publishPendingAppleAuth(pluginImplementation, idToken, nonce);
         boolean skipNativeAuth = call.getBoolean("skipNativeAuth", pluginImplementation.getConfig().getSkipNativeAuth());
         if (skipNativeAuth) {
             pluginImplementation.getFirebaseAuthInstance().signOut();

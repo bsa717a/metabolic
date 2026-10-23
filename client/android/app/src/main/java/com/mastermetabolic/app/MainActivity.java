@@ -11,11 +11,14 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     static final String PREFS = "metabolic.nativeAuth";
     static final String PENDING_GOOGLE_KEY = "metabolic.pendingGoogleAuth";
+    static final String PENDING_APPLE_KEY = "metabolic.pendingAppleAuth";
+    static final String PENDING_APPLE_NONCE_KEY = "metabolic.pendingAppleNonce";
 
     @Override
     public void onResume() {
         super.onResume();
         injectPendingGoogleAuth();
+        injectPendingAppleAuth();
     }
 
     private void injectPendingGoogleAuth() {
@@ -52,6 +55,43 @@ public class MainActivity extends BridgeActivity {
                 return;
             }
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(PENDING_GOOGLE_KEY).apply();
+        });
+    }
+
+    private void injectPendingAppleAuth() {
+        Bridge bridge = getBridge();
+        if (bridge == null) {
+            return;
+        }
+        WebView webView = bridge.getWebView();
+        if (webView == null) {
+            return;
+        }
+        String json = getSharedPreferences(PREFS, MODE_PRIVATE).getString(PENDING_APPLE_KEY, null);
+        if (json == null || json.isEmpty()) {
+            return;
+        }
+        String escaped = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "");
+        String js =
+            "(function () {" +
+            " try {" +
+            " if (window.location.origin !== 'https://metaos.mastermetabolic.com') return false;" +
+            " window.localStorage.setItem('metabolic.pendingAppleAuth', '" +
+            escaped +
+            "');" +
+            " window.dispatchEvent(new Event('metabolic-pending-apple-auth'));" +
+            " return true;" +
+            " } catch (e) { return false; }" +
+            "})()";
+        webView.evaluateJavascript(js, result -> {
+            if (!"true".equals(result)) {
+                return;
+            }
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .remove(PENDING_APPLE_KEY)
+                .remove(PENDING_APPLE_NONCE_KEY)
+                .apply();
         });
     }
 }

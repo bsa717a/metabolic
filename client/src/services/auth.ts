@@ -284,17 +284,21 @@ function initNativePendingAppleAuth() {
   if (!isNativeAuthPlatform() || !auth) return;
   if (Capacitor.getPlatform() !== 'android') return;
   const firebaseAuth = auth;
-  void import('./nativeAuth').then(({ consumePendingNativeAppleAuth }) =>
-    consumePendingNativeAppleAuth(firebaseAuth)
-      .then(async (result) => {
-        if (!result) return;
-        clearOAuthRedirectError();
-        await persistAppleDisplayName(result);
-      })
-      .catch((error) => {
-        storeOAuthRedirectError(error);
-      })
-  );
+  const consume = () => {
+    void import('./nativeAuth').then(({ consumePendingNativeAppleAuth }) =>
+      consumePendingNativeAppleAuth(firebaseAuth)
+        .then(async (result) => {
+          if (!result) return;
+          clearOAuthRedirectError();
+          await persistAppleDisplayName(result);
+        })
+        .catch((error) => {
+          storeOAuthRedirectError(error);
+        })
+    );
+  };
+  consume();
+  window.addEventListener('metabolic-pending-apple-auth', consume);
 }
 
 initOAuthRedirectListener();

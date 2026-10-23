@@ -11,11 +11,20 @@ import { getAuthErrorCode } from '../utils/authErrors';
 
 export const PENDING_GOOGLE_AUTH_KEY = 'metabolic.pendingGoogleAuth';
 export const PENDING_GOOGLE_AUTH_EVENT = 'metabolic-pending-google-auth';
+export const PENDING_APPLE_AUTH_KEY = 'metabolic.pendingAppleAuth';
+export const PENDING_APPLE_AUTH_EVENT = 'metabolic-pending-apple-auth';
 
 type NativeGoogleTokens = {
   idToken?: string | null;
   accessToken?: string | null;
 };
+
+type PendingAppleAuth = {
+  idToken?: string | null;
+  nonce?: string | null;
+};
+
+const appleExchanges = new Map<string, Promise<UserCredential>>();
 
 const GOOGLE_SIGN_IN_TIMEOUT_MS = 20_000;
 const CREDENTIAL_EXCHANGE_TIMEOUT_MS = 12_000;
@@ -170,7 +179,9 @@ export async function nativeAppleCredentialSignIn(auth: Auth): Promise<UserCrede
   const result = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true });
   const idToken = result.credential?.idToken;
   if (!idToken) throw new Error('Apple sign-in did not return an ID token.');
-  const rawNonce = result.credential?.nonce;
+  const rawNonce =
+    result.credential?.nonce ||
+    (Capacitor.getPlatform() === 'android' ? pendingAppleNonceFor(idToken) : null);
   if (Capacitor.getPlatform() === 'android' && !rawNonce) {
     throw new Error('Apple sign-in did not return a nonce.');
   }
@@ -185,11 +196,39 @@ export async function nativeAppleCredentialSignIn(auth: Auth): Promise<UserCrede
 export async function consumePendingNativeAppleAuth(auth: Auth): Promise<UserCredential | null> {
   if (Capacitor.getPlatform() !== 'android') return null;
   const result = await FirebaseAuthentication.getPendingAuthResult();
-  const idToken = result.credential?.idToken;
+  const stored = readPendingAppleAuth();
+  const idToken = result.credential?.idToken || stored?.idToken || null;
   if (!idToken) return null;
-  const rawNonce = result.credential?.nonce;
+  const existing = appleExchanges.get(idToken);
+  if (existing) return existing;
+  const rawNonce = result.credential?.nonce || pendingAppleNonceFor(idToken);
   if (!rawNonce) throw new Error('Apple sign-in did not return a nonce.');
   return exchangeNativeAppleCredential(auth, idToken, rawNonce);
+}
+
+function readPendingAppleAuth(): PendingAppleAuth | null {
+  try {
+    const raw = localStorage.getItem(PENDING_APPLE_AUTH_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PendingAppleAuth;
+  } catch {
+    return null;
+  }
+}
+
+function pendingAppleNonceFor(idToken: string): string | null {
+  const stored = readPendingAppleAuth();
+  if (!stored?.nonce) return null;
+  if (stored.idToken && stored.idToken !== idToken) return null;
+  return stored.nonce;
+}
+
+function clearPendingAppleAuth() {
+  try {
+    localStorage.removeItem(PENDING_APPLE_AUTH_KEY);
+  } catch {
+    // Ignore storage failures. The native preference is cleared only after injection.
+  }
 }
 
 function exchangeNativeAppleCredential(
@@ -197,12 +236,24 @@ function exchangeNativeAppleCredential(
   idToken: string,
   rawNonce: string | null | undefined
 ): Promise<UserCredential> {
+  const existing = appleExchanges.get(idToken);
+  if (existing) return existing;
   const provider = new OAuthProvider('apple.com');
-  return signInWithCredential(
+  const pending = signInWithCredential(
     auth,
     provider.credential({
       idToken,
       rawNonce: rawNonce ?? undefined
     })
-  );
+  )
+    .then((result) => {
+      clearPendingAppleAuth();
+      return result;
+    })
+    .catch((error: unknown) => {
+      appleExchanges.delete(idToken);
+      throw error;
+    });
+  appleExchanges.set(idToken, pending);
+  return pending;
 }

@@ -119,17 +119,27 @@ describe('Android Capacitor platform', () => {
     const apple = readClient('native/android/AppleAuthProviderHandler.java');
     expect(apple).toContain('OAuthProvider.newBuilder');
     expect(apple).toContain('metabolic.pendingAppleNonce');
+    expect(apple).toContain('metabolic.pendingAppleAuth');
     expect(apple).toContain('Arrays.asList("email", "name")');
     expect(apple).toContain('getFirebaseAuthInstance().signOut()');
+    expect(apple).toContain('if (!"true".equals(result))');
+    const finishSignIn = apple.slice(apple.indexOf('void finishSignIn'), apple.indexOf('private static String idTokenFrom'));
+    expect(finishSignIn).toContain('publishPendingAppleAuth');
+    expect(finishSignIn).not.toContain('clearNonce');
     expect(apple).not.toContain('ASAuthorizationController');
 
     const oauth = readClient('native/android/OAuthProviderHandler.java');
     expect(oauth).toContain('PENDING_NONCE_KEY');
+    expect(oauth).toContain('publishPendingAppleAuth');
     expect(oauth).toContain('skipNativeAuth');
+    expect(oauth).not.toContain('clearSavedNonce');
 
     const activity = readClient('android/app/src/main/java/com/mastermetabolic/app/MainActivity.java');
     expect(activity).toContain('metabolic.pendingGoogleAuth');
     expect(activity).toContain('metabolic-pending-google-auth');
+    expect(activity).toContain('metabolic.pendingAppleAuth');
+    expect(activity).toContain('metabolic-pending-apple-auth');
+    expect(activity).toContain('metabolic.pendingAppleNonce');
     expect(activity).toContain("window.location.origin !== 'https://metaos.mastermetabolic.com'");
     expect(activity).toContain('if (!"true".equals(result))');
     expect(activity).not.toContain('evaluateJavascript(js, result ->\n            getSharedPreferences');
