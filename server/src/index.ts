@@ -29,6 +29,8 @@ import { coachSupportRoutes } from './routes/coachSupportRoutes.js';
 import { billingRoutes } from './routes/billingRoutes.js';
 import { appleIapRoutes } from './routes/appleIapRoutes.js';
 import { appleIapWebhookRoutes } from './routes/appleIapWebhookRoutes.js';
+import { googlePlayRoutes } from './routes/googlePlayRoutes.js';
+import { googlePlayWebhookRoutes } from './routes/googlePlayWebhookRoutes.js';
 import { storeRoutes } from './routes/storeRoutes.js';
 import { storeAdminRoutes } from './routes/storeAdminRoutes.js';
 import { storeWebhookRoutes } from './routes/storeWebhookRoutes.js';
@@ -90,6 +92,8 @@ async function main() {
   await app.register(billingRoutes);
   await app.register(appleIapRoutes);
   await app.register(appleIapWebhookRoutes);
+  await app.register(googlePlayRoutes);
+  await app.register(googlePlayWebhookRoutes);
   await app.register(storeRoutes);
   await app.register(storeAdminRoutes);
   await app.register(storeWebhookRoutes);

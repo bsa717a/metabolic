@@ -24,7 +24,7 @@ public class MainActivity extends BridgeActivity {
     private final PendingAuthBridge pendingAuthBridge = new PendingAuthBridge();
 
     /**
-     * Register SessionCues and the page-load handoff before the bridge is created.
+     * Register SessionCues, Play Billing, and the page-load handoff before the bridge is created.
      * A plugin or listener added afterward is missed. OAuth often resumes before
      * the WebView is on the app origin, so page load retries both handoffs
      * without waiting for another resume.
@@ -32,6 +32,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(SessionCuesPlugin.class);
+        registerPlugin(PlayBillingPlugin.class);
         bridgeBuilder.addWebViewListener(
             new WebViewListener() {
                 @Override

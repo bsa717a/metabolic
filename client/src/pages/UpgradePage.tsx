@@ -3,15 +3,44 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { api } from '../services/api';
 import { loadAppleIapProducts, purchaseApplePlan, restoreApplePurchases, type AppleIapProduct } from '../services/appleIap';
+import {
+  loadGooglePlayProducts,
+  purchaseGooglePlan,
+  restoreGooglePurchases,
+  type GooglePlayProduct
+} from '../services/googlePlay';
 import { PlanComparisonModal } from '../components/entitlements/PlanComparisonModal';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { appleFallbackPrice, appleProductIdForPlan } from '../data/appleIap';
+import { googleFallbackPrice, googleProductIdForPlan } from '../data/googlePlay';
 import { PUBLIC_PLANS } from '../data/plans';
 import type { AppUser, PlanSlug } from '../types';
 import { getRequiredPlan, planLabel } from '../utils/entitlements';
 import { WEEKLY_PLAN_BILLING_PARAM, weeklyPlanUnlockName } from '../utils/homePlanStatus';
-import { usesAppleIapCheckout } from '../utils/nativePlatform';
+import { ANDROID_PLAN_MANAGE_COPY, usesAppleIapCheckout, usesGooglePlayCheckout } from '../utils/nativePlatform';
+
+type ListedProduct = {
+  id: string;
+  displayPrice: string;
+  subscriptionPeriodUnit: string;
+};
+
+function listedFromApple(products: AppleIapProduct[]): ListedProduct[] {
+  return products.map((product) => ({
+    id: product.id,
+    displayPrice: product.displayPrice,
+    subscriptionPeriodUnit: product.subscriptionPeriodUnit
+  }));
+}
+
+function listedFromGoogle(products: GooglePlayProduct[]): ListedProduct[] {
+  return products.map((product) => ({
+    id: product.id,
+    displayPrice: product.displayPrice,
+    subscriptionPeriodUnit: product.subscriptionPeriodUnit
+  }));
+}
 
 export function UpgradePage({
   user,
@@ -27,31 +56,44 @@ export function UpgradePage({
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState<PlanSlug | 'restore' | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
-  const [appleProducts, setAppleProducts] = useState<AppleIapProduct[]>([]);
+  const [storeProducts, setStoreProducts] = useState<ListedProduct[]>([]);
   const currentPlan = user?.plan ?? 'starter';
   const useAppleCheckout = usesAppleIapCheckout();
+  const useGoogleCheckout = usesGooglePlayCheckout();
+  const useStoreCheckout = useAppleCheckout || useGoogleCheckout;
 
   useEffect(() => {
-    if (!useAppleCheckout) return;
-    void loadAppleIapProducts()
-      .then(setAppleProducts)
-      .catch(() => setAppleProducts([]));
-  }, [useAppleCheckout]);
+    if (useAppleCheckout) {
+      void loadAppleIapProducts()
+        .then((products) => setStoreProducts(listedFromApple(products)))
+        .catch(() => setStoreProducts([]));
+      return;
+    }
+    if (useGoogleCheckout) {
+      void loadGooglePlayProducts()
+        .then((products) => setStoreProducts(listedFromGoogle(products)))
+        .catch(() => setStoreProducts([]));
+    }
+  }, [useAppleCheckout, useGoogleCheckout]);
 
   const productsByPlan = useMemo(() => {
-    const map = new Map<string, AppleIapProduct>();
-    for (const product of appleProducts) {
-      const plan = PUBLIC_PLANS.find((item) => appleProductIdForPlan(item.id) === product.id);
+    const map = new Map<string, ListedProduct>();
+    for (const product of storeProducts) {
+      const plan = PUBLIC_PLANS.find((item) => {
+        const productId = useGoogleCheckout ? googleProductIdForPlan(item.id) : appleProductIdForPlan(item.id);
+        return productId === product.id;
+      });
       if (plan) map.set(plan.id, product);
     }
     return map;
-  }, [appleProducts]);
+  }, [storeProducts, useGoogleCheckout]);
 
   function priceFor(planId: string) {
-    const storeKit = productsByPlan.get(planId);
-    if (storeKit?.displayPrice) {
-      return storeKit.subscriptionPeriodUnit === 'month' ? `${storeKit.displayPrice}/month` : storeKit.displayPrice;
+    const listed = productsByPlan.get(planId);
+    if (listed?.displayPrice) {
+      return listed.subscriptionPeriodUnit === 'month' ? `${listed.displayPrice}/month` : listed.displayPrice;
     }
+    if (useGoogleCheckout) return googleFallbackPrice(planId) ?? PUBLIC_PLANS.find((plan) => plan.id === planId)?.price;
     if (useAppleCheckout) return appleFallbackPrice(planId) ?? PUBLIC_PLANS.find((plan) => plan.id === planId)?.price;
     return PUBLIC_PLANS.find((plan) => plan.id === planId)?.price;
   }
@@ -90,13 +132,32 @@ export function UpgradePage({
     }
   }
 
+  async function requestGoogleCheckout(plan: 'self_guided' | 'plus') {
+    setLoading(plan);
+    setMessage('');
+    try {
+      const nextUser = await purchaseGooglePlan(plan);
+      if (!nextUser) {
+        setMessage('Purchase canceled.');
+        return;
+      }
+      onUserUpdated?.(nextUser);
+      setMessage(`You're now on ${planLabel(nextUser.plan)}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to complete the Google Play purchase');
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function restorePurchases() {
     setLoading('restore');
     setMessage('');
     try {
-      const nextUser = await restoreApplePurchases();
+      const nextUser = useGoogleCheckout ? await restoreGooglePurchases() : await restoreApplePurchases();
       if (nextUser) onUserUpdated?.(nextUser);
-      setMessage(nextUser ? `Restored ${planLabel(nextUser.plan)}.` : 'No Apple subscriptions to restore.');
+      const storeName = useGoogleCheckout ? 'Google Play' : 'Apple';
+      setMessage(nextUser ? `Restored ${planLabel(nextUser.plan)}.` : `No ${storeName} subscriptions to restore.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to restore purchases');
     } finally {
@@ -175,12 +236,14 @@ export function UpgradePage({
                     className="w-full"
                     disabled={loading !== null}
                     onClick={() =>
-                      void (useAppleCheckout
-                        ? requestAppleCheckout(plan.id as 'self_guided' | 'plus')
-                        : requestWebCheckout(plan.id as 'self_guided' | 'plus'))
+                      void (useGoogleCheckout
+                        ? requestGoogleCheckout(plan.id as 'self_guided' | 'plus')
+                        : useAppleCheckout
+                          ? requestAppleCheckout(plan.id as 'self_guided' | 'plus')
+                          : requestWebCheckout(plan.id as 'self_guided' | 'plus'))
                     }
                   >
-                    {loading === plan.id ? 'Loading…' : useAppleCheckout ? 'Subscribe' : 'Choose plan'}
+                    {loading === plan.id ? 'Loading…' : useStoreCheckout ? 'Subscribe' : 'Choose plan'}
                   </Button>
                 )}
               </div>
@@ -189,28 +252,39 @@ export function UpgradePage({
         })}
       </div>
 
-      {useAppleCheckout ? (
+      {useStoreCheckout ? (
         <div className="space-y-3">
           <Button variant="secondary" disabled={loading !== null} onClick={() => void restorePurchases()}>
             {loading === 'restore' ? 'Restoring…' : 'Restore purchases'}
           </Button>
-          <p className="text-xs text-app-text-muted">
-            Payment is charged to your Apple ID. Subscriptions renew monthly unless you cancel at least 24 hours
-            before the period ends. Manage or cancel in Settings → Apple ID → Subscriptions.{' '}
-            <Link className="underline" to="/privacy">
-              Privacy Policy
-            </Link>
-            {' · '}
-            <a
-              className="underline"
-              href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
-              rel="noreferrer"
-              target="_blank"
-            >
-              Terms of Use (EULA)
-            </a>
-            .
-          </p>
+          {useGoogleCheckout ? (
+            <p className="text-xs text-app-text-muted">
+              Payment is charged to your Google Play account. Subscriptions renew monthly unless you cancel at least
+              24 hours before the period ends. {ANDROID_PLAN_MANAGE_COPY}{' '}
+              <Link className="underline" to="/privacy">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          ) : (
+            <p className="text-xs text-app-text-muted">
+              Payment is charged to your Apple ID. Subscriptions renew monthly unless you cancel at least 24 hours
+              before the period ends. Manage or cancel in Settings → Apple ID → Subscriptions.{' '}
+              <Link className="underline" to="/privacy">
+                Privacy Policy
+              </Link>
+              {' · '}
+              <a
+                className="underline"
+                href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+                rel="noreferrer"
+                target="_blank"
+              >
+                Terms of Use (EULA)
+              </a>
+              .
+            </p>
+          )}
         </div>
       ) : null}
 

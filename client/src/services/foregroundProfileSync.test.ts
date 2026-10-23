@@ -37,4 +37,17 @@ describe('applyForegroundProfileSync', () => {
     });
     expect(applied).toEqual(['me']);
   });
+
+  it('applies the Play Billing user after Apple when both syncs return a profile', async () => {
+    const applied: string[] = [];
+    await applyForegroundProfileSync({
+      generation: 1,
+      isCurrent: () => true,
+      loadMe: () => Promise.resolve('me'),
+      syncApple: () => Promise.resolve('apple'),
+      syncGoogle: () => Promise.resolve('google'),
+      apply: (user) => applied.push(user)
+    });
+    expect(applied).toEqual(['me', 'apple', 'google']);
+  });
 });
