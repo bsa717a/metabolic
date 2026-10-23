@@ -4,10 +4,11 @@
 # client (SERVER_CLIENT_ID), or JS Auth rejects the credential and login
 # returns to the sign-in screen.
 #
-# Android needs no counterpart copy. GoogleAuthProviderHandler.java already
-# calls requestIdToken(R.string.default_web_client_id). AppleAuthProviderHandler
-# on Android uses Firebase OAuthProvider, not ASAuthorizationController.
-# google-services.json (which fills default_web_client_id) is not committed.
+# Android handlers are patched copies. Google still requests the Firebase web
+# client (default_web_client_id from google-services.json, which is not
+# committed) and writes the same pending-token handoff as iOS. Apple keeps the
+# raw nonce for the JS SDK and does not leave a native Firebase session when
+# skipNativeAuth is set. google-services.json stays gitignored.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -30,6 +31,20 @@ for handler in GoogleAuthProviderHandler.swift AppleAuthProviderHandler.swift; d
   cp "$src" "$dest"
   echo "Patched $handler → $dest"
 done
+
+ANDROID_HANDLERS="$ROOT/node_modules/@capacitor-firebase/authentication/android/src/main/java/io/capawesome/capacitorjs/plugins/firebase/authentication/handlers"
+if [[ -d "$ANDROID_HANDLERS" ]]; then
+  for handler in GoogleAuthProviderHandler.java AppleAuthProviderHandler.java OAuthProviderHandler.java; do
+    src="native/android/$handler"
+    dest="$ANDROID_HANDLERS/$handler"
+    if [[ ! -f "$src" ]]; then
+      echo "Missing $src" >&2
+      exit 1
+    fi
+    cp "$src" "$dest"
+    echo "Patched $handler → $dest"
+  done
+fi
 
 if [[ -d ios/App/App ]]; then
   cp native/GoogleService-Info.plist ios/App/App/GoogleService-Info.plist

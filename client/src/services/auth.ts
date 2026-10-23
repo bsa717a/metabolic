@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import {
   applyActionCode,
   checkActionCode,
@@ -279,8 +280,26 @@ function initNativePendingGoogleAuth() {
   window.addEventListener('metabolic-pending-google-auth', consume);
 }
 
+function initNativePendingAppleAuth() {
+  if (!isNativeAuthPlatform() || !auth) return;
+  if (Capacitor.getPlatform() !== 'android') return;
+  const firebaseAuth = auth;
+  void import('./nativeAuth').then(({ consumePendingNativeAppleAuth }) =>
+    consumePendingNativeAppleAuth(firebaseAuth)
+      .then(async (result) => {
+        if (!result) return;
+        clearOAuthRedirectError();
+        await persistAppleDisplayName(result);
+      })
+      .catch((error) => {
+        storeOAuthRedirectError(error);
+      })
+  );
+}
+
 initOAuthRedirectListener();
 initNativePendingGoogleAuth();
+initNativePendingAppleAuth();
 
 function shouldFallbackToRedirect(error: unknown) {
   const code = getAuthErrorCode(error);

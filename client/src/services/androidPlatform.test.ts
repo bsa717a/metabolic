@@ -1,11 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const CLIENT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
-const require = createRequire(import.meta.url);
 
 function readClient(relPath: string) {
   return readFileSync(join(CLIENT_ROOT, relPath), 'utf8');
@@ -101,31 +99,59 @@ describe('Android Capacitor platform', () => {
     );
   });
 
-  it('leaves the iOS auth patch in place and does not fork the Android handlers', () => {
+  it('patches Android Google and Apple auth without changing the iOS copy', () => {
     const patch = readClient('scripts/apply-native-auth-patches.sh');
     expect(patch).toContain('GoogleAuthProviderHandler.swift');
     expect(patch).toContain('AppleAuthProviderHandler.swift');
     expect(patch).toContain('cp native/SceneDelegate.swift ios/App/App/SceneDelegate.swift');
-    expect(patch).toContain('Android needs no counterpart copy');
-    expect(patch).not.toMatch(/cp\s+.*\.java/);
+    expect(patch).toContain('native/android/$handler');
+    expect(patch).toContain('GoogleAuthProviderHandler.java');
+    expect(patch).toContain('AppleAuthProviderHandler.java');
+    expect(patch).toContain('OAuthProviderHandler.java');
+    expect(patch).not.toContain('cp native/SceneDelegate.swift android');
 
-    const pluginRoot = dirname(require.resolve('@capacitor-firebase/authentication/package.json'));
-    const google = readFileSync(
-      join(
-        pluginRoot,
-        'android/src/main/java/io/capawesome/capacitorjs/plugins/firebase/authentication/handlers/GoogleAuthProviderHandler.java'
-      ),
-      'utf8'
-    );
+    const google = readClient('native/android/GoogleAuthProviderHandler.java');
     expect(google).toContain('.requestIdToken(pluginImplementation.getPlugin().getContext().getString(R.string.default_web_client_id))');
-    const apple = readFileSync(
-      join(
-        pluginRoot,
-        'android/src/main/java/io/capawesome/capacitorjs/plugins/firebase/authentication/handlers/AppleAuthProviderHandler.java'
-      ),
-      'utf8'
-    );
+    expect(google).toContain('metabolic.pendingGoogleAuth');
+    expect(google).toContain('WILL_BE_OVERRIDDEN');
+    expect(google).not.toMatch(/[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}/);
+
+    const apple = readClient('native/android/AppleAuthProviderHandler.java');
     expect(apple).toContain('OAuthProvider.newBuilder');
+    expect(apple).toContain('metabolic.pendingAppleNonce');
+    expect(apple).toContain('Arrays.asList("email", "name")');
+    expect(apple).toContain('getFirebaseAuthInstance().signOut()');
     expect(apple).not.toContain('ASAuthorizationController');
+
+    const oauth = readClient('native/android/OAuthProviderHandler.java');
+    expect(oauth).toContain('PENDING_NONCE_KEY');
+    expect(oauth).toContain('skipNativeAuth');
+
+    const activity = readClient('android/app/src/main/java/com/mastermetabolic/app/MainActivity.java');
+    expect(activity).toContain('metabolic.pendingGoogleAuth');
+    expect(activity).toContain('metabolic-pending-google-auth');
+    expect(activity).not.toContain('SessionCues');
+    expect(activity).not.toContain('BillingClient');
+
+    const gradle = readClient('android/app/build.gradle');
+    expect(gradle).toContain('google-services.json');
+    expect(gradle).toContain('Firebase Auth for Google and Apple');
+
+    const setup = readClient('ANDROID.md');
+    for (const needle of [
+      'google-services.json',
+      'SHA-1',
+      'SHA-256',
+      'UNKNOWN',
+      'com.mastermetabolic.app',
+      'metabolic-v1.firebaseapp.com/__/auth/handler',
+      '707557008901-utr23g550vsjatn2g2fv112uq9daf7pr.apps.googleusercontent.com'
+    ]) {
+      expect(setup).toContain(needle);
+    }
+    expect(setup).not.toMatch(/[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){19}/);
+    expect(setup).not.toMatch(/[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}/);
+    expect(setup).not.toContain('AIza');
+    expect(setup).not.toContain('BEGIN PRIVATE KEY');
   });
 });

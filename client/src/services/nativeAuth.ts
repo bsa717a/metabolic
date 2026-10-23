@@ -1,4 +1,5 @@
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { Capacitor } from '@capacitor/core';
 import {
   GoogleAuthProvider,
   OAuthProvider,
@@ -169,12 +170,39 @@ export async function nativeAppleCredentialSignIn(auth: Auth): Promise<UserCrede
   const result = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true });
   const idToken = result.credential?.idToken;
   if (!idToken) throw new Error('Apple sign-in did not return an ID token.');
+  const rawNonce = result.credential?.nonce;
+  if (Capacitor.getPlatform() === 'android' && !rawNonce) {
+    throw new Error('Apple sign-in did not return a nonce.');
+  }
+  return exchangeNativeAppleCredential(auth, idToken, rawNonce);
+}
+
+/**
+ * Android Apple sign-in can outlive the WebView call. The patched handler
+ * stores the raw nonce and `getPendingAuthResult` returns the Apple ID token.
+ * iOS finishes inside the original `signInWithApple` call, so this is a no-op there.
+ */
+export async function consumePendingNativeAppleAuth(auth: Auth): Promise<UserCredential | null> {
+  if (Capacitor.getPlatform() !== 'android') return null;
+  const result = await FirebaseAuthentication.getPendingAuthResult();
+  const idToken = result.credential?.idToken;
+  if (!idToken) return null;
+  const rawNonce = result.credential?.nonce;
+  if (!rawNonce) throw new Error('Apple sign-in did not return a nonce.');
+  return exchangeNativeAppleCredential(auth, idToken, rawNonce);
+}
+
+function exchangeNativeAppleCredential(
+  auth: Auth,
+  idToken: string,
+  rawNonce: string | null | undefined
+): Promise<UserCredential> {
   const provider = new OAuthProvider('apple.com');
   return signInWithCredential(
     auth,
     provider.credential({
       idToken,
-      rawNonce: result.credential?.nonce
+      rawNonce: rawNonce ?? undefined
     })
   );
 }

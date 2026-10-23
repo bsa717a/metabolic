@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const signInWithGoogle = vi.fn();
 const signInWithApple = vi.fn();
+const getPendingAuthResult = vi.fn();
 const signInWithCredential = vi.fn();
+const getPlatform = vi.fn(() => 'ios');
 const googleCredential = vi.fn((idToken?: unknown, accessToken?: unknown) => ({
   idToken,
   accessToken,
@@ -21,10 +23,15 @@ vi.stubGlobal('localStorage', {
   }
 });
 
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { getPlatform: () => getPlatform() }
+}));
+
 vi.mock('@capacitor-firebase/authentication', () => ({
   FirebaseAuthentication: {
     signInWithGoogle: (...args: unknown[]) => signInWithGoogle(...args),
-    signInWithApple: (...args: unknown[]) => signInWithApple(...args)
+    signInWithApple: (...args: unknown[]) => signInWithApple(...args),
+    getPendingAuthResult: (...args: unknown[]) => getPendingAuthResult(...args)
   }
 }));
 
@@ -45,6 +52,7 @@ describe('nativeAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     memory.clear();
+    getPlatform.mockReturnValue('ios');
   });
 
   it('exchanges a native Google ID token for a Firebase credential', async () => {
@@ -139,5 +147,48 @@ describe('nativeAuth', () => {
     expect(signInWithApple).toHaveBeenCalledWith({ skipNativeAuth: true });
     expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-id-token', rawNonce: 'nonce-1' });
     expect(result.user.uid).toBe('a1');
+    expect(getPendingAuthResult).not.toHaveBeenCalled();
+  });
+
+  it('does not read a pending Apple result on iOS', async () => {
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+    const result = await consumePendingNativeAppleAuth({} as never);
+    expect(result).toBeNull();
+    expect(getPendingAuthResult).not.toHaveBeenCalled();
+  });
+
+  it('exchanges a pending Android Apple result with the saved nonce', async () => {
+    getPlatform.mockReturnValue('android');
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-id-token', nonce: 'nonce-android' }
+    });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a2' } });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(getPendingAuthResult).toHaveBeenCalledTimes(1);
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-id-token', rawNonce: 'nonce-android' });
+    expect(result?.user.uid).toBe('a2');
+  });
+
+  it('ignores an empty Android pending Apple result', async () => {
+    getPlatform.mockReturnValue('android');
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('requires the Android Apple nonce before exchanging', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockResolvedValue({ credential: { idToken: 'apple-id-token' } });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    await expect(nativeAppleCredentialSignIn({} as never)).rejects.toThrow('Apple sign-in did not return a nonce.');
+    expect(signInWithCredential).not.toHaveBeenCalled();
   });
 });
