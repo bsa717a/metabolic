@@ -36,6 +36,16 @@ describe('Android Capacitor platform', () => {
     expect(gradle).toContain('namespace = "com.mastermetabolic.app"');
     expect(gradle).toContain('applicationId "com.mastermetabolic.app"');
     expect(gradle).toContain('targetSdkVersion rootProject.ext.targetSdkVersion');
+
+    const colors = readClient('android/app/src/main/res/values/colors.xml');
+    const classic = readClient('src/index.css').slice(0, readClient('src/index.css').indexOf('[data-theme="ocean"]'));
+    expect(colors).toContain('name="colorPrimary"');
+    expect(colors).toContain('name="colorPrimaryDark"');
+    expect(colors).toContain('name="colorAccent"');
+    for (const hex of ['#7da35d', '#6d8f52', '#e2c26e']) {
+      expect(colors.toLowerCase()).toContain(hex);
+      expect(classic.toLowerCase()).toContain(hex);
+    }
   });
 
   it('declares verified App Links for the production join URL', () => {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Classic site theme. See client/src/index.css [data-theme="classic"]. -->
+    <color name="colorPrimary">#7da35d</color>
+    <color name="colorPrimaryDark">#6d8f52</color>
+    <color name="colorAccent">#e2c26e</color>
+</resources>
