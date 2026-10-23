@@ -1,0 +1,11 @@
+[
+  {
+    "comment": "PLACEHOLDER until Play App Signing exists. Replace sha256_cert_fingerprints with the Play app-signing certificate SHA-256. Do not invent a fingerprint.",
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.mastermetabolic.app",
+      "sha256_cert_fingerprints": ["PLACEHOLDER_PLAY_APP_SIGNING_SHA256"]
+    }
+  }
+]

@@ -14,11 +14,14 @@
     "native:patch": "bash scripts/apply-native-auth-patches.sh",
     "cap:sync": "npm run native:patch && npm run build && npx cap sync",
     "cap:sync:ios": "npm run native:patch && npm run build && npx cap sync ios",
-    "cap:open:ios": "npx cap open ios"
+    "cap:open:ios": "npx cap open ios",
+    "cap:sync:android": "npm run native:patch && npm run build && npx cap sync android",
+    "cap:open:android": "npx cap open android"
   },
   "dependencies": {
     "@capacitor-community/keep-awake": "^8.0.1",
     "@capacitor-firebase/authentication": "^8.5.1",
+    "@capacitor/android": "^8.5.1",
     "@capacitor/camera": "^8.2.4",
     "@capacitor/core": "^8.5.1",
     "@capacitor/haptics": "^8.0.2",
