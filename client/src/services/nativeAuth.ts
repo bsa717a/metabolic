@@ -4,6 +4,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithCredential,
+  signOut,
   type Auth,
   type UserCredential
 } from 'firebase/auth';
@@ -25,6 +26,13 @@ type PendingAppleAuth = {
 };
 
 const appleExchanges = new Map<string, Promise<UserCredential>>();
+
+type AppleSignInAttempt = {
+  abandoned: boolean;
+};
+
+/** The Android attempt currently waiting on Apple. iOS does not set this. */
+let activeAppleAttempt: AppleSignInAttempt | null = null;
 
 const GOOGLE_SIGN_IN_TIMEOUT_MS = 20_000;
 const APPLE_SIGN_IN_TIMEOUT_MS = 20_000;
@@ -189,9 +197,14 @@ export async function nativeAppleCredentialSignIn(auth: Auth): Promise<UserCrede
 }
 
 async function nativeAndroidAppleCredentialSignIn(auth: Auth): Promise<UserCredential> {
+  const attempt: AppleSignInAttempt = { abandoned: false };
+  activeAppleAttempt = attempt;
   const abort = new AbortController();
   let exchanging: Promise<UserCredential> | null = null;
   const exchangeOnce = (pending: PendingAppleAuth) => {
+    if (attempt.abandoned) {
+      return Promise.reject(new Error('Apple sign-in timed out. Try again.'));
+    }
     if (exchanging) return exchanging;
     const idToken = pending.idToken || null;
     const rawNonce = (idToken ? pending.nonce || pendingAppleNonceFor(idToken) : null) || null;
@@ -201,23 +214,29 @@ async function nativeAndroidAppleCredentialSignIn(auth: Auth): Promise<UserCrede
     if (!rawNonce) {
       return Promise.reject(new Error('Apple sign-in did not return a nonce.'));
     }
-    exchanging = exchangeNativeAppleCredential(auth, idToken, rawNonce);
+    exchanging = exchangeNativeAppleCredential(auth, idToken, rawNonce, attempt);
     return exchanging;
   };
 
-  const fromPlugin = FirebaseAuthentication.signInWithApple({ skipNativeAuth: true }).then((result) =>
-    exchangeOnce({
+  // signInWithApple has no cancel method. A result that arrives after the
+  // timeout must not start a new exchange.
+  const fromPlugin = FirebaseAuthentication.signInWithApple({ skipNativeAuth: true }).then((result) => {
+    if (attempt.abandoned) {
+      return Promise.reject(new Error('Apple sign-in timed out. Try again.'));
+    }
+    return exchangeOnce({
       idToken: result.credential?.idToken,
       nonce: result.credential?.nonce
-    })
-  );
+    });
+  });
+  void fromPlugin.catch(() => undefined);
   const fromPending = waitForPendingAppleAuth(abort.signal, exchangeOnce);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<UserCredential>((_, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new Error('Apple sign-in timed out. Try again.')),
-      APPLE_SIGN_IN_TIMEOUT_MS
-    );
+    timeoutId = setTimeout(() => {
+      attempt.abandoned = true;
+      reject(new Error('Apple sign-in timed out. Try again.'));
+    }, APPLE_SIGN_IN_TIMEOUT_MS);
   });
 
   try {
@@ -297,7 +316,8 @@ export async function consumePendingNativeAppleAuth(auth: Auth): Promise<UserCre
   if (existing) return existing;
   const rawNonce = result.credential?.nonce || pendingAppleNonceFor(idToken);
   if (!rawNonce) throw new Error('Apple sign-in did not return a nonce.');
-  return exchangeNativeAppleCredential(auth, idToken, rawNonce);
+  const attempt = activeAppleAttempt?.abandoned ? activeAppleAttempt : null;
+  return exchangeNativeAppleCredential(auth, idToken, rawNonce, attempt);
 }
 
 function readPendingAppleAuth(): PendingAppleAuth | null {
@@ -375,7 +395,8 @@ function clearSucceededAppleHandoff(idToken: string, rawNonce: string | null | u
 function exchangeNativeAppleCredential(
   auth: Auth,
   idToken: string,
-  rawNonce: string | null | undefined
+  rawNonce: string | null | undefined,
+  attempt?: AppleSignInAttempt | null
 ): Promise<UserCredential> {
   const existing = appleExchanges.get(idToken);
   if (existing) return existing;
@@ -387,15 +408,26 @@ function exchangeNativeAppleCredential(
       rawNonce: rawNonce ?? undefined
     })
   )
-    .then((result) => {
+    .then(async (result) => {
+      if (attempt?.abandoned) {
+        appleExchanges.delete(idToken);
+        try {
+          await signOut(auth);
+        } catch {
+          // The timeout already won. Dropping the handoff below still blocks a replay.
+        }
+        clearSucceededAppleHandoff(idToken, rawNonce);
+        throw new Error('Apple sign-in timed out. Try again.');
+      }
       clearSucceededAppleHandoff(idToken, rawNonce);
       return result;
     })
     .catch((error: unknown) => {
       appleExchanges.delete(idToken);
-      clearMatchingLocalAppleHandoff(idToken, rawNonce);
+      if (!attempt?.abandoned) clearMatchingLocalAppleHandoff(idToken, rawNonce);
       throw error;
     });
   appleExchanges.set(idToken, pending);
+  void pending.catch(() => undefined);
   return pending;
 }

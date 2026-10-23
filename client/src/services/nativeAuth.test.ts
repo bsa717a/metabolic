@@ -4,6 +4,7 @@ const signInWithGoogle = vi.fn();
 const signInWithApple = vi.fn();
 const getPendingAuthResult = vi.fn();
 const signInWithCredential = vi.fn();
+const signOut = vi.fn();
 const getPlatform = vi.fn(() => 'ios');
 const googleCredential = vi.fn((idToken?: unknown, accessToken?: unknown) => ({
   idToken,
@@ -44,7 +45,8 @@ vi.mock('firebase/auth', () => {
   return {
     GoogleAuthProvider: { credential: (idToken?: unknown, accessToken?: unknown) => googleCredential(idToken, accessToken) },
     OAuthProvider,
-    signInWithCredential: (...args: unknown[]) => signInWithCredential(...args)
+    signInWithCredential: (...args: unknown[]) => signInWithCredential(...args),
+    signOut: (...args: unknown[]) => signOut(...args)
   };
 });
 
@@ -54,6 +56,7 @@ describe('nativeAuth', () => {
     vi.clearAllMocks();
     memory.clear();
     getPlatform.mockReturnValue('ios');
+    signOut.mockResolvedValue(undefined);
   });
 
   it('exchanges a native Google ID token for a Firebase credential', async () => {
@@ -149,6 +152,7 @@ describe('nativeAuth', () => {
     expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-id-token', rawNonce: 'nonce-1' });
     expect(result.user.uid).toBe('a1');
     expect(getPendingAuthResult).not.toHaveBeenCalled();
+    expect(signOut).not.toHaveBeenCalled();
   });
 
   it('does not read a pending Apple result on iOS', async () => {
@@ -342,6 +346,7 @@ describe('nativeAuth', () => {
 
     expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-handoff', rawNonce: 'nonce-handoff' });
     expect(result.user.uid).toBe('a5');
+    expect(signOut).not.toHaveBeenCalled();
   });
 
   it('finishes Android Apple sign-in from getPendingAuthResult if the plugin call never resolves', async () => {
@@ -382,6 +387,65 @@ describe('nativeAuth', () => {
     expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
     expect(clearPending).toHaveBeenCalledTimes(1);
     delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('does not start an Apple exchange when the plugin result arrives after the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      let resolvePlugin: ((value: unknown) => void) | undefined;
+      signInWithApple.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePlugin = resolve;
+        })
+      );
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn({} as never);
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+      resolvePlugin?.({ credential: { idToken: 'late-apple', nonce: 'late-nonce' } });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(signInWithCredential).not.toHaveBeenCalled();
+      expect(signOut).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('signs out a Firebase session created after the Apple timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      signInWithApple.mockReturnValue(new Promise(() => undefined));
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      memory.set(
+        'metabolic.pendingAppleAuth',
+        JSON.stringify({ idToken: 'apple-late', nonce: 'nonce-late' })
+      );
+      let resolveExchange: ((value: unknown) => void) | undefined;
+      signInWithCredential.mockReturnValue(
+        new Promise((resolve) => {
+          resolveExchange = resolve;
+        })
+      );
+      const auth = {} as never;
+      const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn(auth);
+      await Promise.resolve();
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+      expect(signInWithCredential).toHaveBeenCalledTimes(1);
+      resolveExchange?.({ user: { uid: 'late' } });
+      await vi.waitFor(() => {
+        expect(signOut).toHaveBeenCalledWith(auth);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('times out Android Apple sign-in when neither the plugin nor the handoff settles', async () => {
