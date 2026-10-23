@@ -27,6 +27,7 @@ type PendingAppleAuth = {
 const appleExchanges = new Map<string, Promise<UserCredential>>();
 
 const GOOGLE_SIGN_IN_TIMEOUT_MS = 20_000;
+const APPLE_SIGN_IN_TIMEOUT_MS = 20_000;
 const CREDENTIAL_EXCHANGE_TIMEOUT_MS = 12_000;
 
 async function waitUntilVisible() {
@@ -176,16 +177,109 @@ export async function nativeGoogleCredentialSignIn(auth: Auth): Promise<UserCred
 }
 
 export async function nativeAppleCredentialSignIn(auth: Auth): Promise<UserCredential> {
-  const result = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true });
-  const idToken = result.credential?.idToken;
-  if (!idToken) throw new Error('Apple sign-in did not return an ID token.');
-  const rawNonce =
-    result.credential?.nonce ||
-    (Capacitor.getPlatform() === 'android' ? pendingAppleNonceFor(idToken) : null);
-  if (Capacitor.getPlatform() === 'android' && !rawNonce) {
-    throw new Error('Apple sign-in did not return a nonce.');
+  // iOS delivers the Apple ID token on the original plugin call. The Android
+  // activity is often recreated by the OAuth tab, which drops that call.
+  if (Capacitor.getPlatform() !== 'android') {
+    const result = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true });
+    const idToken = result.credential?.idToken;
+    if (!idToken) throw new Error('Apple sign-in did not return an ID token.');
+    return exchangeNativeAppleCredential(auth, idToken, result.credential?.nonce);
   }
-  return exchangeNativeAppleCredential(auth, idToken, rawNonce);
+  return nativeAndroidAppleCredentialSignIn(auth);
+}
+
+async function nativeAndroidAppleCredentialSignIn(auth: Auth): Promise<UserCredential> {
+  const abort = new AbortController();
+  let exchanging: Promise<UserCredential> | null = null;
+  const exchangeOnce = (pending: PendingAppleAuth) => {
+    if (exchanging) return exchanging;
+    const idToken = pending.idToken || null;
+    const rawNonce = (idToken ? pending.nonce || pendingAppleNonceFor(idToken) : null) || null;
+    if (!idToken) {
+      return Promise.reject(new Error('Apple sign-in did not return an ID token.'));
+    }
+    if (!rawNonce) {
+      return Promise.reject(new Error('Apple sign-in did not return a nonce.'));
+    }
+    exchanging = exchangeNativeAppleCredential(auth, idToken, rawNonce);
+    return exchanging;
+  };
+
+  const fromPlugin = FirebaseAuthentication.signInWithApple({ skipNativeAuth: true }).then((result) =>
+    exchangeOnce({
+      idToken: result.credential?.idToken,
+      nonce: result.credential?.nonce
+    })
+  );
+  const fromPending = waitForPendingAppleAuth(abort.signal, exchangeOnce);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<UserCredential>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error('Apple sign-in timed out. Try again.')),
+      APPLE_SIGN_IN_TIMEOUT_MS
+    );
+  });
+
+  try {
+    return await Promise.race([fromPlugin, fromPending, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    abort.abort();
+  }
+}
+
+function waitForPendingAppleAuth(
+  signal: AbortSignal,
+  exchange: (pending: PendingAppleAuth) => Promise<UserCredential>
+): Promise<UserCredential> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    const finish = (run: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(PENDING_APPLE_AUTH_EVENT, onEvent);
+      }
+      if (poll) clearInterval(poll);
+      signal.removeEventListener('abort', onAbort);
+      run();
+    };
+    const tryConsume = () => {
+      if (settled || signal.aborted) return;
+      const stored = readPendingAppleAuth();
+      if (stored?.idToken && (stored.nonce || pendingAppleNonceFor(stored.idToken))) {
+        void exchange(stored)
+          .then((result) => finish(() => resolve(result)))
+          .catch((error) => finish(() => reject(error)));
+        return;
+      }
+      void FirebaseAuthentication.getPendingAuthResult()
+        .then((result) => {
+          if (settled || signal.aborted) return;
+          const idToken = result?.credential?.idToken;
+          if (!idToken) return;
+          const nonce = result.credential?.nonce || pendingAppleNonceFor(idToken);
+          if (!nonce) return;
+          void exchange({ idToken, nonce })
+            .then((credential) => finish(() => resolve(credential)))
+            .catch((error) => finish(() => reject(error)));
+        })
+        .catch(() => undefined);
+    };
+    const onEvent = () => tryConsume();
+    const onAbort = () => finish(() => undefined);
+    if (signal.aborted) {
+      finish(() => undefined);
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener(PENDING_APPLE_AUTH_EVENT, onEvent);
+    }
+    poll = setInterval(tryConsume, 300);
+    signal.addEventListener('abort', onAbort);
+    tryConsume();
+  });
 }
 
 /**

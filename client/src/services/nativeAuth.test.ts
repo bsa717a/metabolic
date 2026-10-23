@@ -220,9 +220,68 @@ describe('nativeAuth', () => {
   it('requires the Android Apple nonce before exchanging', async () => {
     getPlatform.mockReturnValue('android');
     signInWithApple.mockResolvedValue({ credential: { idToken: 'apple-id-token' } });
+    getPendingAuthResult.mockResolvedValue({ credential: null });
     const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
 
     await expect(nativeAppleCredentialSignIn({} as never)).rejects.toThrow('Apple sign-in did not return a nonce.');
     expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('finishes Android Apple sign-in from the pending handoff if the plugin call never resolves', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockReturnValue(new Promise(() => undefined));
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-handoff', nonce: 'nonce-handoff' })
+    );
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a5' } });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    const result = await nativeAppleCredentialSignIn({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-handoff', rawNonce: 'nonce-handoff' });
+    expect(result.user.uid).toBe('a5');
+  });
+
+  it('finishes Android Apple sign-in from getPendingAuthResult if the plugin call never resolves', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockReturnValue(new Promise(() => undefined));
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-pending', nonce: 'nonce-pending' }
+    });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a6' } });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    const result = await nativeAppleCredentialSignIn({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-pending', rawNonce: 'nonce-pending' });
+    expect(result.user.uid).toBe('a6');
+  });
+
+  it('rejects a cancelled Android Apple sign-in instead of leaving the button disabled', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockRejectedValue(new Error('The user canceled the sign-in flow.'));
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    await expect(nativeAppleCredentialSignIn({} as never)).rejects.toThrow('canceled');
+    expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('times out Android Apple sign-in when neither the plugin nor the handoff settles', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      signInWithApple.mockReturnValue(new Promise(() => undefined));
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn({} as never);
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
