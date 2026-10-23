@@ -30,6 +30,8 @@ describe('Android Capacitor platform', () => {
     const variables = readClient('android/variables.gradle');
     expect(variables).toContain('compileSdkVersion = 36');
     expect(variables).toContain('targetSdkVersion = 36');
+    expect(variables).toContain('rgcfaIncludeGoogle = true');
+    expect(variables).toContain("androidxCredentialsVersion = '1.3.0'");
     const gradle = readClient('android/app/build.gradle');
     expect(gradle).toContain('namespace = "com.mastermetabolic.app"');
     expect(gradle).toContain('applicationId "com.mastermetabolic.app"');
