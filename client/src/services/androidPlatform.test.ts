@@ -113,6 +113,9 @@ describe('Android Capacitor platform', () => {
     const google = readClient('native/android/GoogleAuthProviderHandler.java');
     expect(google).toContain('.requestIdToken(pluginImplementation.getPlugin().getContext().getString(R.string.default_web_client_id))');
     expect(google).toContain('metabolic.pendingGoogleAuth');
+    expect(google).toContain('https://metaos.mastermetabolic.com');
+    expect(google).toContain('window.location.origin !==');
+    expect(google).toContain('if (!"true".equals(result))');
     expect(google).toContain('WILL_BE_OVERRIDDEN');
     expect(google).not.toMatch(/[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}/);
 

@@ -8,6 +8,7 @@ package io.capawesome.capacitorjs.plugins.firebase.authentication.handlers;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.IntentSender;
@@ -75,6 +76,7 @@ public class GoogleAuthProviderHandler {
 
     private static final String PREFS = "metabolic.nativeAuth";
     private static final String PENDING_GOOGLE_KEY = "metabolic.pendingGoogleAuth";
+    private static final String APP_ORIGIN = "https://metaos.mastermetabolic.com";
     private static final String UNCONFIGURED_WEB_CLIENT_ID = "WILL_BE_OVERRIDDEN";
 
     public GoogleAuthProviderHandler(FirebaseAuthentication pluginImplementation) {
@@ -366,12 +368,15 @@ public class GoogleAuthProviderHandler {
                 return;
             }
             String escaped = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "");
-            // Leave the preference in place. MainActivity injects again on resume
-            // and when the page finishes on the app origin, then clears it.
+            // Same origin gate as MainActivity and the Apple handler. A false or
+            // null result leaves the preference so a later page load can retry.
             // Skip the write when logout or a newer sign-in already replaced this payload.
             String js =
                 "(function () {" +
                 " try {" +
+                " if (window.location.origin !== '" +
+                APP_ORIGIN +
+                "') return false;" +
                 " var expected = '" +
                 escaped +
                 "';" +
@@ -386,7 +391,19 @@ public class GoogleAuthProviderHandler {
                 " return true;" +
                 " } catch (e) { return false; }" +
                 "})()";
-            webView.evaluateJavascript(js, null);
+            webView.evaluateJavascript(js, result -> {
+                if (!"true".equals(result)) {
+                    return;
+                }
+                SharedPreferences prefs = pluginImplementation
+                    .getPlugin()
+                    .getContext()
+                    .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                if (!json.equals(prefs.getString(PENDING_GOOGLE_KEY, null))) {
+                    return;
+                }
+                prefs.edit().remove(PENDING_GOOGLE_KEY).apply();
+            });
         });
     }
 
