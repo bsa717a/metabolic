@@ -5,6 +5,8 @@ import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import com.getcapacitor.Bridge;
+import org.json.JSONException;
+import org.json.JSONObject;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 
@@ -174,6 +176,45 @@ public class MainActivity extends BridgeActivity {
                 .remove(PENDING_APPLE_KEY)
                 .remove(PENDING_APPLE_NONCE_KEY)
                 .apply();
+        }
+
+        /**
+         * A successful Apple exchange is done with this id token and nonce.
+         * Remove only that handoff. A newer payload stays for the next injection.
+         */
+        @JavascriptInterface
+        public void clearAppleHandoff(String idToken, String nonce) {
+            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+            String json = prefs.getString(PENDING_APPLE_KEY, null);
+            String savedNonce = prefs.getString(PENDING_APPLE_NONCE_KEY, null);
+            String token = idToken == null ? "" : idToken;
+            String usedNonce = nonce == null ? "" : nonce;
+            if (json == null || json.isEmpty()) {
+                if (!usedNonce.isEmpty() && usedNonce.equals(savedNonce)) {
+                    prefs.edit().remove(PENDING_APPLE_NONCE_KEY).apply();
+                }
+                return;
+            }
+            try {
+                JSONObject payload = new JSONObject(json);
+                String storedToken = payload.optString("idToken", "");
+                String storedNonce = payload.optString("nonce", "");
+                boolean sameToken = !storedToken.isEmpty() && storedToken.equals(token);
+                boolean nonceOnly = storedToken.isEmpty() && !storedNonce.isEmpty() && storedNonce.equals(usedNonce);
+                if (sameToken && !storedNonce.isEmpty() && !usedNonce.isEmpty() && !storedNonce.equals(usedNonce)) {
+                    return;
+                }
+                if (!sameToken && !nonceOnly) {
+                    return;
+                }
+                SharedPreferences.Editor editor = prefs.edit().remove(PENDING_APPLE_KEY);
+                if (savedNonce == null || savedNonce.isEmpty() || savedNonce.equals(storedNonce) || savedNonce.equals(usedNonce)) {
+                    editor.remove(PENDING_APPLE_NONCE_KEY);
+                }
+                editor.apply();
+            } catch (JSONException exception) {
+                // Leave an unreadable payload so a later injection can still retry it.
+            }
         }
 
         private String pendingValue(String key) {

@@ -319,6 +319,7 @@ function pendingAppleNonceFor(idToken: string): string | null {
 
 type PendingAuthBridge = {
   clearPending?: () => void;
+  clearAppleHandoff?: (idToken: string, nonce: string) => void;
 };
 
 /**
@@ -340,19 +341,11 @@ export function clearPendingNativeAuthHandoff(): void {
   }
 }
 
-function clearPendingAppleAuth() {
-  try {
-    localStorage.removeItem(PENDING_APPLE_AUTH_KEY);
-  } catch {
-    // Ignore storage failures. The native preference is cleared only after injection.
-  }
-}
-
 /**
- * Drop the handoff that `signInWithCredential` just rejected. A different
- * id token, or a nonce that this attempt did not use, stays for a later consume.
+ * Drop the local handoff that this exchange used. A different id token, or a
+ * nonce that this attempt did not use, stays for a later consume.
  */
-function clearFailedAppleHandoff(idToken: string, rawNonce: string | null | undefined) {
+function clearMatchingLocalAppleHandoff(idToken: string, rawNonce: string | null | undefined) {
   try {
     const stored = readPendingAppleAuth();
     if (!stored) return;
@@ -365,7 +358,17 @@ function clearFailedAppleHandoff(idToken: string, rawNonce: string | null | unde
     if (!consumedThisAttempt) return;
     localStorage.removeItem(PENDING_APPLE_AUTH_KEY);
   } catch {
-    // Ignore storage failures. The native preference is cleared only after injection.
+    // Ignore storage failures.
+  }
+}
+
+function clearSucceededAppleHandoff(idToken: string, rawNonce: string | null | undefined) {
+  clearMatchingLocalAppleHandoff(idToken, rawNonce);
+  const bridge = (globalThis as { MetabolicNativeAuth?: PendingAuthBridge }).MetabolicNativeAuth;
+  try {
+    bridge?.clearAppleHandoff?.(idToken, rawNonce ?? '');
+  } catch {
+    // The bridge exists only in the Android WebView.
   }
 }
 
@@ -385,12 +388,12 @@ function exchangeNativeAppleCredential(
     })
   )
     .then((result) => {
-      clearPendingAppleAuth();
+      clearSucceededAppleHandoff(idToken, rawNonce);
       return result;
     })
     .catch((error: unknown) => {
       appleExchanges.delete(idToken);
-      clearFailedAppleHandoff(idToken, rawNonce);
+      clearMatchingLocalAppleHandoff(idToken, rawNonce);
       throw error;
     });
   appleExchanges.set(idToken, pending);

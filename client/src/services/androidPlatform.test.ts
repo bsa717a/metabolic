@@ -153,6 +153,11 @@ describe('Android Capacitor platform', () => {
     expect(activity).toContain('json.equals(prefs.getString(key, null))');
     expect(activity).toContain('pendingGoogle');
     expect(activity).toContain('pendingApple');
+    const clearApple = activity.slice(activity.indexOf('void clearAppleHandoff'), activity.indexOf('private String pendingValue'));
+    expect(clearApple).toContain('PENDING_APPLE_KEY');
+    expect(clearApple).toContain('PENDING_APPLE_NONCE_KEY');
+    expect(clearApple).toContain('storedToken.equals(token)');
+    expect(clearApple).not.toContain('PENDING_GOOGLE_KEY');
     expect(activity).not.toContain('evaluateJavascript(js, result ->\n            getSharedPreferences');
     expect(activity).not.toContain('SessionCues');
     expect(activity).not.toContain('BillingClient');

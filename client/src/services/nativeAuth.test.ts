@@ -201,6 +201,48 @@ describe('nativeAuth', () => {
     expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
   });
 
+  it('clears the Android Apple preference for the handoff that just succeeded', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-used', nonce: 'nonce-used' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a7' } });
+    const clearAppleHandoff = vi.fn();
+    const clearPending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearAppleHandoff, clearPending });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(result?.user.uid).toBe('a7');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearAppleHandoff).toHaveBeenCalledWith('apple-used', 'nonce-used');
+    expect(clearPending).not.toHaveBeenCalled();
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('keeps a newer Apple handoff when an older exchange succeeds', async () => {
+    getPlatform.mockReturnValue('android');
+    const fresh = JSON.stringify({ idToken: 'apple-fresh', nonce: 'nonce-fresh' });
+    memory.set('metabolic.pendingAppleAuth', fresh);
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-old', nonce: 'nonce-old' }
+    });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a8' } });
+    const clearAppleHandoff = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearAppleHandoff });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(result?.user.uid).toBe('a8');
+    expect(memory.get('metabolic.pendingAppleAuth')).toBe(fresh);
+    expect(clearAppleHandoff).toHaveBeenCalledWith('apple-old', 'nonce-old');
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
   it('clears a failed Android Apple handoff so a later launch does not replay it', async () => {
     getPlatform.mockReturnValue('android');
     memory.set(
