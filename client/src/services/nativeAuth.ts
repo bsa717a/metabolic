@@ -243,6 +243,7 @@ async function nativeAndroidAppleCredentialSignIn(auth: Auth): Promise<UserCrede
   const timeout = new Promise<UserCredential>((_, reject) => {
     timeoutId = setTimeout(() => {
       attempt.abandoned = true;
+      if (activeAppleAttempt === attempt) activeAppleAttempt = null;
       reject(new Error('Apple sign-in timed out. Try again.'));
     }, APPLE_SIGN_IN_TIMEOUT_MS);
   });
@@ -332,8 +333,9 @@ export async function consumePendingNativeAppleAuth(auth: Auth): Promise<UserCre
   if (existing) return existing;
   const rawNonce = result.credential?.nonce || pendingAppleNonceFor(idToken);
   if (!rawNonce) throw new Error('Apple sign-in did not return a nonce.');
-  const attempt = activeAppleAttempt?.abandoned ? activeAppleAttempt : null;
-  return exchangeNativeAppleCredential(auth, idToken, rawNonce, attempt);
+  // This handoff started after the timed-out call. It is a new attempt.
+  // Only the exchange created by that call is signed out when its attempt is abandoned.
+  return exchangeNativeAppleCredential(auth, idToken, rawNonce);
 }
 
 function readPendingAppleAuth(): PendingAppleAuth | null {

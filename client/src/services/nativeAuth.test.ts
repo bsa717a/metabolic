@@ -513,6 +513,32 @@ describe('nativeAuth', () => {
     }
   });
 
+  it('finishes a handoff that starts after an Apple timeout without signing it out', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      signInWithApple.mockReturnValue(new Promise(() => undefined));
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      const { nativeAppleCredentialSignIn, consumePendingNativeAppleAuth } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn({} as never);
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+
+      getPendingAuthResult.mockResolvedValue({
+        credential: { idToken: 'apple-next', nonce: 'nonce-next' }
+      });
+      signInWithCredential.mockResolvedValue({ user: { uid: 'next' } });
+      const result = await consumePendingNativeAppleAuth({} as never);
+
+      expect(result?.user.uid).toBe('next');
+      expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-next', rawNonce: 'nonce-next' });
+      expect(signOut).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('times out Android Apple sign-in when neither the plugin nor the handoff settles', async () => {
     vi.useFakeTimers();
     try {
