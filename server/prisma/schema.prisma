@@ -37,6 +37,7 @@ enum SubscriptionSource {
   MANUAL
   APPLE
   STRIPE
+  GOOGLE
 }
 enum CoachRelationshipStatus {
   ACTIVE
@@ -270,6 +271,9 @@ model User {
   appleOriginalTransactionId String? @unique
   appleAppAccountToken String? @unique
   appleProductId String?
+  googlePurchaseToken String? @unique
+  googleObfuscatedAccountId String? @unique
+  googleProductId String?
   gracePeriodEndsAt DateTime?
   nextPlanAfterCoach PlanTier?
   createdAt DateTime @default(now())
@@ -340,6 +344,7 @@ model User {
   guidedJourneyEvents GuidedJourneyEvent[]
   pushDevices PushDevice[]
   appleTransactions AppleProcessedTransaction[]
+  googlePurchases GoogleProcessedPurchase[]
   exerciseAutoSetting UserExerciseAutoSetting?
   exerciseAutoProgress UserExerciseAutoProgress[]
 }
@@ -358,6 +363,22 @@ model AppleProcessedTransaction {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([originalTransactionId])
+  @@index([userId])
+}
+
+model GoogleProcessedPurchase {
+  id String @id @default(cuid())
+  purchaseToken String @unique
+  orderId String?
+  userId String
+  productId String
+  notificationType String?
+  expiryTime DateTime?
+  acknowledgementState String?
+  environment String?
+  processedAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 

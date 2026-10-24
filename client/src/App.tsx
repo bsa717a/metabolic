@@ -4,6 +4,7 @@ import type { User } from 'firebase/auth';
 import { listenForAuth, reloadCurrentUser } from './services/auth';
 import { api } from './services/api';
 import { syncAppleEntitlements } from './services/appleIap';
+import { syncGoogleEntitlements } from './services/googlePlay';
 import { applyForegroundProfileSync } from './services/foregroundProfileSync';
 import { listenForForegroundPush, syncPushTokenIfGranted } from './services/pushNotifications';
 import type { AppUser } from './types';
@@ -248,6 +249,8 @@ export default function App() {
             setAppUser(me.user);
             const appleUser = await syncAppleEntitlements();
             if (appleUser) setAppUser(appleUser);
+            const googleUser = await syncGoogleEntitlements();
+            if (googleUser) setAppUser(googleUser);
             await refreshOnboardingStatus();
           } catch {
             setAppUser(null);
@@ -291,6 +294,7 @@ export default function App() {
           }
         },
         syncApple: syncAppleEntitlements,
+        syncGoogle: syncGoogleEntitlements,
         apply: setAppUser
       });
       void refreshEmailVerification();

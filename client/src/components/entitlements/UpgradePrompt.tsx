@@ -4,8 +4,9 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import type { PlanSlug } from '../../types';
 import { appleFallbackPrice } from '../../data/appleIap';
+import { googleFallbackPrice } from '../../data/googlePlay';
 import { getRequiredPlan, getUpgradePlan, planLabel, planPriceLabel, type FeatureKey } from '../../utils/entitlements';
-import { usesAppleIapCheckout } from '../../utils/nativePlatform';
+import { usesAppleIapCheckout, usesGooglePlayCheckout } from '../../utils/nativePlatform';
 
 type UpgradePromptProps = {
   feature?: FeatureKey;
@@ -17,7 +18,9 @@ type UpgradePromptProps = {
 export function UpgradePrompt({ feature, requiredPlan, currentPlan = 'starter', className }: UpgradePromptProps) {
   const required = requiredPlan ?? (feature ? getRequiredPlan(feature) : 'self_guided');
   const upgrade = getUpgradePlan(currentPlan, required);
-  const price = usesAppleIapCheckout() ? appleFallbackPrice(upgrade) ?? planPriceLabel(upgrade) : planPriceLabel(upgrade);
+  const nativePrice = usesGooglePlayCheckout() ? googleFallbackPrice(upgrade) : appleFallbackPrice(upgrade);
+  const price =
+    usesAppleIapCheckout() || usesGooglePlayCheckout() ? nativePrice ?? planPriceLabel(upgrade) : planPriceLabel(upgrade);
 
   if (required === 'coach_led') {
     return (

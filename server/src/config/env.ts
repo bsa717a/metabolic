@@ -58,6 +58,11 @@ const envSchema = z.object({
   APPLE_IAP_ISSUER_ID: z.string().optional().default(""),
   APPLE_IAP_KEY_ID: z.string().optional().default(""),
   APPLE_IAP_PRIVATE_KEY: z.string().optional().default(""),
+  GOOGLE_PLAY_PACKAGE_NAME: z.string().optional().default("com.mastermetabolic.app"),
+  GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL: z.string().optional().default(""),
+  GOOGLE_PLAY_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional().default(""),
+  // Pub/Sub push audience. Unknown until the RTDN subscription exists. Empty skips JWT checks.
+  GOOGLE_PLAY_RTDN_AUDIENCE: z.string().optional().default(""),
   STORE_NOTIFY_EMAIL: z.string().email().optional().or(z.literal("")).default(""),
   GIT_SHA: z.string().optional().default("dev"),
   CRON_SECRET: z.string().optional().default(""),

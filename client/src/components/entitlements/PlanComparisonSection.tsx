@@ -2,8 +2,9 @@ import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { appleFallbackPrice } from '../../data/appleIap';
+import { googleFallbackPrice } from '../../data/googlePlay';
 import { PUBLIC_PLANS } from '../../data/plans';
-import { usesAppleIapCheckout } from '../../utils/nativePlatform';
+import { usesAppleIapCheckout, usesGooglePlayCheckout } from '../../utils/nativePlatform';
 
 export function PlanComparisonSection({
   showActions = false,
@@ -12,7 +13,9 @@ export function PlanComparisonSection({
   showActions?: boolean;
   authenticated?: boolean;
 }) {
-  const appleCheckout = usesAppleIapCheckout();
+  const nativeCheckout = usesAppleIapCheckout() || usesGooglePlayCheckout();
+  const nativePrice = (planId: string) =>
+    usesGooglePlayCheckout() ? googleFallbackPrice(planId) : appleFallbackPrice(planId);
   return (
     <>
       <div className="mb-10 text-center">
@@ -40,7 +43,7 @@ export function PlanComparisonSection({
             ) : null}
             <h3 className="text-xl font-bold text-brand-navy dark:text-brand-off-white">{plan.name}</h3>
             <p className="mt-1 text-3xl font-bold text-brand-green">
-              {appleCheckout ? appleFallbackPrice(plan.id) ?? plan.price : plan.price}
+              {nativeCheckout ? nativePrice(plan.id) ?? plan.price : plan.price}
             </p>
             <p className="mt-2 text-sm text-app-text-muted">{plan.description}</p>
             <ul className="mt-6 flex-1 space-y-3">
