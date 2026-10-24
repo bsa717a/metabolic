@@ -1,17 +1,11 @@
 import { type User } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
-import { rankPlan } from './googlePlayCatalog.js';
 import { playDeveloperClient } from './googlePlayDeveloperClient.js';
-import { assertAccountBinding, entitlementWrite, pickHighestState } from './googlePlayEntitlement.js';
-import { readDeveloperNotification } from './googlePlayRtdn.js';
+import { assertAccountBinding, chooseSubscriptionState, entitlementWrite } from './googlePlayEntitlement.js';
+import { readDeveloperNotification, rtdnEntitlementSignal } from './googlePlayRtdn.js';
 import { GooglePlayError, type GoogleSubscriptionState, type PlayDeveloperClient } from './googlePlayTypes.js';
-import {
-  acknowledgeVerified,
-  verifyBindAndAcknowledge,
-  verifyPlayPurchase,
-  type VerifiedPlayPurchase
-} from './googlePlayVerify.js';
+import { acknowledgeVerified, verifyPlayPurchase, type VerifiedPlayPurchase } from './googlePlayVerify.js';
 import { serializeAppUser } from './userSerialization.js';
 
 function entitlementUser(user: User) {
@@ -32,22 +26,18 @@ export async function getOrCreateGoogleObfuscatedAccountId(userId: string): Prom
   });
   if (existing?.googleObfuscatedAccountId) return existing.googleObfuscatedAccountId;
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const token = randomUUID();
-    try {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { googleObfuscatedAccountId: token }
-      });
-      return token;
-    } catch {
-      const raced = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { googleObfuscatedAccountId: true }
-      });
-      if (raced?.googleObfuscatedAccountId) return raced.googleObfuscatedAccountId;
-    }
-  }
+  const token = randomUUID();
+  const claimed = await prisma.user.updateMany({
+    where: { id: userId, googleObfuscatedAccountId: null },
+    data: { googleObfuscatedAccountId: token }
+  });
+  if (claimed.count === 1) return token;
+
+  const raced = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { googleObfuscatedAccountId: true }
+  });
+  if (raced?.googleObfuscatedAccountId) return raced.googleObfuscatedAccountId;
   throw new GooglePlayError('Unable to allocate a Google Play account id', 500);
 }
 
@@ -58,6 +48,23 @@ async function applyVerified(user: User, state: GoogleSubscriptionState | null) 
     where: { id: user.id },
     data: write.data
   });
+}
+
+async function acknowledgeAndRecord(
+  client: PlayDeveloperClient,
+  userId: string,
+  verified: VerifiedPlayPurchase,
+  notificationType?: string | null
+) {
+  try {
+    const acked = await acknowledgeVerified(client, verified);
+    await recordProcessed(userId, acked, notificationType);
+  } catch (error) {
+    if (error instanceof GooglePlayError && error.statusCode < 500) {
+      throw new GooglePlayError('Google Play could not acknowledge this purchase', 502);
+    }
+    throw error;
+  }
 }
 
 async function recordProcessed(userId: string, verified: VerifiedPlayPurchase, notificationType?: string | null) {
@@ -116,12 +123,20 @@ async function resolveUserForPurchase(
   return owner;
 }
 
-function chooseState(verified: VerifiedPlayPurchase[]): VerifiedPlayPurchase {
-  const states = verified.map((item) => item.state);
-  const chosen =
-    pickHighestState(states) ??
-    states.reduce((best, current) => (rankPlan(current.plan) >= rankPlan(best.plan) ? current : best));
-  return verified.find((item) => item.state.purchaseToken === chosen.purchaseToken) ?? verified[0];
+function chooseState(user: User, verified: VerifiedPlayPurchase[]): VerifiedPlayPurchase {
+  const chosen = chooseSubscriptionState(
+    verified.map((item) => item.state),
+    user.googlePurchaseToken
+  );
+  return verified.find((item) => item.state.purchaseToken === chosen?.purchaseToken) ?? verified[0];
+}
+
+function unknownProduct(error: unknown) {
+  return (
+    error instanceof GooglePlayError &&
+    error.statusCode === 400 &&
+    error.message.includes('not a digital Metabolic plan')
+  );
 }
 
 export async function processGooglePurchases(options: {
@@ -154,64 +169,59 @@ export async function processGooglePurchases(options: {
     return serializeAppUser(user);
   }
 
-  if (unique.length === 1) {
-    const purchase = unique[0];
-    const { verified, bound } = await verifyBindAndAcknowledge({
-      purchaseToken: purchase.purchaseToken,
-      expectedProductId: purchase.productId,
-      client,
-      bind: async (verifiedPurchase) => {
-        const owner = await resolveUserForPurchase(options.userId, verifiedPurchase.state);
-        return applyVerified(owner, verifiedPurchase.state);
-      }
-    });
-    await recordProcessed(bound.id, verified);
-    return serializeAppUser(bound);
-  }
-
   const verified: VerifiedPlayPurchase[] = [];
   for (const purchase of unique) {
-    verified.push(
-      await verifyPlayPurchase({
+    try {
+      const verifiedPurchase = await verifyPlayPurchase({
         purchaseToken: purchase.purchaseToken,
         expectedProductId: purchase.productId,
         client
-      })
-    );
+      });
+      await resolveUserForPurchase(options.userId, verifiedPurchase.state);
+      verified.push(verifiedPurchase);
+    } catch (error) {
+      if (unique.length > 1 && unknownProduct(error)) continue;
+      throw error;
+    }
   }
 
-  const chosen = chooseState(verified);
+  if (verified.length === 0) {
+    throw new GooglePlayError('Google Play product is not a digital Metabolic plan', 400);
+  }
+
+  const chosen = chooseState(user, verified);
   const owner = await resolveUserForPurchase(options.userId, chosen.state);
   const updated = await applyVerified(owner, chosen.state);
   for (const item of verified) {
-    const acked = await acknowledgeVerified(client, item);
-    await recordProcessed(updated.id, acked);
+    await acknowledgeAndRecord(client, updated.id, item);
   }
   return serializeAppUser(updated);
 }
 
-export async function processPlayDeveloperNotification(body: unknown, client: PlayDeveloperClient = playDeveloperClient()) {
+export async function processPlayDeveloperNotification(
+  body: unknown,
+  client: PlayDeveloperClient = playDeveloperClient(),
+  options?: { trustNotification?: boolean }
+) {
+  const play = client ?? playDeveloperClient();
   const event = readDeveloperNotification(body);
   if (event.kind === 'test') return { received: true, ignored: true, reason: 'test' };
   if (event.kind === 'ignore') return { received: true, ignored: true, reason: event.reason };
 
-  const notificationType = event.kind === 'voided' ? 'REVOKED' : event.notificationType;
-  const productId = event.kind === 'subscription' ? event.productId : null;
+  const signal = rtdnEntitlementSignal(event, options?.trustNotification === true);
 
   try {
-    const { verified, bound } = await verifyBindAndAcknowledge({
+    const verifiedPurchase = await verifyPlayPurchase({
       purchaseToken: event.purchaseToken,
-      expectedProductId: productId,
-      notificationType,
-      notificationProductId: productId,
-      client,
-      bind: async (verifiedPurchase) => {
-        const owner = await resolveUserForPurchase(null, verifiedPurchase.state);
-        return applyVerified(owner, verifiedPurchase.state);
-      }
+      expectedProductId: signal.productId,
+      notificationType: signal.notificationType,
+      notificationProductId: signal.productId,
+      client: play
     });
-    await recordProcessed(bound.id, verified, notificationType);
-    return { received: true, userId: bound.id, notificationType };
+    const owner = await resolveUserForPurchase(null, verifiedPurchase.state);
+    const updated = await applyVerified(owner, verifiedPurchase.state);
+    await acknowledgeAndRecord(play, updated.id, verifiedPurchase, signal.notificationType);
+    return { received: true, userId: updated.id, notificationType: signal.notificationType };
   } catch (error) {
     if (error instanceof GooglePlayError && error.statusCode === 404) {
       return { received: true, ignored: true, reason: 'unlinked_purchase' };
@@ -222,11 +232,7 @@ export async function processPlayDeveloperNotification(body: unknown, client: Pl
     if (error instanceof GooglePlayError && error.statusCode === 400 && error.message.includes('was not found')) {
       return { received: true, ignored: true, reason: 'not_found' };
     }
-    if (
-      error instanceof GooglePlayError &&
-      error.statusCode === 400 &&
-      error.message.includes('not a digital Metabolic plan')
-    ) {
+    if (unknownProduct(error)) {
       return { received: true, ignored: true, reason: 'unknown_product' };
     }
     throw error;

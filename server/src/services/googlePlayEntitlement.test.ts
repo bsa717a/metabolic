@@ -6,6 +6,8 @@ import {
   GOOGLE_PLAY_PRODUCT_SELF_GUIDED_MONTHLY
 } from './googlePlayCatalog.js';
 import {
+  assertAccountBinding,
+  chooseSubscriptionState,
   decideEntitlementUpdate,
   deriveSubscriptionState,
   entitlementWrite,
@@ -75,6 +77,11 @@ describe('deriveSubscriptionState', () => {
     assert.equal(deriveSubscriptionState(purchase(), now, 'REVOKED').kind, 'expired');
     assert.equal(deriveSubscriptionState(purchase(), now, 'EXPIRED').kind, 'expired');
     assert.equal(deriveSubscriptionState(purchase(), now, 'ON_HOLD').kind, 'expired');
+    assert.equal(deriveSubscriptionState(purchase(), now, 'PAUSED').kind, 'expired');
+    assert.equal(
+      deriveSubscriptionState(purchase({ subscriptionState: 'SUBSCRIPTION_STATE_PAUSED' }), now).kind,
+      'expired'
+    );
     assert.equal(
       deriveSubscriptionState(purchase({ subscriptionState: 'SUBSCRIPTION_STATE_ON_HOLD' }), now).kind,
       'expired'
@@ -239,5 +246,65 @@ describe('pickHighestState and decideEntitlementUpdate', () => {
     );
     assert.equal(write.action, 'noop');
     assert.equal(write.data, null);
+  });
+
+  it('keeps the linked expired token when a higher expired token is also present', () => {
+    const selfGuided = deriveSubscriptionState(
+      purchase({
+        purchaseToken: 'token-self',
+        lineItems: [
+          {
+            productId: GOOGLE_PLAY_PRODUCT_SELF_GUIDED_MONTHLY,
+            expiryTime: new Date('2026-09-01T00:00:00.000Z')
+          }
+        ]
+      }),
+      now
+    );
+    const plus = deriveSubscriptionState(
+      purchase({
+        purchaseToken: 'token-plus',
+        lineItems: [
+          {
+            productId: GOOGLE_PLAY_PRODUCT_PLUS_MONTHLY,
+            expiryTime: new Date('2026-09-01T00:00:00.000Z')
+          }
+        ]
+      }),
+      now
+    );
+    const chosen = chooseSubscriptionState([selfGuided, plus], 'token-self');
+    assert.equal(chosen?.purchaseToken, 'token-self');
+    assert.equal(chooseSubscriptionState([selfGuided, plus], null)?.purchaseToken, 'token-plus');
+  });
+});
+
+describe('assertAccountBinding', () => {
+  it('rejects a purchase token that is missing the signed-in account id', () => {
+    assert.throws(
+      () =>
+        assertAccountBinding({
+          userId: 'user-1',
+          userToken: '11111111-1111-4111-8111-111111111111',
+          transactionToken: null,
+          originalOwnerId: null,
+          tokenOwnerId: null
+        }),
+      (error: unknown) => error instanceof GooglePlayError && error.statusCode === 409
+    );
+  });
+
+  it('rejects a purchase already linked to another account', () => {
+    assert.throws(
+      () =>
+        assertAccountBinding({
+          userId: 'user-1',
+          userToken: '11111111-1111-4111-8111-111111111111',
+          transactionToken: '11111111-1111-4111-8111-111111111111',
+          originalOwnerId: 'user-2',
+          tokenOwnerId: null
+        }),
+      (error: unknown) => error instanceof GooglePlayError && error.statusCode === 409
+    );
   });
 });

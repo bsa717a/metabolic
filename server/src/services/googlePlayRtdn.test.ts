@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { GOOGLE_PLAY_PRODUCT_PLUS_MONTHLY } from './googlePlayCatalog.js';
 import { GooglePlayError } from './googlePlayTypes.js';
-import { readDeveloperNotification, rtdnAuthorizationError } from './googlePlayRtdn.js';
+import {
+  readDeveloperNotification,
+  rtdnAuthorizationError,
+  rtdnEntitlementSignal,
+  rtdnFailureStatus,
+  rtdnTokenRejected
+} from './googlePlayRtdn.js';
 
 function pushBody(notification: unknown) {
   return {
@@ -105,5 +111,29 @@ describe('Play RTDN Pub/Sub', () => {
       rtdnAuthorizationError('https://api.example/api/billing/google/rtdn', 'Bearer token'),
       null
     );
+  });
+
+  it('ignores notification types until the push bearer is verified', () => {
+    const event = readDeveloperNotification(
+      pushBody({
+        packageName: 'com.mastermetabolic.app',
+        subscriptionNotification: {
+          notificationType: 12,
+          purchaseToken: 'token-plus',
+          subscriptionId: GOOGLE_PLAY_PRODUCT_PLUS_MONTHLY
+        }
+      })
+    );
+    assert.deepEqual(rtdnEntitlementSignal(event, false), { notificationType: null, productId: null });
+    assert.deepEqual(rtdnEntitlementSignal(event, true), {
+      notificationType: 'REVOKED',
+      productId: GOOGLE_PLAY_PRODUCT_PLUS_MONTHLY
+    });
+    assert.equal(rtdnTokenRejected({ email_verified: true }), false);
+    assert.equal(rtdnTokenRejected({ email_verified: false }), true);
+    assert.equal(rtdnTokenRejected(undefined), true);
+    assert.equal(rtdnFailureStatus(new GooglePlayError('nope', 400)), null);
+    assert.equal(rtdnFailureStatus(new GooglePlayError('down', 502)), 502);
+    assert.equal(rtdnFailureStatus(new Error('db')), 500);
   });
 });

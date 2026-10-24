@@ -1,7 +1,7 @@
 import { GoogleAuth } from 'google-auth-library';
 import { env } from '../config/env.js';
 import { GooglePlayError, type PlayDeveloperClient } from './googlePlayTypes.js';
-import { parseSubscriptionPurchaseV2 } from './googlePlayVerify.js';
+import { parseSubscriptionPurchaseV2, settleAcknowledgement } from './googlePlayVerify.js';
 
 const ANDROID_PUBLISHER_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 
@@ -33,7 +33,7 @@ function publisherUrl(path: string) {
 }
 
 export function createPlayDeveloperClient(fetchImpl: typeof fetch = fetch): PlayDeveloperClient {
-  return {
+  const client: PlayDeveloperClient = {
     async getSubscription(purchaseToken) {
       const token = await accessToken();
       const response = await fetchImpl(
@@ -65,14 +65,10 @@ export function createPlayDeveloperClient(fetchImpl: typeof fetch = fetch): Play
           body: '{}'
         }
       );
-      // 400/409 is the already-acknowledged response. The purchase was verified before this call.
-      if (response.ok || response.status === 400 || response.status === 409) return;
-      throw new GooglePlayError(
-        'Google Play could not acknowledge this purchase',
-        response.status === 401 || response.status === 403 ? 503 : 502
-      );
+      await settleAcknowledgement(response.status, response.ok, () => client.getSubscription(purchaseToken));
     }
   };
+  return client;
 }
 
 let singleton: PlayDeveloperClient | null = null;

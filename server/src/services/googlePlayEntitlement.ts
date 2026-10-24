@@ -131,6 +131,23 @@ export function pickHighestState(states: GoogleSubscriptionState[]): GoogleSubsc
   return usable.reduce((best, current) => (rankPlan(current.plan) >= rankPlan(best.plan) ? current : best));
 }
 
+/** Prefer a live plan. If every token is expired, keep the one already linked to this user. */
+export function chooseSubscriptionState<T extends Pick<GoogleSubscriptionState, 'kind' | 'plan' | 'purchaseToken'>>(
+  states: T[],
+  linkedPurchaseToken?: string | null
+): T | null {
+  if (states.length === 0) return null;
+  const usable = states.filter((state) => state.kind !== 'expired');
+  if (usable.length > 0) {
+    return usable.reduce((best, current) => (rankPlan(current.plan) >= rankPlan(best.plan) ? current : best));
+  }
+  if (linkedPurchaseToken) {
+    const linked = states.find((state) => state.purchaseToken === linkedPurchaseToken);
+    if (linked) return linked;
+  }
+  return states.reduce((best, current) => (rankPlan(current.plan) >= rankPlan(best.plan) ? current : best));
+}
+
 export function decideEntitlementUpdate(
   user: Pick<GoogleEntitlementUser, 'plan' | 'subscriptionSource' | 'googlePurchaseToken' | 'nextPlanAfterCoach'>,
   state: GoogleSubscriptionState | null
@@ -260,7 +277,8 @@ export function assertAccountBinding({
   if (tokenOwnerId && tokenOwnerId !== userId) {
     throw new GooglePlayError('This Google Play subscription is already linked to another account', 409);
   }
-  if (userToken && transactionToken && userToken.toLowerCase() !== transactionToken.toLowerCase()) {
+  // The purchase token alone is not proof of the signed-in user. Play must echo the account id we set.
+  if (!userToken || !transactionToken || userToken.toLowerCase() !== transactionToken.toLowerCase()) {
     throw new GooglePlayError('Google Play purchase is not tied to this signed-in account', 409);
   }
 }

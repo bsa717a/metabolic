@@ -32,6 +32,7 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
     static final String SELF_GUIDED = "com.mastermetabolic.app.plan.self_guided.monthly";
     static final String PLUS = "com.mastermetabolic.app.plan.plus.monthly";
 
+    private final Object billingLock = new Object();
     private BillingClient billingClient;
     private PluginCall pendingPurchase;
     private String pendingProductId;
@@ -62,9 +63,13 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             call.reject("A Play Billing account id is required.");
             return;
         }
-        if (pendingPurchase != null) {
-            call.reject("A purchase is already in progress.");
-            return;
+        synchronized (billingLock) {
+            if (pendingPurchase != null) {
+                call.reject("A purchase is already in progress.");
+                return;
+            }
+            pendingPurchase = call;
+            pendingProductId = productId;
         }
         withBilling(call, client -> queryProducts(call, client, List.of(productId), details -> launchPurchase(call, client, details, obfuscatedAccountId)));
     }
@@ -75,7 +80,7 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build(),
             (billingResult, purchases) -> {
                 if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
-                    call.reject(message(billingResult, "Could not read Google Play purchases"));
+                    rejectCall(call, message(billingResult, "Could not read Google Play purchases"));
                     return;
                 }
                 JSObject result = new JSObject();
@@ -87,10 +92,14 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
 
     @Override
     public void onPurchasesUpdated(BillingResult billingResult, List<Purchase> purchases) {
-        PluginCall call = pendingPurchase;
-        String productId = pendingProductId;
-        pendingPurchase = null;
-        pendingProductId = null;
+        PluginCall call;
+        String productId;
+        synchronized (billingLock) {
+            call = pendingPurchase;
+            productId = pendingProductId;
+            pendingPurchase = null;
+            pendingProductId = null;
+        }
         if (call == null) return;
 
         int code = billingResult.getResponseCode();
@@ -113,19 +122,22 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
                 break;
             }
         }
-        if (match == null) match = purchases.get(0);
+        if (match == null) {
+            call.reject("Google Play did not return that subscription.");
+            return;
+        }
         call.resolve(purchasePayload(match));
     }
 
     private void launchPurchase(PluginCall call, BillingClient client, ProductDetails details, String obfuscatedAccountId) {
         ProductDetails.SubscriptionOfferDetails offer = chooseOffer(details);
         if (offer == null) {
-            call.reject("Google Play did not return a subscription offer.");
+            rejectCall(call, "Google Play did not return a subscription offer.");
             return;
         }
         Activity activity = getActivity();
         if (activity == null) {
-            call.reject("Play Billing is unavailable");
+            rejectCall(call, "Play Billing is unavailable");
             return;
         }
 
@@ -140,21 +152,23 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             .build();
 
         activity.runOnUiThread(() -> {
+            // pendingPurchase is already this call, so a listener that runs inside launchBillingFlow is not dropped.
             BillingResult launched = client.launchBillingFlow(activity, params);
             int code = launched.getResponseCode();
-            if (code == BillingClient.BillingResponseCode.OK) {
-                pendingPurchase = call;
-                pendingProductId = details.getProductId();
+            if (code == BillingClient.BillingResponseCode.OK) return;
+            if (code == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
+                resolveOwned(call, client, details.getProductId());
                 return;
+            }
+            synchronized (billingLock) {
+                if (pendingPurchase != call) return;
+                pendingPurchase = null;
+                pendingProductId = null;
             }
             if (code == BillingClient.BillingResponseCode.USER_CANCELED) {
                 JSObject canceled = new JSObject();
                 canceled.put("canceled", true);
                 call.resolve(canceled);
-                return;
-            }
-            if (code == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
-                resolveOwned(call, client, details.getProductId());
                 return;
             }
             call.reject(message(launched, "Could not open Google Play"));
@@ -169,12 +183,13 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
                     for (Purchase purchase : purchases) {
                         List<String> products = purchase.getProducts();
                         if (products != null && products.contains(productId)) {
+                            releasePurchase(call);
                             call.resolve(purchasePayload(purchase));
                             return;
                         }
                     }
                 }
-                call.reject(message(billingResult, "Google Play says this subscription is already owned"));
+                rejectCall(call, message(billingResult, "Google Play says this subscription is already owned"));
             }
         );
     }
@@ -195,20 +210,20 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             );
         }
         if (products.isEmpty()) {
-            call.reject("productIds is required");
+            rejectCall(call, "productIds is required");
             return;
         }
 
         QueryProductDetailsParams params = QueryProductDetailsParams.newBuilder().setProductList(products).build();
         client.queryProductDetailsAsync(params, (billingResult, queryProductDetailsResult) -> {
             if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
-                call.reject(message(billingResult, "Could not load Google Play products"));
+                rejectCall(call, message(billingResult, "Could not load Google Play products"));
                 return;
             }
             List<ProductDetails> details = productDetails(queryProductDetailsResult);
             if (onOne != null) {
                 if (details.isEmpty()) {
-                    call.reject("Google Play did not return that subscription.");
+                    rejectCall(call, "Google Play did not return that subscription.");
                     return;
                 }
                 onOne.run(details.get(0));
@@ -288,7 +303,7 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
 
     private void withBilling(PluginCall call, BillingReady ready) {
         if (getContext() == null) {
-            call.reject("Play Billing is unavailable");
+            rejectCall(call, "Play Billing is unavailable");
             return;
         }
         BillingClient client = ensureClient();
@@ -303,7 +318,7 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
                     ready.run(client);
                     return;
                 }
-                call.reject(message(billingResult, "Play Billing is unavailable"));
+                rejectCall(call, message(billingResult, "Play Billing is unavailable"));
             }
 
             @Override
@@ -337,6 +352,20 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
             if (SELF_GUIDED.equals(id) || PLUS.equals(id)) ids.add(id);
         }
         return ids;
+    }
+
+    private void releasePurchase(PluginCall call) {
+        synchronized (billingLock) {
+            if (pendingPurchase == call) {
+                pendingPurchase = null;
+                pendingProductId = null;
+            }
+        }
+    }
+
+    private void rejectCall(PluginCall call, String message) {
+        releasePurchase(call);
+        call.reject(message);
     }
 
     private static void add(JSArray array, Object value) {

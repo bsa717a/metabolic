@@ -40,6 +40,36 @@ export function rtdnAuthorizationError(audience: string | undefined, authorizati
   return null;
 }
 
+/** Pub/Sub OIDC tokens are Google-signed and include email_verified. */
+export function rtdnTokenRejected(payload: { email_verified?: unknown } | null | undefined): boolean {
+  return payload?.email_verified !== true;
+}
+
+/**
+ * Notification type is an entitlement signal only after the push bearer is verified.
+ * Otherwise a forged EXPIRED/REVOKED would override a still-active Play subscription.
+ */
+export function rtdnEntitlementSignal(
+  event: RtdnEvent,
+  trustNotification: boolean
+): { notificationType: string | null; productId: string | null } {
+  if (!trustNotification) return { notificationType: null, productId: null };
+  if (event.kind === 'voided') return { notificationType: 'REVOKED', productId: null };
+  if (event.kind === 'subscription') {
+    return { notificationType: event.notificationType, productId: event.productId };
+  }
+  return { notificationType: null, productId: null };
+}
+
+/** 4xx Play/parse failures are permanent. 5xx and unexpected errors must be retried by Pub/Sub. */
+export function rtdnFailureStatus(error: unknown): number | null {
+  if (error instanceof GooglePlayError) {
+    if (error.statusCode >= 500 || error.statusCode === 401 || error.statusCode === 403) return error.statusCode;
+    return null;
+  }
+  return 500;
+}
+
 export function readDeveloperNotification(body: unknown): RtdnEvent {
   const envelope = asRecord(body);
   const message = envelope ? asRecord(envelope.message) : null;

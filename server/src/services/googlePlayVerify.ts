@@ -61,7 +61,28 @@ export function parseSubscriptionPurchaseV2(purchaseToken: string, body: unknown
 /** Payment-pending purchases are not acknowledged. Google refunds an unacknowledged purchase after three days. */
 export function shouldAcknowledge(purchase: ParsedPlaySubscription): boolean {
   if (purchase.subscriptionState === 'SUBSCRIPTION_STATE_PENDING') return false;
+  if (purchase.subscriptionState === 'SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED') return false;
   return purchase.acknowledgementState !== 'ACKNOWLEDGED';
+}
+
+/**
+ * Play returns 400 for "already acknowledged" and also for a real reject
+ * (wrong product, token not ready). Only the re-read purchase can tell them apart.
+ */
+export async function settleAcknowledgement(
+  status: number,
+  ok: boolean,
+  refetch: () => Promise<Pick<ParsedPlaySubscription, 'acknowledgementState'>>
+): Promise<void> {
+  if (ok) return;
+  if (status === 400 || status === 409) {
+    const current = await refetch();
+    if (current.acknowledgementState === 'ACKNOWLEDGED') return;
+  }
+  throw new GooglePlayError(
+    'Google Play could not acknowledge this purchase',
+    status === 401 || status === 403 ? 503 : 502
+  );
 }
 
 export async function verifyPlayPurchase(input: {

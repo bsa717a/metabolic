@@ -2,8 +2,7 @@ import { OAuth2Client } from 'google-auth-library';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../config/env.js';
 import { processPlayDeveloperNotification } from '../services/googlePlayService.js';
-import { bearerFromAuthorization, rtdnAuthorizationError } from '../services/googlePlayRtdn.js';
-import { GooglePlayError } from '../services/googlePlayTypes.js';
+import { bearerFromAuthorization, rtdnAuthorizationError, rtdnFailureStatus, rtdnTokenRejected } from '../services/googlePlayRtdn.js';
 
 /**
  * Play Real-time developer notifications delivered by a Pub/Sub push subscription.
@@ -11,18 +10,23 @@ import { GooglePlayError } from '../services/googlePlayTypes.js';
  */
 export async function googlePlayWebhookRoutes(app: FastifyInstance) {
   app.post('/api/billing/google/rtdn', async (request, reply) => {
-    const audience = env.GOOGLE_PLAY_RTDN_AUDIENCE;
+    const audience = env.GOOGLE_PLAY_RTDN_AUDIENCE?.trim() ?? '';
     const authorization = typeof request.headers.authorization === 'string' ? request.headers.authorization : undefined;
     const missing = rtdnAuthorizationError(audience, authorization);
     if (missing) return reply.code(401).send({ error: missing });
 
-    if (audience.trim()) {
+    let trustNotification = false;
+    if (audience) {
       try {
         const client = new OAuth2Client();
-        await client.verifyIdToken({
+        const ticket = await client.verifyIdToken({
           idToken: bearerFromAuthorization(authorization) ?? '',
-          audience: audience.trim()
+          audience
         });
+        if (rtdnTokenRejected(ticket.getPayload())) {
+          return reply.code(401).send({ error: 'Google Play notification was not authorized' });
+        }
+        trustNotification = true;
       } catch (error) {
         request.log.warn({ err: error }, 'Google Play RTDN bearer rejected');
         return reply.code(401).send({ error: 'Google Play notification was not authorized' });
@@ -30,13 +34,12 @@ export async function googlePlayWebhookRoutes(app: FastifyInstance) {
     }
 
     try {
-      return await processPlayDeveloperNotification(request.body);
+      return await processPlayDeveloperNotification(request.body, undefined, { trustNotification });
     } catch (error) {
       request.log.warn({ err: error }, 'Google Play RTDN rejected');
-      if (error instanceof GooglePlayError) {
-        return reply.code(error.statusCode).send({ error: error.message });
-      }
-      return reply.code(400).send({ error: 'Invalid Google Play notification' });
+      const status = rtdnFailureStatus(error);
+      if (status == null) return { received: true, ignored: true, reason: 'invalid_notification' };
+      return reply.code(status).send({ error: 'Google Play notification could not be processed' });
     }
   });
 }

@@ -29,7 +29,7 @@ function sendGoogleError(
   if (error instanceof GooglePlayError) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
-  return reply.code(400).send({ error: error instanceof Error ? error.message : 'Google Play purchase failed' });
+  return reply.code(500).send({ error: 'Google Play purchase failed' });
 }
 
 export async function googlePlayRoutes(app: FastifyInstance) {

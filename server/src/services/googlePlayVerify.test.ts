@@ -5,6 +5,7 @@ import { GooglePlayError, type ParsedPlaySubscription, type PlayDeveloperClient 
 import {
   acknowledgeVerified,
   parseSubscriptionPurchaseV2,
+  settleAcknowledgement,
   verifyBindAndAcknowledge,
   verifyPlayPurchase
 } from './googlePlayVerify.js';
@@ -124,5 +125,19 @@ describe('verify and acknowledge', () => {
       (error: unknown) => error instanceof GooglePlayError && error.statusCode === 400
     );
     assert.deepEqual(calls, ['get:token-1']);
+  });
+});
+
+describe('settleAcknowledgement', () => {
+  it('accepts a 400 only after Play shows the purchase is acknowledged', async () => {
+    await settleAcknowledgement(400, false, async () => ({ acknowledgementState: 'ACKNOWLEDGED' }));
+    await assert.rejects(
+      () => settleAcknowledgement(400, false, async () => ({ acknowledgementState: 'PENDING' })),
+      (error: unknown) => error instanceof GooglePlayError && error.statusCode === 502
+    );
+    await assert.rejects(
+      () => settleAcknowledgement(503, false, async () => ({ acknowledgementState: 'ACKNOWLEDGED' })),
+      (error: unknown) => error instanceof GooglePlayError && error.statusCode === 502
+    );
   });
 });

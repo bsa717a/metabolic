@@ -50,7 +50,7 @@ GOOGLE_PLAY_RTDN_AUDIENCE=             # unknown until the push subscription exi
 
 Scope for the service account: `https://www.googleapis.com/auth/androidpublisher`.
 
-When `GOOGLE_PLAY_RTDN_AUDIENCE` is empty, the webhook accepts the Pub/Sub body and still re-reads the token from Play. When it is set, the `Authorization: Bearer` OIDC token must match that audience.
+When `GOOGLE_PLAY_RTDN_AUDIENCE` is empty, the webhook still re-reads the token from Play and ignores notification types in the body, so a forged EXPIRED or REVOKED cannot override an active subscription. When it is set, the `Authorization: Bearer` OIDC token must match that audience and have `email_verified`, and only then is the notification type applied. Malformed notifications are acknowledged so Pub/Sub does not retry them for days. Play verify and acknowledge failures return 5xx so they are retried.
 
 ## Real-time developer notifications
 
@@ -63,7 +63,7 @@ API host: **unknown**. Path: `/api/billing/google/rtdn`.
 Pub/Sub topic: **unknown**.
 Pub/Sub push subscription: **unknown**.
 
-Grant `google-play-developer-notifications@system.gserviceaccount.com` the Pub/Sub Publisher role on that topic. The webhook returns 200 for test notifications, unlinked tokens, and products that are not the two digital plans so Pub/Sub does not retry them forever.
+Grant `google-play-developer-notifications@system.gserviceaccount.com` the Pub/Sub Publisher role on that topic. The webhook returns 200 for test notifications, unlinked tokens, malformed bodies, and products that are not the two digital plans so Pub/Sub does not retry them forever.
 
 ## Play Console (not created in this PR)
 
