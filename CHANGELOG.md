@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.44.0](https://github.com/bsa717a/metabolic/compare/v0.43.0...v0.44.0) (2026-10-24)
+
+
+### Features
+
+* **android:** add the Capacitor Android platform ([#379](https://github.com/bsa717a/metabolic/issues/379)) ([be07f52](https://github.com/bsa717a/metabolic/commit/be07f52270839c2e841eff6fe7984e8667cf3dc8))
+* **android:** wire Firebase auth for Google and Apple sign-in ([#380](https://github.com/bsa717a/metabolic/issues/380)) ([fce3717](https://github.com/bsa717a/metabolic/commit/fce37173e0230961e55897fa57e00bd29f6229b8))
+
 ## [0.43.0](https://github.com/bsa717a/metabolic/compare/v0.42.3...v0.43.0) (2026-10-17)
 
 
