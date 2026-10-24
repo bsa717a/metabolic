@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const signInWithGoogle = vi.fn();
 const signInWithApple = vi.fn();
+const getPendingAuthResult = vi.fn();
 const signInWithCredential = vi.fn();
+const signOut = vi.fn();
+const getPlatform = vi.fn(() => 'ios');
 const googleCredential = vi.fn((idToken?: unknown, accessToken?: unknown) => ({
   idToken,
   accessToken,
@@ -21,10 +24,15 @@ vi.stubGlobal('localStorage', {
   }
 });
 
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { getPlatform: () => getPlatform() }
+}));
+
 vi.mock('@capacitor-firebase/authentication', () => ({
   FirebaseAuthentication: {
     signInWithGoogle: (...args: unknown[]) => signInWithGoogle(...args),
-    signInWithApple: (...args: unknown[]) => signInWithApple(...args)
+    signInWithApple: (...args: unknown[]) => signInWithApple(...args),
+    getPendingAuthResult: (...args: unknown[]) => getPendingAuthResult(...args)
   }
 }));
 
@@ -37,14 +45,18 @@ vi.mock('firebase/auth', () => {
   return {
     GoogleAuthProvider: { credential: (idToken?: unknown, accessToken?: unknown) => googleCredential(idToken, accessToken) },
     OAuthProvider,
-    signInWithCredential: (...args: unknown[]) => signInWithCredential(...args)
+    signInWithCredential: (...args: unknown[]) => signInWithCredential(...args),
+    signOut: (...args: unknown[]) => signOut(...args)
   };
 });
 
 describe('nativeAuth', () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
     memory.clear();
+    getPlatform.mockReturnValue('ios');
+    signOut.mockResolvedValue(undefined);
   });
 
   it('exchanges a native Google ID token for a Firebase credential', async () => {
@@ -75,6 +87,24 @@ describe('nativeAuth', () => {
     expect(googleCredential).toHaveBeenNthCalledWith(1, null, 'google-access-token');
     expect(googleCredential).toHaveBeenNthCalledWith(2, 'ios-audience-token', 'google-access-token');
     expect(result.user.uid).toBe('g2');
+  });
+
+  it('drops a pending Google handoff when a Firebase user is already signed in', async () => {
+    memory.set(
+      'metabolic.pendingGoogleAuth',
+      JSON.stringify({ idToken: 'stale-id', accessToken: 'stale-access' })
+    );
+    const clearGooglePending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearGooglePending });
+    const { consumePendingNativeGoogleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeGoogleAuth({ currentUser: { uid: 'already' } } as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+    expect(memory.has('metabolic.pendingGoogleAuth')).toBe(false);
+    expect(clearGooglePending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
   });
 
   it('consumes a pending Google credential left after the WebView reloads', async () => {
@@ -139,5 +169,389 @@ describe('nativeAuth', () => {
     expect(signInWithApple).toHaveBeenCalledWith({ skipNativeAuth: true });
     expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-id-token', rawNonce: 'nonce-1' });
     expect(result.user.uid).toBe('a1');
+    expect(getPendingAuthResult).not.toHaveBeenCalled();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('does not read a pending Apple result on iOS', async () => {
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+    const result = await consumePendingNativeAppleAuth({} as never);
+    expect(result).toBeNull();
+    expect(getPendingAuthResult).not.toHaveBeenCalled();
+  });
+
+  it('drops a pending Apple handoff when a Firebase user is already signed in', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-stale', nonce: 'nonce-stale' })
+    );
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-stale', nonce: 'nonce-stale' }
+    });
+    const clearApplePending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearApplePending });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({ currentUser: { uid: 'already' } } as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+    expect(getPendingAuthResult).not.toHaveBeenCalled();
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearApplePending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('drops an Apple handoff that arrives after a Firebase user signs in', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-stale', nonce: 'nonce-stale' })
+    );
+    const authState = { currentUser: null as { uid: string } | null };
+    getPendingAuthResult.mockImplementation(async () => {
+      authState.currentUser = { uid: 'restored' };
+      return { credential: { idToken: 'apple-stale', nonce: 'nonce-stale' } };
+    });
+    const clearApplePending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearApplePending });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth(authState as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearApplePending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('exchanges a pending Android Apple result with the saved nonce', async () => {
+    getPlatform.mockReturnValue('android');
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-id-token', nonce: 'nonce-android' }
+    });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a2' } });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(getPendingAuthResult).toHaveBeenCalledTimes(1);
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-id-token', rawNonce: 'nonce-android' });
+    expect(result?.user.uid).toBe('a2');
+  });
+
+  it('ignores an empty Android pending Apple result', async () => {
+    getPlatform.mockReturnValue('android');
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('uses the stored Apple nonce when a pending Android result has only an ID token', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-id-token', nonce: 'nonce-stored' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: { idToken: 'apple-id-token' } });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a3' } });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-id-token', rawNonce: 'nonce-stored' });
+    expect(result?.user.uid).toBe('a3');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+  });
+
+  it('clears the Android Apple preference for the handoff that just succeeded', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-used', nonce: 'nonce-used' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a7' } });
+    const clearAppleHandoff = vi.fn();
+    const clearPending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearAppleHandoff, clearPending });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(result?.user.uid).toBe('a7');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearAppleHandoff).toHaveBeenCalledWith('apple-used', 'nonce-used');
+    expect(clearPending).not.toHaveBeenCalled();
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('keeps a newer Apple handoff when an older exchange succeeds', async () => {
+    getPlatform.mockReturnValue('android');
+    const fresh = JSON.stringify({ idToken: 'apple-fresh', nonce: 'nonce-fresh' });
+    memory.set('metabolic.pendingAppleAuth', fresh);
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-old', nonce: 'nonce-old' }
+    });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a8' } });
+    const clearAppleHandoff = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearAppleHandoff });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(result?.user.uid).toBe('a8');
+    expect(memory.get('metabolic.pendingAppleAuth')).toBe(fresh);
+    expect(clearAppleHandoff).toHaveBeenCalledWith('apple-old', 'nonce-old');
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('clears a failed Android Apple handoff so a later launch does not replay it', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-dead', nonce: 'nonce-dead' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+
+    signInWithCredential.mockClear();
+    const retry = await consumePendingNativeAppleAuth({} as never);
+    expect(retry).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('keeps an Apple handoff that the failed exchange did not consume', async () => {
+    getPlatform.mockReturnValue('android');
+    const fresh = JSON.stringify({ idToken: 'apple-fresh', nonce: 'nonce-fresh' });
+    memory.set('metabolic.pendingAppleAuth', fresh);
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-dead', nonce: 'nonce-dead' }
+    });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.get('metabolic.pendingAppleAuth')).toBe(fresh);
+  });
+
+  it('clears a stored Apple nonce after that nonce was used in a failed exchange', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set('metabolic.pendingAppleAuth', JSON.stringify({ nonce: 'nonce-used' }));
+    getPendingAuthResult.mockResolvedValue({ credential: { idToken: 'apple-dead' } });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+  });
+
+  it('keeps a stored Apple nonce that the failed exchange did not use', async () => {
+    getPlatform.mockReturnValue('android');
+    const unused = JSON.stringify({ nonce: 'nonce-unused' });
+    memory.set('metabolic.pendingAppleAuth', unused);
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-dead', nonce: 'nonce-dead' }
+    });
+    signInWithCredential.mockRejectedValue(new Error('auth/invalid-credential'));
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    await expect(consumePendingNativeAppleAuth({} as never)).rejects.toThrow('auth/invalid-credential');
+    expect(memory.get('metabolic.pendingAppleAuth')).toBe(unused);
+  });
+
+  it('exchanges a stored Apple handoff when Firebase has no pending result', async () => {
+    getPlatform.mockReturnValue('android');
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-stored', nonce: 'nonce-stored' })
+    );
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a4' } });
+    const { consumePendingNativeAppleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeAppleAuth({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-stored', rawNonce: 'nonce-stored' });
+    expect(result?.user.uid).toBe('a4');
+  });
+
+  it('requires the Android Apple nonce before exchanging', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockResolvedValue({ credential: { idToken: 'apple-id-token' } });
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    await expect(nativeAppleCredentialSignIn({} as never)).rejects.toThrow('Apple sign-in did not return a nonce.');
+    expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('finishes Android Apple sign-in from the pending handoff if the plugin call never resolves', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockReturnValue(new Promise(() => undefined));
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    memory.set(
+      'metabolic.pendingAppleAuth',
+      JSON.stringify({ idToken: 'apple-handoff', nonce: 'nonce-handoff' })
+    );
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a5' } });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    const result = await nativeAppleCredentialSignIn({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-handoff', rawNonce: 'nonce-handoff' });
+    expect(result.user.uid).toBe('a5');
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('finishes Android Apple sign-in from getPendingAuthResult if the plugin call never resolves', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockReturnValue(new Promise(() => undefined));
+    getPendingAuthResult.mockResolvedValue({
+      credential: { idToken: 'apple-pending', nonce: 'nonce-pending' }
+    });
+    signInWithCredential.mockResolvedValue({ user: { uid: 'a6' } });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    const result = await nativeAppleCredentialSignIn({} as never);
+
+    expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-pending', rawNonce: 'nonce-pending' });
+    expect(result.user.uid).toBe('a6');
+  });
+
+  it('rejects a cancelled Android Apple sign-in instead of leaving the button disabled', async () => {
+    getPlatform.mockReturnValue('android');
+    signInWithApple.mockRejectedValue(new Error('The user canceled the sign-in flow.'));
+    getPendingAuthResult.mockResolvedValue({ credential: null });
+    const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+
+    await expect(nativeAppleCredentialSignIn({} as never)).rejects.toThrow('canceled');
+    expect(signInWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('clears both pending handoffs and asks Android to drop the saved preferences', async () => {
+    memory.set('metabolic.pendingGoogleAuth', '{"idToken":"old-google"}');
+    memory.set('metabolic.pendingAppleAuth', '{"idToken":"old-apple"}');
+    const clearPending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearPending });
+    const { clearPendingNativeAuthHandoff } = await import('./nativeAuth');
+
+    clearPendingNativeAuthHandoff();
+
+    expect(memory.has('metabolic.pendingGoogleAuth')).toBe(false);
+    expect(memory.has('metabolic.pendingAppleAuth')).toBe(false);
+    expect(clearPending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
+  it('does not start an Apple exchange when the plugin result arrives after the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      let resolvePlugin: ((value: unknown) => void) | undefined;
+      signInWithApple.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePlugin = resolve;
+        })
+      );
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn({} as never);
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+      resolvePlugin?.({ credential: { idToken: 'late-apple', nonce: 'late-nonce' } });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(signInWithCredential).not.toHaveBeenCalled();
+      expect(signOut).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('signs out a Firebase session created after the Apple timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      signInWithApple.mockReturnValue(new Promise(() => undefined));
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      memory.set(
+        'metabolic.pendingAppleAuth',
+        JSON.stringify({ idToken: 'apple-late', nonce: 'nonce-late' })
+      );
+      let resolveExchange: ((value: unknown) => void) | undefined;
+      signInWithCredential.mockReturnValue(
+        new Promise((resolve) => {
+          resolveExchange = resolve;
+        })
+      );
+      const auth = {} as never;
+      const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn(auth);
+      await Promise.resolve();
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+      expect(signInWithCredential).toHaveBeenCalledTimes(1);
+      resolveExchange?.({ user: { uid: 'late' } });
+      await vi.waitFor(() => {
+        expect(signOut).toHaveBeenCalledWith(auth);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('finishes a handoff that starts after an Apple timeout without signing it out', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      signInWithApple.mockReturnValue(new Promise(() => undefined));
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      const { nativeAppleCredentialSignIn, consumePendingNativeAppleAuth } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn({} as never);
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+
+      getPendingAuthResult.mockResolvedValue({
+        credential: { idToken: 'apple-next', nonce: 'nonce-next' }
+      });
+      signInWithCredential.mockResolvedValue({ user: { uid: 'next' } });
+      const result = await consumePendingNativeAppleAuth({} as never);
+
+      expect(result?.user.uid).toBe('next');
+      expect(appleCredential).toHaveBeenCalledWith({ idToken: 'apple-next', rawNonce: 'nonce-next' });
+      expect(signOut).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out Android Apple sign-in when neither the plugin nor the handoff settles', async () => {
+    vi.useFakeTimers();
+    try {
+      getPlatform.mockReturnValue('android');
+      signInWithApple.mockReturnValue(new Promise(() => undefined));
+      getPendingAuthResult.mockResolvedValue({ credential: null });
+      const { nativeAppleCredentialSignIn } = await import('./nativeAuth');
+      const pending = nativeAppleCredentialSignIn({} as never);
+      const assertion = expect(pending).rejects.toThrow('Apple sign-in timed out. Try again.');
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

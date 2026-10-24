@@ -1,11 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const CLIENT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
-const require = createRequire(import.meta.url);
 
 function readClient(relPath: string) {
   return readFileSync(join(CLIENT_ROOT, relPath), 'utf8');
@@ -101,31 +99,101 @@ describe('Android Capacitor platform', () => {
     );
   });
 
-  it('leaves the iOS auth patch in place and does not fork the Android handlers', () => {
+  it('patches Android Google and Apple auth without changing the iOS copy', () => {
     const patch = readClient('scripts/apply-native-auth-patches.sh');
     expect(patch).toContain('GoogleAuthProviderHandler.swift');
     expect(patch).toContain('AppleAuthProviderHandler.swift');
     expect(patch).toContain('cp native/SceneDelegate.swift ios/App/App/SceneDelegate.swift');
-    expect(patch).toContain('Android needs no counterpart copy');
-    expect(patch).not.toMatch(/cp\s+.*\.java/);
+    expect(patch).toContain('native/android/$handler');
+    expect(patch).toContain('GoogleAuthProviderHandler.java');
+    expect(patch).toContain('AppleAuthProviderHandler.java');
+    expect(patch).toContain('OAuthProviderHandler.java');
+    expect(patch).not.toContain('cp native/SceneDelegate.swift android');
 
-    const pluginRoot = dirname(require.resolve('@capacitor-firebase/authentication/package.json'));
-    const google = readFileSync(
-      join(
-        pluginRoot,
-        'android/src/main/java/io/capawesome/capacitorjs/plugins/firebase/authentication/handlers/GoogleAuthProviderHandler.java'
-      ),
-      'utf8'
-    );
+    const google = readClient('native/android/GoogleAuthProviderHandler.java');
     expect(google).toContain('.requestIdToken(pluginImplementation.getPlugin().getContext().getString(R.string.default_web_client_id))');
-    const apple = readFileSync(
-      join(
-        pluginRoot,
-        'android/src/main/java/io/capawesome/capacitorjs/plugins/firebase/authentication/handlers/AppleAuthProviderHandler.java'
-      ),
-      'utf8'
-    );
+    expect(google).toContain('metabolic.pendingGoogleAuth');
+    expect(google).toContain('https://metaos.mastermetabolic.com');
+    expect(google).toContain('window.location.origin !==');
+    expect(google).toContain('if (!"true".equals(result))');
+    expect(google).toContain('WILL_BE_OVERRIDDEN');
+    expect(google).not.toMatch(/[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}/);
+
+    const apple = readClient('native/android/AppleAuthProviderHandler.java');
     expect(apple).toContain('OAuthProvider.newBuilder');
+    expect(apple).toContain('metabolic.pendingAppleNonce');
+    expect(apple).toContain('metabolic.pendingAppleAuth');
+    expect(apple).toContain('Arrays.asList("email", "name")');
+    expect(apple).toContain('getFirebaseAuthInstance().signOut()');
+    expect(apple).toContain('if (!"true".equals(result))');
+    const finishSignIn = apple.slice(apple.indexOf('void finishSignIn'), apple.indexOf('private static String idTokenFrom'));
+    expect(finishSignIn).toContain('publishPendingAppleAuth');
+    expect(finishSignIn).not.toContain('clearNonce');
     expect(apple).not.toContain('ASAuthorizationController');
+
+    const oauth = readClient('native/android/OAuthProviderHandler.java');
+    expect(oauth).toContain('PENDING_NONCE_KEY');
+    expect(oauth).toContain('publishPendingAppleAuth');
+    expect(oauth).toContain('skipNativeAuth');
+    expect(oauth).not.toContain('clearSavedNonce');
+
+    const activity = readClient('android/app/src/main/java/com/mastermetabolic/app/MainActivity.java');
+    expect(activity).toContain('metabolic.pendingGoogleAuth');
+    expect(activity).toContain('metabolic-pending-google-auth');
+    expect(activity).toContain('metabolic.pendingAppleAuth');
+    expect(activity).toContain('metabolic-pending-apple-auth');
+    expect(activity).toContain('metabolic.pendingAppleNonce');
+    expect(activity).toContain("window.location.origin !== 'https://metaos.mastermetabolic.com'");
+    expect(activity).toContain('addWebViewListener');
+    const pageLoaded = activity.slice(activity.indexOf('void onPageLoaded'), activity.indexOf('super.onCreate'));
+    expect(pageLoaded).toContain('injectPendingGoogleAuth()');
+    expect(pageLoaded).toContain('injectPendingAppleAuth()');
+    expect(activity).toContain('if (!"true".equals(result))');
+    expect(activity).toContain('clearPending');
+    expect(activity).toContain('json.equals(prefs.getString(key, null))');
+    expect(activity).toContain('pendingGoogle');
+    expect(activity).toContain('pendingApple');
+    const clearGooglePending = activity.slice(
+      activity.indexOf('void clearGooglePending'),
+      activity.indexOf('void clearApplePending')
+    );
+    expect(clearGooglePending).toContain('PENDING_GOOGLE_KEY');
+    expect(clearGooglePending).not.toContain('PENDING_APPLE_KEY');
+    const clearApplePending = activity.slice(
+      activity.indexOf('void clearApplePending'),
+      activity.indexOf('void clearAppleHandoff')
+    );
+    expect(clearApplePending).toContain('PENDING_APPLE_KEY');
+    expect(clearApplePending).toContain('PENDING_APPLE_NONCE_KEY');
+    expect(clearApplePending).not.toContain('PENDING_GOOGLE_KEY');
+    const clearApple = activity.slice(activity.indexOf('void clearAppleHandoff'), activity.indexOf('private String pendingValue'));
+    expect(clearApple).toContain('PENDING_APPLE_KEY');
+    expect(clearApple).toContain('PENDING_APPLE_NONCE_KEY');
+    expect(clearApple).toContain('storedToken.equals(token)');
+    expect(clearApple).not.toContain('PENDING_GOOGLE_KEY');
+    expect(activity).not.toContain('evaluateJavascript(js, result ->\n            getSharedPreferences');
+    expect(activity).not.toContain('SessionCues');
+    expect(activity).not.toContain('BillingClient');
+
+    const gradle = readClient('android/app/build.gradle');
+    expect(gradle).toContain('google-services.json');
+    expect(gradle).toContain('Firebase Auth for Google and Apple');
+
+    const setup = readClient('ANDROID.md');
+    for (const needle of [
+      'google-services.json',
+      'SHA-1',
+      'SHA-256',
+      'UNKNOWN',
+      'com.mastermetabolic.app',
+      'metabolic-v1.firebaseapp.com/__/auth/handler',
+      '707557008901-utr23g550vsjatn2g2fv112uq9daf7pr.apps.googleusercontent.com'
+    ]) {
+      expect(setup).toContain(needle);
+    }
+    expect(setup).not.toMatch(/[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){19}/);
+    expect(setup).not.toMatch(/[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}/);
+    expect(setup).not.toContain('AIza');
+    expect(setup).not.toContain('BEGIN PRIVATE KEY');
   });
 });

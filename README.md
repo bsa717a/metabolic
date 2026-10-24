@@ -175,3 +175,7 @@ A run is about **20 minutes** on the `xcode-27` runner (about 15 with warm cache
 3. In App Store Connect: add build to Internal Testing group
 
 The iOS app bundles the web build and uses native Google and Sign in with Apple. See `client/IOS.md`.
+
+## Android App (Capacitor)
+
+The same web bundle runs in the Capacitor Android shell. Google and Apple sign-in use the Firebase JS session once `google-services.json` and the SHA fingerprints exist. Those values are not in git. See [`client/ANDROID.md`](client/ANDROID.md) for the list Derek or Meta must supply.

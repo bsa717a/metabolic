@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import {
   applyActionCode,
   checkActionCode,
@@ -265,22 +266,52 @@ function initNativePendingGoogleAuth() {
   if (!isNativeAuthPlatform() || !auth) return;
   const firebaseAuth = auth;
   const consume = () => {
-    void import('./nativeAuth').then(({ consumePendingNativeGoogleAuth }) =>
-      consumePendingNativeGoogleAuth(firebaseAuth)
+    void import('./nativeAuth').then(({ consumePendingNativeGoogleAuth, discardPendingGoogleHandoff }) => {
+      if (firebaseAuth.currentUser) {
+        discardPendingGoogleHandoff();
+        return;
+      }
+      return consumePendingNativeGoogleAuth(firebaseAuth)
         .then((result) => {
           if (result) clearOAuthRedirectError();
         })
         .catch((error) => {
           storeOAuthRedirectError(error);
-        })
-    );
+        });
+    });
   };
   consume();
   window.addEventListener('metabolic-pending-google-auth', consume);
 }
 
+function initNativePendingAppleAuth() {
+  if (!isNativeAuthPlatform() || !auth) return;
+  if (Capacitor.getPlatform() !== 'android') return;
+  const firebaseAuth = auth;
+  const consume = () => {
+    void import('./nativeAuth').then(({ consumePendingNativeAppleAuth, discardPendingAppleHandoff }) => {
+      if (firebaseAuth.currentUser) {
+        discardPendingAppleHandoff();
+        return;
+      }
+      return consumePendingNativeAppleAuth(firebaseAuth)
+        .then(async (result) => {
+          if (!result) return;
+          clearOAuthRedirectError();
+          await persistAppleDisplayName(result);
+        })
+        .catch((error) => {
+          storeOAuthRedirectError(error);
+        });
+    });
+  };
+  consume();
+  window.addEventListener('metabolic-pending-apple-auth', consume);
+}
+
 initOAuthRedirectListener();
 initNativePendingGoogleAuth();
+initNativePendingAppleAuth();
 
 function shouldFallbackToRedirect(error: unknown) {
   const code = getAuthErrorCode(error);
@@ -331,11 +362,16 @@ export async function resetPassword(email: string) {
   await postAuthJson('/api/auth/send-password-reset', { email: email.trim() });
 }
 
-export function logout() {
+export async function logout() {
   clearSignupDashboardFirstSession();
   clearOAuthRedirectError();
-  if (!auth) return Promise.resolve();
-  return signOut(auth);
+  if (!auth?.currentUser) return;
+  await signOut(auth);
+  // A failed sign-out leaves the same user signed in. Their unconsumed
+  // handoff must stay. A different current user may already own a new token.
+  if (auth.currentUser) return;
+  const { clearPendingNativeAuthHandoff } = await import('./nativeAuth');
+  clearPendingNativeAuthHandoff();
 }
 
 export function listenForAuth(callback: (user: User | null) => void) {
