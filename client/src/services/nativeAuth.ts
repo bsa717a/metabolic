@@ -113,8 +113,16 @@ export async function signInWithNativeGoogleTokens(
 }
 
 export async function consumePendingNativeGoogleAuth(auth: Auth): Promise<UserCredential | null> {
+  if (auth.currentUser) {
+    discardPendingGoogleHandoff();
+    return null;
+  }
   const tokens = readPendingGoogleAuth();
   if (!tokens) return null;
+  if (auth.currentUser) {
+    discardPendingGoogleHandoff();
+    return null;
+  }
   return signInWithNativeGoogleTokens(auth, tokens);
 }
 
@@ -349,12 +357,28 @@ type PendingAuthBridge = {
   clearPending?: () => void;
   clearAppleHandoff?: (idToken: string, nonce: string) => void;
   clearApplePending?: () => void;
+  clearGooglePending?: () => void;
 };
 
 /**
  * Drop Google and Apple handoff copies after a signed-in user logs out.
  * SharedPreferences stay until this runs, and the next resume would inject them.
  */
+/** Drop a leftover Google handoff so it cannot replace someone who is already signed in. */
+export function discardPendingGoogleHandoff(): void {
+  try {
+    localStorage.removeItem(PENDING_GOOGLE_AUTH_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+  const bridge = (globalThis as { MetabolicNativeAuth?: PendingAuthBridge }).MetabolicNativeAuth;
+  try {
+    bridge?.clearGooglePending?.();
+  } catch {
+    // The bridge exists only in the Android WebView.
+  }
+}
+
 /** Drop a leftover Apple handoff so it cannot replace someone who is already signed in. */
 export function discardPendingAppleHandoff(): void {
   try {

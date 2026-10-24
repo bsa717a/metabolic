@@ -89,6 +89,24 @@ describe('nativeAuth', () => {
     expect(result.user.uid).toBe('g2');
   });
 
+  it('drops a pending Google handoff when a Firebase user is already signed in', async () => {
+    memory.set(
+      'metabolic.pendingGoogleAuth',
+      JSON.stringify({ idToken: 'stale-id', accessToken: 'stale-access' })
+    );
+    const clearGooglePending = vi.fn();
+    vi.stubGlobal('MetabolicNativeAuth', { clearGooglePending });
+    const { consumePendingNativeGoogleAuth } = await import('./nativeAuth');
+
+    const result = await consumePendingNativeGoogleAuth({ currentUser: { uid: 'already' } } as never);
+
+    expect(result).toBeNull();
+    expect(signInWithCredential).not.toHaveBeenCalled();
+    expect(memory.has('metabolic.pendingGoogleAuth')).toBe(false);
+    expect(clearGooglePending).toHaveBeenCalledTimes(1);
+    delete (globalThis as { MetabolicNativeAuth?: unknown }).MetabolicNativeAuth;
+  });
+
   it('consumes a pending Google credential left after the WebView reloads', async () => {
     memory.set(
       'metabolic.pendingGoogleAuth',

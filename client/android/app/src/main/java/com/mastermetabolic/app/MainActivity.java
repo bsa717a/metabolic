@@ -183,6 +183,11 @@ public class MainActivity extends BridgeActivity {
          * Remove only that handoff. A newer payload stays for the next injection.
          */
         @JavascriptInterface
+        public void clearGooglePending() {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(PENDING_GOOGLE_KEY).apply();
+        }
+
+        @JavascriptInterface
         public void clearApplePending() {
             getSharedPreferences(PREFS, MODE_PRIVATE)
                 .edit()

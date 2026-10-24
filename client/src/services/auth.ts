@@ -266,15 +266,19 @@ function initNativePendingGoogleAuth() {
   if (!isNativeAuthPlatform() || !auth) return;
   const firebaseAuth = auth;
   const consume = () => {
-    void import('./nativeAuth').then(({ consumePendingNativeGoogleAuth }) =>
-      consumePendingNativeGoogleAuth(firebaseAuth)
+    void import('./nativeAuth').then(({ consumePendingNativeGoogleAuth, discardPendingGoogleHandoff }) => {
+      if (firebaseAuth.currentUser) {
+        discardPendingGoogleHandoff();
+        return;
+      }
+      return consumePendingNativeGoogleAuth(firebaseAuth)
         .then((result) => {
           if (result) clearOAuthRedirectError();
         })
         .catch((error) => {
           storeOAuthRedirectError(error);
-        })
-    );
+        });
+    });
   };
   consume();
   window.addEventListener('metabolic-pending-google-auth', consume);

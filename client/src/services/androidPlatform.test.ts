@@ -153,6 +153,12 @@ describe('Android Capacitor platform', () => {
     expect(activity).toContain('json.equals(prefs.getString(key, null))');
     expect(activity).toContain('pendingGoogle');
     expect(activity).toContain('pendingApple');
+    const clearGooglePending = activity.slice(
+      activity.indexOf('void clearGooglePending'),
+      activity.indexOf('void clearApplePending')
+    );
+    expect(clearGooglePending).toContain('PENDING_GOOGLE_KEY');
+    expect(clearGooglePending).not.toContain('PENDING_APPLE_KEY');
     const clearApplePending = activity.slice(
       activity.indexOf('void clearApplePending'),
       activity.indexOf('void clearAppleHandoff')
