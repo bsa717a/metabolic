@@ -7,6 +7,14 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.45.0](https://github.com/bsa717a/metabolic/compare/v0.44.0...v0.45.0) (2026-10-24)
+
+
+### Features
+
+* **android:** mix session cues under the user's music ([#381](https://github.com/bsa717a/metabolic/issues/381)) ([d596980](https://github.com/bsa717a/metabolic/commit/d5969805c9f0a9b7ce690e8ca3e77de779923b78))
+* **android:** sell the digital plans with Play Billing ([#382](https://github.com/bsa717a/metabolic/issues/382)) ([fac77d0](https://github.com/bsa717a/metabolic/commit/fac77d0df0e5a9365942be8bd7826030f564f564))
+
 ## [0.44.0](https://github.com/bsa717a/metabolic/compare/v0.43.0...v0.44.0) (2026-10-24)
 
 
