@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Master Metabolic</string>
+    <string name="title_activity_main">Master Metabolic</string>
+    <string name="package_name">com.mastermetabolic.app</string>
+    <string name="custom_url_scheme">com.mastermetabolic.app</string>
+</resources>

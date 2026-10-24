@@ -3,6 +3,11 @@
 # The Google Sign-In handler must request an ID token for the Firebase web
 # client (SERVER_CLIENT_ID), or JS Auth rejects the credential and login
 # returns to the sign-in screen.
+#
+# Android needs no counterpart copy. GoogleAuthProviderHandler.java already
+# calls requestIdToken(R.string.default_web_client_id). AppleAuthProviderHandler
+# on Android uses Firebase OAuthProvider, not ASAuthorizationController.
+# google-services.json (which fills default_web_client_id) is not committed.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

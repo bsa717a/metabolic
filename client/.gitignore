@@ -12,9 +12,6 @@ dist
 dist-ssr
 *.local
 
-# The iOS Xcode project is committed. Android is still generated locally.
-android/
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

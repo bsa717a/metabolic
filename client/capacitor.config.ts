@@ -14,10 +14,12 @@ const config: CapacitorConfig = {
   // includes the Capacitor Firebase Authentication plugin.
   //
   // Bundled dist/. WKWebView cannot use `https` as a custom scheme, so the
-  // real origin is capacitor://metaos.mastermetabolic.com. API calls use
-  // Capacitor native HTTP so they are not blocked by CORS.
+  // iOS origin is capacitor://metaos.mastermetabolic.com. Android keeps the
+  // default https scheme, so its origin is https://metaos.mastermetabolic.com.
+  // API calls use Capacitor native HTTP so they are not blocked by CORS.
   server: {
     hostname: 'metaos.mastermetabolic.com',
+    androidScheme: 'https',
   },
 
   ios: {
