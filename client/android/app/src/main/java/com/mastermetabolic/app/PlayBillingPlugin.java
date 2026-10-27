@@ -21,7 +21,6 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.util.ArrayList;
 import java.util.List;
-import org.json.JSONException;
 
 /**
  * Sells the two digital subscriptions. Acknowledgement stays on the server,
@@ -369,11 +368,7 @@ public class PlayBillingPlugin extends Plugin implements PurchasesUpdatedListene
     }
 
     private static void add(JSArray array, Object value) {
-        try {
-            array.put(value);
-        } catch (JSONException error) {
-            // JSONArray rejects non-finite numbers. These payloads are strings and objects.
-        }
+        array.put(value);
     }
 
     private static String message(BillingResult result, String fallback) {
