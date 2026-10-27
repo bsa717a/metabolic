@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.45.1](https://github.com/bsa717a/metabolic/compare/v0.45.0...v0.45.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **android:** compile Play billing against API 36 JSONArray ([#391](https://github.com/bsa717a/metabolic/issues/391)) ([40e2094](https://github.com/bsa717a/metabolic/commit/40e2094e65e623a126d3d5021ebffa00bdf2de40))
+
 ## [0.45.0](https://github.com/bsa717a/metabolic/compare/v0.44.0...v0.45.0) (2026-10-24)
 
 
