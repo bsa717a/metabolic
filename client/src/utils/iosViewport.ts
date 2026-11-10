@@ -54,13 +54,55 @@ export function resetRouteViewport(main: HTMLElement | null) {
   releaseStuckInputZoom();
 }
 
-/** Clear a stuck focus zoom when a text control blurs, without waiting for navigation. */
+/** Keep keyboard-induced document panning out of the independently scrolling app shell. */
 export function bindIosViewportGuards() {
+  const mobile = window.matchMedia('(max-width: 639px)');
+  const viewport = window.visualViewport;
+  let frame = 0;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function restoreOuterScroll() {
+    if (!mobile.matches) return;
+    // The meal list scrolls in <main>; never reset that user's position here.
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
+
+  function scheduleRestore() {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(restoreOuterScroll);
+  }
+
+  function onViewportChange() {
+    const active = document.activeElement;
+    // Let iOS bring the active field into view while typing.
+    if (active instanceof Element && active.matches('input, select, textarea, [contenteditable="true"]')) return;
+    scheduleRestore();
+  }
+
   const onFocusOut = (event: FocusEvent) => {
     const target = event.target;
     if (!(target instanceof Element) || !target.matches('input, select, textarea')) return;
-    requestAnimationFrame(() => releaseStuckInputZoom());
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      releaseStuckInputZoom();
+      onViewportChange();
+    });
+    // Keyboard dismissal is animated; a blur-frame reset alone can be overwritten.
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(onViewportChange, 400);
   };
   document.addEventListener('focusout', onFocusOut, true);
-  return () => document.removeEventListener('focusout', onFocusOut, true);
+  viewport?.addEventListener('resize', onViewportChange);
+  viewport?.addEventListener('scroll', onViewportChange);
+  window.addEventListener('resize', onViewportChange);
+  return () => {
+    document.removeEventListener('focusout', onFocusOut, true);
+    viewport?.removeEventListener('resize', onViewportChange);
+    viewport?.removeEventListener('scroll', onViewportChange);
+    window.removeEventListener('resize', onViewportChange);
+    cancelAnimationFrame(frame);
+    clearTimeout(settleTimer);
+  };
 }

@@ -54,7 +54,7 @@ export function AppShell({
     <EntitlementsProvider user={user ?? null}>
     <TutorialProvider user={user} onComplete={onTutorialComplete}>
     <AiConsentProvider user={user} onUserUpdated={onUserUpdated ?? onTutorialComplete}>
-      <div className="flex min-h-dvh flex-col bg-app-bg transition-colors duration-200 max-sm:h-dvh max-sm:overflow-hidden">
+      <div className="flex min-h-dvh flex-col bg-app-bg transition-colors duration-200 max-sm:fixed max-sm:inset-0 max-sm:h-full max-sm:min-h-0 max-sm:overflow-hidden">
         <Topbar
           user={user}
           onOpenCoachIntro={() => setCoachIntroRequest((count) => count + 1)}
