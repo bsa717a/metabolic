@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { Food } from '../../types';
 import {
@@ -65,11 +65,6 @@ export function FoodSearch({
     resetAi
   } = useFoodSearchWithAi(query);
 
-  useEffect(() => {
-    resetAi();
-    setAcceptError(null);
-  }, [query, resetAi]);
-
   const showDropdown = query.trim().length >= 2 && (searching || searched || aiLoading || aiOptions.length > 0 || aiError || acceptError);
 
   async function selectFood(food: Food) {
@@ -105,9 +100,14 @@ export function FoodSearch({
             ? 'w-full rounded-xl border border-app-border bg-app-surface px-3 py-1.5 text-sm text-app-text placeholder:text-app-text-muted'
             : 'w-full rounded-2xl border border-app-border bg-app-surface p-3 text-app-text placeholder:text-app-text-muted'
         }
+        aria-label="Search foods"
         placeholder={compact ? 'Search foods to add…' : 'Search foods by name or alias'}
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setAcceptError(null);
+          resetAi();
+        }}
       />
       {showDropdown && (
         <ul
@@ -162,11 +162,11 @@ export function FoodSearch({
             </>
           )}
 
-          {!searching && !aiLoading && searched && !hasResults && aiOptions.length === 0 && !aiError && (
+          {!searching && searched && !searchError && !aiLoading && !hasResults && aiOptions.length === 0 && !aiError && (
             <li className="px-4 py-2 text-sm text-app-text-muted">No foods found in your library or AI queue.</li>
           )}
 
-          {!searching && !aiLoading && aiOptions.length === 0 && !aiError && query.trim().length >= 2 && !hasResults && (
+          {!searching && searched && !searchError && !aiLoading && aiOptions.length === 0 && !aiError && query.trim().length >= 2 && !hasResults && (
             <li>
               <button
                 type="button"

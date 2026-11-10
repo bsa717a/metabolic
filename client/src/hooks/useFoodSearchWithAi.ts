@@ -53,7 +53,6 @@ export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch
   const [local, setLocal] = useState<Food[]>([]);
   const [queue, setQueue] = useState<Food[]>([]);
   const [pending, setPending] = useState<PendingFoodLookup[]>([]);
-  const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
@@ -62,51 +61,50 @@ export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch
   const [aiError, setAiError] = useState<string | null>(null);
   const aiRequestId = useRef(0);
 
-  useEffect(() => {
+  const skipLibrarySearch = Boolean(options?.skipLibrarySearch);
+  const [searchInput, setSearchInput] = useState({ query, skipLibrarySearch });
+  // Reset query-dependent UI before committing a render with a new search.
+  if (searchInput.query !== query || searchInput.skipLibrarySearch !== skipLibrarySearch) {
+    setSearchInput({ query, skipLibrarySearch });
+    setLocal([]);
+    setQueue([]);
+    setPending([]);
+    setSearchError(null);
+    setSearched(false);
     setAiOptions([]);
     setAiError(null);
-    if (query.trim().length < 2) {
-      setLocal([]);
-      setQueue([]);
-      setPending([]);
-      setSearchError(null);
-      setSearched(false);
-      setSearching(false);
-      return;
-    }
+    setAiLoading(false);
+  }
+  const searchingNow = query.trim().length >= 2 && !skipLibrarySearch && !searched;
 
-    if (options?.skipLibrarySearch) {
-      setLocal([]);
-      setQueue([]);
-      setPending([]);
-      setSearchError(null);
-      setSearched(false);
-      setSearching(false);
-      return;
+  useEffect(() => {
+    // Invalidate in-flight AI results when the input changes or unmounts.
+    aiRequestId.current += 1;
+    if (query.trim().length < 2 || skipLibrarySearch) {
+      return () => { aiRequestId.current += 1; };
     }
-
-    setSearching(true);
-    setSearchError(null);
+    let cancelled = false;
     const timer = setTimeout(() => {
       api<FoodSearchResponse>(`/api/foods/search?query=${encodeURIComponent(query.trim())}`)
         .then((result) => {
+          if (cancelled) return;
           setLocal(result.local);
           setQueue(result.queue);
           setPending(result.pending);
           setSearched(true);
         })
         .catch((err) => {
+          if (cancelled) return;
           setLocal([]);
           setQueue([]);
           setPending([]);
           setSearched(true);
           setSearchError(err instanceof Error ? err.message : 'Food search failed');
-        })
-        .finally(() => setSearching(false));
+        });
     }, 250);
 
-    return () => clearTimeout(timer);
-  }, [query, options?.skipLibrarySearch]);
+    return () => { cancelled = true; aiRequestId.current += 1; clearTimeout(timer); };
+  }, [query, skipLibrarySearch]);
 
   const hasResults = local.length + queue.length + pending.length > 0;
 
@@ -145,6 +143,7 @@ export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch
   }, []);
 
   const resetAi = useCallback(() => {
+    aiRequestId.current += 1;
     setAiOptions([]);
     setAiError(null);
     setAiLoading(false);
@@ -154,7 +153,7 @@ export function useFoodSearchWithAi(query: string, options?: { skipLibrarySearch
     local,
     queue,
     pending,
-    searching,
+    searching: searchingNow,
     searchError,
     searched,
     hasResults,
