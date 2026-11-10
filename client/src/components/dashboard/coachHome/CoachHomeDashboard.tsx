@@ -57,6 +57,8 @@ export function CoachHomeDashboard({
     <div className="space-y-5">
       <CoachHomeHero user={user} meals={meals} />
 
+      <CoachHomeMissions waterDone={waterDone} meals={meals} exercises={data.exercises ?? []} />
+
       <section>
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
@@ -93,8 +95,6 @@ export function CoachHomeDashboard({
           />
         </div>
       </section>
-
-      <CoachHomeMissions waterDone={waterDone} meals={meals} exercises={data.exercises ?? []} />
     </div>
   );
 }

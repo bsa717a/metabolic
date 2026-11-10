@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { MealFoodLookup } from './MealFoodLookup';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Camera, ChevronDown, Leaf, Pencil, Plus, Utensils, X } from 'lucide-react';
 import type { Meal, MealItem } from '../../types';
@@ -174,6 +175,8 @@ export function TodayNutrition({
   showPlanToggle = false,
   planExpanded = false,
   onPlanExpandedChange,
+  enableMealFoodLookup = false,
+  onFoodAdded,
   planSaveError = ''
 }: {
   meals: Meal[];
@@ -185,6 +188,8 @@ export function TodayNutrition({
   planExpanded?: boolean;
   onPlanExpandedChange?: (expanded: boolean) => void;
   planSaveError?: string;
+  enableMealFoodLookup?: boolean;
+  onFoodAdded?: () => void | Promise<void>;
 }) {
   const mealsForParse = allMeals ?? meals;
   const { accepted, openReview } = useAiConsent();
@@ -192,15 +197,12 @@ export function TodayNutrition({
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
   const [hiddenWhenExpanded, setHiddenWhenExpanded] = useState<Set<string>>(() => new Set());
   const [detailsMealId, setDetailsMealId] = useState<string | null>(null);
-  const openedFromQuery = useRef(false);
-
-  useEffect(() => {
-    if (openedFromQuery.current) return;
-    const requestedId = searchParams.get('meal');
-    if (!requestedId || !meals.some((meal) => meal.id === requestedId)) return;
-    setExpandedMealId(requestedId);
-    openedFromQuery.current = true;
-  }, [meals, searchParams]);
+  const [openedFromQuery, setOpenedFromQuery] = useState(false);
+  const requestedMealId = searchParams.get('meal');
+  if (!openedFromQuery && requestedMealId && meals.some((meal) => meal.id === requestedMealId)) {
+    setExpandedMealId(requestedMealId);
+    setOpenedFromQuery(true);
+  }
   const [entry, setEntry] = useState('');
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -578,6 +580,7 @@ export function TodayNutrition({
                 {expanded && (
                   <>
                     <PlannedItemChecklist meal={meal} onChange={onChange} reading={showPlanToggle} />
+                    {enableMealFoodLookup && <MealFoodLookup mealId={meal.id} mealName={meal.name} onChange={onFoodAdded ?? onChange} />}
                     {showPlanToggle && (
                       <div className="px-3 pb-3">
                         <button

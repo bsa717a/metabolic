@@ -99,6 +99,22 @@ function RemainingMacrosDisplay({
 }
 
 
+async function fetchDashboard(): Promise<Dashboard> {
+  const token = await getIdToken();
+  if (!token) {
+    throw new Error('Not signed in yet. Please refresh or sign in again.');
+  }
+
+  const dashboard = await api<Dashboard>(`/api/dashboard/today?${todayDateParam()}&_=${Date.now()}`, {
+    cache: 'no-store'
+  });
+  if (dashboard.program && !dashboard.summary) {
+    throw new Error('Dashboard data is incomplete. Restart the backend server and try again.');
+  }
+
+  return dashboard;
+}
+
 export function DashboardPage({
   user,
   onUserUpdated
@@ -121,27 +137,18 @@ export function DashboardPage({
     onUserUpdated
   );
 
-  const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
+  const loadDashboard = useCallback(async (options?: { silent?: boolean; throwOnError?: boolean }) => {
     if (!options?.silent) {
       setLoading(true);
       setError('');
     }
 
     try {
-      const token = await getIdToken();
-      if (!token) {
-        throw new Error('Not signed in yet. Please refresh or sign in again.');
-      }
-
-      const dashboard = await api<Dashboard>(`/api/dashboard/today?${todayDateParam()}&_=${Date.now()}`, {
-        cache: 'no-store'
-      });
-      if (dashboard.program && !dashboard.summary) {
-        throw new Error('Dashboard data is incomplete. Restart the backend server and try again.');
-      }
+      const dashboard = await fetchDashboard();
 
       setData(dashboard);
     } catch (err) {
+      if (options?.throwOnError) throw err;
       if (!options?.silent) {
         setData(null);
         setError(err instanceof Error ? err.message : 'Unable to load dashboard');
@@ -153,8 +160,21 @@ export function DashboardPage({
 
   useEffect(() => {
     if (location.pathname !== '/') return;
-    void loadDashboard();
-  }, [location.pathname, loadDashboard]);
+    let cancelled = false;
+    void fetchDashboard()
+      .then((dashboard) => {
+        if (cancelled) return;
+        setData(dashboard);
+        setError('');
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setData(null);
+        setError(err instanceof Error ? err.message : 'Unable to load dashboard');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [location.pathname]);
 
   useEffect(() => {
     function handleVisibilityChange() {
@@ -306,6 +326,8 @@ export function DashboardPage({
             allMeals={data.allMeals}
             onChange={() => loadDashboard({ silent: true })}
             showPlanToggle
+            enableMealFoodLookup
+            onFoodAdded={() => loadDashboard({ silent: true, throwOnError: true })}
             planExpanded={planExpanded}
             onPlanExpandedChange={(next) => void changePlanExpanded(next)}
             planSaveError={planSaveError}
