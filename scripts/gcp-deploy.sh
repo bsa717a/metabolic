@@ -14,6 +14,10 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CI="${CI:-false}"
 
 cd "$ROOT_DIR"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/assert-deploy-target.sh"
+assert_deploy_target
+assert_staging_cloud_sql
 gcloud config set project "$PROJECT_ID"
 
 echo "==> Apply database migrations"
@@ -41,6 +45,14 @@ docker buildx build \
   .
 
 echo "==> Deploy Cloud Run"
+RUN_ENV="NODE_ENV=production,AI_PROVIDER=gemini,SMS_AGENT_MODE=agent"
+if [[ "${DEPLOY_TARGET:-}" == "staging" ]]; then
+  # No production signup-alert number. Staging SMS stays quiet unless Derek
+  # later puts a staging Twilio number in this project's secrets.
+  RUN_ENV="${RUN_ENV},DEPLOY_TARGET=staging"
+else
+  RUN_ENV="${RUN_ENV},SIGNUP_ALERT_PHONE=+19044030781"
+fi
 gcloud run deploy "$SERVICE_NAME" \
   --image "$IMAGE" \
   --region "$REGION" \
@@ -69,23 +81,36 @@ RESEND_API_KEY=RESEND_API_KEY:latest,\
 SENDGRID_FROM_EMAIL=SENDGRID_FROM_EMAIL:latest,\
 SENDGRID_FROM_NAME=SENDGRID_FROM_NAME:latest,\
 CRON_SECRET=CRON_SECRET:latest" \
-  --set-env-vars "NODE_ENV=production,AI_PROVIDER=gemini,SMS_AGENT_MODE=agent,SIGNUP_ALERT_PHONE=+19044030781"
+  --set-env-vars "$RUN_ENV"
 
-API_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
+API_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --project "$PROJECT_ID" --format='value(status.url)')"
 echo "API URL: $API_URL"
 
-echo "==> Ensure Cloud Scheduler API is enabled (required for proactive SMS reminders)"
-if ! gcloud services enable cloudscheduler.googleapis.com --project="$PROJECT_ID" --quiet 2>/dev/null; then
-  echo "WARN: Could not enable cloudscheduler.googleapis.com — run as project admin if SMS reminders are silent."
+if [[ "${DEPLOY_TARGET:-}" == "staging" ]]; then
+  assert_staging_cloud_run_url "$API_URL"
+  # The client always calls the Cloud Run service this deploy just updated.
+  # A copied production VITE_API_URL cannot point staging at the live API.
+  VITE_API_URL="$API_URL"
+  export VITE_API_URL
+  FIREBASE_PROJECT_FROM_SECRET="$(gcloud secrets versions access latest --secret=FIREBASE_PROJECT_ID --project="$PROJECT_ID")"
+  assert_staging_firebase_project "$FIREBASE_PROJECT_FROM_SECRET"
+  assert_staging_firebase_project "${VITE_FIREBASE_PROJECT_ID:-}"
+  echo "==> Staging does not create Cloud Scheduler jobs."
+  echo "    SMS and email ticks stay off so this deploy cannot text or email."
+else
+  echo "==> Ensure Cloud Scheduler API is enabled (required for proactive SMS reminders)"
+  if ! gcloud services enable cloudscheduler.googleapis.com --project="$PROJECT_ID" --quiet 2>/dev/null; then
+    echo "WARN: Could not enable cloudscheduler.googleapis.com — run as project admin if SMS reminders are silent."
+  fi
+
+  echo "==> Ensure Cloud Scheduler job for proactive SMS reminders (best-effort)"
+  # CI often lacks permission to enable APIs or create scheduler jobs. Do not fail
+  # deploy when scheduler setup fails; run ./scripts/setup-sms-scheduler.sh once as admin.
+  API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-sms-scheduler.sh" || true
+
+  echo "==> Ensure Cloud Scheduler job for transactional email queue (best-effort)"
+  API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-email-scheduler.sh" || true
 fi
-
-echo "==> Ensure Cloud Scheduler job for proactive SMS reminders (best-effort)"
-# CI often lacks permission to enable APIs or create scheduler jobs. Do not fail
-# deploy when scheduler setup fails; run ./scripts/setup-sms-scheduler.sh once as admin.
-API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-sms-scheduler.sh" || true
-
-echo "==> Ensure Cloud Scheduler job for transactional email queue (best-effort)"
-API_URL="$API_URL" BEST_EFFORT=true "$ROOT_DIR/scripts/setup-email-scheduler.sh" || true
 
 echo "==> Set API_PUBLIC_URL + Twilio webhook validation (stable Cloud Run URL)"
 gcloud run services update "$SERVICE_NAME" \

@@ -10,6 +10,9 @@ describe('corsAllowedOrigins', () => {
     assert.ok(origins.includes('capacitor://localhost'));
     assert.ok(origins.includes('capacitor://metaos.mastermetabolic.com'));
     assert.ok(origins.includes('https://metabolic-v1.web.app'));
+    assert.ok(origins.includes('https://staging.metaos.mastermetabolic.com'));
+    assert.ok(origins.includes('https://metabolic-staging.web.app'));
+    assert.ok(origins.includes('https://metabolic-staging.firebaseapp.com'));
   });
 
   it('adds CLIENT_URL even when it is not in the static list', () => {

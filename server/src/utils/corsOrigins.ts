@@ -6,6 +6,10 @@ const STATIC_CLIENT_ORIGINS = [
   'capacitor://metaos.mastermetabolic.com',
   'https://metabolic-v1.web.app',
   'https://metabolic-v1.firebaseapp.com',
+  // Staging Firebase project. Kept separate from production users and data.
+  'https://staging.metaos.mastermetabolic.com',
+  'https://metabolic-staging.web.app',
+  'https://metabolic-staging.firebaseapp.com',
   'http://localhost:5173',
   'https://localhost',
   'capacitor://localhost',

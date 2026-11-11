@@ -44,6 +44,20 @@ if ! gcloud iam workload-identity-pools describe "$POOL_ID" --location=global >/
     --display-name="GitHub Actions"
 fi
 
+# WIF_ENVIRONMENT is unset for production. Set it to "staging" only from
+# scripts/gcp-setup-staging.sh so the provider rejects tokens from other
+# GitHub environments. Do not set it when PROJECT_ID is metabolic-v1.
+ATTRIBUTE_MAPPING="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
+ATTRIBUTE_CONDITION="assertion.repository=='${GITHUB_REPO}'"
+if [[ -n "${WIF_ENVIRONMENT:-}" ]]; then
+  if [[ "$PROJECT_ID" == "metabolic-v1" ]]; then
+    echo "Refusing to add a ${WIF_ENVIRONMENT} workload-identity condition in the production project."
+    exit 1
+  fi
+  ATTRIBUTE_MAPPING="${ATTRIBUTE_MAPPING},attribute.environment=assertion.environment"
+  ATTRIBUTE_CONDITION="${ATTRIBUTE_CONDITION} && assertion.environment=='${WIF_ENVIRONMENT}'"
+fi
+
 echo "==> Workload Identity Provider"
 if ! gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
   --location=global \
@@ -53,8 +67,8 @@ if ! gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
     --workload-identity-pool="$POOL_ID" \
     --display-name="GitHub" \
     --issuer-uri="https://token.actions.githubusercontent.com" \
-    --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
-    --attribute-condition="assertion.repository=='${GITHUB_REPO}'"
+    --attribute-mapping="$ATTRIBUTE_MAPPING" \
+    --attribute-condition="$ATTRIBUTE_CONDITION"
 fi
 
 echo "==> Deploy service account"
@@ -88,10 +102,15 @@ for role in "${DEPLOY_ROLES[@]}"; do
     --quiet >/dev/null 2>&1 || true
 done
 
+if [[ -n "${WIF_ENVIRONMENT:-}" ]]; then
+  SECRET_HOME="GitHub environment \"${WIF_ENVIRONMENT}\" (Settings -> Environments -> ${WIF_ENVIRONMENT} -> Environment secrets). Do not put these on the repository; repository secrets are the production values and this environment would inherit them."
+else
+  SECRET_HOME="GitHub repository secrets (Settings -> Secrets and variables -> Actions)"
+fi
+
 cat <<EOF
 
-Setup complete. Add these GitHub repository secrets
-(Settings -> Secrets and variables -> Actions):
+Setup complete. Add these ${SECRET_HOME}:
 
 Required for GCP auth:
   GCP_WORKLOAD_IDENTITY_PROVIDER = ${WIF_PROVIDER}
@@ -115,3 +134,17 @@ After secrets are set, merge to main to trigger deploy, or run the
 workflow manually from the Actions tab.
 
 EOF
+
+if [[ -n "${WIF_ENVIRONMENT:-}" ]]; then
+  cat <<EOF
+
+Staging notes for the ${WIF_ENVIRONMENT} environment:
+  Create the GitHub environment first, then add every secret there.
+  Repository secrets are production. Do not copy them.
+  VITE_API_URL is ignored. The staging client uses the staging Cloud Run URL.
+  VITE_FIREBASE_PROJECT_ID must be metabolic-staging.
+  Leave VITE_SMS_PHONE_NUMBER empty, or set a staging number. Do not copy +13853634403.
+  Do not point the production Twilio webhook at the staging API.
+
+EOF
+fi

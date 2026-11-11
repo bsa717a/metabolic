@@ -117,6 +117,10 @@ cp client/.env.production.example client/.env.production
 
 Production deploys apply Prisma migrations before Cloud Run is updated (`scripts/run-cloud-migrations.sh` in CI and `gcp-deploy.sh`). The API also runs migrations on startup via `server/docker-entrypoint.sh` as a fallback. Health check: `GET /health`.
 
+### Staging
+
+Staging is a separate Firebase/GCP project, `metabolic-staging`, deployed from the `staging` branch by `.github/workflows/deploy-staging.yml`. It does not use production Firebase users or the production database. The client is Firebase Hosting, the same shape as production. See [`docs/staging-environment.md`](docs/staging-environment.md). Creating the project, Cloud SQL, and secrets is manual and waits for Derek's approval. Do not run `scripts/gcp-setup-staging.sh` until then.
+
 ### Copy local database to Cloud SQL
 
 Requires local Docker Postgres running and `cloud-sql-proxy` installed.

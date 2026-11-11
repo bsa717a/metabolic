@@ -1,0 +1,127 @@
+# Staging only. Push to `staging`, or run this workflow by hand.
+# Production stays on deploy.yml and metabolic-v1. This file never deploys
+# that project. The client is Firebase Hosting on metabolic-staging, matching
+# production. The API is Cloud Run service metabolic-api in metabolic-staging.
+
+name: Deploy staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: metabolic-staging
+  REGION: us-central1
+  SQL_INSTANCE: metabolic-db
+  SERVICE_NAME: metabolic-api
+  DEPLOY_TARGET: staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse production targets before auth
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source scripts/assert-deploy-target.sh
+          assert_deploy_target
+          assert_staging_cloud_sql
+          assert_staging_service_account "$GCP_SERVICE_ACCOUNT"
+          assert_staging_workload_identity_provider "$GCP_WORKLOAD_IDENTITY_PROVIDER"
+          assert_staging_firebase_project "$VITE_FIREBASE_PROJECT_ID"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: metabolic-staging
+
+      - name: Confirm the staging identity
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source scripts/assert-deploy-target.sh
+          ACTIVE="$(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
+          assert_staging_service_account "$ACTIVE"
+          PROJECT="$(gcloud projects describe "$PROJECT_ID" --format='value(projectId)')"
+          if [[ "$PROJECT" != "metabolic-staging" ]]; then
+            echo "Refusing staging deploy: authenticated project is ${PROJECT}." >&2
+            exit 1
+          fi
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: ./scripts/run-cloud-migrations.sh
+
+      - name: Deploy API and client
+        env:
+          CI: "true"
+          SKIP_DB_MIGRATIONS: "true"
+          IMAGE_TAG: ${{ github.sha }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+          VITE_SMS_PHONE_NUMBER: ${{ secrets.VITE_SMS_PHONE_NUMBER }}
+        run: ./scripts/gcp-deploy.sh
+
+      - name: Verify API health
+        run: |
+          set -euo pipefail
+          API_URL="$(gcloud run services describe metabolic-api \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --format='value(status.url)')"
+          # shellcheck disable=SC1091
+          source scripts/assert-deploy-target.sh
+          assert_staging_cloud_run_url "$API_URL"
+          curl -fsS "${API_URL}/health"

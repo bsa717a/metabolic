@@ -21,6 +21,10 @@ fail_with_proxy_logs() {
 }
 
 echo "==> Run database migrations"
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/assert-deploy-target.sh"
+assert_deploy_target
+assert_staging_cloud_sql
 
 if [[ ! -x "${ROOT_DIR}/node_modules/.bin/prisma" ]]; then
   echo "Installing dependencies for migrations..."
@@ -51,6 +55,7 @@ else
 fi
 
 RAW_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL --project="$PROJECT_ID")"
+DATABASE_URL="$RAW_URL" "$ROOT_DIR/scripts/staging-database-url-guard.sh"
 
 MIGRATION_URL="$(
   RAW_DATABASE_URL="$RAW_URL" SOCKET_DIR="$SOCKET_DIR" CONNECTION="$CONNECTION" python3 <<'PY'
