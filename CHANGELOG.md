@@ -7,6 +7,13 @@ From `0.1.0` onward this file is maintained automatically by
 [Conventional Commit](https://www.conventionalcommits.org/) messages — please do not edit
 it by hand.
 
+## [0.46.1](https://github.com/bsa717a/metabolic/compare/v0.46.0...v0.46.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **ios:** restore mobile layout after keyboard dismissal ([#396](https://github.com/bsa717a/metabolic/issues/396)) ([8a873ae](https://github.com/bsa717a/metabolic/commit/8a873aec758130c6dbc60c9906038c5f38558afd))
+
 ## [0.46.0](https://github.com/bsa717a/metabolic/compare/v0.45.0...v0.46.0) (2026-11-10)
 
 
