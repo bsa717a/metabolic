@@ -1,3 +1,7 @@
+# Production only. Staging is .github/workflows/deploy-staging.yml
+# (push to the staging branch, or workflow_dispatch). Do not point this file
+# at another project, database, or Firebase project.
+
 name: Deploy
 
 on:

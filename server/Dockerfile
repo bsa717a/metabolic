@@ -24,6 +24,7 @@ COPY --from=build /app/server/src/emails ./src/emails
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/server/node_modules ./node_modules
 COPY server/docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x docker-entrypoint.sh
+COPY scripts/staging-database-url-guard.sh ./staging-database-url-guard.sh
+RUN chmod +x docker-entrypoint.sh staging-database-url-guard.sh
 EXPOSE 8080
 ENTRYPOINT ["./docker-entrypoint.sh"]

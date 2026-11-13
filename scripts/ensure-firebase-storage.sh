@@ -4,6 +4,11 @@ set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-metabolic-v1}"
 LOCATION="${FIREBASE_STORAGE_LOCATION:-us-central1}"
+if [[ "${DEPLOY_TARGET:-}" == "staging" ]]; then
+  # shellcheck disable=SC1091
+  source "$(cd "$(dirname "$0")" && pwd)/assert-deploy-target.sh"
+  assert_deploy_target
+fi
 API_BASE="https://firebasestorage.googleapis.com/v1beta/projects/${PROJECT_ID}/defaultBucket"
 
 echo "==> Ensure Firebase Storage default bucket"

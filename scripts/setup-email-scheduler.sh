@@ -9,6 +9,13 @@ SERVICE_NAME="${SERVICE_NAME:-metabolic-api}"
 JOB_NAME="${EMAIL_SCHEDULER_JOB:-metabolic-email-tick}"
 BEST_EFFORT="${BEST_EFFORT:-false}"
 
+if [[ "${DEPLOY_TARGET:-}" == "staging" ]]; then
+  if [[ "$PROJECT_ID" != "metabolic-staging" || "$JOB_NAME" == "metabolic-email-tick" ]]; then
+    echo "Refusing staging email scheduler: project must be metabolic-staging and the job must not be the production job metabolic-email-tick." >&2
+    exit 1
+  fi
+fi
+
 fail() {
   echo "$1" >&2
   if [[ "$BEST_EFFORT" == "true" ]]; then
