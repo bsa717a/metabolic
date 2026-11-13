@@ -2,6 +2,9 @@
   "name": "server",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "prisma generate && tsx watch src/index.ts",
     "postinstall": "prisma generate",
@@ -28,7 +31,7 @@
     "@prisma/client": "^6.19.3",
     "dotenv": "^16.6.1",
     "fastify": "^5.12.6",
-    "firebase-admin": "^13.10.0",
+    "firebase-admin": "^14.5.0",
     "google-auth-library": "^10.6.2",
     "resend": "^6.26.0",
     "stripe": "^22.3.1",
